@@ -78,6 +78,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/cards", s.handleCreateCard)
 	mux.HandleFunc("PATCH /api/cards/{id}", s.handleUpdateCard)
 	mux.HandleFunc("POST /api/tasks", s.handleCreateTask)
+	mux.HandleFunc("PATCH /api/tasks/{id}", s.handleReassignTask)
 	mux.HandleFunc("GET /api/tasks/{id}", s.handleGetTask)
 	mux.HandleFunc("POST /api/tasks/{id}/messages", s.handlePostMessage)
 	mux.HandleFunc("POST /api/tasks/{id}/interrupt", s.handleInterrupt)
@@ -607,15 +608,45 @@ func (s *Server) handleCreateTask(w http.ResponseWriter, r *http.Request) {
 	s.runner.publishTask(task)
 	s.runner.publishCards(project.ID)
 
-	cliInput := body.Title
-	if body.Prompt != "" {
-		cliInput = body.Title + "\n\n" + body.Prompt
-	}
+	cliInput := contextualizeCliInput(body.Title, body.Prompt)
 	if err := s.runner.Start(task.ID, true, cliInput); err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to start agent: "+err.Error())
 		return
 	}
 	task, _ = s.store.GetTask(task.ID)
+	writeJSON(w, http.StatusOK, task)
+}
+
+// handleReassignTask change l'agent assigné à une tâche : refusé si la tâche
+// est en cours d'exécution ou si l'agent est inconnu. Ajoute un message
+// marqueur au fil (détecté et localisé par le frontend) et republie
+// task + message + agents.
+func (s *Server) handleReassignTask(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	var body struct {
+		AgentID string `json:"agentId"`
+	}
+	if err := decodeJSON(r, &body); err != nil || body.AgentID == "" {
+		writeError(w, http.StatusBadRequest, "agentId is required")
+		return
+	}
+	task, err := s.store.ReassignTask(id, body.AgentID)
+	if err != nil {
+		status := http.StatusBadRequest
+		if err.Error() == "task not found" {
+			status = http.StatusNotFound
+		}
+		writeError(w, status, err.Error())
+		return
+	}
+	msg, task, err := s.store.AddMessage(task.ID, "agent", "", "[reassigned:"+body.AgentID+"]")
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	s.runner.publishTask(task)
+	s.runner.publishMessage(msg)
+	s.runner.publishAgents()
 	writeJSON(w, http.StatusOK, task)
 }
 

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -392,6 +393,59 @@ func sortedAgents(m map[string]Agent) []Agent {
 	return out
 }
 
+// sortedAgentsWithWarnings retourne les agents triés par ID, avec leur
+// avertissement de santé calculé (voir agentWarning). Coûteux (LookPath,
+// lecture /proc) : à n'appeler qu'à la liste des agents (ListAgents/Snapshot),
+// jamais depuis recomputeAgent/recomputeAll qui tournent à chaque mutation.
+func sortedAgentsWithWarnings(m map[string]Agent) []AgentOut {
+	sorted := sortedAgents(m)
+	out := make([]AgentOut, len(sorted))
+	for i, a := range sorted {
+		out[i] = AgentOut{Agent: a, Warning: agentWarning(a)}
+	}
+	return out
+}
+
+// lookPath est une indirection testable de exec.LookPath.
+var lookPath = exec.LookPath
+
+// apparmorRestrictPath est le chemin lu pour détecter si les espaces de noms
+// utilisateur non privilégiés sont restreints par AppArmor (bloque le sandbox
+// par défaut de codex sur certaines machines, ex : Ubuntu 23.10+).
+// Indirection testable.
+var apparmorRestrictPath = "/proc/sys/kernel/apparmor_restrict_unprivileged_userns"
+
+// agentWarning calcule un avertissement de santé pour un agent (chaîne vide
+// si tout va bien) : sandbox codex bloqué par AppArmor sans
+// SILLAGE_CODEX_SANDBOX défini, ou binaire cli introuvable dans le PATH.
+// Jamais persisté : voir AgentOut.
+func agentWarning(a Agent) string {
+	switch a.Cli {
+	case "codex":
+		if apparmorRestrictsUserNamespaces() && os.Getenv("SILLAGE_CODEX_SANDBOX") == "" {
+			return "codex sandbox is blocked on this machine (AppArmor); see README (SILLAGE_CODEX_SANDBOX)"
+		}
+		if _, err := lookPath("codex"); err != nil {
+			return "codex CLI not found in PATH"
+		}
+	case "claude":
+		if _, err := lookPath("claude"); err != nil {
+			return "claude CLI not found in PATH"
+		}
+	}
+	return ""
+}
+
+// apparmorRestrictsUserNamespaces lit apparmorRestrictPath : "1" signifie que
+// les espaces de noms utilisateur non privilégiés sont restreints.
+func apparmorRestrictsUserNamespaces() bool {
+	data, err := os.ReadFile(apparmorRestrictPath)
+	if err != nil {
+		return false
+	}
+	return strings.TrimSpace(string(data)) == "1"
+}
+
 // Snapshot recalcule les compteurs dérivés et retourne l'état complet pour GET /api/state.
 func (s *Store) Snapshot() State {
 	s.mu.Lock()
@@ -409,7 +463,7 @@ func (s *Store) Snapshot() State {
 		Projects: sortedProjects(s.Projects),
 		Cards:    sortedCards(s.Cards),
 		Tasks:    sortedTasks(s.Tasks),
-		Agents:   sortedAgents(s.Agents),
+		Agents:   sortedAgentsWithWarnings(s.Agents),
 		Settings: s.Settings,
 	}
 	st.Tokens.Global = global
@@ -435,12 +489,13 @@ func (s *Store) TokensSnapshot() TokensEvent {
 	return ev
 }
 
-// ListAgents retourne les agents (compteur "active" recalculé), triés par ID.
-func (s *Store) ListAgents() []Agent {
+// ListAgents retourne les agents (compteur "active" recalculé et
+// avertissement de santé calculé, voir agentWarning), triés par ID.
+func (s *Store) ListAgents() []AgentOut {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.recomputeAll()
-	return sortedAgents(s.Agents)
+	return sortedAgentsWithWarnings(s.Agents)
 }
 
 // CardsByProject retourne les cartes d'un projet, recalculées.
@@ -825,6 +880,28 @@ func (s *Store) ReopenTask(id string) (Task, error) {
 		return Task{}, fmt.Errorf("only a shipped, done or cancelled task can be reopened")
 	}
 	return s.UpdateTask(id, func(t *Task) { t.Status = "review" })
+}
+
+// ReassignTask change l'agent assigné à une tâche. Refusé si la tâche est en
+// cours d'exécution (l'agent doit d'abord être interrompu), ou si l'agent
+// cible est inconnu. sessionId est vidé : le nouvel agent ne peut pas
+// reprendre la session CLI de l'ancien (voir Runner.Start pour le rappel de
+// contexte envoyé au prochain message).
+func (s *Store) ReassignTask(id, agentID string) (Task, error) {
+	t, ok := s.GetTask(id)
+	if !ok {
+		return Task{}, fmt.Errorf("task not found")
+	}
+	if t.Status == "running" {
+		return Task{}, fmt.Errorf("interrupt the agent before reassigning")
+	}
+	if _, ok := s.GetAgent(agentID); !ok {
+		return Task{}, fmt.Errorf("agent not found")
+	}
+	return s.UpdateTask(id, func(t *Task) {
+		t.AgentID = agentID
+		t.SessionID = ""
+	})
 }
 
 // AddMessage ajoute un message au fil d'une tâche et retourne le message et la tâche mises à jour.

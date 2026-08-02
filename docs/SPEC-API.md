@@ -1,4 +1,4 @@
-# Sillage : contrat d'API (v0.3.1)
+# Sillage : contrat d'API (v0.3.2)
 
 Serveur Go sur `:8787`. Frontend statique servi sur `/`. Tout le JSON est en camelCase.
 Auth par cookie de session (`sillage_session`, HttpOnly). Toute route `/api/*` (sauf `/api/login`) renvoie `401` sans session valide : le frontend affiche alors l'écran de connexion.
@@ -22,7 +22,10 @@ Card    { "id": "c1", "projectId": "p1", "column": "soon|doing|done", "title": "
 
 Agent   { "id": "bolt", "name": "Bolt", "emoji": "🐝", "color": "#f2b705",
           "model": "claude-sonnet-5", "cli": "claude", "contextPrompt": "...",
-          "active": true }        // active = une tâche running lui est assignée
+          "active": true, "warning": "..." }
+          // active = une tâche running lui est assignée. warning : calculé à chaque
+          // liste d'agents (jamais persisté dans state.json), vide si tout va bien ;
+          // voir "Santé des agents" ci-dessous.
 
 Task    { "id": "t1", "cardId": "c1", "projectId": "p1", "ref": 482, "title": "...",
           "agentId": "bolt", "repoName": "api", "branch": "sillage/482-slug",
@@ -73,6 +76,7 @@ Settings { "displayName": "Ada", "lang": "fr" }   // lang : ""|"fr"|"en"
 | POST | `/api/cards` | `{projectId, title, column?}` | Card. `column`, si fourni, doit valoir `"soon"` (400 `"cards are created in the soon column"` sinon) : les cartes se créent toujours dans "Bientôt" |
 | PATCH | `/api/cards/{id}` | `{column}` | Card (déplacement manuel inchangé, toutes colonnes acceptées) |
 | POST | `/api/tasks` | `{cardId, title, agentId, prompt?, repoName?}` | Task (créée `running`, agent lancé avec title+prompt). `repoName` optionnel si le projet n'a qu'un repo ; sinon 400 `"repoName required (project has several repositories)"` ou 400 si inconnu |
+| PATCH | `/api/tasks/{id}` | `{agentId}` | Task : réassigne l'agent (voir « Réassignation » ci-dessous). 400 si `status=running` (`"interrupt the agent before reassigning"`) ou si l'agent est inconnu |
 | GET | `/api/tasks/{id}` | | `{task, messages}` |
 | POST | `/api/tasks/{id}/messages` | `{text}` | 202 ; relance l'agent (statut → running) |
 | POST | `/api/tasks/{id}/interrupt` | | Task (running → review) |
@@ -92,6 +96,19 @@ Settings { "displayName": "Ada", "lang": "fr" }   // lang : ""|"fr"|"en"
 Statuts : `running → review → ready → shipped`, plus `done` (via `/finish`) et `cancelled` (via `/cancel`). `/reopen` accepte shipped/done/cancelled et ramène en `review`.
 
 Après chaque changement de statut de tâche, la carte est automatiquement replacée : si elle a au moins une tâche et que toutes ses tâches sont terminales (`shipped`/`done`/`cancelled`), `card.column` passe à `"done"` ; si une tâche redevient active (reopen, nouvelle tâche) alors que la carte est en `"done"`, elle repasse en `"doing"`. Le déplacement manuel (PATCH `/api/cards/{id}`) reste indépendant de cette règle. Chaque changement republie l'événement SSE `cards`.
+
+### Réassignation d'une tâche à un autre agent
+
+`PATCH /api/tasks/{id} {agentId}` : refusé si la tâche est `running` (l'interrompre d'abord via `/interrupt`) ou si l'agent est inconnu. Effets : `task.agentId` change, `task.sessionId` est vidé (le nouvel agent ne peut pas reprendre la session CLI de l'ancien), et un Message est ajouté au fil avec `author="agent"`, `authorName=""` et un texte figé `"[reassigned:<agentId>]"` : le frontend détecte ce marqueur et affiche une ligne système localisée (`author`/`authorName` volontairement neutres pour rester i18n-propre côté backend). SSE `task` + `message` + `agents`.
+
+Départ frais : quand la session CLI est vide (lancement initial, ou premier message après une réassignation), le texte envoyé au CLI est préfixé par un rappel minimal : `Task: <title>\n\n<texte>` (pas de préfixe si le texte est vide).
+
+### Santé des agents
+
+`Agent.warning` (dans `AgentOut`, jamais `Agent` lui-même : le champ n'existe pas dans le modèle persisté) est recalculé à chaque liste d'agents (`GET /api/state`, événement SSE `agents`) :
+- `cli=codex` : si `/proc/sys/kernel/apparmor_restrict_unprivileged_userns` vaut `1` et que `SILLAGE_CODEX_SANDBOX` n'est pas définie → `"codex sandbox is blocked on this machine (AppArmor); see README (SILLAGE_CODEX_SANDBOX)"`.
+- `cli=codex` ou `cli=claude` : si le binaire correspondant est introuvable dans le PATH → `"<cli> CLI not found in PATH"`.
+- Sinon (ou `cli=fake`) : chaîne vide.
 
 ### Ouvrir la PR
 

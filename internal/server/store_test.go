@@ -1,6 +1,10 @@
 package server
 
 import (
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -672,5 +676,170 @@ func TestSettingsUpdateValidatesLang(t *testing.T) {
 	}
 	if got := s2.GetSettings(); got.DisplayName != "Ada" {
 		t.Fatalf("displayName attendu 'Ada' après rechargement, reçu %q", got.DisplayName)
+	}
+}
+
+// --- Réassignation d'agent (v0.3.2 section 1) ---
+
+func TestReassignTask(t *testing.T) {
+	dir := t.TempDir()
+	s, err := NewStore(dir)
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+	project, err := s.AddProject("p", "", "", []Repo{{Path: "/tmp/p"}})
+	if err != nil {
+		t.Fatalf("AddProject: %v", err)
+	}
+	card, err := s.AddCard(project.ID, "Carte", "")
+	if err != nil {
+		t.Fatalf("AddCard: %v", err)
+	}
+
+	id, ref := s.ReserveTaskID()
+	if _, err := s.CreateTask(id, ref, card.ID, project.ID, "T", "echo", "sillage/"+id, "main", "/tmp/wt", "p"); err != nil {
+		t.Fatalf("CreateTask: %v", err)
+	}
+
+	// Refusé pendant l'exécution.
+	if _, err := s.ReassignTask(id, "bolt"); err == nil {
+		t.Fatalf("la réassignation d'une tâche running devrait être refusée")
+	} else if err.Error() != "interrupt the agent before reassigning" {
+		t.Fatalf("message d'erreur inattendu : %q", err.Error())
+	}
+
+	if _, err := s.UpdateTask(id, func(tk *Task) {
+		tk.Status = "review"
+		tk.SessionID = "sess-abc"
+	}); err != nil {
+		t.Fatalf("UpdateTask: %v", err)
+	}
+
+	// Agent inconnu refusé.
+	if _, err := s.ReassignTask(id, "inconnu"); err == nil {
+		t.Fatalf("la réassignation vers un agent inconnu devrait être refusée")
+	}
+
+	task, err := s.ReassignTask(id, "bolt")
+	if err != nil {
+		t.Fatalf("ReassignTask: %v", err)
+	}
+	if task.AgentID != "bolt" {
+		t.Fatalf("agentId attendu 'bolt', reçu %q", task.AgentID)
+	}
+	if task.SessionID != "" {
+		t.Fatalf("sessionId devrait être vidé après réassignation, reçu %q", task.SessionID)
+	}
+}
+
+// --- Avertissements de santé des agents (v0.3.2 section 2) ---
+
+func TestAgentWarningCodexSandboxBlockedByAppArmor(t *testing.T) {
+	origPath := apparmorRestrictPath
+	defer func() { apparmorRestrictPath = origPath }()
+	apparmorRestrictPath = filepath.Join(t.TempDir(), "apparmor_restrict_unprivileged_userns")
+	if err := os.WriteFile(apparmorRestrictPath, []byte("1\n"), 0o644); err != nil {
+		t.Fatalf("écriture fichier test : %v", err)
+	}
+
+	origLookPath := lookPath
+	defer func() { lookPath = origLookPath }()
+	lookPath = func(string) (string, error) { return "/usr/bin/codex", nil } // binaire présent : seul AppArmor doit déclencher.
+
+	t.Setenv("SILLAGE_CODEX_SANDBOX", "")
+	want := "codex sandbox is blocked on this machine (AppArmor); see README (SILLAGE_CODEX_SANDBOX)"
+	if got := agentWarning(Agent{Cli: "codex"}); got != want {
+		t.Fatalf("warning attendu %q, reçu %q", want, got)
+	}
+
+	t.Setenv("SILLAGE_CODEX_SANDBOX", "danger-full-access")
+	if got := agentWarning(Agent{Cli: "codex"}); got == want {
+		t.Fatalf("SILLAGE_CODEX_SANDBOX définie ne devrait plus déclencher l'avertissement AppArmor")
+	}
+}
+
+func TestAgentWarningMissingBinary(t *testing.T) {
+	origPath := apparmorRestrictPath
+	defer func() { apparmorRestrictPath = origPath }()
+	apparmorRestrictPath = filepath.Join(t.TempDir(), "absent") // fichier absent -> pas de blocage AppArmor.
+
+	origLookPath := lookPath
+	defer func() { lookPath = origLookPath }()
+	lookPath = func(string) (string, error) { return "", fmt.Errorf("not found") }
+
+	if got := agentWarning(Agent{Cli: "claude"}); got != "claude CLI not found in PATH" {
+		t.Fatalf("warning attendu 'claude CLI not found in PATH', reçu %q", got)
+	}
+	if got := agentWarning(Agent{Cli: "codex"}); got != "codex CLI not found in PATH" {
+		t.Fatalf("warning attendu 'codex CLI not found in PATH', reçu %q", got)
+	}
+	if got := agentWarning(Agent{Cli: "fake"}); got != "" {
+		t.Fatalf("l'agent fake ne devrait jamais avoir d'avertissement, reçu %q", got)
+	}
+}
+
+func TestAgentWarningHealthy(t *testing.T) {
+	origPath := apparmorRestrictPath
+	defer func() { apparmorRestrictPath = origPath }()
+	apparmorRestrictPath = filepath.Join(t.TempDir(), "absent")
+
+	origLookPath := lookPath
+	defer func() { lookPath = origLookPath }()
+	lookPath = func(file string) (string, error) { return "/usr/bin/" + file, nil }
+
+	if got := agentWarning(Agent{Cli: "codex"}); got != "" {
+		t.Fatalf("aucun avertissement attendu, reçu %q", got)
+	}
+	if got := agentWarning(Agent{Cli: "claude"}); got != "" {
+		t.Fatalf("aucun avertissement attendu, reçu %q", got)
+	}
+}
+
+func TestListAgentsExposesWarningNotPersisted(t *testing.T) {
+	dir := t.TempDir()
+	s, err := NewStore(dir)
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+
+	origLookPath := lookPath
+	defer func() { lookPath = origLookPath }()
+	lookPath = func(string) (string, error) { return "", fmt.Errorf("not found") }
+	origPath := apparmorRestrictPath
+	defer func() { apparmorRestrictPath = origPath }()
+	apparmorRestrictPath = filepath.Join(t.TempDir(), "absent")
+
+	agents := s.ListAgents()
+	found := false
+	for _, a := range agents {
+		if a.ID == "bolt" {
+			found = true
+			if a.Warning == "" {
+				t.Fatalf("l'agent bolt (claude) devrait porter un avertissement quand le binaire est introuvable")
+			}
+		}
+	}
+	if !found {
+		t.Fatalf("agent seedé 'bolt' introuvable")
+	}
+
+	// Le champ warning ne doit jamais être écrit dans state.json.
+	raw, err := os.ReadFile(filepath.Join(dir, "state.json"))
+	if err != nil {
+		t.Fatalf("lecture state.json : %v", err)
+	}
+	if strings.Contains(string(raw), "warning") {
+		t.Fatalf("state.json ne devrait jamais contenir le champ warning : %s", raw)
+	}
+}
+
+// --- Rappel de contexte au départ frais (v0.3.2 section 1) ---
+
+func TestContextualizeCliInput(t *testing.T) {
+	if got := contextualizeCliInput("Mon titre", "un message"); got != "Task: Mon titre\n\nun message" {
+		t.Fatalf("résultat inattendu : %q", got)
+	}
+	if got := contextualizeCliInput("Mon titre", ""); got != "Task: Mon titre" {
+		t.Fatalf("résultat inattendu (sans texte) : %q", got)
 	}
 }

@@ -89,6 +89,7 @@ func (r *Runner) Start(taskID string, initial bool, text string) error {
 	r.publishTask(task)
 	r.publishAgents()
 
+	cliInput := text
 	if !initial {
 		authorName := r.store.GetSettings().DisplayName
 		msg, updated, err := r.store.AddMessage(taskID, "user", authorName, text)
@@ -98,6 +99,13 @@ func (r *Runner) Start(taskID string, initial bool, text string) error {
 		r.publishMessage(msg)
 		task = updated
 		r.publishTask(task)
+
+		// Session vide = départ frais (lancement initial, ou message envoyé
+		// après réassignation à un nouvel agent qui vide sessionId) : rappeler
+		// le contexte minimal de la tâche, comme au lancement initial.
+		if task.SessionID == "" {
+			cliInput = contextualizeCliInput(task.Title, text)
+		}
 	}
 
 	handle := &procHandle{done: make(chan struct{})}
@@ -105,8 +113,18 @@ func (r *Runner) Start(taskID string, initial bool, text string) error {
 	r.procs[taskID] = handle
 	r.mu.Unlock()
 
-	go r.run(task, agent, handle, text)
+	go r.run(task, agent, handle, cliInput)
 	return nil
+}
+
+// contextualizeCliInput préfixe text par un rappel minimal de la tâche
+// ("Task: <title>") : utilisé au lancement initial et chaque fois qu'un
+// message est envoyé sans session CLI à reprendre (départ frais).
+func contextualizeCliInput(title, text string) string {
+	if text == "" {
+		return "Task: " + title
+	}
+	return "Task: " + title + "\n\n" + text
 }
 
 // Interrupt arrête l'agent en cours pour une tâche : SIGINT au groupe de
@@ -511,6 +529,7 @@ func (r *Runner) runCodex(task *Task, agent Agent, project Project, handle *proc
 	handle.cmd = cmd
 
 	parsedAny := false
+	var tokenAcc codexTokenAccumulator
 	scanner := bufio.NewScanner(stdout)
 	scanner.Buffer(make([]byte, 0, 64*1024), 10*1024*1024)
 	for scanner.Scan() {
@@ -533,16 +552,11 @@ func (r *Runner) runCodex(task *Task, agent Agent, project Project, handle *proc
 				r.publishTask(*task)
 			}
 		}
-		if tok, ok := extractCodexTokens(generic); ok {
+		// token_count/turn.completed portent des TOTAUX CUMULÉS par exécution
+		// (pas des deltas) : on retient juste le dernier vu, appliqué une seule
+		// fois en fin de process (voir plus bas), pour ne pas sur-compter.
+		if tokenAcc.observe(generic) {
 			parsedAny = true
-			if t, err := r.store.UpdateTask(task.ID, func(t *Task) {
-				t.Tokens.Input += tok.Input
-				t.Tokens.Output += tok.Output
-				t.Tokens.CostUsd += tok.CostUsd
-			}); err == nil {
-				*task = t
-			}
-			r.publishTokens()
 		}
 	}
 
@@ -550,6 +564,16 @@ func (r *Runner) runCodex(task *Task, agent Agent, project Project, handle *proc
 	waitErr := cmd.Wait()
 	if waitErr == nil && scanErr != nil {
 		waitErr = scanErr
+	}
+	if tokenAcc.found {
+		if t, err := r.store.UpdateTask(task.ID, func(t *Task) {
+			t.Tokens.Input += tokenAcc.last.Input
+			t.Tokens.Output += tokenAcc.last.Output
+			t.Tokens.CostUsd += tokenAcc.last.CostUsd
+		}); err == nil {
+			*task = t
+		}
+		r.publishTokens()
 	}
 	if !parsedAny && rawBuf.Len() > 0 {
 		msg, t, err := r.store.AddMessage(task.ID, "agent", agent.Name, strings.TrimSpace(rawBuf.String()))
@@ -617,6 +641,46 @@ func extractCodexTokens(m map[string]any) (Tokens, bool) {
 		found = true
 	}
 	return tok, found
+}
+
+// codexTokenAccumulator retient le dernier total de tokens vu dans le flux
+// JSONL d'une exécution codex. Les événements token_count/turn.completed
+// portent des TOTAUX CUMULÉS par exécution (pas des deltas) : il ne faut
+// jamais les additionner entre eux, seul le dernier compte.
+type codexTokenAccumulator struct {
+	last  Tokens
+	found bool
+}
+
+// observe traite un événement JSONL générique et retourne true s'il portait
+// des tokens (auquel cas last est mis à jour).
+func (a *codexTokenAccumulator) observe(m map[string]any) bool {
+	tok, ok := extractCodexTokens(m)
+	if !ok {
+		return false
+	}
+	a.last = tok
+	a.found = true
+	return true
+}
+
+// parseCodexTokenStream traite une suite de lignes JSONL (une par événement
+// codex) et retourne le dernier total de tokens vu, et si au moins un
+// événement de tokens a été trouvé. Fonction pure, sans exec, pour tester la
+// logique de non-cumul indépendamment du process codex réel.
+func parseCodexTokenStream(lines []string) (Tokens, bool) {
+	var acc codexTokenAccumulator
+	for _, line := range lines {
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		var m map[string]any
+		if err := json.Unmarshal([]byte(line), &m); err != nil {
+			continue
+		}
+		acc.observe(m)
+	}
+	return acc.last, acc.found
 }
 
 // --- Adaptateur fake (test/démo, sans exec) ---

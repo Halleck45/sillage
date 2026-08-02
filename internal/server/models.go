@@ -62,6 +62,15 @@ type Agent struct {
 	Active        bool   `json:"active"`
 }
 
+// AgentOut est la représentation d'un Agent exposée par l'API : les mêmes
+// champs qu'Agent (via embedding), plus Warning. Warning est calculé à la
+// volée à chaque ListAgents (jamais persisté dans state.json : Agent lui-même
+// n'a pas ce champ, donc rien à vider à l'écriture disque).
+type AgentOut struct {
+	Agent
+	Warning string `json:"warning"`
+}
+
 // Check est le résultat d'une vérification projet (ex : go test) pour une tâche.
 type Check struct {
 	Label string `json:"label"`
@@ -145,7 +154,7 @@ type State struct {
 	Projects  []Project       `json:"projects"`
 	Cards     []Card          `json:"cards"`
 	Tasks     []Task          `json:"tasks"`
-	Agents    []Agent         `json:"agents"`
+	Agents    []AgentOut      `json:"agents"`
 	Workspace WorkspaceStatus `json:"workspace"`
 	Settings  Settings        `json:"settings"`
 	Tokens    struct {

@@ -136,6 +136,11 @@
       'agent.errorNameRequired': 'Le nom est requis.',
       'agent.errorSaveFailed': 'Erreur lors de l\'enregistrement.',
       'agent.errorDeleteFailed': 'Erreur lors de la suppression.',
+      'agent.warning.codexSandbox': 'Sandbox codex bloqué sur cette machine (AppArmor). Voir le README (SILLAGE_CODEX_SANDBOX).',
+      'agent.warning.cliNotFound': 'CLI {cli} introuvable dans le PATH.',
+      'reassign.tooltip': 'Réassigner la tâche',
+      'chat.reassignedTo': 'Tâche réassignée à {name}',
+      'errors.reassignFailed': 'Échec de la réassignation.',
       'login.passwordPlaceholder': 'Mot de passe',
       'login.submit': 'Se connecter',
       'login.error': 'Mot de passe incorrect.',
@@ -320,6 +325,11 @@
       'agent.errorNameRequired': 'Name is required.',
       'agent.errorSaveFailed': 'Failed to save.',
       'agent.errorDeleteFailed': 'Failed to delete.',
+      'agent.warning.codexSandbox': 'Codex sandbox is blocked on this machine (AppArmor). See the README (SILLAGE_CODEX_SANDBOX).',
+      'agent.warning.cliNotFound': '{cli} CLI not found in PATH.',
+      'reassign.tooltip': 'Reassign the task',
+      'chat.reassignedTo': 'Task reassigned to {name}',
+      'errors.reassignFailed': 'Failed to reassign.',
       'login.passwordPlaceholder': 'Password',
       'login.submit': 'Log in',
       'login.error': 'Incorrect password.',
@@ -858,9 +868,11 @@
     }).join('');
 
     var agentsHTML = state.agents.map(function (a) {
+      var warn = a.warning ? '<span class="agent-warning-sm" title="' + escapeHtml(agentWarningText(a.warning)) + '">⚠</span>' : '';
       return '<div class="agent-item" data-action="edit-agent" data-agent-id="' + a.id + '">' +
         '<span class="agent-avatar" style="background:' + softColor(a.color) + '">' + a.emoji + '</span>' +
         '<span class="agent-name">' + escapeHtml(a.name) + '</span>' +
+        warn +
         (a.active ? '<span class="agent-dot"></span>' : '') +
         '</div>';
     }).join('');
@@ -1179,6 +1191,64 @@
     }).join('');
   }
 
+  // ---------------------------------------------------------------------
+  // Réassignation d'une tâche à un autre agent
+  // ---------------------------------------------------------------------
+
+  function agentWarningText(warning) {
+    if (!warning) return '';
+    if (warning.indexOf('codex sandbox is blocked') !== -1) return t('agent.warning.codexSandbox');
+    var m = /^(\S+) CLI not found in PATH$/.exec(warning);
+    if (m) return t('agent.warning.cliNotFound', { cli: m[1] });
+    return warning;
+  }
+
+  function buildReassignMenuHTML(task) {
+    var others = state.agents.filter(function (a) { return a.id !== task.agentId; });
+    var items = others.map(function (a) {
+      var warn = a.warning ? '<span class="agent-warning" title="' + escapeHtml(agentWarningText(a.warning)) + '">⚠</span>' : '';
+      return '<button class="reassign-item" data-action="reassign-task" data-task-id="' + task.id + '" data-agent-id="' + a.id + '">' +
+        '<span class="reassign-item-avatar" style="background:' + softColor(a.color) + '">' + a.emoji + '</span>' +
+        '<span class="reassign-item-info"><span class="reassign-item-name">' + escapeHtml(a.name) + warn + '</span>' +
+        '<span class="reassign-item-model mono">' + escapeHtml(a.model || '') + '</span></span>' +
+        '</button>';
+    }).join('');
+    return '<div class="reassign-menu hidden" data-reassign-menu="' + task.id + '">' + items + '</div>';
+  }
+
+  function buildAgentChipHTML(task, agent, soft) {
+    var others = state.agents.filter(function (a) { return a.id !== task.agentId; });
+    var canReassign = task.status !== 'running' && others.length > 0;
+    var innerHTML = '<span class="agent-avatar-sm" style="background:' + soft + '">' + agent.emoji + '</span>' + escapeHtml(agent.name);
+    if (!canReassign) {
+      return '<span class="agent-chip">' + innerHTML + '</span>';
+    }
+    return '<span class="agent-chip-wrap">' +
+      '<button class="agent-chip agent-chip-btn" data-action="toggle-reassign-menu" data-task-id="' + task.id + '" title="' + escapeHtml(t('reassign.tooltip')) + '" aria-label="' + escapeHtml(t('reassign.tooltip')) + '">' + innerHTML + '</button>' +
+      buildReassignMenuHTML(task) +
+      '</span>';
+  }
+
+  function closeAllReassignMenus() {
+    document.querySelectorAll('.reassign-menu').forEach(function (m) { m.classList.add('hidden'); });
+  }
+  function toggleReassignMenu(taskId) {
+    var el = document.querySelector('.reassign-menu[data-reassign-menu="' + taskId + '"]');
+    if (!el) return;
+    var willOpen = el.classList.contains('hidden');
+    closeAllReassignMenus();
+    if (willOpen) el.classList.remove('hidden');
+  }
+  function doReassignTask(taskId, agentId) {
+    closeAllReassignMenus();
+    api('/api/tasks/' + taskId, { method: 'PATCH', body: { agentId: agentId } }).then(function (task) {
+      upsertTask(task);
+      renderMain();
+    }).catch(function (e) {
+      if (e instanceof ApiError) showDetailError(taskId, e.message || t('errors.reassignFailed'));
+    });
+  }
+
   function buildDetailPanelHTML(task) {
     var agent = state.agentsById[task.agentId] || { emoji: '?', name: '?', model: '?', color: '#ccc' };
     var glyph = STATUS_GLYPH[task.status] || STATUS_GLYPH.running;
@@ -1243,7 +1313,7 @@
           '<div class="detail-head-main">' +
             '<div class="detail-title">' + escapeHtml(task.title) + '</div>' +
             '<div class="detail-meta">' +
-              '<span class="agent-chip"><span class="agent-avatar-sm" style="background:' + soft + '">' + agent.emoji + '</span>' + escapeHtml(agent.name) + '</span>' +
+              buildAgentChipHTML(task, agent, soft) +
               '<span class="mono">' + escapeHtml(agent.model || '') + '</span>' +
               '<span class="mono">' + escapeHtml(task.branch || '') + '</span>' +
               (multiRepo && task.repoName ? '<span class="repo-chip">' + escapeHtml(task.repoName) + '</span>' : '') +
@@ -1268,7 +1338,18 @@
   // Onglet Conversation
   // ---------------------------------------------------------------------
 
+  function parseReassignMarker(text) {
+    var m = /^\[reassigned:([^\]]+)\]$/.exec(String(text || '').trim());
+    return m ? m[1] : null;
+  }
+
   function buildMessageHTML(m, agent) {
+    var reassignedAgentId = parseReassignMarker(m.text);
+    if (reassignedAgentId) {
+      var targetAgent = state.agentsById[reassignedAgentId];
+      var targetName = targetAgent ? targetAgent.name : reassignedAgentId;
+      return '<div class="msg-system">' + escapeHtml(t('chat.reassignedTo', { name: targetName })) + '</div>';
+    }
     var isUser = m.author === 'user';
     var emoji = isUser ? '🙂' : (agent.emoji || '');
     var bg = isUser ? '#eeece6' : softColor(agent.color);
@@ -1627,9 +1708,10 @@
 
   function buildNewTaskModalHTML(card) {
     var agentChoices = state.agents.map(function (a) {
+      var warn = a.warning ? '<span class="agent-warning" title="' + escapeHtml(agentWarningText(a.warning)) + '">⚠</span>' : '';
       return '<button class="agent-choice ' + (a.id === modalAgentId ? 'selected' : '') + '" data-action="pick-agent" data-agent-id="' + a.id + '">' +
         '<span class="agent-choice-avatar" style="background:' + softColor(a.color) + '">' + a.emoji + '</span>' +
-        '<span class="agent-choice-info"><span class="agent-choice-name">' + escapeHtml(a.name) + '</span>' +
+        '<span class="agent-choice-info"><span class="agent-choice-name">' + escapeHtml(a.name) + warn + '</span>' +
         '<span class="agent-choice-model mono">' + escapeHtml(a.model || '') + '</span></span></button>';
     }).join('');
     var selected = state.agentsById[modalAgentId];
@@ -1859,8 +1941,10 @@
         '<button class="delete-link" data-action="confirm-click" data-confirm-key="' + delKey + '" data-confirm-action="agent-delete" data-confirm-id="' + agent.id + '" data-default-label="' + escapeHtml(t('agent.delete')) + '" data-confirm-label="' + escapeHtml(t('agent.deleteConfirm')) + '">' + escapeHtml(delLabel) + '</button>' +
         '</div>';
     }
+    var warningBanner = (agent && agent.warning) ? '<div class="agent-warning-banner">⚠ ' + escapeHtml(agentWarningText(agent.warning)) + '</div>' : '';
     return '<div class="modal">' +
       '<div class="modal-head"><span class="modal-title">' + escapeHtml(title) + '</span><button class="icon-btn" data-action="close-modal" aria-label="' + escapeHtml(t('common.close')) + '">✕</button></div>' +
+      warningBanner +
       '<div class="modal-label">' + escapeHtml(t('agent.name')) + '</div><input id="agent-name" class="modal-input" value="' + (agent ? escapeHtml(agent.name) : '') + '">' +
       '<div class="agent-form-row">' +
         '<div><div class="modal-label">' + escapeHtml(t('agent.emoji')) + '</div><input id="agent-emoji" class="modal-input agent-emoji-input" maxlength="4" value="' + (agent ? escapeHtml(agent.emoji || '') : '') + '"></div>' +
@@ -2358,9 +2442,10 @@
 
   function onGlobalClick(e) {
     var el = e.target.closest('[data-action]');
-    if (!el) { closeAllCardMenus(); return; }
+    if (!el) { closeAllCardMenus(); closeAllReassignMenus(); return; }
     var action = el.getAttribute('data-action');
     if (action !== 'toggle-card-menu') closeAllCardMenus();
+    if (action !== 'toggle-reassign-menu') closeAllReassignMenus();
     switch (action) {
       case 'nav-inbox': goInbox(); break;
       case 'nav-projects': goAllProjects(); break;
@@ -2372,6 +2457,8 @@
       case 'set-filter': setFilter(el.getAttribute('data-filter')); break;
       case 'set-tab': setTab(el.getAttribute('data-panel-tab')); break;
       case 'toggle-card-menu': toggleCardMenu(el.getAttribute('data-card-id')); break;
+      case 'toggle-reassign-menu': toggleReassignMenu(el.getAttribute('data-task-id')); break;
+      case 'reassign-task': doReassignTask(el.getAttribute('data-task-id'), el.getAttribute('data-agent-id')); break;
       case 'move-card': moveCard(el.getAttribute('data-card-id'), el.getAttribute('data-column')); break;
       case 'open-new-card': openNewCardModal(); break;
       case 'open-new-task': if (state.cardId) openNewTaskModal(state.cardId); break;
