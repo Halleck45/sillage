@@ -62,7 +62,12 @@ func CreateWorktree(repoPath, dataDir, taskID, branch string) (dir, base string,
 	if err := os.MkdirAll(filepath.Dir(dir), 0o700); err != nil {
 		return "", "", err
 	}
-	if _, err := runGit(repoPath, gitDefaultTimeout, "worktree", "add", "-b", branch, dir, base); err != nil {
+	// Nettoie les worktrees fantômes (répertoire de données supprimé ou déplacé)
+	// qui bloqueraient la création au même chemin.
+	_, _ = runGit(repoPath, gitDefaultTimeout, "worktree", "prune")
+	// -B : réutilise la branche si elle existe déjà (le nom est dérivé d'un
+	// compteur de référence, une collision signifie un état recréé de zéro).
+	if _, err := runGit(repoPath, gitDefaultTimeout, "worktree", "add", "-B", branch, dir, base); err != nil {
 		return "", "", err
 	}
 	return dir, base, nil

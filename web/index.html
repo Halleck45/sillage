@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Atelier</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app">
+
+  <div id="login-screen" class="login-screen">
+    <div class="login-card">
+      <div class="login-logo"><span class="brand-mark"></span><span class="brand-name">Atelier</span></div>
+      <form id="login-form">
+        <input type="password" id="login-password" placeholder="Mot de passe" autocomplete="current-password" required>
+        <button type="submit">Se connecter</button>
+      </form>
+      <div id="login-error" class="login-error hidden"></div>
+    </div>
+  </div>
+
+  <div id="shell" class="shell hidden">
+    <aside id="sidebar" class="sidebar"></aside>
+    <div id="sidebar-backdrop" class="sidebar-backdrop hidden" data-action="close-sidebar-drawer"></div>
+    <main id="main" class="main"></main>
+  </div>
+
+  <div id="search-overlay" class="search-overlay hidden"></div>
+  <div id="modal-root"></div>
+
+</div>
+<script src="app.js"></script>
+</body>
+</html>

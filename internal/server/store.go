@@ -503,9 +503,16 @@ func (s *Store) AddMessage(taskID, author, text string) (Message, Task, error) {
 
 var slugRe = regexp.MustCompile(`[^a-z0-9]+`)
 
+var slugAccents = strings.NewReplacer(
+	"à", "a", "â", "a", "ä", "a", "é", "e", "è", "e", "ê", "e", "ë", "e",
+	"î", "i", "ï", "i", "ô", "o", "ö", "o", "ù", "u", "û", "u", "ü", "u",
+	"ç", "c", "œ", "oe", "æ", "ae",
+)
+
 // Slugify normalise un titre de tâche en segment de nom de branche.
 func Slugify(title string) string {
-	s := slugRe.ReplaceAllString(strings.ToLower(title), "-")
+	s := slugAccents.Replace(strings.ToLower(title))
+	s = slugRe.ReplaceAllString(s, "-")
 	s = strings.Trim(s, "-")
 	if len(s) > 40 {
 		s = strings.Trim(s[:40], "-")

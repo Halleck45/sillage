@@ -40,6 +40,7 @@ func TestStoreRoundtripSaveLoad(t *testing.T) {
 		tk.Status = "shipped"
 		tk.Unread = true
 		tk.Tokens = Tokens{Input: 10, Output: 5, CostUsd: 0.01}
+		tk.SessionID = "sess-abc"
 	})
 	if err != nil {
 		t.Fatalf("UpdateTask: %v", err)
@@ -71,6 +72,12 @@ func TestStoreRoundtripSaveLoad(t *testing.T) {
 	}
 	if loadedTask.Tokens.Input != 10 || loadedTask.Tokens.Output != 5 || loadedTask.Tokens.CostUsd != 0.01 {
 		t.Fatalf("tokens inattendus après rechargement : %+v", loadedTask.Tokens)
+	}
+	// Régression : les champs internes doivent survivre au redémarrage,
+	// sinon diff et resume sont cassés après relance du serveur.
+	if loadedTask.Base != "main" || loadedTask.WorktreeDir != "/tmp/worktree" || loadedTask.SessionID != "sess-abc" {
+		t.Fatalf("champs internes perdus après rechargement : base=%q worktree=%q session=%q",
+			loadedTask.Base, loadedTask.WorktreeDir, loadedTask.SessionID)
 	}
 	if loadedTask.MessagesCount != 1 {
 		t.Fatalf("messagesCount attendu 1 après rechargement, reçu %d", loadedTask.MessagesCount)
@@ -194,6 +201,7 @@ func TestDerivedCounters(t *testing.T) {
 func TestSlugify(t *testing.T) {
 	cases := map[string]string{
 		"Ajouter le bouton Ship": "ajouter-le-bouton-ship",
+		"Créer un fichier été":   "creer-un-fichier-ete",
 		"  Espaces  multiples ":  "espaces-multiples",
 		"":                       "tache",
 		"!!!":                    "tache",

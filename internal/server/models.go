@@ -75,10 +75,11 @@ type Task struct {
 	UpdatedAt     time.Time `json:"updatedAt"`
 	Tokens        Tokens    `json:"tokens"`
 
-	// Champs internes, non exposés par l'API.
-	Base        string `json:"-"` // branche de base au moment de la création
-	WorktreeDir string `json:"-"`
-	SessionID   string `json:"-"` // session claude, pour --resume
+	// Champs internes ; persistés dans state.json (sinon perdus au redémarrage)
+	// et visibles par le client authentifié, ce qui est sans enjeu en mono-utilisateur.
+	Base        string `json:"base"`        // branche de base au moment de la création
+	WorktreeDir string `json:"worktreeDir"` //
+	SessionID   string `json:"sessionId"`   // session claude, pour --resume
 }
 
 // Message est un message échangé dans le fil d'une tâche.
