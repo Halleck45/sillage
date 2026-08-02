@@ -1,0 +1,705 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  html, body { margin:0; padding:0; background:#f2f0ea; }
+  * { box-sizing: border-box; }
+  a { color:#2f66d0; text-decoration:none; }
+  a:hover { color:#1e4ba6; }
+  ::-webkit-scrollbar { width:10px; height:10px; }
+  ::-webkit-scrollbar-thumb { background:#e2e1dd; border-radius:8px; border:3px solid transparent; background-clip:content-box; }
+  @keyframes om-pulse { 0%,100% { opacity:.25 } 50% { opacity:1 } }
+  @keyframes om-fade { from { opacity:0; transform:translateY(3px) } to { opacity:1; transform:none } }
+</style>
+</helmet>
+<div style="display:flex; height:100vh; width:100%; overflow:hidden; font-family:'Helvetica Neue', Helvetica, Arial, sans-serif; color:#191917; -webkit-font-smoothing:antialiased; background:#f2f0ea">
+
+  <aside style="width:236px; flex:none; display:flex; flex-direction:column; padding:10px 0 0">
+    <div style="height:44px; flex:none; display:flex; align-items:center; gap:9px; padding:0 18px">
+      <div style="width:18px; height:18px; border-radius:6px; background:#191917"></div>
+      <span style="font-size:14px; font-weight:600; letter-spacing:-0.015em">Atelier</span>
+    </div>
+    <div style="padding:4px 12px 12px">
+      <div style="display:flex; align-items:center; gap:8px; height:32px; padding:0 10px; background:#ffffff; border-radius:9px; font-size:13px; color:#9b998f">
+        <span>⌕</span><span style="flex:1">Rechercher</span>
+        <span style="font-family:ui-monospace, Menlo, monospace; font-size:11px; color:#b8b6ad">⌘K</span>
+      </div>
+    </div>
+    <div style="display:flex; flex-direction:column; gap:1px; padding:0 8px 10px">
+      <sc-for list="{{ navItems }}" as="n" hint-placeholder-count="2">
+        <button onClick="{{ n.onClick }}" style="display:flex; align-items:center; gap:10px; height:30px; padding:0 10px; border:0; border-radius:8px; cursor:pointer; font-family:inherit; font-size:13.5px; text-align:left; background:{{ n.bg }}; color:#3a3936; font-weight:{{ n.weight }}" style-hover="background:#eae7df">
+          <span style="width:15px; text-align:center">{{ n.icon }}</span>{{ n.label }}
+        </button>
+      </sc-for>
+    </div>
+    <div style="padding:6px 20px 6px; font-size:11.5px; font-weight:600; color:#a3a19a">Projets</div>
+    <nav style="display:flex; flex-direction:column; gap:1px; padding:0 8px; overflow-y:auto">
+      <sc-for list="{{ projects }}" as="p" hint-placeholder-count="5">
+        <button onClick="{{ p.onSelect }}" style="display:flex; align-items:center; gap:9px; width:100%; height:30px; padding:0 10px; border:0; border-radius:8px; cursor:pointer; font-family:inherit; font-size:13.5px; text-align:left; background:{{ p.bg }}; color:{{ p.fg }}; font-weight:{{ p.weight }}" style-hover="background:#eae7df">
+          <span style="color:#b8b6ad; flex:none">#</span>
+          <span style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap">{{ p.name }}</span>
+          <sc-if value="{{ p.unread }}" hint-placeholder-val="{{ true }}">
+            <span style="width:6px; height:6px; border-radius:50%; background:#191917; flex:none"></span>
+          </sc-if>
+        </button>
+      </sc-for>
+    </nav>
+
+    <div style="padding:16px 20px 6px; font-size:11.5px; font-weight:600; color:#a3a19a">Agents</div>
+    <div style="display:flex; flex-direction:column; gap:1px; padding:0 8px">
+      <sc-for list="{{ agentList }}" as="a" hint-placeholder-count="3">
+        <div style="display:flex; align-items:center; gap:9px; height:32px; padding:0 10px; border-radius:8px; font-size:13.5px; color:#3a3936" style-hover="background:#eae7df">
+          <span style="width:21px; height:21px; flex:none; border-radius:7px; display:flex; align-items:center; justify-content:center; font-size:12px; background:{{ a.bg }}">{{ a.emoji }}</span>
+          <span style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap">{{ a.name }}</span>
+          <sc-if value="{{ a.busy }}" hint-placeholder-val="{{ true }}">
+            <span style="width:6px; height:6px; border-radius:50%; background:#2f7d54; flex:none; animation:om-pulse 1.6s ease-in-out infinite"></span>
+          </sc-if>
+        </div>
+      </sc-for>
+    </div>
+
+    <div style="margin-top:auto; padding:14px 18px; display:flex; align-items:center; gap:9px">
+      <div style="width:24px; height:24px; border-radius:50%; background:#dcdad3; display:flex; align-items:center; justify-content:center; font-size:10.5px; font-weight:600; color:#5c5a53">TL</div>
+      <span style="font-size:13px; color:#5c5a53">Thomas L.</span>
+    </div>
+  </aside>
+
+  <main style="flex:1; min-width:0; display:flex; flex-direction:column; margin:10px 10px 10px 0; background:#ffffff; border-radius:14px; overflow:hidden; box-shadow:0 1px 3px rgba(25,25,23,0.06)">
+
+    <header style="height:52px; flex:none; display:flex; align-items:center; gap:10px; padding:0 20px; border-bottom:1px solid #f0eeE9">
+      <sc-if value="{{ inWork }}" hint-placeholder-val="{{ true }}">
+        <button onClick="{{ goBack }}" style="width:26px; height:26px; margin-left:-6px; flex:none; border:0; background:transparent; border-radius:7px; cursor:pointer; color:#7d7b74; font-size:15px" style-hover="background:#f4f2ee">←</button>
+      </sc-if>
+      <span style="font-size:14.5px; font-weight:600; letter-spacing:-0.015em; overflow:hidden; text-overflow:ellipsis; white-space:nowrap">{{ crumbTitle }}</span>
+      <sc-if value="{{ inWork }}" hint-placeholder-val="{{ true }}">
+        <span style="flex:none; font-size:12.5px; color:#a3a19a">{{ crumbProject }}</span>
+      </sc-if>
+      <div style="margin-left:auto; display:flex; align-items:center; gap:8px">
+        <button style="flex:none; white-space:nowrap; height:28px; padding:0 11px; border:1px solid #e6e3dc; background:#ffffff; border-radius:8px; font-family:inherit; font-size:12.5px; color:#3a3936; cursor:pointer" style-hover="background:#f6f4f0">Terminal</button>
+        <button onClick="{{ openCompose }}" style="flex:none; white-space:nowrap; height:28px; padding:0 12px; border:0; border-radius:8px; font-family:inherit; font-size:12.5px; font-weight:500; color:#ffffff; cursor:pointer; background:{{ accent }}" style-hover="filter:brightness(0.92)">Nouvelle tâche</button>
+      </div>
+    </header>
+
+    <sc-if value="{{ inKanban }}" hint-placeholder-val="{{ true }}">
+      <div style="flex:1; min-height:0; overflow-y:auto; padding:24px 24px 48px">
+        <div style="display:flex; align-items:baseline; gap:22px; margin-bottom:22px">
+          <h1 style="margin:0; font-size:24px; font-weight:600; letter-spacing:-0.028em">{{ crumbProject }}</h1>
+          <div style="display:flex; gap:18px; margin-left:auto; flex-wrap:wrap">
+            <sc-for list="{{ projectStats }}" as="s" hint-placeholder-count="3">
+              <span style="font-size:12.5px; color:#8b8982; white-space:nowrap"><span style="font-weight:600; color:{{ s.color }}; font-variant-numeric:tabular-nums">{{ s.value }}</span> {{ s.label }}</span>
+            </sc-for>
+          </div>
+        </div>
+
+        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(250px,1fr)); gap:14px; align-items:start">
+          <sc-for list="{{ columns }}" as="col" hint-placeholder-count="3">
+            <section style="display:flex; flex-direction:column; gap:9px; min-width:0">
+              <div style="display:flex; align-items:center; gap:8px; padding:0 3px 3px">
+                <span style="width:7px; height:7px; border-radius:50%; background:{{ col.color }}"></span>
+                <span style="font-size:12.5px; font-weight:600; letter-spacing:-0.01em">{{ col.label }}</span>
+                <span style="font-size:12px; color:#b0aea7; font-variant-numeric:tabular-nums">{{ col.count }}</span>
+              </div>
+              <sc-for list="{{ col.cards }}" as="c" hint-placeholder-count="3">
+                <article onClick="{{ c.onOpen }}" style="background:#ffffff; border:1px solid #eae7e0; border-radius:12px; padding:14px 15px; cursor:pointer; transition:border-color .15s ease, box-shadow .15s ease" style-hover="border-color:#d8d4cb; box-shadow:0 4px 14px rgba(25,25,23,0.06)">
+                  <div style="display:flex; align-items:flex-start; gap:10px">
+                    <h3 style="margin:0; font-size:14.5px; font-weight:600; letter-spacing:-0.015em; line-height:1.35; flex:1 1 auto; min-width:0; text-wrap:pretty; color:{{ c.titleColor }}">{{ c.title }}</h3>
+                    <span style="flex:none; display:flex; padding-top:1px">
+                      <sc-for list="{{ c.agents }}" as="a" hint-placeholder-count="2">
+                        <span style="width:22px; height:22px; margin-left:-5px; border-radius:7px; border:2px solid #ffffff; display:flex; align-items:center; justify-content:center; font-size:11px; background:{{ a.bg }}">{{ a.emoji }}</span>
+                      </sc-for>
+                    </span>
+                  </div>
+                  <sc-if value="{{ c.live }}" hint-placeholder-val="{{ true }}">
+                    <div style="display:flex; align-items:center; gap:8px; margin-top:11px; padding:7px 9px; background:#f5f8f6; border-radius:8px">
+                      <span style="width:5px; height:5px; border-radius:50%; flex:none; background:#2f7d54; animation:om-pulse 1.4s ease-in-out infinite"></span>
+                      <span style="font-family:ui-monospace, Menlo, monospace; font-size:11px; color:#41695a; overflow:hidden; text-overflow:ellipsis; white-space:nowrap">{{ c.live }}</span>
+                    </div>
+                  </sc-if>
+                  <div style="display:flex; align-items:center; gap:12px; margin-top:12px; flex-wrap:wrap; font-size:12px; color:#9b998f; font-variant-numeric:tabular-nums">
+                    <span style="white-space:nowrap">{{ c.tasksLabel }}</span>
+                    <span style="white-space:nowrap">▤ {{ c.docs }}</span>
+                    <span style="white-space:nowrap">💬 {{ c.messages }}</span>
+                    <sc-if value="{{ c.attention }}" hint-placeholder-val="{{ true }}">
+                      <span style="margin-left:auto; white-space:nowrap; font-weight:600; color:#9a6b0d">{{ c.attention }}</span>
+                    </sc-if>
+                  </div>
+                  <div style="margin-top:11px; height:3px; border-radius:3px; background:#f1efea; overflow:hidden">
+                    <div style="height:100%; border-radius:3px; background:{{ c.barColor }}; width:{{ c.progress }}"></div>
+                  </div>
+                </article>
+              </sc-for>
+              <button onClick="{{ openCompose }}" style="height:34px; border:1px dashed #e2dfd7; background:transparent; border-radius:10px; font-family:inherit; font-size:12.5px; color:#a3a19a; cursor:pointer" style-hover="border-color:#c9c5bb; color:#6d6b64">+ Ajouter</button>
+            </section>
+          </sc-for>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ inWork }}" hint-placeholder-val="{{ true }}">
+      <div style="flex:1; min-height:0; display:flex">
+
+        <div style="flex:1; min-width:0; overflow-y:auto; padding:16px 20px 40px">
+          <div style="display:flex; align-items:center; gap:7px; margin-bottom:12px; flex-wrap:wrap">
+            <sc-for list="{{ filters }}" as="f" hint-placeholder-count="4">
+              <button onClick="{{ f.onClick }}" style="flex:none; white-space:nowrap; height:26px; padding:0 11px; border:0; background:{{ f.bg }}; color:{{ f.fg }}; border-radius:8px; font-family:inherit; font-size:12.5px; font-weight:{{ f.weight }}; cursor:pointer" style-hover="background:#f1efea">{{ f.label }}</button>
+            </sc-for>
+          </div>
+
+          <div style="display:flex; flex-direction:column">
+            <sc-for list="{{ tasks }}" as="t" hint-placeholder-count="5">
+              <div onClick="{{ t.onOpen }}" style="display:flex; align-items:flex-start; gap:12px; padding:13px 12px; border-radius:10px; cursor:pointer; background:{{ t.rowBg }}; border-bottom:1px solid #f4f2ed" style-hover="background:#faf9f6">
+                <span style="flex:none; width:18px; height:18px; margin-top:1px; display:flex; align-items:center; justify-content:center; font-size:13px; color:{{ t.glyphFg }}">{{ t.glyph }}</span>
+                <div style="flex:1; min-width:0">
+                  <div style="display:flex; align-items:center; gap:9px; flex-wrap:wrap">
+                    <span style="flex:0 1 auto; min-width:0; font-size:14.5px; font-weight:500; letter-spacing:-0.014em; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:{{ t.titleFg }}">{{ t.title }}</span>
+                    <sc-if value="{{ t.isNew }}" hint-placeholder-val="{{ true }}">
+                      <span style="flex:none; height:17px; padding:0 6px; border-radius:5px; background:#e9f3ec; color:#2f7d54; font-size:10.5px; font-weight:700; letter-spacing:0.03em; display:inline-flex; align-items:center">NEW</span>
+                    </sc-if>
+                  </div>
+                  <div style="display:flex; align-items:center; gap:8px; margin-top:4px; flex-wrap:wrap; font-size:12px; color:#9b998f">
+                    <span style="white-space:nowrap; font-family:ui-monospace, Menlo, monospace">{{ t.ref }}</span>
+                    <span style="display:inline-flex; align-items:center; gap:5px; white-space:nowrap">
+                      <span style="width:16px; height:16px; border-radius:5px; display:flex; align-items:center; justify-content:center; font-size:9.5px; background:{{ t.agentBg }}">{{ t.agentEmoji }}</span>{{ t.agentName }}
+                    </span>
+                    <span style="white-space:nowrap">{{ t.age }}</span>
+                    <sc-if value="{{ t.live }}" hint-placeholder-val="{{ true }}">
+                      <span style="display:inline-flex; align-items:center; gap:6px; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-family:ui-monospace, Menlo, monospace; font-size:11.5px; color:#2f7d54">
+                        <span style="width:5px; height:5px; border-radius:50%; flex:none; background:#2f7d54; animation:om-pulse 1.4s ease-in-out infinite"></span>{{ t.live }}
+                      </span>
+                    </sc-if>
+                  </div>
+                </div>
+                <div style="flex:none; display:flex; align-items:center; gap:12px; padding-top:2px; font-size:12px; color:#a3a19a; font-variant-numeric:tabular-nums">
+                  <span style="white-space:nowrap">◆ {{ t.filesCount }}</span>
+                  <span style="white-space:nowrap">💬 {{ t.messages }}</span>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+
+        <sc-if value="{{ panelOpen }}" hint-placeholder-val="{{ true }}">
+          <aside style="flex:0 0 auto; width:min(560px, 50%); border-left:1px solid #f0eeE9; background:#ffffff; display:flex; flex-direction:column; min-height:0; animation:om-fade .18s ease">
+
+            <div style="flex:none; padding:14px 18px 0">
+              <div style="display:flex; align-items:flex-start; gap:10px">
+                <span style="flex:none; width:18px; height:18px; margin-top:2px; display:flex; align-items:center; justify-content:center; font-size:13px; color:{{ detail.glyphFg }}">{{ detail.glyph }}</span>
+                <div style="flex:1; min-width:0">
+                  <div style="font-size:15px; font-weight:600; letter-spacing:-0.015em; line-height:1.35; text-wrap:pretty">{{ detail.title }}</div>
+                  <div style="display:flex; align-items:center; gap:8px; margin-top:5px; flex-wrap:wrap; font-size:12px; color:#9b998f">
+                    <span style="display:inline-flex; align-items:center; gap:5px; white-space:nowrap">
+                      <span style="width:16px; height:16px; border-radius:5px; display:flex; align-items:center; justify-content:center; font-size:9.5px; background:{{ detail.agentBg }}">{{ detail.agentEmoji }}</span>{{ detail.agentName }}
+                    </span>
+                    <span style="font-family:ui-monospace, Menlo, monospace; white-space:nowrap">{{ detail.model }}</span>
+                    <span style="white-space:nowrap">{{ detail.branch }}</span>
+                  </div>
+                </div>
+                <button onClick="{{ closePanel }}" style="flex:none; width:24px; height:24px; border:0; background:transparent; border-radius:7px; color:#a3a19a; cursor:pointer; font-size:13px" style-hover="background:#f4f2ee">✕</button>
+              </div>
+
+              <div style="display:flex; align-items:center; gap:8px; margin-top:14px">
+                <sc-for list="{{ detail.steps }}" as="s" hint-placeholder-count="3">
+                  <span style="flex:1; display:flex; flex-direction:column; gap:5px; min-width:0">
+                    <span style="height:3px; border-radius:3px; background:{{ s.bar }}"></span>
+                    <span style="font-size:11px; color:{{ s.fg }}; font-weight:{{ s.weight }}; overflow:hidden; text-overflow:ellipsis; white-space:nowrap">{{ s.label }}</span>
+                  </span>
+                </sc-for>
+              </div>
+
+              <div style="display:flex; align-items:center; gap:10px; margin-top:14px">
+                <button onClick="{{ detail.onPrimary }}" style="flex:1; min-width:0; height:40px; padding:0 16px; border:0; border-radius:10px; font-family:inherit; font-size:14px; font-weight:600; letter-spacing:-0.01em; cursor:pointer; background:{{ detail.actionBg }}; color:{{ detail.actionFg }}; box-shadow:{{ detail.actionShadow }}" style-hover="filter:brightness(0.95)">{{ detail.actionLabel }}</button>
+                <span style="flex:none; font-size:12px; font-weight:600; white-space:nowrap; color:{{ detail.checksFg }}">{{ detail.checks }}</span>
+              </div>
+
+              <div style="display:flex; align-items:center; gap:4px; margin-top:13px; border-bottom:1px solid #f0eeE9">
+                <sc-for list="{{ panelTabs }}" as="tab" hint-placeholder-count="3">
+                  <button onClick="{{ tab.onClick }}" style="flex:none; white-space:nowrap; display:inline-flex; align-items:center; gap:6px; height:33px; padding:0 10px; border:0; border-bottom:2px solid {{ tab.underline }}; background:transparent; font-family:inherit; font-size:13px; font-weight:{{ tab.weight }}; color:{{ tab.fg }}; cursor:pointer" style-hover="color:#191917">
+                    {{ tab.label }}
+                    <span style="min-width:18px; height:17px; padding:0 5px; border-radius:20px; background:{{ tab.countBg }}; color:{{ tab.countFg }}; font-size:11px; font-weight:600; display:inline-flex; align-items:center; justify-content:center; font-variant-numeric:tabular-nums">{{ tab.count }}</span>
+                    <sc-if value="{{ tab.isNew }}" hint-placeholder-val="{{ true }}">
+                      <span style="width:6px; height:6px; border-radius:50%; background:#2f7d54"></span>
+                    </sc-if>
+                  </button>
+                </sc-for>
+              </div>
+            </div>
+
+            <sc-if value="{{ showChat }}" hint-placeholder-val="{{ true }}">
+              <div style="flex:1; min-height:0; overflow-y:auto; padding:16px 18px 8px; display:flex; flex-direction:column; gap:15px">
+                <sc-for list="{{ messages }}" as="m" hint-placeholder-count="4">
+                  <div style="display:flex; gap:10px">
+                    <span style="width:26px; height:26px; flex:none; border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:13px; background:{{ m.bg }}">{{ m.emoji }}</span>
+                    <div style="flex:1; min-width:0">
+                      <div style="display:flex; align-items:baseline; gap:8px">
+                        <span style="font-size:13px; font-weight:600">{{ m.name }}</span>
+                        <span style="font-size:11px; color:#b0aea7">{{ m.time }}</span>
+                      </div>
+                      <p style="margin:3px 0 0; font-size:13.5px; line-height:1.55; color:#33322f; text-wrap:pretty">{{ m.text }}</p>
+                      <sc-if value="{{ m.code }}" hint-placeholder-val="{{ true }}">
+                        <pre style="margin:8px 0 0; padding:10px 12px; background:#faf9f6; border:1px solid #f0eeE9; border-radius:9px; font-family:ui-monospace, Menlo, monospace; font-size:11.5px; line-height:1.6; color:#3a3936; overflow-x:auto">{{ m.code }}</pre>
+                      </sc-if>
+                      <sc-if value="{{ m.attachment }}" hint-placeholder-val="{{ true }}">
+                        <div onClick="{{ openDiff }}" style="display:flex; align-items:center; gap:10px; margin-top:9px; padding:9px 11px; border:1px solid #eeecE6; border-radius:10px; cursor:pointer; max-width:330px" style-hover="background:#faf9f6">
+                          <span style="width:26px; height:26px; flex:none; border-radius:7px; background:#f2f0ea; display:flex; align-items:center; justify-content:center; font-size:12px">◆</span>
+                          <div style="min-width:0">
+                            <div style="font-size:11px; color:#9b998f">{{ m.attachment.kind }}</div>
+                            <div style="font-size:13px; font-weight:600; letter-spacing:-0.01em; overflow:hidden; text-overflow:ellipsis; white-space:nowrap">{{ m.attachment.title }}</div>
+                          </div>
+                        </div>
+                      </sc-if>
+                    </div>
+                  </div>
+                </sc-for>
+              </div>
+              <div style="flex:none; padding:10px 16px 16px">
+                <div style="border:1px solid #e6e3dc; border-radius:12px; padding:11px 13px">
+                  <div style="font-size:13.5px; color:#b0aea7">{{ composerHint }}</div>
+                  <div style="display:flex; align-items:center; gap:8px; margin-top:12px">
+                    <span style="display:inline-flex; align-items:center; gap:6px; font-size:12px; color:#8b8982">
+                      <span style="width:18px; height:18px; border-radius:6px; display:flex; align-items:center; justify-content:center; font-size:10px; background:{{ detail.agentBg }}">{{ detail.agentEmoji }}</span>{{ detail.model }}
+                    </span>
+                    <button style="margin-left:auto; flex:none; height:28px; padding:0 12px; border:0; border-radius:8px; font-family:inherit; font-size:12.5px; font-weight:500; color:#ffffff; cursor:pointer; background:{{ accent }}">Envoyer ⏎</button>
+                  </div>
+                </div>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ showDiff }}" hint-placeholder-val="{{ true }}">
+              <div style="flex:none; display:flex; align-items:center; gap:7px; padding:11px 18px; overflow-x:auto">
+                <sc-for list="{{ diffFiles }}" as="f" hint-placeholder-count="3">
+                  <span style="display:inline-flex; align-items:center; gap:8px; flex:none; height:24px; padding:0 10px; border-radius:7px; background:{{ f.bg }}; font-family:ui-monospace, Menlo, monospace; font-size:11px; color:{{ f.fg }}; white-space:nowrap">
+                    {{ f.name }}<span style="color:#2f7d54">{{ f.plus }}</span><span style="color:#b0392f">{{ f.minus }}</span>
+                  </span>
+                </sc-for>
+              </div>
+              <div style="flex:1; min-height:0; overflow:auto">
+                <sc-for list="{{ diffHunks }}" as="h" hint-placeholder-count="2">
+                  <div>
+                    <div style="padding:7px 18px; background:#faf9f6; border-top:1px solid #f0eeE9; border-bottom:1px solid #f0eeE9; font-family:ui-monospace, Menlo, monospace; font-size:11px; color:#9b998f">{{ h.header }}</div>
+                    <sc-for list="{{ h.lines }}" as="l" hint-placeholder-count="6">
+                      <div style="display:flex; font-family:ui-monospace, Menlo, monospace; font-size:11.5px; line-height:1.75; background:{{ l.bg }}">
+                        <span style="width:44px; flex:none; text-align:right; padding-right:10px; color:#c8c5bd; user-select:none">{{ l.n }}</span>
+                        <span style="width:14px; flex:none; color:{{ l.markFg }}">{{ l.mark }}</span>
+                        <span style="flex:1; white-space:pre; color:#33322f; padding-right:16px">{{ l.text }}</span>
+                      </div>
+                    </sc-for>
+                  </div>
+                </sc-for>
+              </div>
+              <div style="flex:none; display:flex; align-items:center; gap:8px; padding:12px 18px; border-top:1px solid #f0eeE9">
+                <span style="flex:1; min-width:0; font-family:ui-monospace, Menlo, monospace; font-size:11px; color:#9b998f; overflow:hidden; text-overflow:ellipsis; white-space:nowrap">{{ branchLabel }}</span>
+                <button style="flex:none; white-space:nowrap; height:28px; padding:0 11px; border:1px solid #e6e3dc; background:#ffffff; border-radius:8px; font-family:inherit; font-size:12.5px; color:#3a3936; cursor:pointer" style-hover="background:#f6f4f0">Ouvrir la PR</button>
+                <button style="flex:none; white-space:nowrap; height:28px; padding:0 13px; border:0; border-radius:8px; font-family:inherit; font-size:12.5px; font-weight:500; color:#ffffff; cursor:pointer; background:{{ accent }}" style-hover="filter:brightness(0.92)">Push</button>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ showFiles }}" hint-placeholder-val="{{ true }}">
+              <div style="flex:1; min-height:0; overflow-y:auto; padding:14px 18px 24px; display:flex; flex-direction:column; gap:16px">
+                <sc-for list="{{ deliverableGroups }}" as="g" hint-placeholder-count="3">
+                  <section style="display:flex; flex-direction:column; gap:7px">
+                    <span style="font-size:11.5px; font-weight:600; color:#a3a19a">{{ g.label }}</span>
+                    <sc-for list="{{ g.items }}" as="d" hint-placeholder-count="2">
+                      <div onClick="{{ d.onOpen }}" style="display:flex; align-items:center; gap:11px; padding:10px 12px; border:1px solid #eeecE6; border-radius:10px; cursor:pointer" style-hover="background:#faf9f6; border-color:#e2dfd7">
+                        <span style="flex:none; width:28px; height:28px; border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:12px; background:{{ d.iconBg }}; color:{{ d.iconFg }}">{{ d.icon }}</span>
+                        <div style="flex:1; min-width:0">
+                          <div style="font-size:13px; font-weight:500; letter-spacing:-0.01em; overflow:hidden; text-overflow:ellipsis; white-space:nowrap">{{ d.title }}</div>
+                          <div style="margin-top:2px; font-family:ui-monospace, Menlo, monospace; font-size:11px; color:#9b998f; overflow:hidden; text-overflow:ellipsis; white-space:nowrap">{{ d.meta }}</div>
+                        </div>
+                        <span style="flex:none; font-size:11.5px; color:#b0aea7; white-space:nowrap">{{ d.action }}</span>
+                      </div>
+                    </sc-for>
+                  </section>
+                </sc-for>
+              </div>
+            </sc-if>
+          </aside>
+        </sc-if>
+
+      </div>
+    </sc-if>
+  </main>
+
+  <sc-if value="{{ composeOpen }}" hint-placeholder-val="{{ true }}">
+    <div style="position:fixed; inset:0; background:rgba(30,29,26,0.28); display:flex; align-items:flex-start; justify-content:center; padding:90px 20px 20px; z-index:40">
+      <div style="width:min(560px, 100%); background:#ffffff; border-radius:16px; padding:22px 22px 18px; box-shadow:0 24px 60px rgba(25,25,23,0.22); animation:om-fade .18s ease">
+        <div style="display:flex; align-items:center; gap:10px">
+          <span style="font-size:15px; font-weight:600; letter-spacing:-0.015em">Nouvelle tâche</span>
+          <span style="font-size:12.5px; color:#a3a19a">{{ crumbTitle }}</span>
+          <button onClick="{{ closeCompose }}" style="margin-left:auto; width:24px; height:24px; border:0; background:transparent; border-radius:7px; color:#a3a19a; cursor:pointer; font-size:13px" style-hover="background:#f4f2ee">✕</button>
+        </div>
+
+        <input value="{{ draftTitle }}" onChange="{{ onDraftTitle }}" placeholder="Que doit faire l'agent ?" style="width:100%; margin-top:16px; height:42px; padding:0 13px; border:1px solid #e6e3dc; border-radius:10px; font-family:inherit; font-size:15px; color:#191917; outline:none" style-focus="border-color:#c9c5bb" />
+
+        <div style="margin-top:18px; font-size:11.5px; font-weight:600; color:#a3a19a">Agent</div>
+        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(150px,1fr)); gap:8px; margin-top:8px">
+          <sc-for list="{{ agentChoices }}" as="a" hint-placeholder-count="3">
+            <button onClick="{{ a.onPick }}" style="display:flex; align-items:center; gap:10px; padding:11px 12px; border:1px solid {{ a.border }}; background:{{ a.cardBg }}; border-radius:11px; cursor:pointer; text-align:left; font-family:inherit" style-hover="border-color:#c9c5bb">
+              <span style="flex:none; width:30px; height:30px; border-radius:9px; display:flex; align-items:center; justify-content:center; font-size:15px; background:{{ a.bg }}">{{ a.emoji }}</span>
+              <span style="flex:1; min-width:0">
+                <span style="display:block; font-size:13.5px; font-weight:600; letter-spacing:-0.01em">{{ a.name }}</span>
+                <span style="display:block; margin-top:2px; font-family:ui-monospace, Menlo, monospace; font-size:10.5px; color:#9b998f; overflow:hidden; text-overflow:ellipsis; white-space:nowrap">{{ a.model }}</span>
+              </span>
+            </button>
+          </sc-for>
+        </div>
+
+        <div style="margin-top:10px; padding:11px 13px; background:#faf9f6; border-radius:10px; font-size:12.5px; line-height:1.5; color:#6d6b64; text-wrap:pretty">{{ selectedAgentContext }}</div>
+
+        <div style="display:flex; align-items:center; gap:9px; margin-top:18px">
+          <span style="font-size:12px; color:#a3a19a">La conversation s'ouvre après la création</span>
+          <button onClick="{{ closeCompose }}" style="margin-left:auto; flex:none; height:32px; padding:0 13px; border:1px solid #e6e3dc; background:#ffffff; border-radius:9px; font-family:inherit; font-size:13px; color:#3a3936; cursor:pointer" style-hover="background:#f6f4f0">Annuler</button>
+          <button onClick="{{ createTask }}" style="flex:none; height:32px; padding:0 15px; border:0; border-radius:9px; font-family:inherit; font-size:13px; font-weight:500; color:#ffffff; cursor:pointer; background:{{ accent }}" style-hover="filter:brightness(0.92)">Créer et discuter</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1440,&quot;height&quot;:900},&quot;accent&quot;:{&quot;editor&quot;:&quot;color&quot;,&quot;default&quot;:&quot;#2f66d0&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;options&quot;:[&quot;#2f66d0&quot;,&quot;#1f6f52&quot;,&quot;#8a5a2b&quot;,&quot;#191917&quot;]},&quot;showLiveActivity&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;},&quot;defaultPanel&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;chat&quot;,&quot;options&quot;:[&quot;chat&quot;,&quot;diff&quot;,&quot;files&quot;],&quot;tsType&quot;:&quot;string&quot;}}">
+const AGENTS = {
+  bolt: { key: 'bolt', name: 'Bolt', emoji: '🐝', bg: '#fdf1d8', model: 'claude-sonnet-4', context: 'Backend & API — connaît le monorepo, les migrations et la convention de tests.' },
+  otto: { key: 'otto', name: 'Otto', emoji: '🦉', bg: '#e7edf9', model: 'codex-large', context: 'Refactors & infra — accès CI, terminal et scripts de déploiement.' },
+  muse: { key: 'muse', name: 'Muse', emoji: '🦊', bg: '#fbe7e2', model: 'claude-opus-4', context: 'Produit & docs — écrit les specs, les changelogs et relit les copies.' },
+  me: { key: 'me', name: 'Thomas', emoji: '🙂', bg: '#eeece6', model: 'moi', context: 'Tâche que je traite moi-même.' }
+};
+
+const STATUS = {
+  review: { label: 'À relire', glyph: '◍', fg: '#9a6b0d' },
+  ready: { label: 'Prêt à livrer', glyph: '⬆', fg: '#2f5fb0' },
+  shipped: { label: 'Livré', glyph: '✓', fg: '#2f7d54' },
+  running: { label: 'En cours', glyph: '◐', fg: '#8b8982' }
+};
+
+const PROJECTS = [
+  { id: 'web', name: 'plateforme-web', unread: true },
+  { id: 'mobile', name: 'app-mobile', unread: false },
+  { id: 'infra', name: 'infra-data', unread: true },
+  { id: 'growth', name: 'site-marketing', unread: false },
+  { id: 'ds', name: 'design-system', unread: false }
+];
+
+const CARDS = {
+  web: [
+    { id: 'w1', col: 'soon', title: 'Facturation Stripe', tasks: 6, done: 0, docs: 3, messages: 4, agents: ['bolt'], progress: '0%' },
+    { id: 'w2', col: 'soon', title: 'Export CSV des rapports', tasks: 3, done: 0, docs: 1, messages: 2, agents: ['otto'], progress: '0%' },
+    { id: 'w3', col: 'doing', title: 'Refonte de l\'authentification', tasks: 5, done: 2, docs: 4, messages: 35, review: 1, agents: ['bolt', 'otto'], progress: '55%', live: true },
+    { id: 'w4', col: 'doing', title: 'Recherche full-text', tasks: 4, done: 1, docs: 2, messages: 11, agents: ['otto'], progress: '30%' },
+    { id: 'w5', col: 'done', title: 'Migration Postgres 16', tasks: 7, done: 7, docs: 5, messages: 48, agents: ['bolt'], progress: '100%' },
+    { id: 'w6', col: 'done', title: 'Webhooks sortants', tasks: 4, done: 4, docs: 2, messages: 22, agents: ['otto'], progress: '100%' }
+  ],
+  mobile: [
+    { id: 'm1', col: 'soon', title: 'Notifications push', tasks: 4, done: 0, docs: 2, messages: 3, agents: ['bolt'], progress: '0%' },
+    { id: 'm2', col: 'doing', title: 'Mode hors-ligne', tasks: 6, done: 3, docs: 3, messages: 18, agents: ['otto'], progress: '50%' },
+    { id: 'm3', col: 'done', title: 'Onboarding v2', tasks: 5, done: 5, docs: 4, messages: 30, agents: ['muse'], progress: '100%' }
+  ],
+  infra: [
+    { id: 'i1', col: 'soon', title: 'Alerting Grafana', tasks: 3, done: 0, docs: 1, messages: 2, agents: ['otto'], progress: '0%' },
+    { id: 'i2', col: 'doing', title: 'Pipeline dbt quotidien', tasks: 5, done: 2, docs: 6, messages: 16, review: 2, agents: ['bolt'], progress: '40%', live: true },
+    { id: 'i3', col: 'done', title: 'Backups chiffrés', tasks: 3, done: 3, docs: 2, messages: 12, agents: ['otto'], progress: '100%' }
+  ],
+  growth: [
+    { id: 'g1', col: 'soon', title: 'Page tarifs', tasks: 4, done: 0, docs: 3, messages: 5, agents: ['muse'], progress: '0%' },
+    { id: 'g2', col: 'doing', title: 'Blog SEO', tasks: 8, done: 5, docs: 9, messages: 27, review: 1, agents: ['muse'], progress: '62%' },
+    { id: 'g3', col: 'done', title: 'Refonte homepage', tasks: 6, done: 6, docs: 4, messages: 19, agents: ['muse'], progress: '100%' }
+  ],
+  ds: [
+    { id: 'd1', col: 'soon', title: 'Tokens de couleur', tasks: 3, done: 0, docs: 2, messages: 3, agents: ['otto'], progress: '0%' },
+    { id: 'd2', col: 'doing', title: 'Composants formulaire', tasks: 7, done: 4, docs: 5, messages: 21, agents: ['bolt'], progress: '57%' },
+    { id: 'd3', col: 'done', title: 'Icônes v3', tasks: 2, done: 2, docs: 3, messages: 9, agents: ['muse'], progress: '100%' }
+  ]
+};
+
+const TASKS = {
+  w3: [
+    { id: 't1', ref: '#482', title: 'Rotation des sessions côté serveur', status: 'review', agent: 'bolt', messages: 12, files: 4, docs: 2, age: 'il y a 12 min', branch: 'auth/session-rotation', checks: '✓ 38 tests', checksOk: true, unread: true },
+    { id: 't2', ref: '#479', title: 'Magic link : e-mail + page de retour', status: 'ready', agent: 'otto', messages: 7, files: 6, docs: 1, age: 'il y a 2 h', branch: 'auth/magic-link', checks: '✓ 41 tests', checksOk: true },
+    { id: 't3', ref: '#486', title: 'Écrans 2FA — codes de secours', status: 'running', agent: 'bolt', messages: 4, files: 2, docs: 0, age: 'démarré il y a 4 min', branch: 'auth/2fa-backup', checks: '● tests en cours', checksOk: false, live: 'écrit src/auth/backup-codes.ts' },
+    { id: 't4', ref: '#471', title: 'Revue de sécurité du flux OAuth', status: 'shipped', agent: 'me', messages: 3, files: 0, docs: 2, age: 'hier', branch: 'main', checks: '✓ relu', checksOk: true },
+    { id: 't5', ref: '#468', title: 'Suppression du legacy cookie auth', status: 'shipped', agent: 'otto', messages: 9, files: 3, docs: 0, age: 'il y a 2 j', branch: 'main', checks: '✓ 36 tests', checksOk: true }
+  ]
+};
+
+const GENERIC = [
+  { id: 'g-a', ref: '#12', title: 'Cadrage et découpage', status: 'review', agent: 'muse', messages: 8, files: 0, docs: 2, age: 'il y a 1 h', branch: 'spec/cadrage', checks: '✓ relu', checksOk: true, unread: true },
+  { id: 'g-b', ref: '#14', title: 'Implémentation initiale', status: 'running', agent: 'otto', messages: 5, files: 3, docs: 0, age: 'démarré il y a 9 min', branch: 'feat/init', checks: '● tests en cours', checksOk: false, live: 'exécute la suite de tests' },
+  { id: 'g-c', ref: '#15', title: 'Tests end-to-end', status: 'ready', agent: 'bolt', messages: 6, files: 2, docs: 1, age: 'il y a 3 h', branch: 'test/e2e', checks: '✓ 22 tests', checksOk: true },
+  { id: 'g-d', ref: '#9', title: 'Documentation', status: 'shipped', agent: 'muse', messages: 2, files: 0, docs: 1, age: 'hier', branch: 'main', checks: '✓ relu', checksOk: true }
+];
+
+const DELIVERABLES = [
+  { group: 'Code', icon: '◆', iconBg: '#eef2fb', iconFg: '#2f5fb0', title: '4 fichiers modifiés · +85 −22', meta: 'auth/session-rotation → main', action: 'Diff', kind: 'diff' },
+  { group: 'Code', icon: '⎘', iconBg: '#f2f0ea', iconFg: '#5c5a53', title: 'feat: rotation synchrone des sessions', meta: 'a91f3c0 · il y a 14 min', action: 'Voir', kind: 'diff' },
+  { group: 'Code', icon: '↗', iconBg: '#e9f3ec', iconFg: '#2f7d54', title: 'PR #482 — Session rotation', meta: 'ouverte · 1 relecture demandée', action: 'Ouvrir', kind: 'link' },
+  { group: 'Documents', icon: '▤', iconBg: '#fdf1d8', iconFg: '#9a6b0d', title: 'spec-session-rotation.md', meta: 'mis à jour il y a 20 min · 3 pages', action: 'Lire', kind: 'doc' },
+  { group: 'Documents', icon: '▤', iconBg: '#fdf1d8', iconFg: '#9a6b0d', title: 'audit-securite.md', meta: 'Thomas · hier', action: 'Lire', kind: 'doc' },
+  { group: 'Captures', icon: '▣', iconBg: '#f2f0ea', iconFg: '#5c5a53', title: 'flux-2fa-ecrans.png', meta: '1440×900 · il y a 1 h', action: 'Voir', kind: 'image' }
+];
+
+const MESSAGES = [
+  { who: 'me', time: '09:12', text: "La rotation doit invalider l'ancien refresh token immédiatement, pas au prochain appel." },
+  { who: 'agent', time: '09:13', text: "Compris. Je passe sur une révocation synchrone dans le repository et j'ajoute un index sur (user_id, revoked_at).", code: "- await queue.push({ type: 'revoke', id })\n+ await sessions.revoke(id, { cascade: true })" },
+  { who: 'agent', time: '09:21', text: "4 fichiers modifiés, 38 tests passent. Reste un cas : les sessions mobiles ouvertes pendant la rotation. Déconnexion immédiate ou fenêtre de 30 s ?", attachment: { kind: 'Diff · 4 fichiers', title: 'auth/session-rotation' } },
+  { who: 'me', time: '09:24', text: "Fenêtre de 30 s, avec un log d'audit." },
+  { who: 'agent', time: '09:25', text: "Fait. Prêt à relire — le diff est à jour." }
+];
+
+const DIFF = {
+  files: [{ name: 'src/auth/session.ts', plus: '+42', minus: '−18', active: true }, { name: 'src/auth/repository.ts', plus: '+16', minus: '−4' }, { name: 'tests/session.test.ts', plus: '+27', minus: '−0' }],
+  hunks: [
+    { header: '@@ -84,9 +84,14 @@  rotateSession()', lines: [
+      { t: ' ', n: 84, text: '  const current = await sessions.find(token)' },
+      { t: ' ', n: 85, text: '  if (!current) throw new AuthError("unknown_session")' },
+      { t: '-', n: 86, text: '  await queue.push({ type: "revoke", id: current.id })' },
+      { t: '-', n: 87, text: '  return issue(current.userId)' },
+      { t: '+', n: 86, text: '  await sessions.revoke(current.id, { cascade: true })' },
+      { t: '+', n: 87, text: '  audit.log("session.rotated", { userId: current.userId })' },
+      { t: '+', n: 88, text: '' },
+      { t: '+', n: 89, text: '  return issue(current.userId, { graceMs: 30_000 })' },
+      { t: ' ', n: 90, text: '}' }
+    ] },
+    { header: '@@ -12,4 +12,9 @@  repository.ts', lines: [
+      { t: ' ', n: 12, text: 'export const sessions = {' },
+      { t: '+', n: 13, text: '  async revoke(id: string, opts: RevokeOptions = {}) {' },
+      { t: '+', n: 14, text: '    await db.session.update({ where: { id }, data: { revokedAt: new Date() } })' },
+      { t: '+', n: 15, text: '    if (opts.cascade) await db.session.revokeChildren(id)' },
+      { t: '+', n: 16, text: '  },' },
+      { t: ' ', n: 17, text: '  async find(token: string) {' }
+    ] }
+  ]
+};
+
+const TICKS = ['écrit src/auth/backup-codes.ts', 'lance vitest — 38 passés', 'lit docs/security/2fa.md', 'met à jour les types de session'];
+
+class Component extends DCLogic {
+  state = { project: 'web', card: null, view: 'kanban', task: null, panel: null, filter: 'all', tick: 0, statuses: {}, compose: false, draftTitle: '', draftAgent: 'bolt', created: {} };
+
+  componentDidMount() { this.timer = setInterval(() => this.setState(s => ({ tick: s.tick + 1 })), 2600); }
+  componentWillUnmount() { clearInterval(this.timer); }
+
+  status(t) { return this.state.statuses[t.id] || t.status; }
+
+  taskList(cardId) {
+    return (this.state.created[cardId] || []).concat(TASKS[cardId] || GENERIC);
+  }
+
+  renderVals() {
+    const accent = this.props.accent ?? '#2f66d0';
+    const showLive = this.props.showLiveActivity ?? true;
+    const st = this.state;
+    const cards = CARDS[st.project] || [];
+    const proj = PROJECTS.find(p => p.id === st.project);
+    const card = cards.find(c => c.id === st.card);
+    const inWork = st.view === 'work' && !!card;
+
+    const projects = PROJECTS.map(p => ({
+      name: p.name, unread: p.unread && p.id !== st.project,
+      bg: p.id === st.project ? '#e8e5dd' : 'transparent',
+      fg: p.id === st.project ? '#191917' : '#4a4945',
+      weight: p.id === st.project ? 600 : 400,
+      onSelect: () => this.setState({ project: p.id, view: 'kanban', card: null, panel: null, task: null })
+    }));
+
+    const navItems = [
+      { icon: '⌂', label: 'Boîte de réception', key: 'inbox' },
+      { icon: '◫', label: 'Tous les projets', key: 'all' }
+    ].map(n => ({ icon: n.icon, label: n.label, bg: 'transparent', weight: 400, onClick: () => this.setState({ view: 'kanban', card: null, panel: null }) }));
+
+    const busyAgents = {};
+    Object.keys(CARDS).forEach(k => CARDS[k].forEach(c => { if (c.live) busyAgents[c.agents[0]] = true; }));
+    const agentList = ['bolt', 'otto', 'muse'].map(k => ({
+      name: AGENTS[k].name, emoji: AGENTS[k].emoji, bg: AGENTS[k].bg, busy: showLive && !!busyAgents[k]
+    }));
+
+    const colDefs = [
+      { key: 'soon', label: 'Bientôt', color: '#d3d0c8' },
+      { key: 'doing', label: 'En cours', color: '#2f7d54' },
+      { key: 'done', label: 'Terminé', color: '#c3c0b8' }
+    ];
+    const columns = colDefs.map(cd => {
+      const list = cards.filter(c => c.col === cd.key);
+      return {
+        label: cd.label, color: cd.color, count: list.length,
+        cards: list.map(c => ({
+          title: c.title,
+          titleColor: cd.key === 'done' ? '#6d6b64' : '#191917',
+          live: showLive && c.live ? AGENTS[c.agents[0]].name + ' · ' + TICKS[(st.tick + c.title.length) % TICKS.length] : null,
+          attention: c.review ? c.review + ' à relire' : null,
+          tasksLabel: c.done + '/' + c.tasks,
+          docs: c.docs, messages: c.messages, progress: c.progress,
+          barColor: cd.key === 'done' ? '#2f7d54' : accent,
+          agents: c.agents.map(a => AGENTS[a]),
+          onOpen: () => this.setState({ card: c.id, view: 'work', panel: null, task: null, filter: 'all' })
+        }))
+      };
+    });
+
+    const totalTasks = cards.reduce((n, c) => n + c.tasks, 0);
+    const totalReview = cards.reduce((n, c) => n + (c.review || 0), 0);
+    const projectStats = [
+      { value: cards.filter(c => c.col === 'doing').length, label: 'en cours', color: '#191917' },
+      { value: totalReview, label: 'à relire', color: totalReview ? '#9a6b0d' : '#191917' },
+      { value: totalTasks, label: 'tâches', color: '#191917' }
+    ];
+
+    const rawTasks = card ? this.taskList(card.id) : [];
+    const counts = rawTasks.reduce((acc, t) => { acc[this.status(t)] = (acc[this.status(t)] || 0) + 1; return acc; }, {});
+    const filters = [
+      { key: 'all', label: 'Toutes ' + rawTasks.length },
+      { key: 'review', label: 'À relire ' + (counts.review || 0) },
+      { key: 'ready', label: 'Prêt à livrer ' + (counts.ready || 0) },
+      { key: 'shipped', label: 'Livré ' + (counts.shipped || 0) }
+    ].map(f => ({
+      label: f.label,
+      bg: st.filter === f.key ? '#f1efea' : 'transparent',
+      fg: st.filter === f.key ? '#191917' : '#8b8982',
+      weight: st.filter === f.key ? 600 : 400,
+      onClick: () => this.setState({ filter: f.key })
+    }));
+
+    const visible = rawTasks.filter(t => st.filter === 'all' || this.status(t) === st.filter);
+    const tasks = visible.map(t => {
+      const s = this.status(t);
+      const sd = STATUS[s];
+      const ag = AGENTS[t.agent];
+      return {
+        title: t.title, ref: t.ref, age: t.age, messages: t.messages, filesCount: t.files,
+        glyph: sd.glyph, glyphFg: sd.fg,
+        titleFg: s === 'shipped' ? '#6d6b64' : '#191917',
+        rowBg: st.task === t.id ? '#f6f4f0' : 'transparent',
+        isNew: !!t.unread && st.task !== t.id,
+        agentName: ag.name, agentEmoji: ag.emoji, agentBg: ag.bg,
+        live: showLive && s === 'running' && t.live ? TICKS[(st.tick + t.title.length) % TICKS.length] : null,
+        onOpen: () => this.setState({ task: t.id, panel: this.props.defaultPanel ?? 'chat' })
+      };
+    });
+
+    const at = rawTasks.find(t => t.id === st.task);
+    let detail = null;
+    if (at) {
+      const s = this.status(at);
+      const sd = STATUS[s];
+      const ag = AGENTS[at.agent];
+      const isShipped = s === 'shipped';
+      detail = {
+        title: at.title, glyph: sd.glyph, glyphFg: sd.fg,
+        agentName: ag.name, agentEmoji: ag.emoji, agentBg: ag.bg, model: ag.model,
+        branch: at.branch, checks: at.checks, checksFg: at.checksOk ? '#2f7d54' : '#8b8982',
+        actionLabel: isShipped ? 'Rouvrir la tâche' : (s === 'running' ? 'Interrompre l\'agent' : (s === 'ready' ? 'Pousser et livrer' : 'Accepter le diff et les livrables')),
+        actionBg: isShipped ? '#f1efea' : (s === 'running' ? '#f1efea' : '#1f7a4d'),
+        actionFg: isShipped || s === 'running' ? '#3a3936' : '#ffffff',
+        actionShadow: isShipped || s === 'running' ? 'none' : '0 2px 10px rgba(31,122,77,0.25)',
+        steps: [
+          { key: 'review', label: 'À relire' },
+          { key: 'ready', label: 'Accepté' },
+          { key: 'shipped', label: 'Livré' }
+        ].map((step, i) => {
+          const order = { running: 0, review: 0, ready: 1, shipped: 2 };
+          const done = i <= order[s];
+          return {
+            label: step.label,
+            bar: done ? (i === order[s] ? '#1f7a4d' : '#a9cfba') : '#eeecE6',
+            fg: done ? '#3a3936' : '#b0aea7',
+            weight: i === order[s] ? 600 : 400
+          };
+        }),
+        onPrimary: () => {
+          const next = isShipped ? 'review' : (s === 'running' ? 'review' : (s === 'review' ? 'ready' : 'shipped'));
+          this.setState(prev => ({ statuses: Object.assign({}, prev.statuses, { [at.id]: next }) }));
+        }
+      };
+    }
+
+    const TAB_LABELS = { chat: 'Conversation', diff: 'Diff', files: 'Livrables' };
+    const tabCounts = at ? { chat: at.messages, diff: at.files, files: at.files + at.docs } : { chat: 0, diff: 0, files: 0 };
+    const panelTabs = ['chat', 'diff', 'files'].map(k => {
+      const active = st.panel === k;
+      return {
+        label: TAB_LABELS[k], count: tabCounts[k],
+        isNew: !!(at && at.unread && k === 'chat' && !active),
+        weight: active ? 600 : 400,
+        fg: active ? '#191917' : '#8b8982',
+        underline: active ? '#191917' : 'transparent',
+        countBg: active ? '#f1efea' : 'transparent',
+        countFg: active ? '#5c5a53' : '#b0aea7',
+        onClick: () => this.setState({ panel: k })
+      };
+    });
+
+    const agentOf = at ? AGENTS[at.agent] : AGENTS.bolt;
+    const messages = MESSAGES.map(m => {
+      const a = m.who === 'me' ? AGENTS.me : agentOf;
+      return { emoji: a.emoji, bg: a.bg, name: a.name, time: m.time, text: m.text, code: m.code || null, attachment: m.attachment || null };
+    });
+
+    const agentChoices = ['bolt', 'otto', 'muse'].map(k => ({
+      name: AGENTS[k].name, emoji: AGENTS[k].emoji, bg: AGENTS[k].bg, model: AGENTS[k].model,
+      border: st.draftAgent === k ? '#191917' : '#eeecE6',
+      cardBg: st.draftAgent === k ? '#faf9f6' : '#ffffff',
+      onPick: () => this.setState({ draftAgent: k })
+    }));
+
+    return {
+      accent, projects, navItems, agentList, agentChoices, columns, projectStats, tasks, filters, panelTabs, messages, detail,
+      inKanban: !inWork, inWork,
+      crumbProject: proj ? proj.name : '',
+      crumbTitle: inWork ? card.title : (proj ? proj.name : ''),
+      panelOpen: !!st.panel && !!at,
+      showChat: st.panel === 'chat',
+      showDiff: st.panel === 'diff',
+      showFiles: st.panel === 'files',
+      composerHint: 'Répondre à ' + agentOf.name + '…',
+      openDiff: () => this.setState({ panel: 'diff' }),
+      deliverableGroups: ['Code', 'Documents', 'Captures'].map(g => ({
+        label: g,
+        items: DELIVERABLES.filter(d => d.group === g).map(d => Object.assign({}, d, {
+          onOpen: () => this.setState({ panel: d.kind === 'diff' ? 'diff' : 'files' })
+        }))
+      })),
+      diffFiles: DIFF.files.map(f => ({ name: f.name, plus: f.plus, minus: f.minus, bg: f.active ? '#f2f0ea' : 'transparent', fg: f.active ? '#191917' : '#9b998f' })),
+      diffHunks: DIFF.hunks.map(h => ({
+        header: h.header,
+        lines: h.lines.map(l => ({
+          n: l.n, mark: l.t === ' ' ? '' : l.t, text: l.text,
+          markFg: l.t === '+' ? '#2f7d54' : '#b0392f',
+          bg: l.t === '+' ? '#f1faf4' : (l.t === '-' ? '#fdf3f1' : 'transparent')
+        }))
+      })),
+      branchLabel: at ? at.branch + ' → main' : '',
+      composeOpen: st.compose,
+      draftTitle: st.draftTitle,
+      selectedAgentContext: AGENTS[st.draftAgent].context,
+      onDraftTitle: (e) => this.setState({ draftTitle: e.target.value }),
+      openCompose: () => this.setState({ compose: true, draftTitle: '' }),
+      closeCompose: () => this.setState({ compose: false }),
+      createTask: () => {
+        const target = st.card || (cards[0] && cards[0].id);
+        if (!target) return;
+        const id = 'new-' + Date.now();
+        const t = {
+          id, ref: '#' + (490 + Object.keys(st.statuses).length), title: st.draftTitle || 'Nouvelle tâche',
+          status: 'running', agent: st.draftAgent, messages: 1, files: 0, docs: 0,
+          age: 'démarré à l\'instant', branch: 'task/' + id.slice(-4), checks: '● démarrage', checksOk: false,
+          live: 'lit le contexte du projet', unread: true
+        };
+        this.setState(prev => ({
+          created: Object.assign({}, prev.created, { [target]: [t].concat(prev.created[target] || []) }),
+          compose: false, card: target, view: 'work', filter: 'all', task: id, panel: 'chat'
+        }));
+      },
+      goBack: () => this.setState({ view: 'kanban', card: null, panel: null, task: null }),
+      closePanel: () => this.setState({ panel: null, task: null })
+    };
+  }
+}
+</script>
+</body>
+</html>

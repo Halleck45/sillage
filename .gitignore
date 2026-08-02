@@ -1,0 +1,4 @@
+atelier
+/atelier-*
+*.log
+.DS_Store
