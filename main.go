@@ -11,7 +11,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"sillage/internal/server"
+	"github.com/Halleck45/sillage/internal/server"
 )
 
 //go:embed web

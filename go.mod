@@ -1,4 +1,4 @@
-module sillage
+module github.com/Halleck45/sillage
 
 go 1.24.0
 

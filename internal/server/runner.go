@@ -399,7 +399,11 @@ func (r *Runner) runClaude(task *Task, agent Agent, handle *procHandle, cliInput
 		}
 	}
 
+	scanErr := scanner.Err()
 	waitErr := cmd.Wait()
+	if waitErr == nil && scanErr != nil {
+		waitErr = scanErr
+	}
 	if waitErr != nil && !handle.interrupted.Load() {
 		msg := strings.TrimSpace(stderrBuf.String())
 		if msg == "" {
@@ -480,7 +484,11 @@ func (r *Runner) runCodex(task *Task, agent Agent, handle *procHandle, cliInput 
 		}
 	}
 
+	scanErr := scanner.Err()
 	waitErr := cmd.Wait()
+	if waitErr == nil && scanErr != nil {
+		waitErr = scanErr
+	}
 	if !parsedAny && rawBuf.Len() > 0 {
 		msg, t, err := r.store.AddMessage(task.ID, "agent", strings.TrimSpace(rawBuf.String()))
 		if err == nil {
