@@ -50,6 +50,7 @@ func (r *Runner) publishTokens() {
 func (r *Runner) publishCards(projectID string) {
 	r.hub.Publish(Event{Name: "cards", Data: r.store.CardsByProject(projectID)})
 }
+func (r *Runner) publishProject(p Project) { r.hub.Publish(Event{Name: "project", Data: p}) }
 func (r *Runner) publishActivity(taskID string, line *string) {
 	r.hub.Publish(Event{Name: "activity", Data: map[string]any{"taskId": taskID, "line": line}})
 }
@@ -57,22 +58,23 @@ func (r *Runner) publishActivity(taskID string, line *string) {
 // Start lance (ou relance) l'agent d'une tâche. initial=true correspond au
 // lancement initial (text = titre + description, aucun Message ajouté) ;
 // initial=false correspond à un nouveau message utilisateur (text = son
-// contenu, ajouté comme Message puis transmis à l'agent).
-func (r *Runner) Start(taskID string, initial bool, text string) error {
+// contenu, ajouté comme Message puis transmis à l'agent). authorName est le
+// nom affiché pour ce message utilisateur (ignoré si initial=true).
+func (r *Runner) Start(taskID string, initial bool, text string, authorName string) error {
 	r.mu.Lock()
 	if _, exists := r.procs[taskID]; exists {
 		r.mu.Unlock()
-		return fmt.Errorf("un agent est déjà en cours d'exécution pour cette tâche")
+		return fmt.Errorf("an agent is already running for this task")
 	}
 	r.mu.Unlock()
 
 	task, ok := r.store.GetTask(taskID)
 	if !ok {
-		return fmt.Errorf("tâche %s introuvable", taskID)
+		return fmt.Errorf("task not found")
 	}
 	agent, ok := r.store.GetAgent(task.AgentID)
 	if !ok {
-		return fmt.Errorf("agent %s introuvable", task.AgentID)
+		return fmt.Errorf("agent not found")
 	}
 
 	task, err := r.store.UpdateTask(taskID, func(t *Task) { t.Status = "running"; t.LiveActivity = nil })
@@ -83,7 +85,7 @@ func (r *Runner) Start(taskID string, initial bool, text string) error {
 	r.publishAgents()
 
 	if !initial {
-		msg, updated, err := r.store.AddMessage(taskID, "user", text)
+		msg, updated, err := r.store.AddMessage(taskID, "user", authorName, text)
 		if err != nil {
 			return err
 		}
@@ -109,7 +111,7 @@ func (r *Runner) Interrupt(taskID string) (Task, error) {
 	handle, ok := r.procs[taskID]
 	r.mu.Unlock()
 	if !ok {
-		return Task{}, fmt.Errorf("aucun agent en cours d'exécution pour cette tâche")
+		return Task{}, fmt.Errorf("no agent is running for this task")
 	}
 	handle.interrupted.Store(true)
 
@@ -160,11 +162,11 @@ func (r *Runner) run(task Task, agent Agent, handle *procHandle, cliInput string
 	case "fake":
 		runErr = r.runFake(&task, agent, handle)
 	default:
-		runErr = fmt.Errorf("cli inconnu : %s", agent.Cli)
+		runErr = fmt.Errorf("unknown cli: %s", agent.Cli)
 	}
 
 	if runErr != nil {
-		msg, updated, err := r.store.AddMessage(task.ID, "agent", "⚠️ "+runErr.Error())
+		msg, updated, err := r.store.AddMessage(task.ID, "agent", agent.Name, "⚠️ "+runErr.Error())
 		if err == nil {
 			r.publishMessage(msg)
 			task = updated
@@ -321,7 +323,7 @@ func (r *Runner) runClaude(task *Task, agent Agent, handle *procHandle, cliInput
 	cmd.Stderr = &stderrBuf
 
 	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("lancement de claude impossible : %w", err)
+		return fmt.Errorf("failed to start claude: %w", err)
 	}
 	handle.cmd = cmd
 
@@ -355,7 +357,7 @@ func (r *Runner) runClaude(task *Task, agent Agent, handle *procHandle, cliInput
 						continue
 					}
 					lastAgentText = block.Text
-					msg, t, err := r.store.AddMessage(task.ID, "agent", block.Text)
+					msg, t, err := r.store.AddMessage(task.ID, "agent", agent.Name, block.Text)
 					if err == nil {
 						r.publishMessage(msg)
 						*task = t
@@ -386,7 +388,7 @@ func (r *Runner) runClaude(task *Task, agent Agent, handle *procHandle, cliInput
 			}
 			r.publishTokens()
 			if env.Result != "" && env.Result != lastAgentText {
-				msg, t, err := r.store.AddMessage(task.ID, "agent", env.Result)
+				msg, t, err := r.store.AddMessage(task.ID, "agent", agent.Name, env.Result)
 				if err == nil {
 					r.publishMessage(msg)
 					*task = t
@@ -394,7 +396,7 @@ func (r *Runner) runClaude(task *Task, agent Agent, handle *procHandle, cliInput
 				}
 			}
 			if env.IsError {
-				return fmt.Errorf("l'agent a signalé une erreur")
+				return fmt.Errorf("the agent reported an error")
 			}
 		}
 	}
@@ -444,7 +446,7 @@ func (r *Runner) runCodex(task *Task, agent Agent, handle *procHandle, cliInput 
 	cmd.Stderr = &stderrBuf
 
 	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("lancement de codex impossible : %w", err)
+		return fmt.Errorf("failed to start codex: %w", err)
 	}
 	handle.cmd = cmd
 
@@ -464,7 +466,7 @@ func (r *Runner) runCodex(task *Task, agent Agent, handle *procHandle, cliInput 
 		}
 		if text, ok := extractCodexMessage(generic); ok {
 			parsedAny = true
-			msg, t, err := r.store.AddMessage(task.ID, "agent", text)
+			msg, t, err := r.store.AddMessage(task.ID, "agent", agent.Name, text)
 			if err == nil {
 				r.publishMessage(msg)
 				*task = t
@@ -490,7 +492,7 @@ func (r *Runner) runCodex(task *Task, agent Agent, handle *procHandle, cliInput 
 		waitErr = scanErr
 	}
 	if !parsedAny && rawBuf.Len() > 0 {
-		msg, t, err := r.store.AddMessage(task.ID, "agent", strings.TrimSpace(rawBuf.String()))
+		msg, t, err := r.store.AddMessage(task.ID, "agent", agent.Name, strings.TrimSpace(rawBuf.String()))
 		if err == nil {
 			r.publishMessage(msg)
 			*task = t
@@ -582,7 +584,7 @@ func (r *Runner) runFake(task *Task, agent Agent, handle *procHandle) error {
 	content := fmt.Sprintf("# Sillage : tâche de test\n\nGénéré le %s par l'agent %s.\n", time.Now().UTC().Format(time.RFC3339), agent.Name)
 	_ = os.WriteFile(filepath.Join(task.WorktreeDir, "SILLAGE-TEST.md"), []byte(content), 0o644)
 
-	msg, t, err := r.store.AddMessage(task.ID, "agent", "Tâche simulée terminée : SILLAGE-TEST.md mis à jour.")
+	msg, t, err := r.store.AddMessage(task.ID, "agent", agent.Name, "Tâche simulée terminée : SILLAGE-TEST.md mis à jour.")
 	if err == nil {
 		r.publishMessage(msg)
 		*task = t

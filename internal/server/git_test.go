@@ -146,3 +146,30 @@ func contains(list []string, item string) bool {
 	}
 	return false
 }
+
+// TestParseGithubRemote couvre le fallback PR : parse d'URL de remote github.com
+// aux formats ssh (scp-like) et https, avec ou sans suffixe ".git".
+func TestParseGithubRemote(t *testing.T) {
+	cases := []struct {
+		in                  string
+		wantOwner, wantRepo string
+		wantOk              bool
+	}{
+		{"git@github.com:Halleck45/sillage.git", "Halleck45", "sillage", true},
+		{"git@github.com:Halleck45/sillage", "Halleck45", "sillage", true},
+		{"https://github.com/Halleck45/sillage.git", "Halleck45", "sillage", true},
+		{"https://github.com/Halleck45/sillage", "Halleck45", "sillage", true},
+		{"https://github.com/Halleck45/sillage/", "Halleck45", "sillage", true},
+		{"  https://github.com/Halleck45/sillage.git  ", "Halleck45", "sillage", true},
+		{"https://gitlab.com/foo/bar.git", "", "", false},
+		{"git@gitlab.com:foo/bar.git", "", "", false},
+		{"", "", "", false},
+	}
+	for _, c := range cases {
+		owner, repo, ok := ParseGithubRemote(c.in)
+		if ok != c.wantOk || owner != c.wantOwner || repo != c.wantRepo {
+			t.Errorf("ParseGithubRemote(%q) = (%q, %q, %v), attendu (%q, %q, %v)",
+				c.in, owner, repo, ok, c.wantOwner, c.wantRepo, c.wantOk)
+		}
+	}
+}

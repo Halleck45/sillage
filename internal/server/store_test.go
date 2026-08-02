@@ -46,14 +46,14 @@ func TestStoreRoundtripSaveLoad(t *testing.T) {
 		t.Fatalf("UpdateTask: %v", err)
 	}
 
-	msg, task, err := s1.AddMessage(taskID, "user", "bonjour")
+	msg, task, err := s1.AddMessage(taskID, "user", "Alice", "bonjour")
 	if err != nil {
 		t.Fatalf("AddMessage: %v", err)
 	}
 	if task.MessagesCount != 1 {
 		t.Fatalf("messagesCount attendu 1, reçu %d", task.MessagesCount)
 	}
-	if msg.Author != "user" || msg.Text != "bonjour" {
+	if msg.Author != "user" || msg.Text != "bonjour" || msg.AuthorName != "Alice" {
 		t.Fatalf("message inattendu : %+v", msg)
 	}
 
@@ -210,5 +210,211 @@ func TestSlugify(t *testing.T) {
 		if got := Slugify(in); got != want {
 			t.Errorf("Slugify(%q) = %q, attendu %q", in, got, want)
 		}
+	}
+}
+
+// --- Migration des utilisateurs (v0.2) ---
+
+func TestMigrateUsersCreatesAdminFromLegacyHash(t *testing.T) {
+	dir := t.TempDir()
+	s, err := NewStore(dir)
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+
+	if err := s.MigrateUsers("hash-from-config"); err != nil {
+		t.Fatalf("MigrateUsers: %v", err)
+	}
+	admin, ok := s.FindUserByName("admin")
+	if !ok {
+		t.Fatalf("l'utilisateur admin devrait avoir été créé")
+	}
+	if admin.Role != "admin" {
+		t.Fatalf("rôle attendu 'admin', reçu %q", admin.Role)
+	}
+	if admin.PasswordHash != "hash-from-config" {
+		t.Fatalf("hash attendu 'hash-from-config', reçu %q", admin.PasswordHash)
+	}
+
+	// Un second appel sans SILLAGE_PASSWORD ne doit rien changer : la
+	// migration a déjà eu lieu (des utilisateurs existent).
+	if err := s.MigrateUsers("autre-hash"); err != nil {
+		t.Fatalf("MigrateUsers (second appel): %v", err)
+	}
+	admin, _ = s.FindUserByName("admin")
+	if admin.PasswordHash != "hash-from-config" {
+		t.Fatalf("le hash admin ne devrait pas changer sans SILLAGE_PASSWORD, reçu %q", admin.PasswordHash)
+	}
+
+	// Avec SILLAGE_PASSWORD positionnée, le mot de passe admin est toujours remplacé.
+	t.Setenv("SILLAGE_PASSWORD", "peu-importe")
+	if err := s.MigrateUsers("hash-env"); err != nil {
+		t.Fatalf("MigrateUsers (env): %v", err)
+	}
+	admin, _ = s.FindUserByName("admin")
+	if admin.PasswordHash != "hash-env" {
+		t.Fatalf("le hash admin devrait être remplacé par SILLAGE_PASSWORD, reçu %q", admin.PasswordHash)
+	}
+}
+
+func TestMigrateUsersRoundtrip(t *testing.T) {
+	dir := t.TempDir()
+	s, err := NewStore(dir)
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+	if err := s.MigrateUsers("hash-1"); err != nil {
+		t.Fatalf("MigrateUsers: %v", err)
+	}
+
+	// Recharge depuis le disque : l'utilisateur admin doit avoir survécu,
+	// c'est le scénario de compatibilité d'un state.json existant sans users.
+	s2, err := NewStore(dir)
+	if err != nil {
+		t.Fatalf("NewStore (reload): %v", err)
+	}
+	admin, ok := s2.FindUserByName("admin")
+	if !ok || admin.PasswordHash != "hash-1" {
+		t.Fatalf("admin non persisté correctement après rechargement : %+v ok=%v", admin, ok)
+	}
+}
+
+// --- Gardes utilisateurs et agents ---
+
+func TestDeleteUserGuardsLastAdmin(t *testing.T) {
+	dir := t.TempDir()
+	s, err := NewStore(dir)
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+	if err := s.MigrateUsers("hash-admin"); err != nil {
+		t.Fatalf("MigrateUsers: %v", err)
+	}
+	admin, _ := s.FindUserByName("admin")
+
+	if err := s.DeleteUser(admin.ID); err == nil {
+		t.Fatalf("la suppression du dernier admin devrait être refusée")
+	}
+
+	member, err := s.AddUser("bob", "secret1234", "member")
+	if err != nil {
+		t.Fatalf("AddUser: %v", err)
+	}
+	if err := s.DeleteUser(member.ID); err != nil {
+		t.Fatalf("la suppression d'un membre non-admin devrait réussir : %v", err)
+	}
+
+	second, err := s.AddUser("alice", "secret1234", "admin")
+	if err != nil {
+		t.Fatalf("AddUser (second admin): %v", err)
+	}
+	if err := s.DeleteUser(admin.ID); err != nil {
+		t.Fatalf("la suppression d'un admin devrait réussir s'il en reste un autre : %v", err)
+	}
+	if err := s.DeleteUser(second.ID); err == nil {
+		t.Fatalf("la suppression du dernier admin restant devrait être refusée")
+	}
+}
+
+func TestUpdateUserGuardsLastAdminDemotion(t *testing.T) {
+	dir := t.TempDir()
+	s, err := NewStore(dir)
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+	if err := s.MigrateUsers("hash-admin"); err != nil {
+		t.Fatalf("MigrateUsers: %v", err)
+	}
+	admin, _ := s.FindUserByName("admin")
+
+	member := "member"
+	if _, err := s.UpdateUser(admin.ID, nil, &member); err == nil {
+		t.Fatalf("rétrograder le dernier admin devrait être refusé")
+	}
+
+	if _, err := s.AddUser("alice", "secret1234", "admin"); err != nil {
+		t.Fatalf("AddUser (second admin): %v", err)
+	}
+	if _, err := s.UpdateUser(admin.ID, nil, &member); err != nil {
+		t.Fatalf("rétrograder un admin devrait réussir s'il en reste un autre : %v", err)
+	}
+}
+
+func TestDeleteAgentGuardsReferencedAgent(t *testing.T) {
+	dir := t.TempDir()
+	s, err := NewStore(dir)
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+	project, err := s.AddProject("sillage", "/tmp/sillage")
+	if err != nil {
+		t.Fatalf("AddProject: %v", err)
+	}
+	card, err := s.AddCard(project.ID, "Carte", "")
+	if err != nil {
+		t.Fatalf("AddCard: %v", err)
+	}
+	id, ref := s.ReserveTaskID()
+	if _, err := s.CreateTask(id, ref, card.ID, project.ID, "T", "echo", "sillage/"+id, "main", "/tmp/wt"); err != nil {
+		t.Fatalf("CreateTask: %v", err)
+	}
+
+	if err := s.DeleteAgent("echo"); err == nil {
+		t.Fatalf("la suppression d'un agent référencé par une tâche devrait être refusée")
+	}
+
+	if err := s.DeleteAgent("bolt"); err != nil {
+		t.Fatalf("la suppression d'un agent non référencé devrait réussir : %v", err)
+	}
+	if _, ok := s.GetAgent("bolt"); ok {
+		t.Fatalf("l'agent bolt devrait avoir été supprimé")
+	}
+}
+
+func TestAddAgentSlugUniqueAndValidation(t *testing.T) {
+	dir := t.TempDir()
+	s, err := NewStore(dir)
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+
+	if _, err := s.AddAgent("", "", "", "claude", "", ""); err == nil {
+		t.Fatalf("un nom vide devrait être refusé")
+	}
+	if _, err := s.AddAgent("Test", "", "", "invalid-cli", "", ""); err == nil {
+		t.Fatalf("un cli invalide devrait être refusé")
+	}
+	if _, err := s.AddAgent("Bolt", "🐝", "#000", "claude", "", ""); err == nil {
+		t.Fatalf("un agent nommé Bolt existe déjà (slug 'bolt'), la création devrait échouer")
+	}
+
+	a, err := s.AddAgent("Nova", "✨", "#fff", "fake", "", "prompt")
+	if err != nil {
+		t.Fatalf("AddAgent: %v", err)
+	}
+	if a.ID != "nova" {
+		t.Fatalf("id attendu 'nova', reçu %q", a.ID)
+	}
+}
+
+func TestUpdateProjectFields(t *testing.T) {
+	dir := t.TempDir()
+	s, err := NewStore(dir)
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+	p, err := s.AddProject("sillage", "/tmp/sillage")
+	if err != nil {
+		t.Fatalf("AddProject: %v", err)
+	}
+
+	name := "Nouveau nom"
+	checkCmd := "go test ./..."
+	updated, err := s.UpdateProject(p.ID, &name, &checkCmd)
+	if err != nil {
+		t.Fatalf("UpdateProject: %v", err)
+	}
+	if updated.Name != name || updated.CheckCmd != checkCmd {
+		t.Fatalf("mise à jour du projet inattendue : %+v", updated)
 	}
 }

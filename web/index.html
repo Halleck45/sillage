@@ -13,8 +13,9 @@
     <div class="login-card">
       <div class="login-logo"><span class="brand-mark"></span><span class="brand-name">Sillage</span></div>
       <form id="login-form">
-        <input type="password" id="login-password" placeholder="Mot de passe" autocomplete="current-password" required>
-        <button type="submit">Se connecter</button>
+        <input type="text" id="login-username" autocomplete="username" required>
+        <input type="password" id="login-password" autocomplete="current-password" required>
+        <button type="submit" id="login-submit"></button>
       </form>
       <div id="login-error" class="login-error hidden"></div>
     </div>

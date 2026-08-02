@@ -95,46 +95,54 @@ func LoadOrInitPasswordHash(dataDir string) (hash string, generated string, err 
 	return string(h), pass, nil
 }
 
-// SessionManager gère les sessions en mémoire (token -> expiration).
+// sessionEntry associe un token à l'utilisateur authentifié et à son expiration.
+type sessionEntry struct {
+	userID string
+	expiry time.Time
+}
+
+// SessionManager gère les sessions en mémoire (token -> utilisateur + expiration).
 type SessionManager struct {
 	mu       sync.Mutex
-	sessions map[string]time.Time
+	sessions map[string]sessionEntry
 }
 
 // NewSessionManager crée un gestionnaire de sessions vide.
 func NewSessionManager() *SessionManager {
-	return &SessionManager{sessions: map[string]time.Time{}}
+	return &SessionManager{sessions: map[string]sessionEntry{}}
 }
 
-// Create génère un nouveau token de session (32 octets aléatoires, hex) valable 30 jours.
-func (m *SessionManager) Create() (string, error) {
+// Create génère un nouveau token de session (32 octets aléatoires, hex) valable 30 jours,
+// associé à l'utilisateur userID.
+func (m *SessionManager) Create(userID string) (string, error) {
 	buf := make([]byte, 32)
 	if _, err := rand.Read(buf); err != nil {
 		return "", err
 	}
 	token := hex.EncodeToString(buf)
 	m.mu.Lock()
-	m.sessions[token] = time.Now().Add(sessionTTL)
+	m.sessions[token] = sessionEntry{userID: userID, expiry: time.Now().Add(sessionTTL)}
 	m.mu.Unlock()
 	return token, nil
 }
 
-// Validate indique si un token de session est connu et non expiré.
-func (m *SessionManager) Validate(token string) bool {
+// Validate retourne l'identifiant de l'utilisateur associé à un token de
+// session valide et non expiré.
+func (m *SessionManager) Validate(token string) (userID string, ok bool) {
 	if token == "" {
-		return false
+		return "", false
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	expiry, ok := m.sessions[token]
+	entry, ok := m.sessions[token]
 	if !ok {
-		return false
+		return "", false
 	}
-	if time.Now().After(expiry) {
+	if time.Now().After(entry.expiry) {
 		delete(m.sessions, token)
-		return false
+		return "", false
 	}
-	return true
+	return entry.userID, true
 }
 
 // Delete invalide un token de session (déconnexion).
@@ -142,6 +150,17 @@ func (m *SessionManager) Delete(token string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	delete(m.sessions, token)
+}
+
+// DeleteByUser invalide toutes les sessions d'un utilisateur (ex : après suppression du compte).
+func (m *SessionManager) DeleteByUser(userID string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for token, entry := range m.sessions {
+		if entry.userID == userID {
+			delete(m.sessions, token)
+		}
+	}
 }
 
 // LoginLimiter limite les tentatives de connexion échouées par adresse IP

@@ -1,7 +1,340 @@
 // Sillage : frontend SPA vanilla (zéro framework, zéro dépendance).
-// Contrat d'API : voir SPEC-API.md à la racine du dépôt.
+// Contrat d'API : voir docs/SPEC-API.md + docs/SPEC-V2.md à la racine du dépôt.
 (function () {
   'use strict';
+
+  // ---------------------------------------------------------------------
+  // i18n
+  // ---------------------------------------------------------------------
+
+  var I18N = {
+    fr: {
+      'nav.inbox': 'Boîte de réception',
+      'nav.allProjects': 'Tous les projets',
+      'nav.logout': 'Déconnexion',
+      'nav.back': 'Retour',
+      'common.projects': 'Projets',
+      'common.tasksWord': 'Tâches',
+      'common.close': 'Fermer',
+      'common.cancel': 'Annuler',
+      'common.save': 'Enregistrer',
+      'common.create': 'Créer',
+      'common.loading': 'Chargement…',
+      'common.networkError': 'Erreur réseau.',
+      'search.buttonLabel': 'Rechercher',
+      'search.placeholder': 'Rechercher tâches et projets…',
+      'search.typeToSearch': 'Tapez pour rechercher…',
+      'search.noResults': 'Aucun résultat.',
+      'sidebar.projectsHeading': 'Projets',
+      'sidebar.newProjectTooltip': 'Nouveau projet',
+      'sidebar.noProjects': 'Aucun projet',
+      'sidebar.agentsHeading': 'Agents',
+      'sidebar.newAgentTooltip': 'Nouvel agent',
+      'sidebar.noAgents': 'Aucun agent',
+      'aria.menu': 'Menu',
+      'header.newTask': 'Nouvelle tâche',
+      'header.newProject': '+ Nouveau projet',
+      'allProjects.emptyTitle': 'Aucun projet pour l\'instant',
+      'allProjects.emptySub': 'Créez votre premier projet pour commencer.',
+      'allProjects.cardCount.one': '{n} carte',
+      'allProjects.cardCount.other': '{n} cartes',
+      'inbox.empty': 'Boîte de réception vide. Tout est à jour !',
+      'kanban.stats.doing': 'en cours',
+      'kanban.stats.review': 'à relire',
+      'kanban.stats.tasks': 'tâches',
+      'kanban.addCard': '+ Ajouter',
+      'kanban.empty': 'Aucune carte pour l\'instant. Utilisez « + Ajouter » dans une colonne pour commencer.',
+      'kanban.card.tasksLabel': 'tâches',
+      'kanban.card.reviewCount': '{n} à relire',
+      'column.soon': 'Bientôt',
+      'column.doing': 'En cours',
+      'column.done': 'Terminé',
+      'cardMenu.moveTo': 'Déplacer vers {column}',
+      'project.editTooltip': 'Modifier le projet',
+      'project.editTitle': 'Projet',
+      'project.name': 'Nom',
+      'project.checkCmd': 'Commande de vérification',
+      'project.errorNameRequired': 'Le nom est requis.',
+      'project.errorSaveFailed': 'Erreur lors de l\'enregistrement.',
+      'work.emptyCard': 'Aucune tâche pour l\'instant.',
+      'filter.all': 'Toutes {n}',
+      'filter.review': 'À relire {n}',
+      'filter.ready': 'Prêt à livrer {n}',
+      'filter.shipped': 'Livré {n}',
+      'badge.new': 'NOUVEAU',
+      'workflow.step.review': 'À relire',
+      'workflow.step.accepted': 'Accepté',
+      'workflow.step.shipped': 'Livré',
+      'action.interrupt': 'Interrompre l\'agent',
+      'action.accept': 'Accepter le diff et les livrables',
+      'action.ship': 'Pousser et livrer',
+      'action.shipConfirm': 'Confirmer le push ?',
+      'action.reopen': 'Rouvrir la tâche',
+      'action.pr': 'Ouvrir la PR',
+      'action.prConfirm': 'Confirmer la PR ?',
+      'tabs.conversation': 'Conversation',
+      'tabs.diff': 'Diff',
+      'tabs.deliverables': 'Livrables',
+      'chat.you': 'Vous',
+      'chat.placeholder': 'Répondre à {name}…',
+      'chat.send': 'Envoyer ⏎',
+      'conversation.empty': 'Aucun message pour l\'instant.',
+      'diff.empty': 'Aucune modification.',
+      'detail.diff.pushButton': 'Push',
+      'detail.diff.pushDisabledTooltip': 'Disponible une fois prêt à livrer',
+      'detail.diff.prDisabledTooltip': 'Disponible une fois livré',
+      'deliverables.code': 'Code',
+      'deliverables.docs': 'Documents',
+      'deliverables.images': 'Captures',
+      'deliverables.empty': 'Aucun élément.',
+      'newTask.title': 'Nouvelle tâche',
+      'newTask.titlePlaceholder': 'Que doit faire l\'agent ?',
+      'newTask.promptPlaceholder': 'Description ou instructions détaillées (optionnel)',
+      'newTask.agentLabel': 'Agent',
+      'newTask.hint': 'La conversation s\'ouvre après la création',
+      'newTask.submit': 'Créer et discuter',
+      'newTask.errorTitleRequired': 'Le titre est requis.',
+      'newTask.errorAgentRequired': 'Choisissez un agent.',
+      'newTask.errorCreateFailed': 'Erreur lors de la création.',
+      'newProject.title': 'Nouveau projet',
+      'newProject.nameLabel': 'Nom',
+      'newProject.namePlaceholder': 'mon-projet',
+      'newProject.pathLabel': 'Chemin absolu du dépôt git',
+      'newProject.pathPlaceholder': '/home/utilisateur/projets/mon-projet',
+      'newProject.errorRequired': 'Nom et chemin sont requis.',
+      'newProject.errorCreateFailed': 'Erreur lors de la création du projet.',
+      'newCard.title': 'Nouvelle carte',
+      'newCard.titleLabel': 'Titre',
+      'newCard.titlePlaceholder': 'Titre de la carte',
+      'newCard.columnLabel': 'Colonne',
+      'newCard.errorTitleRequired': 'Le titre est requis.',
+      'newCard.errorCreateFailed': 'Erreur lors de la création de la carte.',
+      'agent.newTitle': 'Nouvel agent',
+      'agent.editTitle': 'Modifier l\'agent',
+      'agent.name': 'Nom',
+      'agent.emoji': 'Emoji',
+      'agent.color': 'Couleur',
+      'agent.cli': 'CLI',
+      'agent.model': 'Modèle',
+      'agent.contextPrompt': 'Prompt de contexte',
+      'agent.delete': 'Supprimer',
+      'agent.deleteConfirm': 'Confirmer la suppression ?',
+      'agent.errorNameRequired': 'Le nom est requis.',
+      'agent.errorSaveFailed': 'Erreur lors de l\'enregistrement.',
+      'agent.errorDeleteFailed': 'Erreur lors de la suppression.',
+      'users.tooltip': 'Utilisateurs',
+      'users.title': 'Utilisateurs',
+      'users.empty': 'Aucun utilisateur.',
+      'users.reset': 'Réinitialiser',
+      'users.delete': 'Supprimer',
+      'users.deleteConfirm': 'Confirmer ?',
+      'users.addTitle': 'Ajouter un utilisateur',
+      'users.namePlaceholder': 'Nom',
+      'users.passwordPlaceholder': 'Mot de passe',
+      'users.newPasswordPlaceholder': 'Nouveau mot de passe',
+      'users.add': 'Ajouter',
+      'users.errorRequired': 'Nom et mot de passe sont requis.',
+      'users.errorCreateFailed': 'Erreur lors de la création.',
+      'users.errorUpdateFailed': 'Erreur lors de la mise à jour.',
+      'users.errorDeleteFailed': 'Erreur lors de la suppression.',
+      'role.admin': 'Administrateur',
+      'role.member': 'Membre',
+      'login.usernamePlaceholder': 'admin',
+      'login.passwordPlaceholder': 'Mot de passe',
+      'login.submit': 'Se connecter',
+      'login.error': 'Identifiant ou mot de passe incorrect.',
+      'time.now': 'à l\'instant',
+      'time.min': 'il y a {n} min',
+      'time.hour': 'il y a {n} h',
+      'time.yesterday': 'hier',
+      'time.day': 'il y a {n} j',
+      'time.week': 'il y a {n} sem.',
+      'time.month': 'il y a {n} mois',
+      'time.year.one': 'il y a {n} an',
+      'time.year.other': 'il y a {n} ans',
+      'tokens.unit': 'tokens',
+      'errors.interruptFailed': 'Échec de l\'interruption.',
+      'errors.genericFailed': 'Échec.',
+      'errors.shipFailed': 'Échec du push.',
+      'errors.prFailed': 'Échec de l\'ouverture de la PR.'
+    },
+    en: {
+      'nav.inbox': 'Inbox',
+      'nav.allProjects': 'All projects',
+      'nav.logout': 'Log out',
+      'nav.back': 'Back',
+      'common.projects': 'Projects',
+      'common.tasksWord': 'Tasks',
+      'common.close': 'Close',
+      'common.cancel': 'Cancel',
+      'common.save': 'Save',
+      'common.create': 'Create',
+      'common.loading': 'Loading…',
+      'common.networkError': 'Network error.',
+      'search.buttonLabel': 'Search',
+      'search.placeholder': 'Search tasks and projects…',
+      'search.typeToSearch': 'Type to search…',
+      'search.noResults': 'No results.',
+      'sidebar.projectsHeading': 'Projects',
+      'sidebar.newProjectTooltip': 'New project',
+      'sidebar.noProjects': 'No projects',
+      'sidebar.agentsHeading': 'Agents',
+      'sidebar.newAgentTooltip': 'New agent',
+      'sidebar.noAgents': 'No agents',
+      'aria.menu': 'Menu',
+      'header.newTask': 'New task',
+      'header.newProject': '+ New project',
+      'allProjects.emptyTitle': 'No projects yet',
+      'allProjects.emptySub': 'Create your first project to get started.',
+      'allProjects.cardCount.one': '{n} card',
+      'allProjects.cardCount.other': '{n} cards',
+      'inbox.empty': 'Inbox is empty. All caught up!',
+      'kanban.stats.doing': 'in progress',
+      'kanban.stats.review': 'to review',
+      'kanban.stats.tasks': 'tasks',
+      'kanban.addCard': '+ Add',
+      'kanban.empty': 'No cards yet. Use "+ Add" in a column to get started.',
+      'kanban.card.tasksLabel': 'tasks',
+      'kanban.card.reviewCount': '{n} to review',
+      'column.soon': 'Soon',
+      'column.doing': 'In progress',
+      'column.done': 'Done',
+      'cardMenu.moveTo': 'Move to {column}',
+      'project.editTooltip': 'Edit project',
+      'project.editTitle': 'Project',
+      'project.name': 'Name',
+      'project.checkCmd': 'Check command',
+      'project.errorNameRequired': 'Name is required.',
+      'project.errorSaveFailed': 'Failed to save.',
+      'work.emptyCard': 'No tasks yet.',
+      'filter.all': 'All {n}',
+      'filter.review': 'To review {n}',
+      'filter.ready': 'Ready to ship {n}',
+      'filter.shipped': 'Shipped {n}',
+      'badge.new': 'NEW',
+      'workflow.step.review': 'To review',
+      'workflow.step.accepted': 'Accepted',
+      'workflow.step.shipped': 'Shipped',
+      'action.interrupt': 'Stop the agent',
+      'action.accept': 'Accept the diff and deliverables',
+      'action.ship': 'Push and ship',
+      'action.shipConfirm': 'Confirm push?',
+      'action.reopen': 'Reopen the task',
+      'action.pr': 'Open the PR',
+      'action.prConfirm': 'Confirm PR?',
+      'tabs.conversation': 'Conversation',
+      'tabs.diff': 'Diff',
+      'tabs.deliverables': 'Deliverables',
+      'chat.you': 'You',
+      'chat.placeholder': 'Reply to {name}…',
+      'chat.send': 'Send ⏎',
+      'conversation.empty': 'No messages yet.',
+      'diff.empty': 'No changes.',
+      'detail.diff.pushButton': 'Push',
+      'detail.diff.pushDisabledTooltip': 'Available once ready to ship',
+      'detail.diff.prDisabledTooltip': 'Available once shipped',
+      'deliverables.code': 'Code',
+      'deliverables.docs': 'Documents',
+      'deliverables.images': 'Screenshots',
+      'deliverables.empty': 'No items.',
+      'newTask.title': 'New task',
+      'newTask.titlePlaceholder': 'What should the agent do?',
+      'newTask.promptPlaceholder': 'Description or detailed instructions (optional)',
+      'newTask.agentLabel': 'Agent',
+      'newTask.hint': 'The conversation opens after creation',
+      'newTask.submit': 'Create and chat',
+      'newTask.errorTitleRequired': 'A title is required.',
+      'newTask.errorAgentRequired': 'Choose an agent.',
+      'newTask.errorCreateFailed': 'Failed to create.',
+      'newProject.title': 'New project',
+      'newProject.nameLabel': 'Name',
+      'newProject.namePlaceholder': 'my-project',
+      'newProject.pathLabel': 'Absolute path to the git repository',
+      'newProject.pathPlaceholder': '/home/user/projects/my-project',
+      'newProject.errorRequired': 'Name and path are required.',
+      'newProject.errorCreateFailed': 'Failed to create the project.',
+      'newCard.title': 'New card',
+      'newCard.titleLabel': 'Title',
+      'newCard.titlePlaceholder': 'Card title',
+      'newCard.columnLabel': 'Column',
+      'newCard.errorTitleRequired': 'A title is required.',
+      'newCard.errorCreateFailed': 'Failed to create the card.',
+      'agent.newTitle': 'New agent',
+      'agent.editTitle': 'Edit agent',
+      'agent.name': 'Name',
+      'agent.emoji': 'Emoji',
+      'agent.color': 'Color',
+      'agent.cli': 'CLI',
+      'agent.model': 'Model',
+      'agent.contextPrompt': 'Context prompt',
+      'agent.delete': 'Delete',
+      'agent.deleteConfirm': 'Confirm deletion?',
+      'agent.errorNameRequired': 'Name is required.',
+      'agent.errorSaveFailed': 'Failed to save.',
+      'agent.errorDeleteFailed': 'Failed to delete.',
+      'users.tooltip': 'Users',
+      'users.title': 'Users',
+      'users.empty': 'No users.',
+      'users.reset': 'Reset',
+      'users.delete': 'Delete',
+      'users.deleteConfirm': 'Confirm?',
+      'users.addTitle': 'Add a user',
+      'users.namePlaceholder': 'Name',
+      'users.passwordPlaceholder': 'Password',
+      'users.newPasswordPlaceholder': 'New password',
+      'users.add': 'Add',
+      'users.errorRequired': 'Name and password are required.',
+      'users.errorCreateFailed': 'Failed to create.',
+      'users.errorUpdateFailed': 'Failed to update.',
+      'users.errorDeleteFailed': 'Failed to delete.',
+      'role.admin': 'Admin',
+      'role.member': 'Member',
+      'login.usernamePlaceholder': 'admin',
+      'login.passwordPlaceholder': 'Password',
+      'login.submit': 'Log in',
+      'login.error': 'Incorrect username or password.',
+      'time.now': 'just now',
+      'time.min': '{n} min ago',
+      'time.hour': '{n} h ago',
+      'time.yesterday': 'yesterday',
+      'time.day': '{n} d ago',
+      'time.week': '{n} wk ago',
+      'time.month': '{n} mo ago',
+      'time.year.one': '{n} yr ago',
+      'time.year.other': '{n} yrs ago',
+      'tokens.unit': 'tokens',
+      'errors.interruptFailed': 'Failed to stop the agent.',
+      'errors.genericFailed': 'Failed.',
+      'errors.shipFailed': 'Failed to push.',
+      'errors.prFailed': 'Failed to open the PR.'
+    }
+  };
+
+  function t(key, vars) {
+    var dict = I18N[state.lang] || I18N.fr;
+    var str = dict[key];
+    if (str === undefined) str = (I18N.fr[key] !== undefined ? I18N.fr[key] : key);
+    if (vars) {
+      Object.keys(vars).forEach(function (k) {
+        str = str.replace(new RegExp('\\{' + k + '\\}', 'g'), vars[k]);
+      });
+    }
+    return str;
+  }
+
+  function tCount(baseKey, n, vars) {
+    var suffix = (n === 1) ? '.one' : '.other';
+    var allVars = Object.assign({ n: n }, vars || {});
+    return t(baseKey + suffix, allVars);
+  }
+
+  function detectInitialLang() {
+    var saved = null;
+    try { saved = localStorage.getItem('sillage.lang'); } catch (e) {}
+    if (saved === 'fr' || saved === 'en') return saved;
+    var nav = ((navigator.language || navigator.userLanguage || '') + '').toLowerCase();
+    return nav.indexOf('fr') === 0 ? 'fr' : 'en';
+  }
 
   // ---------------------------------------------------------------------
   // Constantes
@@ -13,14 +346,17 @@
     ready: { icon: '⬆', color: '#2f5fb0' },
     shipped: { icon: '✓', color: '#2f7d54' }
   };
-  var COLUMN_LABELS = { soon: 'Bientôt', doing: 'En cours', done: 'Terminé' };
   var COLUMN_ORDER = ['soon', 'doing', 'done'];
+  function columnLabel(key) { return t('column.' + key); }
 
   // ---------------------------------------------------------------------
   // État en mémoire
   // ---------------------------------------------------------------------
 
   var state = {
+    lang: detectInitialLang(),
+    me: null,
+    users: null,
     projects: [], cards: [], tasks: [], agents: [],
     projectsById: {}, cardsById: {}, tasksById: {}, agentsById: {},
     tokens: { global: { input: 0, output: 0, costUsd: 0 } },
@@ -32,12 +368,13 @@
     projectId: null, cardId: null, taskId: null,
     panelTab: 'chat', taskFilter: 'all',
     searchOpen: false, modal: null,
-    pendingShip: null,
+    pendingConfirm: null, // { key, timer }
     sidebarOpen: false // tiroir mobile (< 860px)
   };
 
   var modalAgentId = null;
   var modalColumn = 'soon';
+  var usersResetRowId = null;
   var sseOpenedOnce = false;
 
   // ---------------------------------------------------------------------
@@ -66,18 +403,24 @@
     return 'rgba(' + r + ',' + g + ',' + b + ',' + (alpha === undefined ? 0.22 : alpha) + ')';
   }
 
+  function localeDecimalSep() { return state.lang === 'en' ? '.' : ','; }
+
   function formatTokens(n) {
     n = n || 0;
-    if (n >= 1000) return (n / 1000).toFixed(1).replace('.', ',') + 'k';
+    if (n >= 1000) return (n / 1000).toFixed(1).replace('.', localeDecimalSep()) + 'k';
     return String(n);
   }
-  function formatCost(n) {
-    return (n || 0).toFixed(2).replace('.', ',');
+  function formatCostNumber(n) {
+    return (n || 0).toFixed(2).replace('.', localeDecimalSep());
+  }
+  function formatMoney(n) {
+    var num = formatCostNumber(n);
+    return state.lang === 'en' ? ('$' + num) : (num + ' $');
   }
   function tokenSummary(tokens) {
     tokens = tokens || {};
     var total = (tokens.input || 0) + (tokens.output || 0);
-    return 'Σ ' + formatTokens(total) + ' tokens · ' + formatCost(tokens.costUsd) + ' $';
+    return 'Σ ' + formatTokens(total) + ' ' + t('tokens.unit') + ' · ' + formatMoney(tokens.costUsd);
   }
 
   function timeAgo(iso) {
@@ -85,26 +428,26 @@
     var then = new Date(iso).getTime();
     if (isNaN(then)) return '';
     var diff = Math.max(0, Math.round((Date.now() - then) / 1000));
-    if (diff < 45) return 'à l\'instant';
+    if (diff < 45) return t('time.now');
     var min = Math.round(diff / 60);
-    if (min < 60) return 'il y a ' + min + ' min';
+    if (min < 60) return t('time.min', { n: min });
     var hr = Math.round(min / 60);
-    if (hr < 24) return 'il y a ' + hr + ' h';
+    if (hr < 24) return t('time.hour', { n: hr });
     var day = Math.round(hr / 24);
-    if (day === 1) return 'hier';
-    if (day < 7) return 'il y a ' + day + ' j';
+    if (day === 1) return t('time.yesterday');
+    if (day < 7) return t('time.day', { n: day });
     var week = Math.round(day / 7);
-    if (week < 5) return 'il y a ' + week + ' sem.';
+    if (week < 5) return t('time.week', { n: week });
     var month = Math.round(day / 30);
-    if (month < 12) return 'il y a ' + month + ' mois';
+    if (month < 12) return t('time.month', { n: month });
     var year = Math.round(day / 365);
-    return 'il y a ' + year + ' an' + (year > 1 ? 's' : '');
+    return tCount('time.year', year);
   }
 
   function formatTime(iso) {
     var d = new Date(iso);
     if (isNaN(d.getTime())) return '';
-    return d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+    return d.toLocaleTimeString(state.lang === 'en' ? 'en-US' : 'fr-FR', { hour: '2-digit', minute: '2-digit' });
   }
 
   function renderMarkdown(raw) {
@@ -192,6 +535,7 @@
     state.tasks = data.tasks || [];
     state.agents = data.agents || [];
     state.tokens = data.tokens || { global: { input: 0, output: 0, costUsd: 0 } };
+    state.me = data.me || state.me || null;
     reindex();
   }
 
@@ -222,6 +566,46 @@
     var ids = {};
     state.tasks.forEach(function (t) { if (t.cardId === cardId && t.status === 'running') ids[t.agentId] = true; });
     return Object.keys(ids).map(function (id) { return state.agentsById[id]; }).filter(Boolean);
+  }
+
+  // ---------------------------------------------------------------------
+  // Confirmation en deux temps (générique : ship, PR, suppressions)
+  // ---------------------------------------------------------------------
+
+  function isPendingConfirm(key) {
+    return !!(state.pendingConfirm && state.pendingConfirm.key === key);
+  }
+  function clearPendingConfirm() {
+    if (state.pendingConfirm) clearTimeout(state.pendingConfirm.timer);
+    state.pendingConfirm = null;
+  }
+  function patchConfirmButtons(key) {
+    document.querySelectorAll('[data-confirm-key="' + key + '"]').forEach(function (btn) {
+      var pending = isPendingConfirm(key);
+      btn.textContent = pending ? btn.getAttribute('data-confirm-label') : btn.getAttribute('data-default-label');
+    });
+  }
+  function handleConfirmClick(key, action) {
+    if (isPendingConfirm(key)) {
+      clearPendingConfirm();
+      action();
+      return;
+    }
+    clearPendingConfirm();
+    var timer = setTimeout(function () { state.pendingConfirm = null; patchConfirmButtons(key); }, 5000);
+    state.pendingConfirm = { key: key, timer: timer };
+    patchConfirmButtons(key);
+  }
+  function handleConfirmClickDispatch(el) {
+    var key = el.getAttribute('data-confirm-key');
+    var kind = el.getAttribute('data-confirm-action');
+    var id = el.getAttribute('data-confirm-id');
+    handleConfirmClick(key, function () {
+      if (kind === 'ship') doShip(id);
+      else if (kind === 'pr') doPr(id);
+      else if (kind === 'agent-delete') doDeleteAgent(id);
+      else if (kind === 'user-delete') doDeleteUser(id);
+    });
   }
 
   // ---------------------------------------------------------------------
@@ -257,11 +641,21 @@
 
   function render() { renderSidebar(); renderMain(); }
 
+  function setLang(lang) {
+    if (lang !== 'fr' && lang !== 'en') return;
+    state.lang = lang;
+    try { localStorage.setItem('sillage.lang', lang); } catch (e) {}
+    closeModal();
+    closeSearch();
+    applyStaticTranslations();
+    render();
+  }
+
   function openTask(taskId) {
     state.taskId = taskId;
     state.panelTab = 'chat';
-    var t = state.tasksById[taskId];
-    if (t) t.unread = false;
+    var task = state.tasksById[taskId];
+    if (task) task.unread = false;
     // Le chargement des messages est délégué à loadMessages(), appelé
     // paresseusement par buildConversationHTML() au premier rendu de l'onglet.
     render();
@@ -269,9 +663,9 @@
   }
 
   function openTaskFromSearch(taskId) {
-    var t = state.tasksById[taskId];
-    if (!t) return;
-    goCard(t.cardId);
+    var task = state.tasksById[taskId];
+    if (!task) return;
+    goCard(task.cardId);
     openTask(taskId);
   }
 
@@ -279,15 +673,23 @@
   // Rendu : sidebar
   // ---------------------------------------------------------------------
 
+  function buildLangSwitchHTML() {
+    return '<div class="lang-switch">' +
+      '<button class="lang-btn ' + (state.lang === 'fr' ? 'active' : '') + '" data-action="set-lang" data-lang="fr">FR</button>' +
+      '<span class="lang-sep">·</span>' +
+      '<button class="lang-btn ' + (state.lang === 'en' ? 'active' : '') + '" data-action="set-lang" data-lang="en">EN</button>' +
+      '</div>';
+  }
+
   function buildSidebarHTML() {
     var navItems = [
-      { key: 'inbox', icon: '⌂', label: 'Boîte de réception', action: 'nav-inbox' },
-      { key: 'projects', icon: '◫', label: 'Tous les projets', action: 'nav-projects' }
+      { key: 'inbox', icon: '⌂', label: t('nav.inbox'), action: 'nav-inbox' },
+      { key: 'projects', icon: '◫', label: t('nav.allProjects'), action: 'nav-projects' }
     ];
     var navHTML = navItems.map(function (n) {
       var active = state.screen === n.key;
       return '<button class="nav-item ' + (active ? 'active' : '') + '" data-action="' + n.action + '">' +
-        '<span class="nav-icon">' + n.icon + '</span>' + n.label + '</button>';
+        '<span class="nav-icon">' + n.icon + '</span>' + escapeHtml(n.label) + '</button>';
     }).join('');
 
     var projectsHTML = state.projects.map(function (p) {
@@ -300,28 +702,38 @@
     }).join('');
 
     var agentsHTML = state.agents.map(function (a) {
-      return '<div class="agent-item" data-agent-id="' + a.id + '">' +
+      return '<div class="agent-item" data-action="edit-agent" data-agent-id="' + a.id + '">' +
         '<span class="agent-avatar" style="background:' + softColor(a.color) + '">' + a.emoji + '</span>' +
         '<span class="agent-name">' + escapeHtml(a.name) + '</span>' +
         (a.active ? '<span class="agent-dot"></span>' : '') +
         '</div>';
     }).join('');
 
+    var isAdmin = !!(state.me && state.me.role === 'admin');
+    var adminGearHTML = isAdmin
+      ? '<button class="icon-btn-sm" data-action="open-users-modal" title="' + escapeHtml(t('users.tooltip')) + '" aria-label="' + escapeHtml(t('users.tooltip')) + '">⚙</button>'
+      : '';
+
     return '' +
       '<div class="sidebar-brand"><span class="brand-mark"></span><span class="brand-name">Sillage</span></div>' +
       '<div class="sidebar-search-wrap">' +
-        '<button class="search-btn" data-action="open-search"><span>⌕</span><span class="search-btn-label">Rechercher</span>' +
+        '<button class="search-btn" data-action="open-search"><span>⌕</span><span class="search-btn-label">' + escapeHtml(t('search.buttonLabel')) + '</span>' +
         '<span class="kbd">' + (isMac() ? '⌘K' : 'Ctrl+K') + '</span></button>' +
       '</div>' +
       '<div class="nav-list">' + navHTML + '</div>' +
-      '<div class="sidebar-section-head"><span>Projets</span>' +
-      '<button class="icon-btn-sm" data-action="open-new-project" title="Nouveau projet">+</button></div>' +
-      '<nav class="project-list">' + (projectsHTML || '<div class="empty-note-sm">Aucun projet</div>') + '</nav>' +
-      '<div class="sidebar-section-head"><span>Agents</span></div>' +
-      '<div class="agent-list">' + (agentsHTML || '<div class="empty-note-sm">Aucun agent</div>') + '</div>' +
+      '<div class="sidebar-section-head"><span>' + escapeHtml(t('sidebar.projectsHeading')) + '</span>' +
+      '<button class="icon-btn-sm" data-action="open-new-project" title="' + escapeHtml(t('sidebar.newProjectTooltip')) + '" aria-label="' + escapeHtml(t('sidebar.newProjectTooltip')) + '">+</button></div>' +
+      '<nav class="project-list">' + (projectsHTML || '<div class="empty-note-sm">' + escapeHtml(t('sidebar.noProjects')) + '</div>') + '</nav>' +
+      '<div class="sidebar-section-head"><span>' + escapeHtml(t('sidebar.agentsHeading')) + '</span>' +
+      '<button class="icon-btn-sm" data-action="open-new-agent" title="' + escapeHtml(t('sidebar.newAgentTooltip')) + '" aria-label="' + escapeHtml(t('sidebar.newAgentTooltip')) + '">+</button></div>' +
+      '<div class="agent-list">' + (agentsHTML || '<div class="empty-note-sm">' + escapeHtml(t('sidebar.noAgents')) + '</div>') + '</div>' +
       '<div class="sidebar-footer">' +
         '<span class="sidebar-tokens" id="sidebar-tokens">' + tokenSummary(state.tokens.global) + '</span>' +
-        '<button class="logout-link" data-action="logout">Déconnexion</button>' +
+        '<div class="sidebar-footer-actions">' +
+          buildLangSwitchHTML() +
+          adminGearHTML +
+          '<button class="logout-link" data-action="logout">' + escapeHtml(t('nav.logout')) + '</button>' +
+        '</div>' +
       '</div>';
   }
 
@@ -337,22 +749,22 @@
   function buildHeaderHTML() {
     var back = '', title = '', sub = '', actions = '';
     if (state.screen === 'inbox') {
-      title = 'Boîte de réception';
+      title = t('nav.inbox');
     } else if (state.screen === 'projects') {
-      title = 'Tous les projets';
-      actions = '<button class="btn-outline" data-action="open-new-project">+ Nouveau projet</button>';
+      title = t('nav.allProjects');
+      actions = '<button class="btn-outline" data-action="open-new-project">' + escapeHtml(t('header.newProject')) + '</button>';
     } else if (state.screen === 'kanban') {
       var p = state.projectsById[state.projectId];
       title = p ? p.name : '';
     } else if (state.screen === 'work') {
-      back = '<button class="icon-btn" data-action="go-back">←</button>';
+      back = '<button class="icon-btn" data-action="go-back" aria-label="' + escapeHtml(t('nav.back')) + '">←</button>';
       var c = state.cardsById[state.cardId];
       var pr = state.projectsById[state.projectId];
       title = c ? c.title : '';
       sub = pr ? '<span class="crumb-sub">' + escapeHtml(pr.name) + '</span>' : '';
-      actions = '<button class="btn-primary" data-action="open-new-task">Nouvelle tâche</button>';
+      actions = '<button class="btn-primary" data-action="open-new-task">' + escapeHtml(t('header.newTask')) + '</button>';
     }
-    var hamburger = '<button class="icon-btn hamburger-btn" data-action="toggle-sidebar" aria-label="Menu">☰</button>';
+    var hamburger = '<button class="icon-btn hamburger-btn" data-action="toggle-sidebar" aria-label="' + escapeHtml(t('aria.menu')) + '">☰</button>';
     return '<header class="topbar">' + hamburger + back + '<span class="crumb-title">' + escapeHtml(title) + '</span>' + sub +
       '<div class="topbar-actions">' + actions + '</div></header>';
   }
@@ -364,9 +776,9 @@
   function buildAllProjectsHTML() {
     if (state.projects.length === 0) {
       return buildHeaderHTML() + '<div class="view-body"><div class="empty-state big">' +
-        '<div class="empty-title">Aucun projet pour l\'instant</div>' +
-        '<div class="empty-sub">Créez votre premier projet pour commencer.</div>' +
-        '<button class="btn-primary" data-action="open-new-project">Nouveau projet</button>' +
+        '<div class="empty-title">' + escapeHtml(t('allProjects.emptyTitle')) + '</div>' +
+        '<div class="empty-sub">' + escapeHtml(t('allProjects.emptySub')) + '</div>' +
+        '<button class="btn-primary" data-action="open-new-project">' + escapeHtml(t('header.newProject')) + '</button>' +
         '</div></div>';
     }
     var tiles = state.projects.map(function (p) {
@@ -375,12 +787,12 @@
       return '<article class="project-tile" data-action="nav-project" data-project-id="' + p.id + '">' +
         '<div class="project-tile-top"><span class="project-hash">#</span><h3>' + escapeHtml(p.name) + '</h3>' +
         (unread ? '<span class="badge-unread">' + unread + '</span>' : '') + '</div>' +
-        '<div class="project-tile-meta"><span>' + cardCount + ' carte' + (cardCount > 1 ? 's' : '') + '</span>' +
+        '<div class="project-tile-meta"><span>' + escapeHtml(tCount('allProjects.cardCount', cardCount)) + '</span>' +
         '<span>' + tokenSummary(p.tokens) + '</span></div>' +
         '</article>';
     }).join('');
     return buildHeaderHTML() + '<div class="view-body all-projects-body"><div class="project-grid">' + tiles +
-      '<button class="project-tile project-tile-add" data-action="open-new-project">+ Nouveau projet</button>' +
+      '<button class="project-tile project-tile-add" data-action="open-new-project">' + escapeHtml(t('header.newProject')) + '</button>' +
       '</div></div>';
   }
 
@@ -396,11 +808,11 @@
     var barColor = colKey === 'done' ? 'var(--green-live)' : 'var(--accent)';
     var liveHTML = c.liveActivity ? '<div class="card-live"><span class="live-dot"></span><span class="live-text mono">' +
       escapeHtml(c.liveActivity) + '</span></div>' : '';
-    var attention = c.reviewCount ? '<span class="card-attention">' + c.reviewCount + ' à relire</span>' : '';
+    var attention = c.reviewCount ? '<span class="card-attention">' + escapeHtml(t('kanban.card.reviewCount', { n: c.reviewCount })) + '</span>' : '';
     var others = COLUMN_ORDER.filter(function (k) { return k !== colKey; });
     var menuItemsHTML = others.map(function (k) {
       return '<button class="card-menu-item" data-action="move-card" data-card-id="' + c.id + '" data-column="' + k + '">' +
-        'Déplacer vers ' + COLUMN_LABELS[k] + '</button>';
+        escapeHtml(t('cardMenu.moveTo', { column: columnLabel(k) })) + '</button>';
     }).join('');
     return '<article class="kanban-card" data-action="open-card" data-card-id="' + c.id + '">' +
       '<div class="card-top">' +
@@ -411,7 +823,7 @@
       '</div>' +
       liveHTML +
       '<div class="card-meta">' +
-        '<span>' + (c.tasksDone || 0) + '/' + (c.tasksTotal || 0) + ' tâches</span>' +
+        '<span>' + (c.tasksDone || 0) + '/' + (c.tasksTotal || 0) + ' ' + escapeHtml(t('kanban.card.tasksLabel')) + '</span>' +
         '<span>▤ ' + (c.docsCount || 0) + '</span>' +
         '<span>💬 ' + (c.messagesCount || 0) + '</span>' +
         attention +
@@ -429,30 +841,34 @@
     var tokenTxt = project ? tokenSummary(project.tokens) : '';
 
     var colsHTML = COLUMN_ORDER.map(function (key) {
-      var label = COLUMN_LABELS[key];
+      var label = columnLabel(key);
       var color = key === 'soon' ? '#d3d0c8' : (key === 'doing' ? '#2f7d54' : '#c3c0b8');
       var list = cards.filter(function (c) { return c.column === key; });
       return '<section class="kanban-col">' +
         '<div class="col-head"><span class="col-dot" style="background:' + color + '"></span>' +
-        '<span class="col-label">' + label + '</span><span class="col-count">' + list.length + '</span></div>' +
+        '<span class="col-label">' + escapeHtml(label) + '</span><span class="col-count">' + list.length + '</span></div>' +
         list.map(function (c) { return buildKanbanCardHTML(c, key); }).join('') +
-        '<button class="add-card-btn" data-action="open-new-card" data-column="' + key + '">+ Ajouter</button>' +
+        '<button class="add-card-btn" data-action="open-new-card" data-column="' + key + '">' + escapeHtml(t('kanban.addCard')) + '</button>' +
         '</section>';
     }).join('');
 
-    var head = '<div class="kanban-head"><h1>' + escapeHtml(project ? project.name : '') + '</h1>';
+    var head = '<div class="kanban-head"><div class="kanban-title-row"><h1>' + escapeHtml(project ? project.name : '') + '</h1>';
+    if (project) {
+      head += '<button class="icon-btn" data-action="open-edit-project" title="' + escapeHtml(t('project.editTooltip')) + '" aria-label="' + escapeHtml(t('project.editTooltip')) + '">✎</button>';
+    }
+    head += '</div>';
     if (cards.length > 0) {
       head += '<div class="kanban-stats">' +
-        '<span><b>' + doingCount + '</b> en cours</span>' +
-        '<span><b class="' + (totalReview ? 'amber' : '') + '">' + totalReview + '</b> à relire</span>' +
-        '<span><b>' + totalTasks + '</b> tâches</span>' +
+        '<span><b>' + doingCount + '</b> ' + escapeHtml(t('kanban.stats.doing')) + '</span>' +
+        '<span><b class="' + (totalReview ? 'amber' : '') + '">' + totalReview + '</b> ' + escapeHtml(t('kanban.stats.review')) + '</span>' +
+        '<span><b>' + totalTasks + '</b> ' + escapeHtml(t('kanban.stats.tasks')) + '</span>' +
         '<span id="kanban-token-stat" class="token-stat">' + tokenTxt + '</span>' +
         '</div>';
     }
     head += '</div>';
 
     var emptyNote = cards.length === 0
-      ? '<div class="empty-state">Aucune carte pour l\'instant. Utilisez « + Ajouter » dans une colonne pour commencer.</div>'
+      ? '<div class="empty-state">' + escapeHtml(t('kanban.empty')) + '</div>'
       : '';
 
     return buildHeaderHTML() + '<div class="view-body kanban-body">' + head + emptyNote +
@@ -481,33 +897,35 @@
       '<span class="task-glyph" style="color:' + glyph.color + '">' + glyph.icon + '</span>' +
       '<div class="task-main">' +
         '<div class="task-title-line"><span class="task-title">' + escapeHtml(t.title) + '</span>' +
-        (isNew ? '<span class="badge-new">NEW</span>' : '') + '</div>' +
+        (isNew ? '<span class="badge-new">' + escapeHtml(t2('badge.new')) + '</span>' : '') + '</div>' +
         '<div class="task-meta-line">' + projectTag +
         '<span class="mono">#' + t.ref + '</span>' +
         '<span class="agent-chip"><span class="agent-avatar-sm" style="background:' + softColor(agent.color) + '">' + agent.emoji + '</span>' + escapeHtml(agent.name) + '</span>' +
-        '<span>' + timeAgo(t.updatedAt) + '</span>' + liveLine +
+        '<span>' + escapeHtml(timeAgo(t.updatedAt)) + '</span>' + liveLine +
         '</div>' +
       '</div>' +
       '<div class="task-counts"><span>◆ ' + (t.filesCount || 0) + '</span><span>💬 ' + (t.messagesCount || 0) + '</span></div>' +
       '</div>';
   }
+  // Alias local pour éviter un conflit de nom avec le paramètre `t` (Task) ci-dessus.
+  function t2(key, vars) { return t(key, vars); }
 
   function buildTaskListShell(tasksAll, opts) {
     var counts = tasksAll.reduce(function (acc, t) { acc[t.status] = (acc[t.status] || 0) + 1; return acc; }, {});
     var filters = [
-      { key: 'all', label: 'Toutes ' + tasksAll.length },
-      { key: 'review', label: 'À relire ' + (counts.review || 0) },
-      { key: 'ready', label: 'Prêt à livrer ' + (counts.ready || 0) },
-      { key: 'shipped', label: 'Livré ' + (counts.shipped || 0) }
+      { key: 'all', label: t('filter.all', { n: tasksAll.length }) },
+      { key: 'review', label: t('filter.review', { n: counts.review || 0 }) },
+      { key: 'ready', label: t('filter.ready', { n: counts.ready || 0 }) },
+      { key: 'shipped', label: t('filter.shipped', { n: counts.shipped || 0 }) }
     ];
     var filterHTML = filters.map(function (f) {
-      return '<button class="pill ' + (state.taskFilter === f.key ? 'pill-active' : '') + '" data-action="set-filter" data-filter="' + f.key + '">' + f.label + '</button>';
+      return '<button class="pill ' + (state.taskFilter === f.key ? 'pill-active' : '') + '" data-action="set-filter" data-filter="' + f.key + '">' + escapeHtml(f.label) + '</button>';
     }).join('');
     var visible = tasksAll.filter(function (t) { return state.taskFilter === 'all' || t.status === state.taskFilter; })
       .sort(function (a, b) { return new Date(b.updatedAt) - new Date(a.updatedAt); });
     var rowsHTML = visible.length
       ? visible.map(function (t) { return buildTaskRowHTML(t, opts.showProject); }).join('')
-      : '<div class="empty-state">' + opts.emptyMsg + '</div>';
+      : '<div class="empty-state">' + escapeHtml(opts.emptyMsg) + '</div>';
     var task = state.taskId ? state.tasksById[state.taskId] : null;
     var panelHTML = task ? buildDetailPanelHTML(task) : '';
     return buildHeaderHTML() + '<div class="view-body work-body ' + (task ? 'has-panel' : '') + '" style="padding:0;">' +
@@ -519,12 +937,12 @@
 
   function buildWorkHTML() {
     var tasksAll = state.tasks.filter(function (t) { return t.cardId === state.cardId; });
-    return buildTaskListShell(tasksAll, { showProject: false, emptyMsg: 'Aucune tâche pour l\'instant.' });
+    return buildTaskListShell(tasksAll, { showProject: false, emptyMsg: t('work.emptyCard') });
   }
 
   function buildInboxHTML() {
     var tasksAll = state.tasks.filter(function (t) { return t.unread || t.status === 'review'; });
-    return buildTaskListShell(tasksAll, { showProject: true, emptyMsg: 'Boîte de réception vide. Tout est à jour !' });
+    return buildTaskListShell(tasksAll, { showProject: true, emptyMsg: t('inbox.empty') });
   }
 
   // ---------------------------------------------------------------------
@@ -534,23 +952,32 @@
   function primaryActionInfo(task) {
     switch (task.status) {
       case 'running':
-        return { label: 'Interrompre l\'agent', cls: 'btn-neutral', action: 'interrupt', defaultLabel: 'Interrompre l\'agent' };
+        return { label: t('action.interrupt'), cls: 'btn-neutral', action: 'interrupt', kind: 'plain' };
       case 'review':
-        return { label: 'Accepter le diff et les livrables', cls: 'btn-green', action: 'accept', defaultLabel: 'Accepter le diff et les livrables' };
+        return { label: t('action.accept'), cls: 'btn-green', action: 'accept', kind: 'plain' };
       case 'ready': {
-        var pending = state.pendingShip && state.pendingShip.taskId === task.id;
-        return { label: pending ? 'Confirmer le push ?' : 'Pousser et livrer', cls: 'btn-green', action: 'ship-click', defaultLabel: 'Pousser et livrer' };
+        var key = 'ship:' + task.id;
+        var pending = isPendingConfirm(key);
+        return {
+          label: pending ? t('action.shipConfirm') : t('action.ship'),
+          cls: 'btn-green', kind: 'confirm', confirmKey: key, confirmAction: 'ship',
+          defaultLabel: t('action.ship'), confirmLabel: t('action.shipConfirm')
+        };
       }
       case 'shipped':
-        return { label: 'Rouvrir la tâche', cls: 'btn-neutral', action: 'reopen', defaultLabel: 'Rouvrir la tâche' };
+        return { label: t('action.reopen'), cls: 'btn-neutral', action: 'reopen', kind: 'plain' };
       default:
-        return { label: '', cls: 'btn-neutral', action: '', defaultLabel: '' };
+        return { label: '', cls: 'btn-neutral', action: '', kind: 'plain' };
     }
   }
 
   function buildWorkflowHTML(status) {
     var order = { running: 0, review: 0, ready: 1, shipped: 2 };
-    var steps = [{ label: 'À relire' }, { label: 'Accepté' }, { label: 'Livré' }];
+    var steps = [
+      { label: t('workflow.step.review') },
+      { label: t('workflow.step.accepted') },
+      { label: t('workflow.step.shipped') }
+    ];
     var cur = order[status] !== undefined ? order[status] : 0;
     var html = '<div class="workflow">';
     steps.forEach(function (s, i) {
@@ -559,7 +986,7 @@
       var barClass = !done ? 'wf-bar-todo' : (isCur ? 'wf-bar-current' : 'wf-bar-done');
       var lblClass = done ? 'wf-label-done' : '';
       html += '<div class="wf-step"><span class="wf-bar ' + barClass + '"></span>' +
-        '<span class="wf-label ' + lblClass + ' ' + (isCur ? 'wf-current' : '') + '">' + s.label + '</span></div>';
+        '<span class="wf-label ' + lblClass + ' ' + (isCur ? 'wf-current' : '') + '">' + escapeHtml(s.label) + '</span></div>';
     });
     html += '</div>';
     return html;
@@ -579,15 +1006,15 @@
     var err = state.detailErrorByTask[task.id];
     var action = primaryActionInfo(task);
     var tabs = ['chat', 'diff', 'files'];
-    var tabLabels = { chat: 'Conversation', diff: 'Diff', files: 'Livrables' };
+    var tabLabels = { chat: t('tabs.conversation'), diff: t('tabs.diff'), files: t('tabs.deliverables') };
     var tabCounts = { chat: task.messagesCount || 0, diff: task.filesCount || 0, files: (task.docsCount || 0) + (task.filesCount || 0) };
     var tabDataAttr = { chat: 'conversation', diff: 'diff', files: 'deliverables' };
 
-    var tabsHTML = tabs.map(function (t) {
-      var active = state.panelTab === t;
-      var isNew = t === 'chat' && task.unread && !active;
-      return '<button class="tab ' + (active ? 'tab-active' : '') + '" role="tab" data-tab="' + tabDataAttr[t] + '" data-action="set-tab" data-panel-tab="' + t + '">' +
-        tabLabels[t] + '<span class="tab-count">' + tabCounts[t] + '</span>' +
+    var tabsHTML = tabs.map(function (tk) {
+      var active = state.panelTab === tk;
+      var isNew = tk === 'chat' && task.unread && !active;
+      return '<button class="tab ' + (active ? 'tab-active' : '') + '" role="tab" data-tab="' + tabDataAttr[tk] + '" data-action="set-tab" data-panel-tab="' + tk + '">' +
+        escapeHtml(tabLabels[tk]) + '<span class="tab-count">' + tabCounts[tk] + '</span>' +
         (isNew ? '<span class="tab-dot"></span>' : '') + '</button>';
     }).join('');
 
@@ -595,6 +1022,23 @@
     if (state.panelTab === 'chat') bodyHTML = buildConversationHTML(task, agent);
     else if (state.panelTab === 'diff') bodyHTML = buildDiffHTML(task);
     else if (state.panelTab === 'files') bodyHTML = buildDeliverablesHTML(task);
+
+    var primaryBtnHTML;
+    if (action.kind === 'confirm') {
+      primaryBtnHTML = '<button id="task-primary-action" class="btn-action ' + action.cls + '" data-action="confirm-click" data-confirm-key="' + action.confirmKey + '" data-confirm-action="' + action.confirmAction + '" data-confirm-id="' + task.id + '" data-default-label="' + escapeHtml(action.defaultLabel) + '" data-confirm-label="' + escapeHtml(action.confirmLabel) + '">' + escapeHtml(action.label) + '</button>';
+    } else {
+      primaryBtnHTML = '<button id="task-primary-action" class="btn-action ' + action.cls + '" data-action="' + action.action + '" data-task-id="' + task.id + '">' + escapeHtml(action.label) + '</button>';
+    }
+
+    var prRow = '';
+    if (task.status === 'shipped') {
+      var prKey = 'pr:' + task.id;
+      var prPending = isPendingConfirm(prKey);
+      var prLabel = prPending ? t('action.prConfirm') : t('action.pr');
+      prRow = '<div class="secondary-row">' +
+        '<button class="btn-outline btn-block" data-action="confirm-click" data-confirm-key="' + prKey + '" data-confirm-action="pr" data-confirm-id="' + task.id + '" data-default-label="' + escapeHtml(t('action.pr')) + '" data-confirm-label="' + escapeHtml(t('action.prConfirm')) + '">' + escapeHtml(prLabel) + '</button>' +
+        '</div>';
+    }
 
     return '<aside class="detail-panel">' +
       (err ? '<div class="detail-error">' + escapeHtml(err) + '</div>' : '') +
@@ -609,14 +1053,14 @@
               '<span class="mono">' + escapeHtml(task.branch || '') + '</span>' +
             '</div>' +
           '</div>' +
-          '<button class="icon-btn" data-action="close-panel">✕</button>' +
+          '<button class="icon-btn" data-action="close-panel" aria-label="' + escapeHtml(t('common.close')) + '">✕</button>' +
         '</div>' +
         '<div class="detail-tokens" id="detail-token-line">' + tokenSummary(task.tokens) + '</div>' +
         buildWorkflowHTML(task.status) +
-        '<div class="action-row">' +
-          '<button id="task-primary-action" class="btn-action ' + action.cls + '" data-action="' + action.action + '" data-task-id="' + task.id + '" data-default-label="' + escapeHtml(action.defaultLabel) + '">' + action.label + '</button>' +
+        '<div class="action-row">' + primaryBtnHTML +
           '<span class="checks">' + renderChecks(task.checks) + '</span>' +
         '</div>' +
+        prRow +
         '<div class="tabs">' + tabsHTML + '</div>' +
       '</div>' +
       '<div class="tab-body">' + bodyHTML + '</div>' +
@@ -631,7 +1075,7 @@
     var isUser = m.author === 'user';
     var emoji = isUser ? '🙂' : (agent.emoji || '');
     var bg = isUser ? '#eeece6' : softColor(agent.color);
-    var name = isUser ? 'Vous' : (agent.name || '');
+    var name = m.authorName || (isUser ? t('chat.you') : (agent.name || ''));
     return '<div class="message">' +
       '<span class="msg-avatar" style="background:' + bg + '">' + emoji + '</span>' +
       '<div class="msg-body">' +
@@ -644,15 +1088,15 @@
     var msgs = state.messagesByTask[task.id];
     if (!msgs) {
       loadMessages(task.id);
-      return '<div class="conv-loading">Chargement…</div>';
+      return '<div class="conv-loading">' + escapeHtml(t('common.loading')) + '</div>';
     }
-    var items = msgs.length ? msgs.map(function (m) { return buildMessageHTML(m, agent); }).join('') : '<div class="empty-note">Aucun message pour l\'instant.</div>';
+    var items = msgs.length ? msgs.map(function (m) { return buildMessageHTML(m, agent); }).join('') : '<div class="empty-note">' + escapeHtml(t('conversation.empty')) + '</div>';
     return '<div class="conversation" id="conversation-list">' + items + '</div>' +
       '<div class="composer-wrap"><div class="composer">' +
-        '<textarea id="composer-input" rows="2" placeholder="Répondre à ' + escapeHtml(agent.name) + '…"></textarea>' +
+        '<textarea id="composer-input" rows="2" placeholder="' + escapeHtml(t('chat.placeholder', { name: agent.name })) + '"></textarea>' +
         '<div class="composer-row">' +
           '<span class="composer-model"><span class="agent-avatar-sm" style="background:' + softColor(agent.color) + '">' + agent.emoji + '</span>' + escapeHtml(agent.model || '') + '</span>' +
-          '<button class="btn-send" data-action="send-message" data-task-id="' + task.id + '">Envoyer ⏎</button>' +
+          '<button class="btn-send" data-action="send-message" data-task-id="' + task.id + '">' + escapeHtml(t('chat.send')) + '</button>' +
         '</div>' +
       '</div></div>';
   }
@@ -714,10 +1158,10 @@
     var diff = state.diffByTask[task.id];
     if (!diff) {
       loadDiff(task.id);
-      return '<div class="conv-loading">Chargement…</div>';
+      return '<div class="conv-loading">' + escapeHtml(t('common.loading')) + '</div>';
     }
     if (!diff.files || diff.files.length === 0) {
-      return '<div class="empty-note">Aucune modification.</div>';
+      return '<div class="empty-note">' + escapeHtml(t('diff.empty')) + '</div>';
     }
     var activePath = state.activeDiffFile[task.id] || diff.files[0].path;
     var activeFile = diff.files.filter(function (f) { return f.path === activePath; })[0] || diff.files[0];
@@ -727,21 +1171,32 @@
     }).join('');
     var hunks = (activeFile.hunks || []).map(function (h) {
       var lines = (h.lines || []).map(function (l) {
-        var mark = l.type === 'add' ? '+' : (l.type === 'del' ? '-' : ' ');
+        var mark = l.type === 'add' ? '+' : (l.type === 'del' ? '-' : ' ');
         return '<div class="diff-line diff-' + l.type + '"><span class="diff-mark">' + mark + '</span><span class="diff-text mono">' + escapeHtml(l.text) + '</span></div>';
       }).join('');
       return '<div><div class="diff-hunk-header mono">' + escapeHtml(h.header) + '</div>' + lines + '</div>';
     }).join('');
+
+    var shipKey = 'ship:' + task.id;
     var canShip = task.status === 'ready';
-    var pending = state.pendingShip && state.pendingShip.taskId === task.id;
-    var pushLabel = pending && canShip ? 'Confirmer le push ?' : 'Push';
+    var shipPending = isPendingConfirm(shipKey);
+    var pushDefaultLabel = t('detail.diff.pushButton');
+    var pushLabel = (shipPending && canShip) ? t('action.shipConfirm') : pushDefaultLabel;
+
+    var prKey = 'pr:' + task.id;
+    var canPr = task.status === 'shipped';
+    var prPending = isPendingConfirm(prKey);
+    var prDefaultLabel = t('action.pr');
+    var prLabel = (prPending && canPr) ? t('action.prConfirm') : prDefaultLabel;
+
     return '<div class="diff-subtabs">' + fileTabs + '</div>' +
       '<div class="diff-hunks">' + hunks + '</div>' +
       '<div class="diff-footer">' +
         '<span class="mono diff-branch">' + escapeHtml(diff.branch || '') + ' → ' + escapeHtml(diff.base || '') + '</span>' +
-        '<button class="btn-outline" disabled title="bientôt">Ouvrir la PR</button>' +
-        '<button class="btn-green" ' + (canShip ? '' : 'disabled title="Disponible une fois prêt à livrer"') +
-        ' data-action="ship-click" data-task-id="' + task.id + '" data-default-label="Push">' + pushLabel + '</button>' +
+        '<button class="btn-outline" ' + (canPr ? '' : ('disabled title="' + escapeHtml(t('detail.diff.prDisabledTooltip')) + '"')) +
+        ' data-action="confirm-click" data-confirm-key="' + prKey + '" data-confirm-action="pr" data-confirm-id="' + task.id + '" data-default-label="' + escapeHtml(prDefaultLabel) + '" data-confirm-label="' + escapeHtml(t('action.prConfirm')) + '">' + escapeHtml(prLabel) + '</button>' +
+        '<button class="btn-green" ' + (canShip ? '' : ('disabled title="' + escapeHtml(t('detail.diff.pushDisabledTooltip')) + '"')) +
+        ' data-action="confirm-click" data-confirm-key="' + shipKey + '" data-confirm-action="ship" data-confirm-id="' + task.id + '" data-default-label="' + escapeHtml(pushDefaultLabel) + '" data-confirm-label="' + escapeHtml(t('action.shipConfirm')) + '">' + escapeHtml(pushLabel) + '</button>' +
       '</div>';
   }
 
@@ -772,12 +1227,12 @@
     var d = state.deliverablesByTask[task.id];
     if (!d) {
       loadDeliverables(task.id);
-      return '<div class="conv-loading">Chargement…</div>';
+      return '<div class="conv-loading">' + escapeHtml(t('common.loading')) + '</div>';
     }
     var groups = [
-      { key: 'code', label: 'Code', icon: '◆' },
-      { key: 'docs', label: 'Documents', icon: '▤' },
-      { key: 'images', label: 'Captures', icon: '▣' }
+      { key: 'code', label: t('deliverables.code'), icon: '◆' },
+      { key: 'docs', label: t('deliverables.docs'), icon: '▤' },
+      { key: 'images', label: t('deliverables.images'), icon: '▣' }
     ];
     var html = groups.map(function (g) {
       var items = d[g.key] || [];
@@ -785,8 +1240,8 @@
         return '<div class="deliv-item"><span class="deliv-icon">' + g.icon + '</span>' +
           '<div class="deliv-main"><div class="deliv-title">' + escapeHtml(it.title) + '</div>' +
           '<div class="deliv-meta mono">' + escapeHtml(it.meta || '') + '</div></div></div>';
-      }).join('') : '<div class="empty-note">Aucun élément.</div>';
-      return '<section class="deliv-group"><div class="deliv-group-label">' + g.label + '</div>' + itemsHTML + '</section>';
+      }).join('') : '<div class="empty-note">' + escapeHtml(t('deliverables.empty')) + '</div>';
+      return '<section class="deliv-group"><div class="deliv-group-label">' + escapeHtml(g.label) + '</div>' + itemsHTML + '</section>';
     }).join('');
     return '<div class="deliverables">' + html + '</div>';
   }
@@ -808,44 +1263,30 @@
   function doInterrupt(taskId) {
     api('/api/tasks/' + taskId + '/interrupt', { method: 'POST' }).then(function (task) {
       upsertTask(task); renderMain();
-    }).catch(function (e) { if (e instanceof ApiError) showDetailError(taskId, e.message || 'Échec de l\'interruption.'); });
+    }).catch(function (e) { if (e instanceof ApiError) showDetailError(taskId, e.message || t('errors.interruptFailed')); });
   }
   function doAccept(taskId) {
     api('/api/tasks/' + taskId + '/accept', { method: 'POST' }).then(function (task) {
       upsertTask(task); renderMain();
-    }).catch(function (e) { if (e instanceof ApiError) showDetailError(taskId, e.message || 'Échec.'); });
+    }).catch(function (e) { if (e instanceof ApiError) showDetailError(taskId, e.message || t('errors.genericFailed')); });
   }
   function doReopen(taskId) {
     api('/api/tasks/' + taskId + '/reopen', { method: 'POST' }).then(function (task) {
       upsertTask(task); renderMain();
-    }).catch(function (e) { if (e instanceof ApiError) showDetailError(taskId, e.message || 'Échec.'); });
+    }).catch(function (e) { if (e instanceof ApiError) showDetailError(taskId, e.message || t('errors.genericFailed')); });
   }
   function doShip(taskId) {
     api('/api/tasks/' + taskId + '/ship', { method: 'POST', body: { confirm: true } }).then(function (res) {
       if (res && res.task) upsertTask(res.task);
       renderMain();
-    }).catch(function (e) { if (e instanceof ApiError) showDetailError(taskId, e.message || 'Échec du push.'); });
+    }).catch(function (e) { if (e instanceof ApiError) showDetailError(taskId, e.message || t('errors.shipFailed')); });
   }
-  function patchShipButtons(taskId) {
-    var els = document.querySelectorAll('[data-action="ship-click"][data-task-id="' + taskId + '"]');
-    els.forEach(function (btn) {
-      var pending = state.pendingShip && state.pendingShip.taskId === taskId;
-      btn.textContent = pending ? 'Confirmer le push ?' : btn.getAttribute('data-default-label');
-    });
-  }
-  function handleShipClick(taskId) {
-    var now = Date.now();
-    var pending = state.pendingShip;
-    if (pending && pending.taskId === taskId) {
-      clearTimeout(pending.timer);
-      state.pendingShip = null;
-      doShip(taskId);
-      return;
-    }
-    if (pending) clearTimeout(pending.timer);
-    var timer = setTimeout(function () { state.pendingShip = null; patchShipButtons(taskId); }, 5000);
-    state.pendingShip = { taskId: taskId, timer: timer };
-    patchShipButtons(taskId);
+  function doPr(taskId) {
+    api('/api/tasks/' + taskId + '/pr', { method: 'POST', body: { confirm: true } }).then(function (res) {
+      if (res && res.task) upsertTask(res.task);
+      if (res && res.url) { try { window.open(res.url, '_blank', 'noopener'); } catch (e) {} }
+      renderMain();
+    }).catch(function (e) { if (e instanceof ApiError) showDetailError(taskId, e.message || t('errors.prFailed')); });
   }
 
   function moveCard(cardId, column) {
@@ -909,20 +1350,20 @@
 
   function buildSearchResultsHTML(q) {
     var query = q.trim().toLowerCase();
-    if (!query) return '<div class="empty-note">Tapez pour rechercher…</div>';
+    if (!query) return '<div class="empty-note">' + escapeHtml(t('search.typeToSearch')) + '</div>';
     var projects = state.projects.filter(function (p) { return p.name.toLowerCase().indexOf(query) !== -1; });
     var tasks = state.tasks.filter(function (t) {
       return t.title.toLowerCase().indexOf(query) !== -1 || String(t.ref).indexOf(query) !== -1;
     }).slice(0, 20);
-    if (!projects.length && !tasks.length) return '<div class="empty-note">Aucun résultat.</div>';
+    if (!projects.length && !tasks.length) return '<div class="empty-note">' + escapeHtml(t('search.noResults')) + '</div>';
     var html = '';
     if (projects.length) {
-      html += '<div class="search-group-label">Projets</div>' + projects.map(function (p) {
+      html += '<div class="search-group-label">' + escapeHtml(t('common.projects')) + '</div>' + projects.map(function (p) {
         return '<button class="search-result" data-action="search-goto-project" data-project-id="' + p.id + '"><span class="hash">#</span>' + escapeHtml(p.name) + '</button>';
       }).join('');
     }
     if (tasks.length) {
-      html += '<div class="search-group-label">Tâches</div>' + tasks.map(function (t) {
+      html += '<div class="search-group-label">' + escapeHtml(t('common.tasksWord')) + '</div>' + tasks.map(function (t) {
         var p = state.projectsById[t.projectId];
         return '<button class="search-result" data-action="search-goto-task" data-task-id="' + t.id + '"><span class="mono">#' + t.ref + '</span> ' +
           escapeHtml(t.title) + '<span class="muted-sm">' + (p ? escapeHtml(p.name) : '') + '</span></button>';
@@ -932,7 +1373,7 @@
   }
 
   function buildSearchHTML(q) {
-    return '<div class="search-box"><input id="search-input" class="search-input" placeholder="Rechercher tâches et projets…" value="' + escapeHtml(q) + '">' +
+    return '<div class="search-box"><input id="search-input" class="search-input" placeholder="' + escapeHtml(t('search.placeholder')) + '" value="' + escapeHtml(q) + '">' +
       '<div class="search-results" id="search-results">' + buildSearchResultsHTML(q) + '</div></div>';
   }
 
@@ -958,7 +1399,7 @@
   }
 
   // ---------------------------------------------------------------------
-  // Modales
+  // Modales génériques
   // ---------------------------------------------------------------------
 
   function overlayBgCloseModal(e) { if (e.target === e.currentTarget) closeModal(); }
@@ -971,6 +1412,7 @@
   }
   function closeModal() {
     state.modal = null;
+    usersResetRowId = null;
     var root = document.getElementById('modal-root');
     root.innerHTML = '';
   }
@@ -986,17 +1428,17 @@
     }).join('');
     var selected = state.agentsById[modalAgentId];
     return '<div class="modal">' +
-      '<div class="modal-head"><span class="modal-title">Nouvelle tâche</span><span class="modal-sub">' + escapeHtml(card.title) + '</span>' +
-      '<button class="icon-btn" data-action="close-modal">✕</button></div>' +
-      '<input id="new-task-title" class="modal-input" placeholder="Que doit faire l\'agent ?">' +
-      '<textarea id="new-task-prompt" class="modal-textarea" placeholder="Description ou instructions détaillées (optionnel)" rows="3"></textarea>' +
-      '<div class="modal-label">Agent</div>' +
+      '<div class="modal-head"><span class="modal-title">' + escapeHtml(t('newTask.title')) + '</span><span class="modal-sub">' + escapeHtml(card.title) + '</span>' +
+      '<button class="icon-btn" data-action="close-modal" aria-label="' + escapeHtml(t('common.close')) + '">✕</button></div>' +
+      '<input id="new-task-title" class="modal-input" placeholder="' + escapeHtml(t('newTask.titlePlaceholder')) + '">' +
+      '<textarea id="new-task-prompt" class="modal-textarea" placeholder="' + escapeHtml(t('newTask.promptPlaceholder')) + '" rows="3"></textarea>' +
+      '<div class="modal-label">' + escapeHtml(t('newTask.agentLabel')) + '</div>' +
       '<div class="agent-choices" id="agent-choices">' + agentChoices + '</div>' +
       '<div class="agent-context-preview" id="agent-context-preview">' + (selected ? escapeHtml(selected.contextPrompt || '') : '') + '</div>' +
       '<div id="new-task-error" class="modal-error hidden"></div>' +
-      '<div class="modal-foot"><span class="modal-hint">La conversation s\'ouvre après la création</span>' +
-      '<button class="btn-outline" data-action="close-modal">Annuler</button>' +
-      '<button class="btn-green" data-action="submit-new-task" data-card-id="' + card.id + '">Créer et discuter</button></div>' +
+      '<div class="modal-foot"><span class="modal-hint">' + escapeHtml(t('newTask.hint')) + '</span>' +
+      '<button class="btn-outline" data-action="close-modal">' + escapeHtml(t('common.cancel')) + '</button>' +
+      '<button class="btn-green" data-action="submit-new-task" data-card-id="' + card.id + '">' + escapeHtml(t('newTask.submit')) + '</button></div>' +
       '</div>';
   }
 
@@ -1024,8 +1466,8 @@
     var errEl = document.getElementById('new-task-error');
     var title = titleEl.value.trim();
     var prompt = promptEl.value.trim();
-    if (!title) { errEl.textContent = 'Le titre est requis.'; errEl.classList.remove('hidden'); return; }
-    if (!modalAgentId) { errEl.textContent = 'Choisissez un agent.'; errEl.classList.remove('hidden'); return; }
+    if (!title) { errEl.textContent = t('newTask.errorTitleRequired'); errEl.classList.remove('hidden'); return; }
+    if (!modalAgentId) { errEl.textContent = t('newTask.errorAgentRequired'); errEl.classList.remove('hidden'); return; }
     var body = { cardId: cardId, title: title, agentId: modalAgentId };
     if (prompt) body.prompt = prompt;
     api('/api/tasks', { method: 'POST', body: body }).then(function (task) {
@@ -1034,7 +1476,7 @@
       goCard(cardId);
       openTask(task.id);
     }).catch(function (e) {
-      errEl.textContent = (e instanceof ApiError && e.message) || 'Erreur lors de la création.';
+      errEl.textContent = (e instanceof ApiError && e.message) || t('newTask.errorCreateFailed');
       errEl.classList.remove('hidden');
     });
   }
@@ -1043,13 +1485,13 @@
 
   function buildNewProjectModalHTML() {
     return '<div class="modal modal-sm">' +
-      '<div class="modal-head"><span class="modal-title">Nouveau projet</span><button class="icon-btn" data-action="close-modal">✕</button></div>' +
-      '<div class="modal-label">Nom</div><input id="new-project-name" class="modal-input" placeholder="mon-projet">' +
-      '<div class="modal-label">Chemin absolu du dépôt git</div>' +
-      '<input id="new-project-path" class="modal-input mono" placeholder="/home/utilisateur/projets/mon-projet">' +
+      '<div class="modal-head"><span class="modal-title">' + escapeHtml(t('newProject.title')) + '</span><button class="icon-btn" data-action="close-modal" aria-label="' + escapeHtml(t('common.close')) + '">✕</button></div>' +
+      '<div class="modal-label">' + escapeHtml(t('newProject.nameLabel')) + '</div><input id="new-project-name" class="modal-input" placeholder="' + escapeHtml(t('newProject.namePlaceholder')) + '">' +
+      '<div class="modal-label">' + escapeHtml(t('newProject.pathLabel')) + '</div>' +
+      '<input id="new-project-path" class="modal-input mono" placeholder="' + escapeHtml(t('newProject.pathPlaceholder')) + '">' +
       '<div id="new-project-error" class="modal-error hidden"></div>' +
-      '<div class="modal-foot"><button class="btn-outline" data-action="close-modal">Annuler</button>' +
-      '<button class="btn-green" data-action="submit-new-project">Créer</button></div>' +
+      '<div class="modal-foot"><button class="btn-outline" data-action="close-modal">' + escapeHtml(t('common.cancel')) + '</button>' +
+      '<button class="btn-green" data-action="submit-new-project">' + escapeHtml(t('common.create')) + '</button></div>' +
       '</div>';
   }
   function openNewProjectModal() {
@@ -1062,13 +1504,13 @@
     var errEl = document.getElementById('new-project-error');
     var name = nameEl.value.trim();
     var path = pathEl.value.trim();
-    if (!name || !path) { errEl.textContent = 'Nom et chemin sont requis.'; errEl.classList.remove('hidden'); return; }
+    if (!name || !path) { errEl.textContent = t('newProject.errorRequired'); errEl.classList.remove('hidden'); return; }
     api('/api/projects', { method: 'POST', body: { name: name, path: path } }).then(function (project) {
       upsertProject(project);
       closeModal();
       goProject(project.id);
     }).catch(function (e) {
-      errEl.textContent = (e instanceof ApiError && e.message) || 'Erreur lors de la création du projet.';
+      errEl.textContent = (e instanceof ApiError && e.message) || t('newProject.errorCreateFailed');
       errEl.classList.remove('hidden');
     });
   }
@@ -1077,15 +1519,15 @@
 
   function buildNewCardModalHTML() {
     var pills = COLUMN_ORDER.map(function (k) {
-      return '<button class="col-pill ' + (k === modalColumn ? 'selected' : '') + '" data-action="pick-column" data-column="' + k + '">' + COLUMN_LABELS[k] + '</button>';
+      return '<button class="col-pill ' + (k === modalColumn ? 'selected' : '') + '" data-action="pick-column" data-column="' + k + '">' + escapeHtml(columnLabel(k)) + '</button>';
     }).join('');
     return '<div class="modal modal-sm">' +
-      '<div class="modal-head"><span class="modal-title">Nouvelle carte</span><button class="icon-btn" data-action="close-modal">✕</button></div>' +
-      '<div class="modal-label">Titre</div><input id="new-card-title" class="modal-input" placeholder="Titre de la carte">' +
-      '<div class="modal-label">Colonne</div><div class="col-pills" id="col-pills">' + pills + '</div>' +
+      '<div class="modal-head"><span class="modal-title">' + escapeHtml(t('newCard.title')) + '</span><button class="icon-btn" data-action="close-modal" aria-label="' + escapeHtml(t('common.close')) + '">✕</button></div>' +
+      '<div class="modal-label">' + escapeHtml(t('newCard.titleLabel')) + '</div><input id="new-card-title" class="modal-input" placeholder="' + escapeHtml(t('newCard.titlePlaceholder')) + '">' +
+      '<div class="modal-label">' + escapeHtml(t('newCard.columnLabel')) + '</div><div class="col-pills" id="col-pills">' + pills + '</div>' +
       '<div id="new-card-error" class="modal-error hidden"></div>' +
-      '<div class="modal-foot"><button class="btn-outline" data-action="close-modal">Annuler</button>' +
-      '<button class="btn-green" data-action="submit-new-card">Créer</button></div>' +
+      '<div class="modal-foot"><button class="btn-outline" data-action="close-modal">' + escapeHtml(t('common.cancel')) + '</button>' +
+      '<button class="btn-green" data-action="submit-new-card">' + escapeHtml(t('common.create')) + '</button></div>' +
       '</div>';
   }
   function openNewCardModal(column) {
@@ -1104,20 +1546,256 @@
     var titleEl = document.getElementById('new-card-title');
     var errEl = document.getElementById('new-card-error');
     var title = titleEl.value.trim();
-    if (!title) { errEl.textContent = 'Le titre est requis.'; errEl.classList.remove('hidden'); return; }
+    if (!title) { errEl.textContent = t('newCard.errorTitleRequired'); errEl.classList.remove('hidden'); return; }
     api('/api/cards', { method: 'POST', body: { projectId: state.projectId, title: title, column: modalColumn } }).then(function (card) {
       upsertCard(card);
       closeModal();
       renderMain();
     }).catch(function (e) {
-      errEl.textContent = (e instanceof ApiError && e.message) || 'Erreur lors de la création de la carte.';
+      errEl.textContent = (e instanceof ApiError && e.message) || t('newCard.errorCreateFailed');
       errEl.classList.remove('hidden');
+    });
+  }
+
+  // Nouvel agent / édition d'agent
+
+  function buildAgentModalHTML(agent) {
+    var isEdit = !!agent;
+    var title = isEdit ? t('agent.editTitle') : t('agent.newTitle');
+    var cliValues = ['claude', 'codex', 'fake'];
+    var cliOptions = cliValues.map(function (c) {
+      return '<option value="' + c + '"' + (agent && agent.cli === c ? ' selected' : '') + '>' + c + '</option>';
+    }).join('');
+    var deleteRow = '';
+    if (isEdit) {
+      var delKey = 'agent-delete:' + agent.id;
+      var delPending = isPendingConfirm(delKey);
+      var delLabel = delPending ? t('agent.deleteConfirm') : t('agent.delete');
+      deleteRow = '<div class="modal-delete-row">' +
+        '<button class="delete-link" data-action="confirm-click" data-confirm-key="' + delKey + '" data-confirm-action="agent-delete" data-confirm-id="' + agent.id + '" data-default-label="' + escapeHtml(t('agent.delete')) + '" data-confirm-label="' + escapeHtml(t('agent.deleteConfirm')) + '">' + escapeHtml(delLabel) + '</button>' +
+        '</div>';
+    }
+    return '<div class="modal">' +
+      '<div class="modal-head"><span class="modal-title">' + escapeHtml(title) + '</span><button class="icon-btn" data-action="close-modal" aria-label="' + escapeHtml(t('common.close')) + '">✕</button></div>' +
+      '<div class="modal-label">' + escapeHtml(t('agent.name')) + '</div><input id="agent-name" class="modal-input" value="' + (agent ? escapeHtml(agent.name) : '') + '">' +
+      '<div class="agent-form-row">' +
+        '<div><div class="modal-label">' + escapeHtml(t('agent.emoji')) + '</div><input id="agent-emoji" class="modal-input agent-emoji-input" maxlength="4" value="' + (agent ? escapeHtml(agent.emoji || '') : '') + '"></div>' +
+        '<div><div class="modal-label">' + escapeHtml(t('agent.color')) + '</div><input type="color" id="agent-color" class="color-input" value="' + (agent && agent.color ? agent.color : '#2f66d0') + '"></div>' +
+        '<div><div class="modal-label">' + escapeHtml(t('agent.cli')) + '</div><select id="agent-cli" class="modal-input">' + cliOptions + '</select></div>' +
+      '</div>' +
+      '<div class="modal-label">' + escapeHtml(t('agent.model')) + '</div><input id="agent-model" class="modal-input mono" value="' + (agent ? escapeHtml(agent.model || '') : '') + '">' +
+      '<div class="modal-label">' + escapeHtml(t('agent.contextPrompt')) + '</div><textarea id="agent-context" class="modal-textarea" rows="4">' + (agent ? escapeHtml(agent.contextPrompt || '') : '') + '</textarea>' +
+      '<div id="agent-modal-error" class="modal-error hidden"></div>' +
+      deleteRow +
+      '<div class="modal-foot">' +
+        '<button class="btn-outline" data-action="close-modal">' + escapeHtml(t('common.cancel')) + '</button>' +
+        '<button class="btn-green" data-action="submit-agent" data-agent-id="' + (agent ? agent.id : '') + '">' + escapeHtml(isEdit ? t('common.save') : t('common.create')) + '</button>' +
+      '</div>' +
+      '</div>';
+  }
+  function openNewAgentModal() {
+    openModal(buildAgentModalHTML(null));
+    setTimeout(function () { var el = document.getElementById('agent-name'); if (el) el.focus(); }, 0);
+  }
+  function openEditAgentModal(agentId) {
+    var agent = state.agentsById[agentId];
+    if (!agent) return;
+    openModal(buildAgentModalHTML(agent));
+  }
+  function showAgentModalError(msg) {
+    var el = document.getElementById('agent-modal-error');
+    if (el) { el.textContent = msg; el.classList.remove('hidden'); }
+  }
+  function submitAgent(agentId) {
+    var name = document.getElementById('agent-name').value.trim();
+    var emoji = document.getElementById('agent-emoji').value.trim();
+    var color = document.getElementById('agent-color').value;
+    var cli = document.getElementById('agent-cli').value;
+    var model = document.getElementById('agent-model').value.trim();
+    var contextPrompt = document.getElementById('agent-context').value.trim();
+    if (!name) { showAgentModalError(t('agent.errorNameRequired')); return; }
+    var body = { name: name, emoji: emoji, color: color, cli: cli, model: model, contextPrompt: contextPrompt };
+    var isEdit = !!agentId;
+    var req = isEdit
+      ? api('/api/agents/' + agentId, { method: 'PATCH', body: body })
+      : api('/api/agents', { method: 'POST', body: body });
+    req.then(function (agent) {
+      var i = state.agents.findIndex(function (a) { return a.id === agent.id; });
+      if (i >= 0) state.agents[i] = agent; else state.agents.push(agent);
+      reindex();
+      closeModal();
+      renderSidebar();
+    }).catch(function (e) {
+      showAgentModalError((e instanceof ApiError && e.message) || t('agent.errorSaveFailed'));
+    });
+  }
+  function doDeleteAgent(agentId) {
+    api('/api/agents/' + agentId, { method: 'DELETE' }).then(function () {
+      state.agents = state.agents.filter(function (a) { return a.id !== agentId; });
+      reindex();
+      closeModal();
+      renderSidebar();
+    }).catch(function (e) {
+      showAgentModalError((e instanceof ApiError && e.message) || t('agent.errorDeleteFailed'));
+      patchConfirmButtons('agent-delete:' + agentId);
+    });
+  }
+
+  // Édition de projet
+
+  function buildProjectModalHTML(project) {
+    return '<div class="modal modal-sm">' +
+      '<div class="modal-head"><span class="modal-title">' + escapeHtml(t('project.editTitle')) + '</span><button class="icon-btn" data-action="close-modal" aria-label="' + escapeHtml(t('common.close')) + '">✕</button></div>' +
+      '<div class="modal-label">' + escapeHtml(t('project.name')) + '</div><input id="project-edit-name" class="modal-input" value="' + escapeHtml(project.name) + '">' +
+      '<div class="modal-label">' + escapeHtml(t('project.checkCmd')) + '</div><input id="project-edit-checkcmd" class="modal-input mono" placeholder="go test ./..." value="' + escapeHtml(project.checkCmd || '') + '">' +
+      '<div id="project-modal-error" class="modal-error hidden"></div>' +
+      '<div class="modal-foot"><button class="btn-outline" data-action="close-modal">' + escapeHtml(t('common.cancel')) + '</button>' +
+      '<button class="btn-green" data-action="submit-project-edit" data-project-id="' + project.id + '">' + escapeHtml(t('common.save')) + '</button></div>' +
+      '</div>';
+  }
+  function openEditProjectModal() {
+    var project = state.projectsById[state.projectId];
+    if (!project) return;
+    openModal(buildProjectModalHTML(project));
+    setTimeout(function () { var el = document.getElementById('project-edit-name'); if (el) el.focus(); }, 0);
+  }
+  function submitProjectEdit(projectId) {
+    var name = document.getElementById('project-edit-name').value.trim();
+    var checkCmd = document.getElementById('project-edit-checkcmd').value.trim();
+    var errEl = document.getElementById('project-modal-error');
+    if (!name) { errEl.textContent = t('project.errorNameRequired'); errEl.classList.remove('hidden'); return; }
+    api('/api/projects/' + projectId, { method: 'PATCH', body: { name: name, checkCmd: checkCmd } }).then(function (project) {
+      upsertProject(project);
+      closeModal();
+      renderSidebar(); renderMain();
+    }).catch(function (e) {
+      errEl.textContent = (e instanceof ApiError && e.message) || t('project.errorSaveFailed');
+      errEl.classList.remove('hidden');
+    });
+  }
+
+  // Utilisateurs (admin)
+
+  function buildUsersModalBodyHTML() {
+    if (state.users === null) {
+      return '<div class="conv-loading">' + escapeHtml(t('common.loading')) + '</div>';
+    }
+    var rows = state.users.map(function (u) {
+      var delKey = 'user-delete:' + u.id;
+      var delPending = isPendingConfirm(delKey);
+      var delLabel = delPending ? t('users.deleteConfirm') : t('users.delete');
+      var resetOpen = usersResetRowId === u.id;
+      var resetBlock = resetOpen ? (
+        '<div class="user-reset-row">' +
+          '<input type="password" id="user-reset-password-' + u.id + '" class="modal-input user-reset-input" placeholder="' + escapeHtml(t('users.newPasswordPlaceholder')) + '">' +
+          '<button class="btn-green" data-action="submit-user-reset" data-user-id="' + u.id + '">' + escapeHtml(t('common.save')) + '</button>' +
+        '</div>'
+      ) : '';
+      return '<div class="user-row">' +
+        '<div class="user-row-main">' +
+          '<span class="user-name">' + escapeHtml(u.name) + '</span>' +
+          '<span class="user-role-tag">' + escapeHtml(u.role === 'admin' ? t('role.admin') : t('role.member')) + '</span>' +
+          '<div class="user-row-actions">' +
+            '<button class="link-btn" data-action="toggle-user-reset" data-user-id="' + u.id + '">' + escapeHtml(t('users.reset')) + '</button>' +
+            '<button class="link-btn link-danger" data-action="confirm-click" data-confirm-key="' + delKey + '" data-confirm-action="user-delete" data-confirm-id="' + u.id + '" data-default-label="' + escapeHtml(t('users.delete')) + '" data-confirm-label="' + escapeHtml(t('users.deleteConfirm')) + '">' + escapeHtml(delLabel) + '</button>' +
+          '</div>' +
+        '</div>' +
+        resetBlock +
+        '</div>';
+    }).join('');
+    return '<div class="user-list">' + (rows || '<div class="empty-note">' + escapeHtml(t('users.empty')) + '</div>') + '</div>' +
+      '<div id="users-modal-error" class="modal-error hidden"></div>' +
+      '<div class="modal-label">' + escapeHtml(t('users.addTitle')) + '</div>' +
+      '<input id="new-user-name" class="modal-input" placeholder="' + escapeHtml(t('users.namePlaceholder')) + '">' +
+      '<input type="password" id="new-user-password" class="modal-input" placeholder="' + escapeHtml(t('users.passwordPlaceholder')) + '">' +
+      '<select id="new-user-role" class="modal-input">' +
+        '<option value="member">' + escapeHtml(t('role.member')) + '</option>' +
+        '<option value="admin">' + escapeHtml(t('role.admin')) + '</option>' +
+      '</select>' +
+      '<div class="modal-foot"><button class="btn-green" data-action="submit-new-user">' + escapeHtml(t('users.add')) + '</button></div>';
+  }
+  function buildUsersModalHTML() {
+    return '<div class="modal modal-sm">' +
+      '<div class="modal-head"><span class="modal-title">' + escapeHtml(t('users.title')) + '</span><button class="icon-btn" data-action="close-modal" aria-label="' + escapeHtml(t('common.close')) + '">✕</button></div>' +
+      '<div id="users-modal-body">' + buildUsersModalBodyHTML() + '</div>' +
+      '</div>';
+  }
+  function openUsersModal() {
+    usersResetRowId = null;
+    openModal(buildUsersModalHTML());
+    loadUsers();
+  }
+  function loadUsers() {
+    api('/api/users').then(function (list) {
+      state.users = list || [];
+    }).catch(function () {
+      state.users = [];
+    }).then(function () {
+      refreshUsersModalBody();
+    });
+  }
+  function refreshUsersModalBody() {
+    var body = document.getElementById('users-modal-body');
+    if (body) body.innerHTML = buildUsersModalBodyHTML();
+  }
+  function setUsersModalError(msg) {
+    var el = document.getElementById('users-modal-error');
+    if (el) { el.textContent = msg; el.classList.remove('hidden'); }
+  }
+  function toggleUserReset(userId) {
+    usersResetRowId = (usersResetRowId === userId) ? null : userId;
+    refreshUsersModalBody();
+  }
+  function submitUserReset(userId) {
+    var input = document.getElementById('user-reset-password-' + userId);
+    var pwd = input ? input.value.trim() : '';
+    if (!pwd) return;
+    api('/api/users/' + userId, { method: 'PATCH', body: { password: pwd } }).then(function () {
+      usersResetRowId = null;
+      refreshUsersModalBody();
+    }).catch(function (e) {
+      setUsersModalError((e instanceof ApiError && e.message) || t('users.errorUpdateFailed'));
+    });
+  }
+  function submitNewUser() {
+    var nameEl = document.getElementById('new-user-name');
+    var pwdEl = document.getElementById('new-user-password');
+    var roleEl = document.getElementById('new-user-role');
+    var name = nameEl.value.trim();
+    var password = pwdEl.value;
+    var role = roleEl.value;
+    if (!name || !password) { setUsersModalError(t('users.errorRequired')); return; }
+    api('/api/users', { method: 'POST', body: { name: name, password: password, role: role } }).then(function (user) {
+      state.users = state.users || [];
+      state.users.push(user);
+      refreshUsersModalBody();
+    }).catch(function (e) {
+      setUsersModalError((e instanceof ApiError && e.message) || t('users.errorCreateFailed'));
+    });
+  }
+  function doDeleteUser(userId) {
+    api('/api/users/' + userId, { method: 'DELETE' }).then(function () {
+      state.users = (state.users || []).filter(function (u) { return u.id !== userId; });
+      refreshUsersModalBody();
+    }).catch(function (e) {
+      setUsersModalError((e instanceof ApiError && e.message) || t('users.errorDeleteFailed'));
+      refreshUsersModalBody();
     });
   }
 
   // ---------------------------------------------------------------------
   // Authentification
   // ---------------------------------------------------------------------
+
+  function applyStaticTranslations() {
+    document.documentElement.setAttribute('lang', state.lang);
+    var u = document.getElementById('login-username');
+    var p = document.getElementById('login-password');
+    var s = document.getElementById('login-submit');
+    if (u) u.placeholder = t('login.usernamePlaceholder');
+    if (p) p.placeholder = t('login.passwordPlaceholder');
+    if (s) s.textContent = t('login.submit');
+  }
 
   function showLogin() {
     var shell = document.getElementById('shell');
@@ -1139,21 +1817,22 @@
 
   function onLoginSubmit(e) {
     e.preventDefault();
+    var userEl = document.getElementById('login-username');
     var pwdEl = document.getElementById('login-password');
     var errEl = document.getElementById('login-error');
     errEl.classList.add('hidden');
     fetch('/api/login', {
       method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ password: pwdEl.value })
+      body: JSON.stringify({ username: userEl.value, password: pwdEl.value })
     }).then(function (res) {
       if (res.status === 204) { return boot(); }
       return res.text().then(function (text) {
-        var msg = 'Mot de passe incorrect.';
+        var msg = t('login.error');
         if (text) { try { var j = JSON.parse(text); if (j && j.error) msg = j.error; } catch (er) {} }
         errEl.textContent = msg; errEl.classList.remove('hidden');
       });
     }).catch(function () {
-      errEl.textContent = 'Erreur réseau.'; errEl.classList.remove('hidden');
+      errEl.textContent = t('common.networkError'); errEl.classList.remove('hidden');
     });
   }
 
@@ -1216,6 +1895,13 @@
     renderSidebar();
   }
 
+  function onProjectEvent(project) {
+    if (!project || !project.id) return;
+    upsertProject(project);
+    renderSidebar();
+    renderMain();
+  }
+
   function fetchStateSilently() {
     return api('/api/state').then(function (data) {
       if (data) { hydrateState(data); render(); }
@@ -1230,6 +1916,7 @@
     es.addEventListener('tokens', function (e) { try { onTokensEvent(JSON.parse(e.data)); } catch (er) {} });
     es.addEventListener('cards', function (e) { try { onCardsEvent(JSON.parse(e.data)); } catch (er) {} });
     es.addEventListener('agents', function (e) { try { onAgentsEvent(JSON.parse(e.data)); } catch (er) {} });
+    es.addEventListener('project', function (e) { try { onProjectEvent(JSON.parse(e.data)); } catch (er) {} });
     es.onopen = function () {
       if (sseOpenedOnce) fetchStateSilently();
       sseOpenedOnce = true;
@@ -1274,6 +1961,15 @@
       case 'open-new-card': openNewCardModal(el.getAttribute('data-column')); break;
       case 'open-new-task': if (state.cardId) openNewTaskModal(state.cardId); break;
       case 'open-new-project': openNewProjectModal(); break;
+      case 'open-edit-project': openEditProjectModal(); break;
+      case 'submit-project-edit': submitProjectEdit(el.getAttribute('data-project-id')); break;
+      case 'open-new-agent': openNewAgentModal(); break;
+      case 'edit-agent': openEditAgentModal(el.getAttribute('data-agent-id')); break;
+      case 'submit-agent': submitAgent(el.getAttribute('data-agent-id') || null); break;
+      case 'open-users-modal': openUsersModal(); break;
+      case 'toggle-user-reset': toggleUserReset(el.getAttribute('data-user-id')); break;
+      case 'submit-user-reset': submitUserReset(el.getAttribute('data-user-id')); break;
+      case 'submit-new-user': submitNewUser(); break;
       case 'close-modal': closeModal(); break;
       case 'pick-agent': pickAgentInModal(el.getAttribute('data-agent-id')); break;
       case 'pick-column': pickColumnInModal(el.getAttribute('data-column')); break;
@@ -1282,8 +1978,8 @@
       case 'submit-new-card': submitNewCard(); break;
       case 'interrupt': doInterrupt(el.getAttribute('data-task-id')); break;
       case 'accept': doAccept(el.getAttribute('data-task-id')); break;
-      case 'ship-click': handleShipClick(el.getAttribute('data-task-id')); break;
       case 'reopen': doReopen(el.getAttribute('data-task-id')); break;
+      case 'confirm-click': handleConfirmClickDispatch(el); break;
       case 'select-diff-file': selectDiffFile(el.getAttribute('data-task-id'), el.getAttribute('data-path')); break;
       case 'send-message': sendMessage(el.getAttribute('data-task-id')); break;
       case 'open-search': openSearch(); break;
@@ -1292,6 +1988,7 @@
       case 'logout': doLogout(); break;
       case 'toggle-sidebar': toggleSidebarDrawer(); break;
       case 'close-sidebar-drawer': closeSidebarDrawer(); break;
+      case 'set-lang': setLang(el.getAttribute('data-lang')); break;
     }
   }
 
@@ -1316,6 +2013,7 @@
   }
 
   document.addEventListener('DOMContentLoaded', function () {
+    applyStaticTranslations();
     var form = document.getElementById('login-form');
     if (form) form.addEventListener('submit', onLoginSubmit);
     document.addEventListener('click', onGlobalClick);

@@ -19,8 +19,8 @@ type Project struct {
 	Tokens Tokens `json:"tokens"`
 
 	// CheckCmd est la commande de vérification lancée après chaque tâche
-	// (ex : "go build ./..."). Non exposée par l'API v1.
-	CheckCmd string `json:"-"`
+	// (ex : "go build ./..."). Exposée et modifiable via PATCH /api/projects/{id}.
+	CheckCmd string `json:"checkCmd"`
 }
 
 // Card est une colonne du kanban d'un projet.
@@ -84,19 +84,43 @@ type Task struct {
 
 // Message est un message échangé dans le fil d'une tâche.
 type Message struct {
-	ID        string    `json:"id"`
-	TaskID    string    `json:"taskId"`
-	Author    string    `json:"author"` // user|agent
-	Text      string    `json:"text"`
-	CreatedAt time.Time `json:"createdAt"`
+	ID         string    `json:"id"`
+	TaskID     string    `json:"taskId"`
+	Author     string    `json:"author"` // user|agent
+	AuthorName string    `json:"authorName"`
+	Text       string    `json:"text"`
+	CreatedAt  time.Time `json:"createdAt"`
+}
+
+// User est un compte de l'espace de travail partagé. PasswordHash n'est
+// jamais exposé par l'API : voir UserPublic et User.Public().
+type User struct {
+	ID           string `json:"id"`
+	Name         string `json:"name"`
+	Role         string `json:"role"` // admin|member
+	PasswordHash string `json:"passwordHash"`
+}
+
+// UserPublic est la représentation d'un utilisateur exposée par l'API
+// (sans le hash du mot de passe).
+type UserPublic struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	Role string `json:"role"`
+}
+
+// Public retourne la représentation sûre d'un utilisateur, pour l'API.
+func (u User) Public() UserPublic {
+	return UserPublic{ID: u.ID, Name: u.Name, Role: u.Role}
 }
 
 // State est la réponse de GET /api/state.
 type State struct {
-	Projects []Project `json:"projects"`
-	Cards    []Card    `json:"cards"`
-	Tasks    []Task    `json:"tasks"`
-	Agents   []Agent   `json:"agents"`
+	Projects []Project  `json:"projects"`
+	Cards    []Card     `json:"cards"`
+	Tasks    []Task     `json:"tasks"`
+	Agents   []Agent    `json:"agents"`
+	Me       UserPublic `json:"me"`
 	Tokens   struct {
 		Global Tokens `json:"global"`
 	} `json:"tokens"`
@@ -162,4 +186,9 @@ type DeliverablesResponse struct {
 type ShipResponse struct {
 	Task   Task   `json:"task"`
 	Output string `json:"output"`
+}
+
+// PRResponse est la réponse de POST /api/tasks/{id}/pr.
+type PRResponse struct {
+	URL string `json:"url"`
 }

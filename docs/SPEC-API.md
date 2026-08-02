@@ -1,14 +1,17 @@
-# Sillage : contrat d'API (v1)
+# Sillage : contrat d'API (v0.2)
 
 Serveur Go sur `:8787`. Frontend statique servi sur `/`. Tout le JSON est en camelCase.
 Auth par cookie de session (`sillage_session`, HttpOnly). Toute route `/api/*` (sauf `/api/login`) renvoie `401` sans session valide : le frontend affiche alors l'écran de connexion.
+
+Espace de travail partagé par tous les utilisateurs (pas de permissions par projet, pas de non-lus par utilisateur). Tous les messages d'erreur API (`{"error": "..."}`) sont en anglais, courts (ex : `"confirmation required"`, `"task not found"`, `"invalid project path: not a git repository"`).
 
 ## Modèles
 
 ```jsonc
 Tokens  { "input": 0, "output": 0, "costUsd": 0.0 }
 
-Project { "id": "p1", "name": "sillage", "path": "/abs/path", "unread": 2, "tokens": Tokens }
+Project { "id": "p1", "name": "sillage", "path": "/abs/path", "unread": 2,
+          "tokens": Tokens, "checkCmd": "go test ./..." }   // checkCmd peut être vide
 
 Card    { "id": "c1", "projectId": "p1", "column": "soon|doing|done", "title": "...",
           "tasksTotal": 4, "tasksDone": 1, "docsCount": 2, "messagesCount": 12,
@@ -26,8 +29,12 @@ Task    { "id": "t1", "cardId": "c1", "projectId": "p1", "ref": 482, "title": ".
           "liveActivity": "Edit · internal/server/store.go" | null,
           "unread": true, "updatedAt": "2026-08-02T10:00:00Z", "tokens": Tokens }
 
-Message { "id": "m1", "taskId": "t1", "author": "user|agent", "text": "markdown...",
-          "createdAt": "..." }
+Message { "id": "m1", "taskId": "t1", "author": "user|agent", "authorName": "Alice",
+          "text": "markdown...", "createdAt": "..." }
+          // authorName : nom de l'utilisateur (author="user") ou de l'agent (author="agent")
+
+User    { "id": "u1", "name": "admin", "role": "admin|member" }
+          // représentation publique : jamais de champ passwordHash exposé par l'API
 ```
 
 `Card.progress` = tasksDone/tasksTotal en % (0 si vide). Les compteurs de Card sont calculés côté serveur. `tasksDone` = tâches `shipped`. `reviewCount` = tâches `review`.
@@ -36,10 +43,19 @@ Message { "id": "m1", "taskId": "t1", "author": "user|agent", "text": "markdown.
 
 | Méthode | Route | Corps | Réponse |
 |---|---|---|---|
-| POST | `/api/login` | `{password}` | 204 ou 401 `{error}` |
+| POST | `/api/login` | `{username, password}` | 204 ou 401 `{error}` |
 | POST | `/api/logout` | | 204 |
-| GET | `/api/state` | | `{projects, cards, tasks, agents, tokens:{global:Tokens}}` |
+| GET | `/api/me` | | `{id, name, role}` (utilisateur courant) |
+| GET | `/api/state` | | `{projects, cards, tasks, agents, me, tokens:{global:Tokens}}` |
+| GET | `/api/users` | | liste de User (admin uniquement, 403 sinon) |
+| POST | `/api/users` | `{name, password, role?}` | User (admin uniquement ; role défaut `member` ; name unique et non vide, 400 sinon) |
+| PATCH | `/api/users/{id}` | `{password?, role?}` | User (admin uniquement) |
+| DELETE | `/api/users/{id}` | | 204 (admin uniquement ; 400 pour soi-même ou pour le dernier admin) |
+| POST | `/api/agents` | `{name, emoji?, color?, cli, model?, contextPrompt?}` | Agent (name et cli requis ; cli ∈ {claude, codex, fake} ; id = slug du name, 400 si déjà pris) |
+| PATCH | `/api/agents/{id}` | mêmes champs, tous optionnels | Agent |
+| DELETE | `/api/agents/{id}` | | 204 (400 si une tâche référence encore l'agent) |
 | POST | `/api/projects` | `{name, path}` | Project (400 si path invalide/pas un dépôt git) |
+| PATCH | `/api/projects/{id}` | `{name?, checkCmd?}` | Project |
 | POST | `/api/cards` | `{projectId, title, column?}` | Card |
 | PATCH | `/api/cards/{id}` | `{column}` | Card |
 | POST | `/api/tasks` | `{cardId, title, agentId, prompt?}` | Task (créée `running`, agent lancé avec title+prompt) |
@@ -48,11 +64,18 @@ Message { "id": "m1", "taskId": "t1", "author": "user|agent", "text": "markdown.
 | POST | `/api/tasks/{id}/interrupt` | | Task (→ review) |
 | POST | `/api/tasks/{id}/accept` | | Task (review → ready) |
 | POST | `/api/tasks/{id}/ship` | `{confirm:true}` | `{task, output}` : fait le `git push` réel. **Validation humaine obligatoire** : refus 400 sans `confirm` |
+| POST | `/api/tasks/{id}/pr` | `{confirm:true}` | `{url}` : ouvre la pull request (voir ci-dessous). **Validation humaine obligatoire** : refus 400 sans `confirm` ; tâche `shipped` uniquement (400 sinon) |
 | POST | `/api/tasks/{id}/reopen` | | Task (shipped → review) |
 | POST | `/api/tasks/{id}/read` | | 204 (unread=false) |
 | GET | `/api/tasks/{id}/diff` | | voir ci-dessous |
 | GET | `/api/tasks/{id}/deliverables` | | voir ci-dessous |
 | GET | `/api/events` | | SSE |
+
+Agents et projets sont accessibles à tout utilisateur connecté (pas réservé admin). Seuls les endpoints `/api/users/*` exigent le rôle `admin` (403 sinon).
+
+### Ouvrir la PR
+
+`POST /api/tasks/{id}/pr` ne pousse jamais rien : la branche a déjà été poussée par `/ship`. Implémentation : `gh pr create` dans le worktree (si `gh` est disponible) ; en cas d'échec ou d'absence de `gh`, repli sur une URL de comparaison GitHub en lecture seule (`https://github.com/<owner>/<repo>/compare/<base>...<branch>?expand=1`), déduite de `git remote get-url origin` (ssh ou https). Si ni l'un ni l'autre n'aboutit (remote non-GitHub ou absent) : 502 `{error}`.
 
 ### Diff
 
@@ -80,12 +103,13 @@ Message { "id": "m1", "taskId": "t1", "author": "user|agent", "text": "markdown.
 - `activity` : `{taskId, line}` : ligne d'activité live (peut être `null` = terminé).
 - `tokens` : `{global: Tokens, projects: {projectId: Tokens}, tasks: {taskId: Tokens}}`.
 - `cards` : liste des Cards recalculées du projet touché.
-- `agents` : liste des Agents (pour l'indicateur d'activité).
+- `agents` : liste des Agents (pour l'indicateur d'activité, et après chaque mutation CRUD).
+- `project` : Project complet (après PATCH `/api/projects/{id}`).
 
 Le frontend maintient son état en mémoire à partir de `/api/state` + SSE ; reconnexion SSE automatique (EventSource natif) et re-fetch de `/api/state` à la reconnexion.
 
 ## Règles produit à respecter côté UI
 
-- Push / livraison uniquement via le bouton du détail de tâche avec confirmation explicite (double clic de confirmation ou bouton qui devient « Confirmer le push ? »). Jamais automatique.
+- Push / livraison uniquement via le bouton du détail de tâche avec confirmation explicite (double clic de confirmation ou bouton qui devient « Confirmer le push ? »). Jamais automatique. Même règle pour l'ouverture de la PR.
 - Tokens visibles : total global en bas de sidebar (`Σ 12,4k tokens · 0,84 $`), par projet dans l'en-tête kanban, par tâche dans le détail (sous l'en-tête).
 - Une tâche s'ouvre → POST `/read`.

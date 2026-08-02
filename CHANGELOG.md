@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.2.0 (2026-08-02)
+
+- English and French UI with a sidebar language switch (auto-detected from the browser).
+- Simple multi-user: username and password accounts, shared workspace, admin-managed users from the UI; existing single-password installs migrate automatically to an `admin` account.
+- Agent management from the UI: create, edit and delete agents (deletion refused while tasks reference them).
+- "Open a PR" for shipped tasks: `gh pr create` on the already-pushed branch, or a read-only GitHub compare URL as fallback; explicit confirmation required, never pushes.
+- Per-project check command editable from the UI.
+- Messages carry the author's display name.
+- API error messages are now in English.
+- Releases now ship raw binaries instead of tar.gz archives.
+
 ## v0.1.0 (2026-08-02)
 
 First usable release.

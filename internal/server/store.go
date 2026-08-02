@@ -12,6 +12,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"golang.org/x/crypto/bcrypt"
 )
 
 // Store est l'état en mémoire de l'application, persisté dans state.json.
@@ -26,12 +28,14 @@ type Store struct {
 	Tasks    map[string]Task
 	Messages map[string][]Message
 	Agents   map[string]Agent
+	Users    map[string]User
 
 	NextProjectN int
 	NextCardN    int
 	NextTaskN    int
 	NextMessageN int
 	NextRef      int
+	NextUserN    int
 }
 
 // NewStore charge state.json s'il existe, sinon initialise un état neuf
@@ -76,6 +80,9 @@ func (s *Store) ensureMaps() {
 	if s.Agents == nil {
 		s.Agents = map[string]Agent{}
 	}
+	if s.Users == nil {
+		s.Users = map[string]User{}
+	}
 }
 
 func (s *Store) initEmpty() {
@@ -84,22 +91,22 @@ func (s *Store) initEmpty() {
 	s.Agents["bolt"] = Agent{
 		ID: "bolt", Name: "Bolt", Emoji: "🐝", Color: "#f2b705",
 		Model: "claude-sonnet-5", Cli: "claude",
-		ContextPrompt: "Tu es un développeur backend pragmatique, orienté qualité et simplicité.",
+		ContextPrompt: "You are a pragmatic backend developer, focused on quality and simplicity.",
 	}
 	s.Agents["muse"] = Agent{
 		ID: "muse", Name: "Muse", Emoji: "🦊", Color: "#d0662f",
 		Model: "claude-opus-5", Cli: "claude",
-		ContextPrompt: "Tu es responsable produit : specs, documentation, clarté fonctionnelle.",
+		ContextPrompt: "You are a product owner: specs, documentation, functional clarity.",
 	}
 	s.Agents["otto"] = Agent{
 		ID: "otto", Name: "Otto", Emoji: "🦉", Color: "#4f7d2f",
 		Model: "", Cli: "codex",
-		ContextPrompt: "Tu es un ingénieur infra : CI, déploiement, outillage.",
+		ContextPrompt: "You are an infrastructure engineer: CI, deployment, tooling.",
 	}
 	s.Agents["echo"] = Agent{
 		ID: "echo", Name: "Écho", Emoji: "🧪", Color: "#777777",
 		Model: "", Cli: "fake",
-		ContextPrompt: "Agent de test local, gratuit, pour la démo et les vérifications.",
+		ContextPrompt: "Local test agent, free of charge, for demos and checks.",
 	}
 }
 
@@ -372,6 +379,172 @@ func (s *Store) GetMessages(taskID string) []Message {
 	return out
 }
 
+// --- Utilisateurs ---
+
+var validRole = map[string]bool{"admin": true, "member": true}
+
+// GetUser retourne un utilisateur par son identifiant.
+func (s *Store) GetUser(id string) (User, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	u, ok := s.Users[id]
+	return u, ok
+}
+
+// FindUserByName retourne un utilisateur par son nom (utilisé par le login).
+func (s *Store) FindUserByName(name string) (User, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.findUserByNameLocked(name)
+}
+
+// findUserByNameLocked suppose le verrou déjà tenu par l'appelant.
+func (s *Store) findUserByNameLocked(name string) (User, bool) {
+	for _, u := range s.Users {
+		if u.Name == name {
+			return u, true
+		}
+	}
+	return User{}, false
+}
+
+// countAdminsLocked suppose le verrou déjà tenu par l'appelant.
+func (s *Store) countAdminsLocked() int {
+	n := 0
+	for _, u := range s.Users {
+		if u.Role == "admin" {
+			n++
+		}
+	}
+	return n
+}
+
+// ListUsers retourne tous les utilisateurs, triés par identifiant.
+func (s *Store) ListUsers() []User {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := make([]User, 0, len(s.Users))
+	for _, u := range s.Users {
+		out = append(out, u)
+	}
+	sort.Slice(out, func(i, j int) bool { return idNum(out[i].ID) < idNum(out[j].ID) })
+	return out
+}
+
+// MigrateUsers assure la présence d'un compte "admin", à partir du hash de
+// mot de passe hérité (config.json existant, ou mot de passe généré au tout
+// premier lancement). Si state.json contient déjà des utilisateurs, ne fait
+// rien, sauf si SILLAGE_PASSWORD est positionnée dans l'environnement : dans
+// ce cas le mot de passe de "admin" est toujours remplacé (compte créé s'il
+// est absent). C'est le point d'entrée de compatibilité avec les installations
+// antérieures à la v0.2 (state.json sans utilisateurs).
+func (s *Store) MigrateUsers(legacyHash string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.ensureMaps()
+
+	envSet := os.Getenv("SILLAGE_PASSWORD") != ""
+	if !envSet && len(s.Users) > 0 {
+		return nil
+	}
+
+	if admin, ok := s.findUserByNameLocked("admin"); ok {
+		admin.PasswordHash = legacyHash
+		s.Users[admin.ID] = admin
+	} else {
+		s.NextUserN++
+		id := fmt.Sprintf("u%d", s.NextUserN)
+		s.Users[id] = User{ID: id, Name: "admin", Role: "admin", PasswordHash: legacyHash}
+	}
+	return s.save()
+}
+
+// AddUser crée un utilisateur. name non vide et unique ; role par défaut
+// "member" ; le mot de passe est haché avant stockage.
+func (s *Store) AddUser(name, password, role string) (User, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if strings.TrimSpace(name) == "" {
+		return User{}, fmt.Errorf("name is required")
+	}
+	if password == "" {
+		return User{}, fmt.Errorf("password is required")
+	}
+	if role == "" {
+		role = "member"
+	}
+	if !validRole[role] {
+		return User{}, fmt.Errorf("invalid role: must be admin or member")
+	}
+	if _, exists := s.findUserByNameLocked(name); exists {
+		return User{}, fmt.Errorf("a user with this name already exists")
+	}
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		return User{}, err
+	}
+	s.NextUserN++
+	id := fmt.Sprintf("u%d", s.NextUserN)
+	u := User{ID: id, Name: name, Role: role, PasswordHash: string(hash)}
+	s.Users[id] = u
+	if err := s.save(); err != nil {
+		return User{}, err
+	}
+	return u, nil
+}
+
+// UpdateUser met à jour le mot de passe et/ou le rôle d'un utilisateur.
+// Refuse de rétrograder le dernier administrateur.
+func (s *Store) UpdateUser(id string, password, role *string) (User, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	u, ok := s.Users[id]
+	if !ok {
+		return User{}, fmt.Errorf("user not found")
+	}
+	if role != nil {
+		if !validRole[*role] {
+			return User{}, fmt.Errorf("invalid role: must be admin or member")
+		}
+		if u.Role == "admin" && *role != "admin" && s.countAdminsLocked() <= 1 {
+			return User{}, fmt.Errorf("cannot demote the last admin")
+		}
+		u.Role = *role
+	}
+	if password != nil {
+		if *password == "" {
+			return User{}, fmt.Errorf("password is required")
+		}
+		hash, err := bcrypt.GenerateFromPassword([]byte(*password), bcrypt.DefaultCost)
+		if err != nil {
+			return User{}, err
+		}
+		u.PasswordHash = string(hash)
+	}
+	s.Users[id] = u
+	if err := s.save(); err != nil {
+		return User{}, err
+	}
+	return u, nil
+}
+
+// DeleteUser supprime un utilisateur. Refusé pour le dernier administrateur
+// (la garde "refus pour soi-même" est appliquée par l'appelant, qui connaît
+// l'identité de l'utilisateur courant).
+func (s *Store) DeleteUser(id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	u, ok := s.Users[id]
+	if !ok {
+		return fmt.Errorf("user not found")
+	}
+	if u.Role == "admin" && s.countAdminsLocked() <= 1 {
+		return fmt.Errorf("cannot delete the last admin")
+	}
+	delete(s.Users, id)
+	return s.save()
+}
+
 // AddProject crée un projet. La validation du chemin (existence, dépôt git)
 // est faite par l'appelant (handlers.go) avant l'appel.
 func (s *Store) AddProject(name, path string) (Project, error) {
@@ -386,6 +559,31 @@ func (s *Store) AddProject(name, path string) (Project, error) {
 	return p, nil
 }
 
+// UpdateProject modifie le nom et/ou la commande de vérification d'un projet.
+// Les champs nil ne sont pas modifiés.
+func (s *Store) UpdateProject(id string, name, checkCmd *string) (Project, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	p, ok := s.Projects[id]
+	if !ok {
+		return Project{}, fmt.Errorf("project not found")
+	}
+	if name != nil {
+		if strings.TrimSpace(*name) == "" {
+			return Project{}, fmt.Errorf("name is required")
+		}
+		p.Name = *name
+	}
+	if checkCmd != nil {
+		p.CheckCmd = *checkCmd
+	}
+	s.Projects[id] = p
+	if err := s.save(); err != nil {
+		return Project{}, err
+	}
+	return p, nil
+}
+
 var validColumns = map[string]bool{"soon": true, "doing": true, "done": true}
 
 // AddCard crée une carte dans un projet. column vide => "soon".
@@ -393,13 +591,13 @@ func (s *Store) AddCard(projectID, title, column string) (Card, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if _, ok := s.Projects[projectID]; !ok {
-		return Card{}, fmt.Errorf("projet %s introuvable", projectID)
+		return Card{}, fmt.Errorf("project not found")
 	}
 	if column == "" {
 		column = "soon"
 	}
 	if !validColumns[column] {
-		return Card{}, fmt.Errorf("colonne invalide : %s", column)
+		return Card{}, fmt.Errorf("invalid column")
 	}
 	s.NextCardN++
 	c := Card{ID: fmt.Sprintf("c%d", s.NextCardN), ProjectID: projectID, Column: column, Title: title}
@@ -417,10 +615,10 @@ func (s *Store) UpdateCardColumn(id, column string) (Card, error) {
 	defer s.mu.Unlock()
 	c, ok := s.Cards[id]
 	if !ok {
-		return Card{}, fmt.Errorf("carte %s introuvable", id)
+		return Card{}, fmt.Errorf("card not found")
 	}
 	if !validColumns[column] {
-		return Card{}, fmt.Errorf("colonne invalide : %s", column)
+		return Card{}, fmt.Errorf("invalid column")
 	}
 	c.Column = column
 	s.Cards[id] = c
@@ -466,7 +664,7 @@ func (s *Store) UpdateTask(id string, fn func(t *Task)) (Task, error) {
 	defer s.mu.Unlock()
 	t, ok := s.Tasks[id]
 	if !ok {
-		return Task{}, fmt.Errorf("tâche %s introuvable", id)
+		return Task{}, fmt.Errorf("task not found")
 	}
 	fn(&t)
 	t.UpdatedAt = time.Now().UTC()
@@ -481,15 +679,17 @@ func (s *Store) UpdateTask(id string, fn func(t *Task)) (Task, error) {
 }
 
 // AddMessage ajoute un message au fil d'une tâche et retourne le message et la tâche mises à jour.
-func (s *Store) AddMessage(taskID, author, text string) (Message, Task, error) {
+// authorName est le nom affiché dans le fil (nom de l'utilisateur pour author="user",
+// nom de l'agent pour author="agent").
+func (s *Store) AddMessage(taskID, author, authorName, text string) (Message, Task, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	t, ok := s.Tasks[taskID]
 	if !ok {
-		return Message{}, Task{}, fmt.Errorf("tâche %s introuvable", taskID)
+		return Message{}, Task{}, fmt.Errorf("task not found")
 	}
 	s.NextMessageN++
-	m := Message{ID: fmt.Sprintf("m%d", s.NextMessageN), TaskID: taskID, Author: author, Text: text, CreatedAt: time.Now().UTC()}
+	m := Message{ID: fmt.Sprintf("m%d", s.NextMessageN), TaskID: taskID, Author: author, AuthorName: authorName, Text: text, CreatedAt: time.Now().UTC()}
 	s.Messages[taskID] = append(s.Messages[taskID], m)
 	t.MessagesCount = len(s.Messages[taskID])
 	t.UpdatedAt = time.Now().UTC()
@@ -521,4 +721,87 @@ func Slugify(title string) string {
 		s = "tache"
 	}
 	return s
+}
+
+// --- Agents (CRUD) ---
+
+var validCli = map[string]bool{"claude": true, "codex": true, "fake": true}
+
+// AddAgent crée un agent. name et cli sont obligatoires ; cli doit être
+// claude, codex ou fake ; l'identifiant est le slug du nom (unique).
+func (s *Store) AddAgent(name, emoji, color, cli, model, contextPrompt string) (Agent, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if strings.TrimSpace(name) == "" || cli == "" {
+		return Agent{}, fmt.Errorf("name and cli are required")
+	}
+	if !validCli[cli] {
+		return Agent{}, fmt.Errorf("invalid cli: must be claude, codex or fake")
+	}
+	id := Slugify(name)
+	if _, exists := s.Agents[id]; exists {
+		return Agent{}, fmt.Errorf("an agent with this name already exists")
+	}
+	a := Agent{ID: id, Name: name, Emoji: emoji, Color: color, Cli: cli, Model: model, ContextPrompt: contextPrompt}
+	s.Agents[id] = a
+	if err := s.save(); err != nil {
+		return Agent{}, err
+	}
+	return a, nil
+}
+
+// UpdateAgent met à jour les champs fournis (non nil) d'un agent existant.
+// L'identifiant ne change jamais après création.
+func (s *Store) UpdateAgent(id string, name, emoji, color, cli, model, contextPrompt *string) (Agent, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	a, ok := s.Agents[id]
+	if !ok {
+		return Agent{}, fmt.Errorf("agent not found")
+	}
+	if cli != nil {
+		if !validCli[*cli] {
+			return Agent{}, fmt.Errorf("invalid cli: must be claude, codex or fake")
+		}
+		a.Cli = *cli
+	}
+	if name != nil {
+		if strings.TrimSpace(*name) == "" {
+			return Agent{}, fmt.Errorf("name is required")
+		}
+		a.Name = *name
+	}
+	if emoji != nil {
+		a.Emoji = *emoji
+	}
+	if color != nil {
+		a.Color = *color
+	}
+	if model != nil {
+		a.Model = *model
+	}
+	if contextPrompt != nil {
+		a.ContextPrompt = *contextPrompt
+	}
+	s.Agents[id] = a
+	if err := s.save(); err != nil {
+		return Agent{}, err
+	}
+	return a, nil
+}
+
+// DeleteAgent supprime un agent. Refusé si une tâche le référence encore.
+func (s *Store) DeleteAgent(id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.Agents[id]; !ok {
+		return fmt.Errorf("agent not found")
+	}
+	for _, t := range s.Tasks {
+		if t.AgentID == id {
+			return fmt.Errorf("agent is referenced by a task")
+		}
+	}
+	delete(s.Agents, id)
+	return s.save()
 }

@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 )
@@ -27,10 +28,10 @@ func runGit(dir string, timeout time.Duration, args ...string) (string, error) {
 
 	out, err := cmd.CombinedOutput()
 	if ctx.Err() == context.DeadlineExceeded {
-		return string(out), fmt.Errorf("commande git expirée (%s) : git %s", timeout, strings.Join(args, " "))
+		return string(out), fmt.Errorf("git command timed out (%s): git %s", timeout, strings.Join(args, " "))
 	}
 	if err != nil {
-		return string(out), fmt.Errorf("git %s : %w : %s", strings.Join(args, " "), err, strings.TrimSpace(string(out)))
+		return string(out), fmt.Errorf("git %s: %w: %s", strings.Join(args, " "), err, strings.TrimSpace(string(out)))
 	}
 	return string(out), nil
 }
@@ -200,7 +201,7 @@ func Ship(dir, branch, title string) (string, error) {
 	addOut, err := runGit(dir, gitDefaultTimeout, "add", "-A")
 	out.WriteString(addOut)
 	if err != nil {
-		return out.String(), fmt.Errorf("git add a échoué : %w", err)
+		return out.String(), fmt.Errorf("git add failed: %w", err)
 	}
 
 	statusOut, err := runGit(dir, gitDefaultTimeout, "status", "--porcelain")
@@ -211,14 +212,94 @@ func Ship(dir, branch, title string) (string, error) {
 		commitOut, err := runGit(dir, gitDefaultTimeout, "commit", "-m", "Sillage: "+title)
 		out.WriteString(commitOut)
 		if err != nil {
-			return out.String(), fmt.Errorf("git commit a échoué : %w", err)
+			return out.String(), fmt.Errorf("git commit failed: %w", err)
 		}
 	}
 
 	pushOut, err := runGit(dir, gitPushTimeout, "push", "-u", "origin", branch)
 	out.WriteString(pushOut)
 	if err != nil {
-		return out.String(), fmt.Errorf("échec du push (remote 'origin' absent ou inaccessible) : %w", err)
+		return out.String(), fmt.Errorf("push failed (remote 'origin' missing or unreachable): %w", err)
 	}
 	return out.String(), nil
+}
+
+// --- Ouverture de pull request (lecture seule, jamais de push) ---
+
+// githubSSHRemoteRe et githubHTTPSRemoteRe reconnaissent les deux formats
+// d'URL de remote github.com utilisés par git (ssh de type scp, ou https).
+var githubSSHRemoteRe = regexp.MustCompile(`^git@github\.com:([^/]+)/(.+?)(\.git)?/?$`)
+var githubHTTPSRemoteRe = regexp.MustCompile(`^https?://github\.com/([^/]+)/(.+?)(\.git)?/?$`)
+
+// ParseGithubRemote extrait le owner et le repo d'une URL de remote
+// github.com, au format ssh (git@github.com:owner/repo.git) ou https
+// (https://github.com/owner/repo[.git]).
+func ParseGithubRemote(remoteURL string) (owner, repo string, ok bool) {
+	remoteURL = strings.TrimSpace(remoteURL)
+	if m := githubSSHRemoteRe.FindStringSubmatch(remoteURL); m != nil {
+		return m[1], m[2], true
+	}
+	if m := githubHTTPSRemoteRe.FindStringSubmatch(remoteURL); m != nil {
+		return m[1], m[2], true
+	}
+	return "", "", false
+}
+
+// OpenPR ouvre une pull request pour une branche déjà poussée sur origin.
+// Tente d'abord `gh pr create` (aucune commande d'écriture : la branche est
+// supposée déjà poussée par Ship). En l'absence de gh, ou en cas d'échec,
+// replie sur une URL de comparaison GitHub en lecture seule.
+func OpenPR(dir, branch, base, title string) (string, error) {
+	if _, lookErr := exec.LookPath("gh"); lookErr == nil {
+		if url, err := runGhPRCreate(dir, branch, title); err == nil && url != "" {
+			return url, nil
+		}
+	}
+	return fallbackCompareURL(dir, base, branch)
+}
+
+// runGhPRCreate exécute `gh pr create` (timeout 60 s, environnement hérité)
+// et extrait l'URL de la pull request depuis sa sortie standard.
+func runGhPRCreate(dir, branch, title string) (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	body := "Created with Sillage\n\n" + title
+	cmd := exec.CommandContext(ctx, "gh", "pr", "create", "--head", branch, "--title", title, "--body", body)
+	cmd.Dir = dir
+	cmd.Env = os.Environ()
+
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("gh pr create failed: %w: %s", err, strings.TrimSpace(string(out)))
+	}
+	if url := extractURL(string(out)); url != "" {
+		return url, nil
+	}
+	return "", fmt.Errorf("gh pr create succeeded but no URL was found in its output")
+}
+
+// extractURL retourne la première ligne ressemblant à une URL http(s) dans s.
+func extractURL(s string) string {
+	for _, line := range strings.Split(s, "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "https://") || strings.HasPrefix(line, "http://") {
+			return line
+		}
+	}
+	return ""
+}
+
+// fallbackCompareURL construit une URL de comparaison GitHub en lecture
+// seule, sans exécuter aucune commande d'écriture.
+func fallbackCompareURL(dir, base, branch string) (string, error) {
+	out, err := runGit(dir, gitDefaultTimeout, "remote", "get-url", "origin")
+	if err != nil {
+		return "", fmt.Errorf("no github remote configured")
+	}
+	owner, repo, ok := ParseGithubRemote(out)
+	if !ok {
+		return "", fmt.Errorf("origin remote is not a github.com repository")
+	}
+	return fmt.Sprintf("https://github.com/%s/%s/compare/%s...%s?expand=1", owner, repo, base, branch), nil
 }
