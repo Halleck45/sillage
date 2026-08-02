@@ -12,7 +12,7 @@ func TestStoreRoundtripSaveLoad(t *testing.T) {
 		t.Fatalf("NewStore: %v", err)
 	}
 
-	project, err := s1.AddProject("sillage", []Repo{{Path: "/tmp/sillage"}})
+	project, err := s1.AddProject("sillage", "", "", []Repo{{Path: "/tmp/sillage"}})
 	if err != nil {
 		t.Fatalf("AddProject: %v", err)
 	}
@@ -113,11 +113,11 @@ func TestDerivedCounters(t *testing.T) {
 		t.Fatalf("NewStore: %v", err)
 	}
 
-	project, err := s.AddProject("sillage", []Repo{{Path: "/tmp/sillage"}})
+	project, err := s.AddProject("sillage", "", "", []Repo{{Path: "/tmp/sillage"}})
 	if err != nil {
 		t.Fatalf("AddProject: %v", err)
 	}
-	card, err := s.AddCard(project.ID, "Carte", "doing")
+	card, err := s.AddCard(project.ID, "Carte", "")
 	if err != nil {
 		t.Fatalf("AddCard: %v", err)
 	}
@@ -225,7 +225,7 @@ func TestDeleteAgentGuardsReferencedAgent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewStore: %v", err)
 	}
-	project, err := s.AddProject("sillage", []Repo{{Path: "/tmp/sillage"}})
+	project, err := s.AddProject("sillage", "", "", []Repo{{Path: "/tmp/sillage"}})
 	if err != nil {
 		t.Fatalf("AddProject: %v", err)
 	}
@@ -282,14 +282,14 @@ func TestUpdateProjectFields(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewStore: %v", err)
 	}
-	p, err := s.AddProject("sillage", []Repo{{Path: "/tmp/sillage"}})
+	p, err := s.AddProject("sillage", "", "", []Repo{{Path: "/tmp/sillage"}})
 	if err != nil {
 		t.Fatalf("AddProject: %v", err)
 	}
 
 	name := "Nouveau nom"
 	checkCmd := "go test ./..."
-	updated, err := s.UpdateProject(p.ID, &name, &checkCmd, nil)
+	updated, err := s.UpdateProject(p.ID, &name, nil, &checkCmd, nil, nil)
 	if err != nil {
 		t.Fatalf("UpdateProject: %v", err)
 	}
@@ -301,11 +301,376 @@ func TestUpdateProjectFields(t *testing.T) {
 	}
 
 	newRepos := []Repo{{Name: "a", Path: "/tmp/a"}, {Name: "b", Path: "/tmp/b"}}
-	updated, err = s.UpdateProject(p.ID, nil, nil, &newRepos)
+	updated, err = s.UpdateProject(p.ID, nil, nil, nil, nil, &newRepos)
 	if err != nil {
 		t.Fatalf("UpdateProject (repos): %v", err)
 	}
 	if len(updated.Repos) != 2 {
 		t.Fatalf("repos attendus au nombre de 2, reçu %+v", updated.Repos)
+	}
+}
+
+func TestUpdateProjectDescriptionAndContextPrompt(t *testing.T) {
+	dir := t.TempDir()
+	s, err := NewStore(dir)
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+	p, err := s.AddProject("sillage", "Un projet", "Contexte initial", []Repo{{Path: "/tmp/sillage"}})
+	if err != nil {
+		t.Fatalf("AddProject: %v", err)
+	}
+	if p.Description != "Un projet" || p.ContextPrompt != "Contexte initial" {
+		t.Fatalf("description/contextPrompt inattendus à la création : %+v", p)
+	}
+
+	desc := "Nouvelle description"
+	ctx := "Nouveau contexte"
+	updated, err := s.UpdateProject(p.ID, nil, &desc, nil, &ctx, nil)
+	if err != nil {
+		t.Fatalf("UpdateProject: %v", err)
+	}
+	if updated.Description != desc || updated.ContextPrompt != ctx {
+		t.Fatalf("description/contextPrompt inattendus après mise à jour : %+v", updated)
+	}
+}
+
+// --- Cartes créées uniquement en "soon" (v0.3.1 section 1) ---
+
+func TestAddCardRejectsNonSoonColumn(t *testing.T) {
+	dir := t.TempDir()
+	s, err := NewStore(dir)
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+	project, err := s.AddProject("p", "", "", []Repo{{Path: "/tmp/p"}})
+	if err != nil {
+		t.Fatalf("AddProject: %v", err)
+	}
+
+	if _, err := s.AddCard(project.ID, "Carte", "doing"); err == nil {
+		t.Fatalf("une carte créée en doing devrait être refusée")
+	} else if err.Error() != "cards are created in the soon column" {
+		t.Fatalf("message d'erreur inattendu : %q", err.Error())
+	}
+	if _, err := s.AddCard(project.ID, "Carte", "done"); err == nil {
+		t.Fatalf("une carte créée en done devrait être refusée")
+	}
+
+	c, err := s.AddCard(project.ID, "Carte", "")
+	if err != nil {
+		t.Fatalf("AddCard (vide): %v", err)
+	}
+	if c.Column != "soon" {
+		t.Fatalf("colonne attendue 'soon', reçue %q", c.Column)
+	}
+
+	c2, err := s.AddCard(project.ID, "Carte2", "soon")
+	if err != nil {
+		t.Fatalf("AddCard (soon explicite): %v", err)
+	}
+	if c2.Column != "soon" {
+		t.Fatalf("colonne attendue 'soon', reçue %q", c2.Column)
+	}
+}
+
+// --- Cycle de vie des tâches : finish/cancel/reopen (v0.3.1 section 4) ---
+
+// mkTaskWithStatus crée une tâche sur la carte donnée puis force son statut
+// (sauf "running", statut initial de CreateTask).
+func mkTaskWithStatus(t *testing.T, s *Store, cardID, projectID, status string) string {
+	t.Helper()
+	id, ref := s.ReserveTaskID()
+	if _, err := s.CreateTask(id, ref, cardID, projectID, "T "+status+" "+id, "echo", "sillage/"+id, "main", "/tmp/wt-"+id, "p"); err != nil {
+		t.Fatalf("CreateTask: %v", err)
+	}
+	if status != "running" {
+		if _, err := s.UpdateTask(id, func(tk *Task) { tk.Status = status }); err != nil {
+			t.Fatalf("UpdateTask: %v", err)
+		}
+	}
+	return id
+}
+
+func TestTaskFinishTransitions(t *testing.T) {
+	dir := t.TempDir()
+	s, err := NewStore(dir)
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+	project, err := s.AddProject("p", "", "", []Repo{{Path: "/tmp/p"}})
+	if err != nil {
+		t.Fatalf("AddProject: %v", err)
+	}
+	card, err := s.AddCard(project.ID, "Carte", "")
+	if err != nil {
+		t.Fatalf("AddCard: %v", err)
+	}
+
+	for _, status := range []string{"review", "ready", "shipped"} {
+		id := mkTaskWithStatus(t, s, card.ID, project.ID, status)
+		task, err := s.FinishTask(id)
+		if err != nil {
+			t.Fatalf("FinishTask depuis %s: %v", status, err)
+		}
+		if task.Status != "done" {
+			t.Fatalf("statut attendu 'done', reçu %q", task.Status)
+		}
+	}
+
+	running := mkTaskWithStatus(t, s, card.ID, project.ID, "running")
+	if _, err := s.FinishTask(running); err == nil {
+		t.Fatalf("finish depuis running devrait être refusé")
+	} else if err.Error() != "task must be reviewed before finishing" {
+		t.Fatalf("message inattendu : %q", err.Error())
+	}
+
+	for _, status := range []string{"done", "cancelled"} {
+		id := mkTaskWithStatus(t, s, card.ID, project.ID, status)
+		if _, err := s.FinishTask(id); err == nil {
+			t.Fatalf("finish depuis %s devrait être refusé", status)
+		}
+	}
+
+	if _, err := s.FinishTask("inconnu"); err == nil {
+		t.Fatalf("finish d'une tâche inconnue devrait échouer")
+	}
+}
+
+func TestTaskCancelTransitions(t *testing.T) {
+	dir := t.TempDir()
+	s, err := NewStore(dir)
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+	project, err := s.AddProject("p", "", "", []Repo{{Path: "/tmp/p"}})
+	if err != nil {
+		t.Fatalf("AddProject: %v", err)
+	}
+	card, err := s.AddCard(project.ID, "Carte", "")
+	if err != nil {
+		t.Fatalf("AddCard: %v", err)
+	}
+
+	for _, status := range []string{"running", "review", "ready"} {
+		id := mkTaskWithStatus(t, s, card.ID, project.ID, status)
+		task, err := s.CancelTask(id)
+		if err != nil {
+			t.Fatalf("CancelTask depuis %s: %v", status, err)
+		}
+		if task.Status != "cancelled" {
+			t.Fatalf("statut attendu 'cancelled', reçu %q", task.Status)
+		}
+	}
+
+	for _, status := range []string{"shipped", "done", "cancelled"} {
+		id := mkTaskWithStatus(t, s, card.ID, project.ID, status)
+		if _, err := s.CancelTask(id); err == nil {
+			t.Fatalf("cancel depuis %s devrait être refusé", status)
+		}
+	}
+}
+
+func TestTaskReopenTransitions(t *testing.T) {
+	dir := t.TempDir()
+	s, err := NewStore(dir)
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+	project, err := s.AddProject("p", "", "", []Repo{{Path: "/tmp/p"}})
+	if err != nil {
+		t.Fatalf("AddProject: %v", err)
+	}
+	card, err := s.AddCard(project.ID, "Carte", "")
+	if err != nil {
+		t.Fatalf("AddCard: %v", err)
+	}
+
+	for _, status := range []string{"shipped", "done", "cancelled"} {
+		id := mkTaskWithStatus(t, s, card.ID, project.ID, status)
+		task, err := s.ReopenTask(id)
+		if err != nil {
+			t.Fatalf("ReopenTask depuis %s: %v", status, err)
+		}
+		if task.Status != "review" {
+			t.Fatalf("statut attendu 'review', reçu %q", task.Status)
+		}
+	}
+
+	for _, status := range []string{"running", "review", "ready"} {
+		id := mkTaskWithStatus(t, s, card.ID, project.ID, status)
+		if _, err := s.ReopenTask(id); err == nil {
+			t.Fatalf("reopen depuis %s devrait être refusé", status)
+		}
+	}
+}
+
+// --- Auto-déplacement de carte (v0.3.1 section 4) ---
+
+func TestCardAutoMoveToDoneAndBack(t *testing.T) {
+	dir := t.TempDir()
+	s, err := NewStore(dir)
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+	project, err := s.AddProject("p", "", "", []Repo{{Path: "/tmp/p"}})
+	if err != nil {
+		t.Fatalf("AddProject: %v", err)
+	}
+	card, err := s.AddCard(project.ID, "Carte", "")
+	if err != nil {
+		t.Fatalf("AddCard: %v", err)
+	}
+
+	id1, ref1 := s.ReserveTaskID()
+	if _, err := s.CreateTask(id1, ref1, card.ID, project.ID, "T1", "echo", "sillage/"+id1, "main", "/tmp/wt1", "p"); err != nil {
+		t.Fatalf("CreateTask: %v", err)
+	}
+	id2, ref2 := s.ReserveTaskID()
+	if _, err := s.CreateTask(id2, ref2, card.ID, project.ID, "T2", "echo", "sillage/"+id2, "main", "/tmp/wt2", "p"); err != nil {
+		t.Fatalf("CreateTask: %v", err)
+	}
+
+	if c, _ := s.GetCard(card.ID); c.Column != "soon" {
+		t.Fatalf("colonne attendue 'soon' tant que des tâches sont actives, reçue %q", c.Column)
+	}
+
+	// T1 termine (running -> review -> done).
+	if _, err := s.UpdateTask(id1, func(tk *Task) { tk.Status = "review" }); err != nil {
+		t.Fatalf("UpdateTask: %v", err)
+	}
+	if _, err := s.FinishTask(id1); err != nil {
+		t.Fatalf("FinishTask: %v", err)
+	}
+	if c, _ := s.GetCard(card.ID); c.Column != "soon" {
+		t.Fatalf("colonne attendue 'soon' tant que T2 est active, reçue %q", c.Column)
+	}
+
+	// T2 est annulée : les deux tâches sont maintenant terminales.
+	if _, err := s.CancelTask(id2); err != nil {
+		t.Fatalf("CancelTask: %v", err)
+	}
+	c, _ := s.GetCard(card.ID)
+	if c.Column != "done" {
+		t.Fatalf("colonne attendue 'done' quand toutes les tâches sont terminales, reçue %q", c.Column)
+	}
+
+	// Réouvrir T1 : la carte doit repasser en doing.
+	if _, err := s.ReopenTask(id1); err != nil {
+		t.Fatalf("ReopenTask: %v", err)
+	}
+	c, _ = s.GetCard(card.ID)
+	if c.Column != "doing" {
+		t.Fatalf("colonne attendue 'doing' après réouverture, reçue %q", c.Column)
+	}
+
+	// Terminer à nouveau T1 : retour en done.
+	if _, err := s.FinishTask(id1); err != nil {
+		t.Fatalf("FinishTask: %v", err)
+	}
+	c, _ = s.GetCard(card.ID)
+	if c.Column != "done" {
+		t.Fatalf("colonne attendue 'done', reçue %q", c.Column)
+	}
+
+	// Une nouvelle tâche sur une carte "done" la fait revenir en "doing".
+	id3, ref3 := s.ReserveTaskID()
+	if _, err := s.CreateTask(id3, ref3, card.ID, project.ID, "T3", "echo", "sillage/"+id3, "main", "/tmp/wt3", "p"); err != nil {
+		t.Fatalf("CreateTask: %v", err)
+	}
+	c, _ = s.GetCard(card.ID)
+	if c.Column != "doing" {
+		t.Fatalf("colonne attendue 'doing' après nouvelle tâche sur carte done, reçue %q", c.Column)
+	}
+}
+
+// --- Compteurs de carte avec des tâches cancelled (v0.3.1 section 4) ---
+
+func TestCardCountersExcludeCancelled(t *testing.T) {
+	dir := t.TempDir()
+	s, err := NewStore(dir)
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+	project, err := s.AddProject("p", "", "", []Repo{{Path: "/tmp/p"}})
+	if err != nil {
+		t.Fatalf("AddProject: %v", err)
+	}
+	card, err := s.AddCard(project.ID, "Carte", "")
+	if err != nil {
+		t.Fatalf("AddCard: %v", err)
+	}
+
+	for _, status := range []string{"shipped", "done", "cancelled", "review"} {
+		mkTaskWithStatus(t, s, card.ID, project.ID, status)
+	}
+
+	c, ok := s.GetCard(card.ID)
+	if !ok {
+		t.Fatalf("carte introuvable")
+	}
+	// 3 tâches comptent (shipped, done, review) ; cancelled est exclue.
+	if c.TasksTotal != 3 {
+		t.Fatalf("tasksTotal attendu 3 (cancelled exclue), reçu %d", c.TasksTotal)
+	}
+	if c.TasksDone != 2 {
+		t.Fatalf("tasksDone attendu 2 (shipped+done), reçu %d", c.TasksDone)
+	}
+	if c.ReviewCount != 1 {
+		t.Fatalf("reviewCount attendu 1, reçu %d", c.ReviewCount)
+	}
+	wantProgress := 2 * 100 / 3
+	if c.Progress != wantProgress {
+		t.Fatalf("progress attendu %d, reçu %d", wantProgress, c.Progress)
+	}
+	// La tâche "review" n'est pas terminale : la carte ne doit pas être en
+	// "done". Les tâches ont été ajoutées une à une (passant chacune par
+	// "running"), ce qui a fait transiter la carte par "done" avant de
+	// revenir en "doing" (jamais "soon", conformément à la règle de retour).
+	if c.Column != "doing" {
+		t.Fatalf("colonne attendue 'doing' tant qu'une tâche est en review, reçue %q", c.Column)
+	}
+}
+
+// --- Réglages globaux (v0.3.1 section 6) ---
+
+func TestSettingsUpdateValidatesLang(t *testing.T) {
+	dir := t.TempDir()
+	s, err := NewStore(dir)
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+
+	invalid := "de"
+	if _, err := s.UpdateSettings(nil, &invalid); err == nil {
+		t.Fatalf("une langue invalide devrait être refusée")
+	}
+
+	name := "Ada"
+	lang := "fr"
+	settings, err := s.UpdateSettings(&name, &lang)
+	if err != nil {
+		t.Fatalf("UpdateSettings: %v", err)
+	}
+	if settings.DisplayName != "Ada" || settings.Lang != "fr" {
+		t.Fatalf("settings inattendus : %+v", settings)
+	}
+
+	empty := ""
+	settings, err = s.UpdateSettings(nil, &empty)
+	if err != nil {
+		t.Fatalf("UpdateSettings (lang vide): %v", err)
+	}
+	if settings.Lang != "" || settings.DisplayName != "Ada" {
+		t.Fatalf("settings inattendus après reset lang : %+v", settings)
+	}
+
+	// La valeur persiste après rechargement.
+	s2, err := NewStore(dir)
+	if err != nil {
+		t.Fatalf("NewStore (reload): %v", err)
+	}
+	if got := s2.GetSettings(); got.DisplayName != "Ada" {
+		t.Fatalf("displayName attendu 'Ada' après rechargement, reçu %q", got.DisplayName)
 	}
 }

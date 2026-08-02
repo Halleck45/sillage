@@ -69,6 +69,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/workspace/setup", s.handleWorkspaceSetup)
 	mux.HandleFunc("PATCH /api/workspace", s.handleUpdateWorkspaceRemote)
 	mux.HandleFunc("POST /api/workspace/sync", s.handleWorkspaceSync)
+	mux.HandleFunc("PATCH /api/settings", s.handleUpdateSettings)
 	mux.HandleFunc("POST /api/agents", s.handleCreateAgent)
 	mux.HandleFunc("PATCH /api/agents/{id}", s.handleUpdateAgent)
 	mux.HandleFunc("DELETE /api/agents/{id}", s.handleDeleteAgent)
@@ -83,6 +84,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/tasks/{id}/accept", s.handleAccept)
 	mux.HandleFunc("POST /api/tasks/{id}/ship", s.handleShip)
 	mux.HandleFunc("POST /api/tasks/{id}/pr", s.handlePR)
+	mux.HandleFunc("POST /api/tasks/{id}/finish", s.handleFinish)
+	mux.HandleFunc("POST /api/tasks/{id}/cancel", s.handleCancel)
 	mux.HandleFunc("POST /api/tasks/{id}/reopen", s.handleReopen)
 	mux.HandleFunc("POST /api/tasks/{id}/read", s.handleRead)
 	mux.HandleFunc("GET /api/tasks/{id}/diff", s.handleDiff)
@@ -210,6 +213,26 @@ func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 	state := s.store.Snapshot()
 	state.Workspace = s.workspaceStatus()
 	writeJSON(w, http.StatusOK, state)
+}
+
+// --- Réglages globaux ---
+
+func (s *Server) handleUpdateSettings(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		DisplayName *string `json:"displayName"`
+		Lang        *string `json:"lang"`
+	}
+	if err := decodeJSON(r, &body); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	settings, err := s.store.UpdateSettings(body.DisplayName, body.Lang)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	s.runner.publishSettings(settings)
+	writeJSON(w, http.StatusOK, settings)
 }
 
 // --- Espace de travail (synchronisation git de dataDir) ---
@@ -426,9 +449,11 @@ func (s *Server) handleDeleteAgent(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleCreateProject(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		Name  string `json:"name"`
-		Path  string `json:"path"`
-		Repos []Repo `json:"repos"`
+		Name          string `json:"name"`
+		Path          string `json:"path"`
+		Repos         []Repo `json:"repos"`
+		Description   string `json:"description"`
+		ContextPrompt string `json:"contextPrompt"`
 	}
 	if err := decodeJSON(r, &body); err != nil || body.Name == "" {
 		writeError(w, http.StatusBadRequest, "name is required")
@@ -449,7 +474,7 @@ func (s *Server) handleCreateProject(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	project, err := s.store.AddProject(body.Name, normalized)
+	project, err := s.store.AddProject(body.Name, body.Description, body.ContextPrompt, normalized)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to create project")
 		return
@@ -460,9 +485,11 @@ func (s *Server) handleCreateProject(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleUpdateProject(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	var body struct {
-		Name     *string `json:"name"`
-		CheckCmd *string `json:"checkCmd"`
-		Repos    *[]Repo `json:"repos"`
+		Name          *string `json:"name"`
+		Description   *string `json:"description"`
+		CheckCmd      *string `json:"checkCmd"`
+		ContextPrompt *string `json:"contextPrompt"`
+		Repos         *[]Repo `json:"repos"`
 	}
 	if err := decodeJSON(r, &body); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid request body")
@@ -482,7 +509,7 @@ func (s *Server) handleUpdateProject(w http.ResponseWriter, r *http.Request) {
 		}
 		body.Repos = &normalized
 	}
-	project, err := s.store.UpdateProject(id, body.Name, body.CheckCmd, body.Repos)
+	project, err := s.store.UpdateProject(id, body.Name, body.Description, body.CheckCmd, body.ContextPrompt, body.Repos)
 	if err != nil {
 		writeError(w, statusForStoreError(err), err.Error())
 		return
@@ -725,20 +752,37 @@ func (s *Server) handlePR(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, PRResponse{URL: url})
 }
 
+// handleFinish marque une tâche "done" (autorisé depuis review/ready/shipped).
+func (s *Server) handleFinish(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	task, err := s.store.FinishTask(id)
+	if err != nil {
+		writeError(w, statusForStoreError(err), err.Error())
+		return
+	}
+	s.runner.publishTask(task)
+	s.runner.publishCards(task.ProjectID)
+	writeJSON(w, http.StatusOK, task)
+}
+
+// handleCancel annule une tâche (autorisé depuis running/review/ready) ;
+// si elle est en cours d'exécution, l'agent est interrompu au préalable.
+func (s *Server) handleCancel(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	task, err := s.runner.Cancel(id)
+	if err != nil {
+		writeError(w, statusForStoreError(err), err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, task)
+}
+
+// handleReopen remet une tâche en revue (autorisé depuis shipped/done/cancelled).
 func (s *Server) handleReopen(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	task, ok := s.store.GetTask(id)
-	if !ok {
-		writeError(w, http.StatusNotFound, "task not found")
-		return
-	}
-	if task.Status != "shipped" {
-		writeError(w, http.StatusBadRequest, "only a shipped task can be reopened")
-		return
-	}
-	task, err := s.store.UpdateTask(id, func(t *Task) { t.Status = "review" })
+	task, err := s.store.ReopenTask(id)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		writeError(w, statusForStoreError(err), err.Error())
 		return
 	}
 	s.runner.publishTask(task)

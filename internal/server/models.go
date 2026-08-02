@@ -19,15 +19,20 @@ type Repo struct {
 
 // Project est suivi par Sillage et peut regrouper plusieurs dépôts git (Repos).
 type Project struct {
-	ID     string `json:"id"`
-	Name   string `json:"name"`
-	Repos  []Repo `json:"repos"`
-	Unread int    `json:"unread"`
-	Tokens Tokens `json:"tokens"`
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Description string `json:"description"` // une phrase, affichée sous le nom
+	Repos       []Repo `json:"repos"`
+	Unread      int    `json:"unread"`
+	Tokens      Tokens `json:"tokens"`
 
 	// CheckCmd est la commande de vérification lancée après chaque tâche
 	// (ex : "go build ./..."). Exposée et modifiable via PATCH /api/projects/{id}.
 	CheckCmd string `json:"checkCmd"`
+
+	// ContextPrompt est un texte libre transmis aux agents (voir runner.go :
+	// ajouté au system prompt claude, préfixe du prompt codex, ignoré par fake).
+	ContextPrompt string `json:"contextPrompt"`
 }
 
 // Card est une colonne du kanban d'un projet.
@@ -73,7 +78,7 @@ type Task struct {
 	AgentID       string    `json:"agentId"`
 	RepoName      string    `json:"repoName"` // dépôt du projet utilisé pour le worktree
 	Branch        string    `json:"branch"`
-	Status        string    `json:"status"` // running|review|ready|shipped
+	Status        string    `json:"status"` // running|review|ready|shipped|done|cancelled
 	MessagesCount int       `json:"messagesCount"`
 	FilesCount    int       `json:"filesCount"`
 	DocsCount     int       `json:"docsCount"`
@@ -91,8 +96,9 @@ type Task struct {
 }
 
 // Message est un message échangé dans le fil d'une tâche. AuthorName porte
-// le nom de l'agent pour author="agent" ; il reste vide pour author="user"
-// (mono-utilisateur : le frontend affiche alors "Vous"/"You").
+// le nom de l'agent pour author="agent" ; pour author="user", c'est le
+// displayName des Settings (vide si non renseigné, le frontend affiche alors
+// "Vous"/"You").
 type Message struct {
 	ID         string    `json:"id"`
 	TaskID     string    `json:"taskId"`
@@ -128,6 +134,12 @@ type SyncResponse struct {
 	LastSyncAt time.Time `json:"lastSyncAt"`
 }
 
+// Settings sont les préférences globales persistées de l'utilisateur.
+type Settings struct {
+	DisplayName string `json:"displayName"`
+	Lang        string `json:"lang"` // ""|"fr"|"en"
+}
+
 // State est la réponse de GET /api/state.
 type State struct {
 	Projects  []Project       `json:"projects"`
@@ -135,6 +147,7 @@ type State struct {
 	Tasks     []Task          `json:"tasks"`
 	Agents    []Agent         `json:"agents"`
 	Workspace WorkspaceStatus `json:"workspace"`
+	Settings  Settings        `json:"settings"`
 	Tokens    struct {
 		Global Tokens `json:"global"`
 	} `json:"tokens"`

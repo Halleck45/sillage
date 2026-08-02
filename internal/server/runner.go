@@ -54,6 +54,7 @@ func (r *Runner) publishProject(p Project) { r.hub.Publish(Event{Name: "project"
 func (r *Runner) publishWorkspace(w WorkspaceStatus) {
 	r.hub.Publish(Event{Name: "workspace", Data: w})
 }
+func (r *Runner) publishSettings(s Settings) { r.hub.Publish(Event{Name: "settings", Data: s}) }
 func (r *Runner) publishActivity(taskID string, line *string) {
 	r.hub.Publish(Event{Name: "activity", Data: map[string]any{"taskId": taskID, "line": line}})
 }
@@ -61,8 +62,9 @@ func (r *Runner) publishActivity(taskID string, line *string) {
 // Start lance (ou relance) l'agent d'une tâche. initial=true correspond au
 // lancement initial (text = titre + description, aucun Message ajouté) ;
 // initial=false correspond à un nouveau message utilisateur (text = son
-// contenu, ajouté comme Message puis transmis à l'agent). Mono-utilisateur :
-// l'AuthorName du message utilisateur reste vide (le frontend affiche "Vous"/"You").
+// contenu, ajouté comme Message puis transmis à l'agent). L'AuthorName du
+// message utilisateur est le displayName des Settings (vide si non renseigné,
+// le frontend affiche alors "Vous"/"You").
 func (r *Runner) Start(taskID string, initial bool, text string) error {
 	r.mu.Lock()
 	if _, exists := r.procs[taskID]; exists {
@@ -88,7 +90,8 @@ func (r *Runner) Start(taskID string, initial bool, text string) error {
 	r.publishAgents()
 
 	if !initial {
-		msg, updated, err := r.store.AddMessage(taskID, "user", "", text)
+		authorName := r.store.GetSettings().DisplayName
+		msg, updated, err := r.store.AddMessage(taskID, "user", authorName, text)
 		if err != nil {
 			return err
 		}
@@ -130,6 +133,41 @@ func (r *Runner) Interrupt(taskID string) (Task, error) {
 	return task, nil
 }
 
+// Cancel annule une tâche (autorisé depuis running/review/ready, voir
+// Store.CancelTask). Si elle est en cours d'exécution, l'agent est interrompu
+// au préalable (même mécanique qu'Interrupt) avant de passer au statut final
+// "cancelled" (et non "review").
+func (r *Runner) Cancel(taskID string) (Task, error) {
+	task, ok := r.store.GetTask(taskID)
+	if !ok {
+		return Task{}, fmt.Errorf("task not found")
+	}
+
+	var handle *procHandle
+	if task.Status == "running" {
+		r.mu.Lock()
+		h, hasProc := r.procs[taskID]
+		r.mu.Unlock()
+		if hasProc {
+			h.interrupted.Store(true)
+			handle = h
+		}
+	}
+
+	updated, err := r.store.CancelTask(taskID)
+	if err != nil {
+		return Task{}, err
+	}
+	r.publishTask(updated)
+	r.publishCards(updated.ProjectID)
+	r.publishAgents()
+
+	if handle != nil {
+		go killProcessGroup(handle)
+	}
+	return updated, nil
+}
+
 func killProcessGroup(handle *procHandle) {
 	if handle.cmd != nil && handle.cmd.Process != nil {
 		pid := handle.cmd.Process.Pid
@@ -156,12 +194,14 @@ func (r *Runner) run(task Task, agent Agent, handle *procHandle, cliInput string
 		close(handle.done)
 	}()
 
+	project, _ := r.store.GetProject(task.ProjectID)
+
 	var runErr error
 	switch agent.Cli {
 	case "claude":
-		runErr = r.runClaude(&task, agent, handle, cliInput)
+		runErr = r.runClaude(&task, agent, project, handle, cliInput)
 	case "codex":
-		runErr = r.runCodex(&task, agent, handle, cliInput)
+		runErr = r.runCodex(&task, agent, project, handle, cliInput)
 	case "fake":
 		runErr = r.runFake(&task, agent, handle)
 	default:
@@ -259,6 +299,20 @@ func truncate(s string, n int) string {
 	return s[:n-3] + "..."
 }
 
+// buildSystemPrompt combine le contexte de l'agent et celui du projet pour
+// --append-system-prompt (adaptateur claude) : contexte agent, puis ligne
+// vide, puis "Project context:\n<projectContext>" si projectContext est non
+// vide. Retourne une chaîne vide si les deux le sont (pas de flag ajouté).
+func buildSystemPrompt(agentContext, projectContext string) string {
+	if projectContext == "" {
+		return agentContext
+	}
+	if agentContext == "" {
+		return "Project context:\n" + projectContext
+	}
+	return agentContext + "\n\nProject context:\n" + projectContext
+}
+
 // summarizeToolUse construit la ligne d'activité affichée pour un tool_use claude.
 func summarizeToolUse(name string, input map[string]any) string {
 	for _, key := range []string{"file_path", "path", "command", "pattern", "query", "url"} {
@@ -297,7 +351,7 @@ type claudeEnvelope struct {
 	IsError bool `json:"is_error"`
 }
 
-func (r *Runner) runClaude(task *Task, agent Agent, handle *procHandle, cliInput string) error {
+func (r *Runner) runClaude(task *Task, agent Agent, project Project, handle *procHandle, cliInput string) error {
 	args := []string{
 		"-p", "--output-format", "stream-json", "--verbose",
 		"--permission-mode", "acceptEdits",
@@ -306,8 +360,8 @@ func (r *Runner) runClaude(task *Task, agent Agent, handle *procHandle, cliInput
 	if agent.Model != "" {
 		args = append(args, "--model", agent.Model)
 	}
-	if agent.ContextPrompt != "" {
-		args = append(args, "--append-system-prompt", agent.ContextPrompt)
+	if systemPrompt := buildSystemPrompt(agent.ContextPrompt, project.ContextPrompt); systemPrompt != "" {
+		args = append(args, "--append-system-prompt", systemPrompt)
 	}
 	if task.SessionID != "" {
 		args = append(args, "--resume", task.SessionID)
@@ -421,7 +475,7 @@ func (r *Runner) runClaude(task *Task, agent Agent, handle *procHandle, cliInput
 
 // --- Adaptateur codex (best-effort) ---
 
-func (r *Runner) runCodex(task *Task, agent Agent, handle *procHandle, cliInput string) error {
+func (r *Runner) runCodex(task *Task, agent Agent, project Project, handle *procHandle, cliInput string) error {
 	// workspace-write : écriture limitée au worktree, réseau coupé ; le push
 	// reste impossible et ne passe que par Ship (git.go) après validation humaine.
 	// SILLAGE_CODEX_SANDBOX permet de choisir un autre mode (ex : danger-full-access
@@ -430,6 +484,9 @@ func (r *Runner) runCodex(task *Task, agent Agent, handle *procHandle, cliInput 
 	sandbox := os.Getenv("SILLAGE_CODEX_SANDBOX")
 	if sandbox == "" {
 		sandbox = "workspace-write"
+	}
+	if project.ContextPrompt != "" {
+		cliInput = "Project context:\n" + project.ContextPrompt + "\n\n---\n\n" + cliInput
 	}
 	args := []string{"exec", "--json", "--sandbox", sandbox, "-C", task.WorktreeDir}
 	if agent.Model != "" {

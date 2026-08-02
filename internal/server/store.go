@@ -27,6 +27,7 @@ type Store struct {
 	Messages  map[string][]Message
 	Agents    map[string]Agent
 	Workspace Workspace
+	Settings  Settings
 
 	NextProjectN int
 	NextCardN    int
@@ -129,6 +130,7 @@ func (s *Store) ReloadFromDisk() error {
 	s.Messages = fresh.Messages
 	s.Agents = fresh.Agents
 	s.Workspace = fresh.Workspace
+	s.Settings = fresh.Settings
 	s.NextProjectN = fresh.NextProjectN
 	s.NextCardN = fresh.NextCardN
 	s.NextTaskN = fresh.NextTaskN
@@ -238,8 +240,14 @@ func idNum(id string) int {
 	return n
 }
 
-// recomputeCard recalcule les compteurs dérivés d'une carte à partir des tâches.
-// Doit être appelée avec le verrou tenu.
+// recomputeCard recalcule les compteurs dérivés d'une carte à partir des
+// tâches, et déplace automatiquement la carte entre "doing" et "done" :
+// si la carte a au moins une tâche et qu'elles sont toutes terminales
+// (shipped/done/cancelled), la carte passe (ou reste) en "done" ; si une
+// tâche redevient active (reopen, nouvelle tâche) alors que la carte est en
+// "done", elle repasse en "doing". Les tâches "cancelled" sont exclues de
+// tasksTotal/tasksDone/progress mais comptent comme terminales pour ce
+// déplacement automatique. Doit être appelée avec le verrou tenu.
 func (s *Store) recomputeCard(cardID string) {
 	c, ok := s.Cards[cardID]
 	if !ok {
@@ -247,22 +255,33 @@ func (s *Store) recomputeCard(cardID string) {
 	}
 	var total, done, review, docs, msgs int
 	var live *string
+	hasTasks := false
+	allTerminal := true
 	for _, t := range s.Tasks {
 		if t.CardID != cardID {
 			continue
 		}
-		total++
-		switch t.Status {
-		case "shipped":
-			done++
-		case "review":
-			review++
-		}
+		hasTasks = true
 		docs += t.DocsCount
 		msgs += t.MessagesCount
 		if live == nil && t.Status == "running" && t.LiveActivity != nil {
 			v := *t.LiveActivity
 			live = &v
+		}
+
+		terminal := t.Status == "shipped" || t.Status == "done" || t.Status == "cancelled"
+		if !terminal {
+			allTerminal = false
+		}
+		if t.Status == "cancelled" {
+			continue // exclue de tasksTotal/tasksDone/progress
+		}
+		total++
+		switch t.Status {
+		case "shipped", "done":
+			done++
+		case "review":
+			review++
 		}
 	}
 	progress := 0
@@ -272,6 +291,14 @@ func (s *Store) recomputeCard(cardID string) {
 	c.TasksTotal, c.TasksDone, c.ReviewCount = total, done, review
 	c.DocsCount, c.MessagesCount, c.Progress = docs, msgs, progress
 	c.LiveActivity = live
+
+	if hasTasks {
+		if allTerminal {
+			c.Column = "done"
+		} else if c.Column == "done" {
+			c.Column = "doing"
+		}
+	}
 	s.Cards[cardID] = c
 }
 
@@ -383,6 +410,7 @@ func (s *Store) Snapshot() State {
 		Cards:    sortedCards(s.Cards),
 		Tasks:    sortedTasks(s.Tasks),
 		Agents:   sortedAgents(s.Agents),
+		Settings: s.Settings,
 	}
 	st.Tokens.Global = global
 	return st
@@ -489,6 +517,35 @@ func (s *Store) UpdateWorkspace(fn func(w *Workspace)) (Workspace, error) {
 	return s.Workspace, nil
 }
 
+var validLang = map[string]bool{"": true, "fr": true, "en": true}
+
+// GetSettings retourne les préférences globales persistées.
+func (s *Store) GetSettings() Settings {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.Settings
+}
+
+// UpdateSettings met à jour displayName et/ou lang (champs nil non modifiés).
+// lang doit être "", "fr" ou "en".
+func (s *Store) UpdateSettings(displayName, lang *string) (Settings, error) {
+	if lang != nil && !validLang[*lang] {
+		return Settings{}, fmt.Errorf("invalid lang: must be fr, en or empty")
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if displayName != nil {
+		s.Settings.DisplayName = *displayName
+	}
+	if lang != nil {
+		s.Settings.Lang = *lang
+	}
+	if err := s.save(); err != nil {
+		return Settings{}, err
+	}
+	return s.Settings, nil
+}
+
 // NormalizeRepos valide et normalise une liste de dépôts : au moins un repo,
 // chemins et noms non vides, noms uniques (défaut : basename du chemin).
 // Ne vérifie PAS que le chemin existe ni qu'il s'agit d'un dépôt git : cette
@@ -534,7 +591,8 @@ func ValidateRepoPath(path string) error {
 }
 
 // AddProject crée un projet avec un ou plusieurs dépôts git (repos).
-func (s *Store) AddProject(name string, repos []Repo) (Project, error) {
+// description et contextPrompt peuvent être vides.
+func (s *Store) AddProject(name, description, contextPrompt string, repos []Repo) (Project, error) {
 	normalized, err := NormalizeRepos(repos)
 	if err != nil {
 		return Project{}, err
@@ -542,7 +600,10 @@ func (s *Store) AddProject(name string, repos []Repo) (Project, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.NextProjectN++
-	p := Project{ID: fmt.Sprintf("p%d", s.NextProjectN), Name: name, Repos: normalized}
+	p := Project{
+		ID: fmt.Sprintf("p%d", s.NextProjectN), Name: name, Description: description,
+		ContextPrompt: contextPrompt, Repos: normalized,
+	}
 	s.Projects[p.ID] = p
 	if err := s.save(); err != nil {
 		return Project{}, err
@@ -550,12 +611,13 @@ func (s *Store) AddProject(name string, repos []Repo) (Project, error) {
 	return p, nil
 }
 
-// UpdateProject modifie le nom, la commande de vérification et/ou la liste
-// des dépôts d'un projet. Les champs nil ne sont pas modifiés ; repos, s'il
-// est fourni (même vide), remplace entièrement la liste existante (mêmes
-// validations que AddProject). Retirer un repo ne casse pas les tâches
-// existantes : leur worktree déjà créé vit sa vie indépendamment.
-func (s *Store) UpdateProject(id string, name, checkCmd *string, repos *[]Repo) (Project, error) {
+// UpdateProject modifie le nom, la description, la commande de vérification,
+// le contexte agent et/ou la liste des dépôts d'un projet. Les champs nil ne
+// sont pas modifiés ; repos, s'il est fourni (même vide), remplace entièrement
+// la liste existante (mêmes validations que AddProject). Retirer un repo ne
+// casse pas les tâches existantes : leur worktree déjà créé vit sa vie
+// indépendamment.
+func (s *Store) UpdateProject(id string, name, description, checkCmd, contextPrompt *string, repos *[]Repo) (Project, error) {
 	var normalized []Repo
 	if repos != nil {
 		var err error
@@ -576,8 +638,14 @@ func (s *Store) UpdateProject(id string, name, checkCmd *string, repos *[]Repo) 
 		}
 		p.Name = *name
 	}
+	if description != nil {
+		p.Description = *description
+	}
 	if checkCmd != nil {
 		p.CheckCmd = *checkCmd
+	}
+	if contextPrompt != nil {
+		p.ContextPrompt = *contextPrompt
 	}
 	if repos != nil {
 		p.Repos = normalized
@@ -628,8 +696,8 @@ func (s *Store) AddCard(projectID, title, column string) (Card, error) {
 	if column == "" {
 		column = "soon"
 	}
-	if !validColumns[column] {
-		return Card{}, fmt.Errorf("invalid column")
+	if column != "soon" {
+		return Card{}, fmt.Errorf("cards are created in the soon column")
 	}
 	s.NextCardN++
 	c := Card{ID: fmt.Sprintf("c%d", s.NextCardN), ProjectID: projectID, Column: column, Title: title}
@@ -708,6 +776,55 @@ func (s *Store) UpdateTask(id string, fn func(t *Task)) (Task, error) {
 		return Task{}, err
 	}
 	return s.Tasks[id], nil
+}
+
+// FinishTask marque une tâche "done". Autorisé depuis review/ready/shipped ;
+// message dédié depuis "running" (l'agent tourne encore).
+func (s *Store) FinishTask(id string) (Task, error) {
+	t, ok := s.GetTask(id)
+	if !ok {
+		return Task{}, fmt.Errorf("task not found")
+	}
+	switch t.Status {
+	case "review", "ready", "shipped":
+	case "running":
+		return Task{}, fmt.Errorf("task must be reviewed before finishing")
+	default:
+		return Task{}, fmt.Errorf("task cannot be finished from its current status")
+	}
+	return s.UpdateTask(id, func(t *Task) { t.Status = "done" })
+}
+
+// CancelTask marque une tâche "cancelled". Autorisé depuis running/review/ready.
+// N'interrompt PAS l'agent : c'est la responsabilité de l'appelant pour une
+// tâche "running" (voir Runner.Cancel, qui interrompt le process puis appelle
+// CancelTask).
+func (s *Store) CancelTask(id string) (Task, error) {
+	t, ok := s.GetTask(id)
+	if !ok {
+		return Task{}, fmt.Errorf("task not found")
+	}
+	switch t.Status {
+	case "running", "review", "ready":
+	default:
+		return Task{}, fmt.Errorf("task cannot be cancelled from its current status")
+	}
+	return s.UpdateTask(id, func(t *Task) { t.Status = "cancelled" })
+}
+
+// ReopenTask remet une tâche en revue ("review"). Autorisé depuis
+// shipped/done/cancelled.
+func (s *Store) ReopenTask(id string) (Task, error) {
+	t, ok := s.GetTask(id)
+	if !ok {
+		return Task{}, fmt.Errorf("task not found")
+	}
+	switch t.Status {
+	case "shipped", "done", "cancelled":
+	default:
+		return Task{}, fmt.Errorf("only a shipped, done or cancelled task can be reopened")
+	}
+	return s.UpdateTask(id, func(t *Task) { t.Status = "review" })
 }
 
 // AddMessage ajoute un message au fil d'une tâche et retourne le message et la tâche mises à jour.

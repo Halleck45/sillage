@@ -39,11 +39,9 @@
       'allProjects.cardCount.one': '{n} carte',
       'allProjects.cardCount.other': '{n} cartes',
       'inbox.empty': 'Boîte de réception vide. Tout est à jour !',
-      'kanban.stats.doing': 'en cours',
-      'kanban.stats.review': 'à relire',
-      'kanban.stats.tasks': 'tâches',
       'kanban.addCard': '+ Ajouter',
-      'kanban.empty': 'Aucune carte pour l\'instant. Utilisez « + Ajouter » dans une colonne pour commencer.',
+      'kanban.empty': 'Aucune carte pour l\'instant.',
+      'kanban.emptyAction': 'Créer la première carte',
       'kanban.card.tasksLabel': 'tâches',
       'kanban.card.reviewCount': '{n} à relire',
       'column.soon': 'Bientôt',
@@ -61,15 +59,23 @@
       'project.errorNameRequired': 'Le nom est requis.',
       'project.errorReposRequired': 'Au moins un dépôt est requis.',
       'project.errorSaveFailed': 'Erreur lors de l\'enregistrement.',
+      'project.description': 'Description',
+      'project.descriptionPlaceholder': 'Une phrase pour situer le projet',
+      'project.contextPrompt': 'Contexte pour les agents',
+      'project.contextPromptPlaceholder': 'Conventions, architecture, contraintes à connaître…',
       'work.emptyCard': 'Aucune tâche pour l\'instant.',
+      'work.emptyCardAction': 'Créer la première tâche',
+      'work.emptyFiltered': 'Aucune tâche ne correspond à ce filtre.',
       'filter.all': 'Toutes {n}',
       'filter.review': 'À relire {n}',
       'filter.ready': 'Prêt à livrer {n}',
-      'filter.shipped': 'Livré {n}',
+      'filter.finished': 'Terminées {n}',
       'badge.new': 'NOUVEAU',
       'workflow.step.review': 'À relire',
       'workflow.step.accepted': 'Accepté',
       'workflow.step.shipped': 'Livré',
+      'workflow.doneBanner': 'Tâche terminée',
+      'workflow.cancelledBanner': 'Tâche annulée',
       'action.interrupt': 'Interrompre l\'agent',
       'action.accept': 'Accepter le diff et les livrables',
       'action.ship': 'Pousser et livrer',
@@ -77,6 +83,9 @@
       'action.reopen': 'Rouvrir la tâche',
       'action.pr': 'Ouvrir la PR',
       'action.prConfirm': 'Confirmer la PR ?',
+      'action.finish': 'Marquer comme terminé',
+      'action.cancelTask': 'Annuler la tâche',
+      'action.cancelTaskConfirm': 'Confirmer l\'annulation ?',
       'tabs.conversation': 'Conversation',
       'tabs.diff': 'Diff',
       'tabs.deliverables': 'Livrables',
@@ -97,6 +106,7 @@
       'newTask.promptPlaceholder': 'Description ou instructions détaillées (optionnel)',
       'newTask.agentLabel': 'Agent',
       'newTask.repoLabel': 'Dépôt',
+      'newTask.projectContextNote': '+ contexte du projet',
       'newTask.hint': 'La conversation s\'ouvre après la création',
       'newTask.submit': 'Créer et discuter',
       'newTask.errorTitleRequired': 'Le titre est requis.',
@@ -111,7 +121,6 @@
       'newCard.title': 'Nouvelle carte',
       'newCard.titleLabel': 'Titre',
       'newCard.titlePlaceholder': 'Titre de la carte',
-      'newCard.columnLabel': 'Colonne',
       'newCard.errorTitleRequired': 'Le titre est requis.',
       'newCard.errorCreateFailed': 'Erreur lors de la création de la carte.',
       'agent.newTitle': 'Nouvel agent',
@@ -144,6 +153,8 @@
       'errors.genericFailed': 'Échec.',
       'errors.shipFailed': 'Échec du push.',
       'errors.prFailed': 'Échec de l\'ouverture de la PR.',
+      'errors.finishFailed': 'Échec.',
+      'errors.cancelFailed': 'Échec de l\'annulation.',
       'onboarding.title': 'Bienvenue dans Sillage',
       'onboarding.intro': 'Choisissez comment sauvegarder votre espace de travail.',
       'onboarding.local.title': 'Travailler en local',
@@ -175,7 +186,11 @@
       'workspace.syncedJustNow': 'Synchronisé il y a un instant',
       'workspace.errorSaveFailed': 'Échec de l\'enregistrement du remote.',
       'workspace.errorActivateFailed': 'Échec de l\'activation.',
-      'workspace.errorSyncFailed': 'Échec de la synchronisation.'
+      'workspace.errorSyncFailed': 'Échec de la synchronisation.',
+      'preferences.title': 'Préférences',
+      'preferences.displayNamePlaceholder': 'Prénom',
+      'preferences.langLabel': 'Langue',
+      'preferences.errorSaveFailed': 'Échec de l\'enregistrement.'
     },
     en: {
       'nav.inbox': 'Inbox',
@@ -208,11 +223,9 @@
       'allProjects.cardCount.one': '{n} card',
       'allProjects.cardCount.other': '{n} cards',
       'inbox.empty': 'Inbox is empty. All caught up!',
-      'kanban.stats.doing': 'in progress',
-      'kanban.stats.review': 'to review',
-      'kanban.stats.tasks': 'tasks',
       'kanban.addCard': '+ Add',
-      'kanban.empty': 'No cards yet. Use "+ Add" in a column to get started.',
+      'kanban.empty': 'No cards yet.',
+      'kanban.emptyAction': 'Create the first card',
       'kanban.card.tasksLabel': 'tasks',
       'kanban.card.reviewCount': '{n} to review',
       'column.soon': 'Soon',
@@ -230,15 +243,23 @@
       'project.errorNameRequired': 'Name is required.',
       'project.errorReposRequired': 'At least one repository is required.',
       'project.errorSaveFailed': 'Failed to save.',
+      'project.description': 'Description',
+      'project.descriptionPlaceholder': 'A sentence describing the project',
+      'project.contextPrompt': 'Context for agents',
+      'project.contextPromptPlaceholder': 'Conventions, architecture, constraints to know…',
       'work.emptyCard': 'No tasks yet.',
+      'work.emptyCardAction': 'Create the first task',
+      'work.emptyFiltered': 'No tasks match this filter.',
       'filter.all': 'All {n}',
       'filter.review': 'To review {n}',
       'filter.ready': 'Ready to ship {n}',
-      'filter.shipped': 'Shipped {n}',
+      'filter.finished': 'Completed {n}',
       'badge.new': 'NEW',
       'workflow.step.review': 'To review',
       'workflow.step.accepted': 'Accepted',
       'workflow.step.shipped': 'Shipped',
+      'workflow.doneBanner': 'Task completed',
+      'workflow.cancelledBanner': 'Task cancelled',
       'action.interrupt': 'Stop the agent',
       'action.accept': 'Accept the diff and deliverables',
       'action.ship': 'Push and ship',
@@ -246,6 +267,9 @@
       'action.reopen': 'Reopen the task',
       'action.pr': 'Open the PR',
       'action.prConfirm': 'Confirm PR?',
+      'action.finish': 'Mark as completed',
+      'action.cancelTask': 'Cancel the task',
+      'action.cancelTaskConfirm': 'Confirm cancellation?',
       'tabs.conversation': 'Conversation',
       'tabs.diff': 'Diff',
       'tabs.deliverables': 'Deliverables',
@@ -266,6 +290,7 @@
       'newTask.promptPlaceholder': 'Description or detailed instructions (optional)',
       'newTask.agentLabel': 'Agent',
       'newTask.repoLabel': 'Repository',
+      'newTask.projectContextNote': '+ project context',
       'newTask.hint': 'The conversation opens after creation',
       'newTask.submit': 'Create and chat',
       'newTask.errorTitleRequired': 'A title is required.',
@@ -280,7 +305,6 @@
       'newCard.title': 'New card',
       'newCard.titleLabel': 'Title',
       'newCard.titlePlaceholder': 'Card title',
-      'newCard.columnLabel': 'Column',
       'newCard.errorTitleRequired': 'A title is required.',
       'newCard.errorCreateFailed': 'Failed to create the card.',
       'agent.newTitle': 'New agent',
@@ -313,6 +337,8 @@
       'errors.genericFailed': 'Failed.',
       'errors.shipFailed': 'Failed to push.',
       'errors.prFailed': 'Failed to open the PR.',
+      'errors.finishFailed': 'Failed.',
+      'errors.cancelFailed': 'Failed to cancel.',
       'onboarding.title': 'Welcome to Sillage',
       'onboarding.intro': 'Choose how to back up your workspace.',
       'onboarding.local.title': 'Work locally',
@@ -344,7 +370,11 @@
       'workspace.syncedJustNow': 'Synced just now',
       'workspace.errorSaveFailed': 'Failed to save the remote.',
       'workspace.errorActivateFailed': 'Failed to activate.',
-      'workspace.errorSyncFailed': 'Failed to sync.'
+      'workspace.errorSyncFailed': 'Failed to sync.',
+      'preferences.title': 'Preferences',
+      'preferences.displayNamePlaceholder': 'First name',
+      'preferences.langLabel': 'Language',
+      'preferences.errorSaveFailed': 'Failed to save.'
     }
   };
 
@@ -382,7 +412,9 @@
     running: { icon: '◐', color: '#8b8982' },
     review: { icon: '◍', color: '#9a6b0d' },
     ready: { icon: '⬆', color: '#2f5fb0' },
-    shipped: { icon: '✓', color: '#2f7d54' }
+    shipped: { icon: '✓', color: '#2f7d54' },
+    done: { icon: '✓', color: '#2f7d54' },
+    cancelled: { icon: '⊘', color: '#8b8982' }
   };
   var COLUMN_ORDER = ['soon', 'doing', 'done'];
   function columnLabel(key) { return t('column.' + key); }
@@ -394,6 +426,7 @@
   var state = {
     lang: detectInitialLang(),
     workspace: null,
+    settings: { displayName: '', lang: '' },
     projects: [], cards: [], tasks: [], agents: [],
     projectsById: {}, cardsById: {}, tasksById: {}, agentsById: {},
     tokens: { global: { input: 0, output: 0, costUsd: 0 } },
@@ -410,7 +443,6 @@
   };
 
   var modalAgentId = null;
-  var modalColumn = 'soon';
   var modalRepos = []; // [{name, path}] pour la modale projet (création/édition)
   var modalRepoCreateMode = true;
   var onboardingExpanded = null;
@@ -575,6 +607,11 @@
     state.agents = data.agents || [];
     state.tokens = data.tokens || { global: { input: 0, output: 0, costUsd: 0 } };
     state.workspace = data.workspace || state.workspace || null;
+    state.settings = data.settings || state.settings || { displayName: '', lang: '' };
+    if (state.settings.lang) {
+      state.lang = state.settings.lang;
+      try { localStorage.setItem('sillage.lang', state.lang); } catch (e) {}
+    }
     reindex();
   }
 
@@ -644,6 +681,7 @@
       else if (kind === 'pr') doPr(id);
       else if (kind === 'agent-delete') doDeleteAgent(id);
       else if (kind === 'workspace-sync') doWorkspaceSync();
+      else if (kind === 'task-cancel') doCancelTask(id);
     });
   }
 
@@ -661,50 +699,129 @@
   function toggleSidebarDrawer() { state.sidebarOpen = !state.sidebarOpen; syncSidebarDrawer(); }
 
   // ---------------------------------------------------------------------
-  // Navigation
+  // Routage par hash
+  // ---------------------------------------------------------------------
+  //
+  // Formats supportés : #/inbox, #/projects, #/p/{projectId},
+  // #/p/{projectId}/c/{cardId}, #/p/{projectId}/c/{cardId}/t/{taskId}
+  // (+ ?tab=diff|deliverables optionnel). Le hash est la seule source de
+  // vérité pour l'écran affiché ; toute navigation interne appelle
+  // navigateTo(), qui met à jour location.hash ; l'écouteur hashchange
+  // (et le premier appel après /api/state au boot) appliquent la route
+  // via applyRoute().
+
+  function parseHash(hash) {
+    hash = String(hash || '').replace(/^#/, '');
+    var query = '';
+    var qIndex = hash.indexOf('?');
+    if (qIndex !== -1) { query = hash.slice(qIndex + 1); hash = hash.slice(0, qIndex); }
+    var tab = null;
+    if (query) {
+      var m = query.match(/(?:^|&)tab=([^&]+)/);
+      if (m) tab = decodeURIComponent(m[1]);
+    }
+    var parts = hash.split('/').filter(function (p) { return p.length > 0; }).map(decodeURIComponent);
+    if (parts[0] === 'inbox') return { screen: 'inbox' };
+    if (parts[0] === 'projects') return { screen: 'projects' };
+    if (parts[0] === 'p' && parts[1]) {
+      var projectId = parts[1];
+      if (parts[2] === 'c' && parts[3]) {
+        var cardId = parts[3];
+        if (parts[4] === 't' && parts[5]) {
+          return { screen: 'work', projectId: projectId, cardId: cardId, taskId: parts[5], tab: tab };
+        }
+        return { screen: 'work', projectId: projectId, cardId: cardId };
+      }
+      return { screen: 'kanban', projectId: projectId };
+    }
+    return null;
+  }
+
+  function navigateTo(hash) {
+    if (location.hash === hash) { applyRoute(); return; }
+    location.hash = hash;
+  }
+
+  function applyRoute() {
+    var route = parseHash(location.hash);
+    if (!route) { location.hash = '#/projects'; return; }
+    if (route.projectId && !state.projectsById[route.projectId]) { location.hash = '#/projects'; return; }
+    if (route.cardId) {
+      var card = state.cardsById[route.cardId];
+      if (!card || card.projectId !== route.projectId) { location.hash = '#/projects'; return; }
+    }
+    if (route.taskId) {
+      var task = state.tasksById[route.taskId];
+      if (!task || task.cardId !== route.cardId) { location.hash = '#/projects'; return; }
+    }
+    var prevCardId = state.cardId;
+    var prevTaskId = state.taskId;
+    state.screen = route.screen;
+    state.projectId = route.projectId || null;
+    state.cardId = route.cardId || null;
+    state.taskId = route.taskId || null;
+    if (state.cardId !== prevCardId) state.taskFilter = 'all';
+    if (state.taskId) {
+      state.panelTab = route.tab === 'diff' ? 'diff' : (route.tab === 'deliverables' ? 'files' : 'chat');
+      if (state.taskId !== prevTaskId) {
+        var t = state.tasksById[state.taskId];
+        if (t) t.unread = false;
+        api('/api/tasks/' + state.taskId + '/read', { method: 'POST' }).catch(function () {});
+      }
+    }
+    closeSidebarDrawer();
+    render();
+  }
+
+  // ---------------------------------------------------------------------
+  // Navigation (construit le hash cible ; l'application de l'état se fait
+  // dans applyRoute(), déclenché par le hashchange que provoque navigateTo)
   // ---------------------------------------------------------------------
 
-  function goInbox() { closeSidebarDrawer(); state.screen = 'inbox'; state.projectId = null; state.cardId = null; state.taskId = null; render(); }
-  function goAllProjects() { closeSidebarDrawer(); state.screen = 'projects'; state.projectId = null; state.cardId = null; state.taskId = null; render(); }
-  function goProject(id) { closeSidebarDrawer(); state.screen = 'kanban'; state.projectId = id; state.cardId = null; state.taskId = null; render(); }
+  function goInbox() { closeSidebarDrawer(); navigateTo('#/inbox'); }
+  function goAllProjects() { closeSidebarDrawer(); navigateTo('#/projects'); }
+  function goProject(id) { closeSidebarDrawer(); navigateTo('#/p/' + encodeURIComponent(id)); }
   function goCard(id) {
     var c = state.cardsById[id];
     if (!c) return;
-    state.screen = 'work'; state.cardId = id; state.projectId = c.projectId; state.taskId = null; state.taskFilter = 'all';
-    render();
+    navigateTo('#/p/' + encodeURIComponent(c.projectId) + '/c/' + encodeURIComponent(id));
   }
   function goBack() { if (state.projectId) goProject(state.projectId); else goAllProjects(); }
-  function closePanel() { state.taskId = null; render(); }
+  function closePanel() {
+    if (state.cardId) navigateTo('#/p/' + encodeURIComponent(state.projectId) + '/c/' + encodeURIComponent(state.cardId));
+    else goInbox();
+  }
   function setFilter(f) { state.taskFilter = f; renderMain(); }
-  function setTab(t) { state.panelTab = t; renderMain(); }
+  function setTab(tabKey) {
+    if (!state.taskId) return;
+    var h = '#/p/' + encodeURIComponent(state.projectId) + '/c/' + encodeURIComponent(state.cardId) + '/t/' + encodeURIComponent(state.taskId);
+    if (tabKey === 'diff') h += '?tab=diff';
+    else if (tabKey === 'files') h += '?tab=deliverables';
+    navigateTo(h);
+  }
 
   function render() { renderSidebar(); renderMain(); }
 
   function setLang(lang) {
     if (lang !== 'fr' && lang !== 'en') return;
     state.lang = lang;
+    state.settings = state.settings || { displayName: '', lang: '' };
+    state.settings.lang = lang;
     try { localStorage.setItem('sillage.lang', lang); } catch (e) {}
-    closeModal();
+    api('/api/settings', { method: 'PATCH', body: { lang: lang } }).catch(function () {});
     closeSearch();
     applyStaticTranslations();
     render();
+    refreshWorkspaceModalBody();
   }
 
   function openTask(taskId) {
-    state.taskId = taskId;
-    state.panelTab = 'chat';
     var task = state.tasksById[taskId];
-    if (task) task.unread = false;
-    // Le chargement des messages est délégué à loadMessages(), appelé
-    // paresseusement par buildConversationHTML() au premier rendu de l'onglet.
-    render();
-    api('/api/tasks/' + taskId + '/read', { method: 'POST' }).catch(function () {});
+    if (!task) return;
+    navigateTo('#/p/' + encodeURIComponent(task.projectId) + '/c/' + encodeURIComponent(task.cardId) + '/t/' + encodeURIComponent(taskId));
   }
 
   function openTaskFromSearch(taskId) {
-    var task = state.tasksById[taskId];
-    if (!task) return;
-    goCard(task.cardId);
     openTask(taskId);
   }
 
@@ -764,7 +881,6 @@
       '<div class="sidebar-footer">' +
         '<span class="sidebar-tokens" id="sidebar-tokens">' + tokenSummary(state.tokens.global) + '</span>' +
         '<div class="sidebar-footer-actions">' +
-          buildLangSwitchHTML() +
           '<button class="icon-btn-sm" data-action="open-workspace-modal" title="' + escapeHtml(t('workspace.tooltip')) + '" aria-label="' + escapeHtml(t('workspace.tooltip')) + '">⚙</button>' +
           '<button class="logout-link" data-action="logout">' + escapeHtml(t('nav.logout')) + '</button>' +
         '</div>' +
@@ -869,40 +985,41 @@
   function buildKanbanHTML() {
     var project = state.projectsById[state.projectId];
     var cards = state.cards.filter(function (c) { return c.projectId === state.projectId; });
-    var doingCount = cards.filter(function (c) { return c.column === 'doing'; }).length;
-    var totalReview = cards.reduce(function (n, c) { return n + (c.reviewCount || 0); }, 0);
-    var totalTasks = cards.reduce(function (n, c) { return n + (c.tasksTotal || 0); }, 0);
     var tokenTxt = project ? tokenSummary(project.tokens) : '';
 
     var colsHTML = COLUMN_ORDER.map(function (key) {
       var label = columnLabel(key);
       var color = key === 'soon' ? '#d3d0c8' : (key === 'doing' ? '#2f7d54' : '#c3c0b8');
       var list = cards.filter(function (c) { return c.column === key; });
+      var addBtn = key === 'soon'
+        ? '<button class="add-card-btn" data-action="open-new-card">' + escapeHtml(t('kanban.addCard')) + '</button>'
+        : '';
       return '<section class="kanban-col">' +
         '<div class="col-head"><span class="col-dot" style="background:' + color + '"></span>' +
         '<span class="col-label">' + escapeHtml(label) + '</span><span class="col-count">' + list.length + '</span></div>' +
         list.map(function (c) { return buildKanbanCardHTML(c, key); }).join('') +
-        '<button class="add-card-btn" data-action="open-new-card" data-column="' + key + '">' + escapeHtml(t('kanban.addCard')) + '</button>' +
+        addBtn +
         '</section>';
     }).join('');
 
-    var head = '<div class="kanban-head"><div class="kanban-title-row"><h1>' + escapeHtml(project ? project.name : '') + '</h1>';
+    var head = '<div class="kanban-head"><div class="kanban-title-col">' +
+      '<div class="kanban-title-row"><h1>' + escapeHtml(project ? project.name : '') + '</h1>';
     if (project) {
       head += '<button class="icon-btn" data-action="open-edit-project" title="' + escapeHtml(t('project.editTooltip')) + '" aria-label="' + escapeHtml(t('project.editTooltip')) + '">✎</button>';
     }
     head += '</div>';
-    if (cards.length > 0) {
-      head += '<div class="kanban-stats">' +
-        '<span><b>' + doingCount + '</b> ' + escapeHtml(t('kanban.stats.doing')) + '</span>' +
-        '<span><b class="' + (totalReview ? 'amber' : '') + '">' + totalReview + '</b> ' + escapeHtml(t('kanban.stats.review')) + '</span>' +
-        '<span><b>' + totalTasks + '</b> ' + escapeHtml(t('kanban.stats.tasks')) + '</span>' +
-        '<span id="kanban-token-stat" class="token-stat">' + tokenTxt + '</span>' +
-        '</div>';
+    if (project && project.description) {
+      head += '<div class="kanban-description">' + escapeHtml(project.description) + '</div>';
     }
+    head += '</div>';
+    head += '<div class="kanban-stats"><span id="kanban-token-stat" class="token-stat">' + tokenTxt + '</span></div>';
     head += '</div>';
 
     var emptyNote = cards.length === 0
-      ? '<div class="empty-state">' + escapeHtml(t('kanban.empty')) + '</div>'
+      ? '<button class="empty-cta" data-action="open-new-card">' +
+          '<span class="empty-cta-title">' + escapeHtml(t('kanban.empty')) + '</span>' +
+          '<span class="empty-cta-sub">' + escapeHtml(t('kanban.emptyAction')) + '</span>' +
+        '</button>'
       : '';
 
     return buildHeaderHTML() + '<div class="view-body kanban-body">' + head + emptyNote +
@@ -927,10 +1044,11 @@
     }
     var liveLine = (t.status === 'running' && t.liveActivity)
       ? '<span class="live-line mono"><span class="live-dot"></span>' + escapeHtml(t.liveActivity) + '</span>' : '';
+    var titleClass = t.status === 'cancelled' ? 'task-title task-title-cancelled' : 'task-title';
     return '<div class="task-row ' + (selected ? 'selected' : '') + '" data-action="open-task" data-task-id="' + t.id + '">' +
       '<span class="task-glyph" style="color:' + glyph.color + '">' + glyph.icon + '</span>' +
       '<div class="task-main">' +
-        '<div class="task-title-line"><span class="task-title">' + escapeHtml(t.title) + '</span>' +
+        '<div class="task-title-line"><span class="' + titleClass + '">' + escapeHtml(t.title) + '</span>' +
         (isNew ? '<span class="badge-new">' + escapeHtml(t2('badge.new')) + '</span>' : '') + '</div>' +
         '<div class="task-meta-line">' + projectTag +
         '<span class="mono">#' + t.ref + '</span>' +
@@ -944,22 +1062,39 @@
   // Alias local pour éviter un conflit de nom avec le paramètre `t` (Task) ci-dessus.
   function t2(key, vars) { return t(key, vars); }
 
+  function taskMatchesFilter(t, filter) {
+    if (filter === 'all') return true;
+    if (filter === 'finished') return t.status === 'shipped' || t.status === 'done' || t.status === 'cancelled';
+    return t.status === filter;
+  }
+
   function buildTaskListShell(tasksAll, opts) {
     var counts = tasksAll.reduce(function (acc, t) { acc[t.status] = (acc[t.status] || 0) + 1; return acc; }, {});
+    var finishedCount = (counts.shipped || 0) + (counts.done || 0) + (counts.cancelled || 0);
     var filters = [
       { key: 'all', label: t('filter.all', { n: tasksAll.length }) },
       { key: 'review', label: t('filter.review', { n: counts.review || 0 }) },
       { key: 'ready', label: t('filter.ready', { n: counts.ready || 0 }) },
-      { key: 'shipped', label: t('filter.shipped', { n: counts.shipped || 0 }) }
+      { key: 'finished', label: t('filter.finished', { n: finishedCount }) }
     ];
     var filterHTML = filters.map(function (f) {
       return '<button class="pill ' + (state.taskFilter === f.key ? 'pill-active' : '') + '" data-action="set-filter" data-filter="' + f.key + '">' + escapeHtml(f.label) + '</button>';
     }).join('');
-    var visible = tasksAll.filter(function (t) { return state.taskFilter === 'all' || t.status === state.taskFilter; })
+    var visible = tasksAll.filter(function (t) { return taskMatchesFilter(t, state.taskFilter); })
       .sort(function (a, b) { return new Date(b.updatedAt) - new Date(a.updatedAt); });
-    var rowsHTML = visible.length
-      ? visible.map(function (t) { return buildTaskRowHTML(t, opts.showProject); }).join('')
-      : '<div class="empty-state">' + escapeHtml(opts.emptyMsg) + '</div>';
+    var rowsHTML;
+    if (visible.length) {
+      rowsHTML = visible.map(function (t) { return buildTaskRowHTML(t, opts.showProject); }).join('');
+    } else if (tasksAll.length === 0 && opts.emptyCta) {
+      rowsHTML = '<button class="empty-cta" data-action="' + opts.emptyCta.action + '">' +
+        '<span class="empty-cta-title">' + escapeHtml(opts.emptyMsg) + '</span>' +
+        '<span class="empty-cta-sub">' + escapeHtml(opts.emptyCta.label) + '</span>' +
+        '</button>';
+    } else if (tasksAll.length === 0) {
+      rowsHTML = '<div class="empty-state">' + escapeHtml(opts.emptyMsg) + '</div>';
+    } else {
+      rowsHTML = '<div class="empty-state">' + escapeHtml(t('work.emptyFiltered')) + '</div>';
+    }
     var task = state.taskId ? state.tasksById[state.taskId] : null;
     var panelHTML = task ? buildDetailPanelHTML(task) : '';
     return buildHeaderHTML() + '<div class="view-body work-body ' + (task ? 'has-panel' : '') + '" style="padding:0;">' +
@@ -971,7 +1106,11 @@
 
   function buildWorkHTML() {
     var tasksAll = state.tasks.filter(function (t) { return t.cardId === state.cardId; });
-    return buildTaskListShell(tasksAll, { showProject: false, emptyMsg: t('work.emptyCard') });
+    return buildTaskListShell(tasksAll, {
+      showProject: false,
+      emptyMsg: t('work.emptyCard'),
+      emptyCta: { action: 'open-new-task', label: t('work.emptyCardAction') }
+    });
   }
 
   function buildInboxHTML() {
@@ -1000,12 +1139,19 @@
       }
       case 'shipped':
         return { label: t('action.reopen'), cls: 'btn-neutral', action: 'reopen', kind: 'plain' };
+      case 'done':
+      case 'cancelled':
+        return { label: t('action.reopen'), cls: 'btn-neutral', action: 'reopen', kind: 'plain' };
       default:
         return { label: '', cls: 'btn-neutral', action: '', kind: 'plain' };
     }
   }
 
   function buildWorkflowHTML(status) {
+    if (status === 'done' || status === 'cancelled') {
+      var bannerLabel = status === 'done' ? t('workflow.doneBanner') : t('workflow.cancelledBanner');
+      return '<div class="workflow-banner">' + escapeHtml(bannerLabel) + '</div>';
+    }
     var order = { running: 0, review: 0, ready: 1, shipped: 2 };
     var steps = [
       { label: t('workflow.step.review') },
@@ -1066,6 +1212,19 @@
       primaryBtnHTML = '<button id="task-primary-action" class="btn-action ' + action.cls + '" data-action="' + action.action + '" data-task-id="' + task.id + '">' + escapeHtml(action.label) + '</button>';
     }
 
+    var showFinishLink = task.status === 'review' || task.status === 'ready' || task.status === 'shipped';
+    var showCancelLink = task.status === 'running' || task.status === 'review' || task.status === 'ready';
+    var linksRow = '';
+    if (showFinishLink || showCancelLink) {
+      var cancelKey = 'task-cancel:' + task.id;
+      var cancelPending = isPendingConfirm(cancelKey);
+      var cancelLabel = cancelPending ? t('action.cancelTaskConfirm') : t('action.cancelTask');
+      linksRow = '<div class="detail-link-row">' +
+        (showFinishLink ? '<button class="detail-link" data-action="finish-task" data-task-id="' + task.id + '">' + escapeHtml(t('action.finish')) + '</button>' : '') +
+        (showCancelLink ? '<button class="detail-link" data-action="confirm-click" data-confirm-key="' + cancelKey + '" data-confirm-action="task-cancel" data-confirm-id="' + task.id + '" data-default-label="' + escapeHtml(t('action.cancelTask')) + '" data-confirm-label="' + escapeHtml(t('action.cancelTaskConfirm')) + '">' + escapeHtml(cancelLabel) + '</button>' : '') +
+        '</div>';
+    }
+
     var prRow = '';
     if (task.status === 'shipped') {
       var prKey = 'pr:' + task.id;
@@ -1097,6 +1256,7 @@
         '<div class="action-row">' + primaryBtnHTML +
           '<span class="checks">' + renderChecks(task.checks) + '</span>' +
         '</div>' +
+        linksRow +
         prRow +
         '<div class="tabs">' + tabsHTML + '</div>' +
       '</div>' +
@@ -1325,6 +1485,16 @@
       renderMain();
     }).catch(function (e) { if (e instanceof ApiError) showDetailError(taskId, e.message || t('errors.prFailed')); });
   }
+  function doFinish(taskId) {
+    api('/api/tasks/' + taskId + '/finish', { method: 'POST' }).then(function (task) {
+      upsertTask(task); renderMain();
+    }).catch(function (e) { if (e instanceof ApiError) showDetailError(taskId, e.message || t('errors.finishFailed')); });
+  }
+  function doCancelTask(taskId) {
+    api('/api/tasks/' + taskId + '/cancel', { method: 'POST' }).then(function (task) {
+      upsertTask(task); renderMain();
+    }).catch(function (e) { if (e instanceof ApiError) showDetailError(taskId, e.message || t('errors.cancelFailed')); });
+  }
 
   function moveCard(cardId, column) {
     closeAllCardMenus();
@@ -1482,6 +1652,7 @@
       '<div class="modal-label">' + escapeHtml(t('newTask.agentLabel')) + '</div>' +
       '<div class="agent-choices" id="agent-choices">' + agentChoices + '</div>' +
       '<div class="agent-context-preview" id="agent-context-preview">' + (selected ? escapeHtml(selected.contextPrompt || '') : '') + '</div>' +
+      (project && project.contextPrompt ? '<div class="project-context-note">' + escapeHtml(t('newTask.projectContextNote')) + '</div>' : '') +
       '<div id="new-task-error" class="modal-error hidden"></div>' +
       '<div class="modal-foot"><span class="modal-hint">' + escapeHtml(t('newTask.hint')) + '</span>' +
       '<button class="btn-outline" data-action="close-modal">' + escapeHtml(t('common.cancel')) + '</button>' +
@@ -1522,7 +1693,6 @@
     api('/api/tasks', { method: 'POST', body: body }).then(function (task) {
       upsertTask(task);
       closeModal();
-      goCard(cardId);
       openTask(task.id);
     }).catch(function (e) {
       errEl.textContent = (e instanceof ApiError && e.message) || t('newTask.errorCreateFailed');
@@ -1596,6 +1766,12 @@
       return o;
     });
   }
+  function buildProjectExtraFieldsHTML(project) {
+    return '<div class="modal-label">' + escapeHtml(t('project.description')) + '</div>' +
+      '<input id="project-description" class="modal-input" placeholder="' + escapeHtml(t('project.descriptionPlaceholder')) + '" value="' + escapeHtml(project ? (project.description || '') : '') + '">' +
+      '<div class="modal-label">' + escapeHtml(t('project.contextPrompt')) + '</div>' +
+      '<textarea id="project-context-prompt" class="modal-textarea" rows="3" placeholder="' + escapeHtml(t('project.contextPromptPlaceholder')) + '">' + (project ? escapeHtml(project.contextPrompt || '') : '') + '</textarea>';
+  }
 
   // Nouveau projet
 
@@ -1604,6 +1780,7 @@
       '<div class="modal-head"><span class="modal-title">' + escapeHtml(t('newProject.title')) + '</span><button class="icon-btn" data-action="close-modal" aria-label="' + escapeHtml(t('common.close')) + '">✕</button></div>' +
       '<div class="modal-label">' + escapeHtml(t('newProject.nameLabel')) + '</div><input id="new-project-name" class="modal-input" placeholder="' + escapeHtml(t('newProject.namePlaceholder')) + '">' +
       buildRepoSectionHTML() +
+      buildProjectExtraFieldsHTML(null) +
       '<div id="new-project-error" class="modal-error hidden"></div>' +
       '<div class="modal-foot"><button class="btn-outline" data-action="close-modal">' + escapeHtml(t('common.cancel')) + '</button>' +
       '<button class="btn-green" data-action="submit-new-project">' + escapeHtml(t('common.create')) + '</button></div>' +
@@ -1619,9 +1796,11 @@
     var nameEl = document.getElementById('new-project-name');
     var errEl = document.getElementById('new-project-error');
     var name = nameEl.value.trim();
+    var description = document.getElementById('project-description').value.trim();
+    var contextPrompt = document.getElementById('project-context-prompt').value.trim();
     var repos = collectReposForSubmit();
     if (!name || repos.length === 0) { errEl.textContent = t('newProject.errorRequired'); errEl.classList.remove('hidden'); return; }
-    api('/api/projects', { method: 'POST', body: { name: name, repos: reposToBody(repos) } }).then(function (project) {
+    api('/api/projects', { method: 'POST', body: { name: name, repos: reposToBody(repos), description: description, contextPrompt: contextPrompt } }).then(function (project) {
       upsertProject(project);
       closeModal();
       goProject(project.id);
@@ -1634,36 +1813,25 @@
   // Nouvelle carte
 
   function buildNewCardModalHTML() {
-    var pills = COLUMN_ORDER.map(function (k) {
-      return '<button class="col-pill ' + (k === modalColumn ? 'selected' : '') + '" data-action="pick-column" data-column="' + k + '">' + escapeHtml(columnLabel(k)) + '</button>';
-    }).join('');
     return '<div class="modal modal-sm">' +
       '<div class="modal-head"><span class="modal-title">' + escapeHtml(t('newCard.title')) + '</span><button class="icon-btn" data-action="close-modal" aria-label="' + escapeHtml(t('common.close')) + '">✕</button></div>' +
       '<div class="modal-label">' + escapeHtml(t('newCard.titleLabel')) + '</div><input id="new-card-title" class="modal-input" placeholder="' + escapeHtml(t('newCard.titlePlaceholder')) + '">' +
-      '<div class="modal-label">' + escapeHtml(t('newCard.columnLabel')) + '</div><div class="col-pills" id="col-pills">' + pills + '</div>' +
       '<div id="new-card-error" class="modal-error hidden"></div>' +
       '<div class="modal-foot"><button class="btn-outline" data-action="close-modal">' + escapeHtml(t('common.cancel')) + '</button>' +
       '<button class="btn-green" data-action="submit-new-card">' + escapeHtml(t('common.create')) + '</button></div>' +
       '</div>';
   }
-  function openNewCardModal(column) {
+  function openNewCardModal() {
     if (!state.projectId) return;
-    modalColumn = column || 'soon';
     openModal(buildNewCardModalHTML());
     setTimeout(function () { var el = document.getElementById('new-card-title'); if (el) el.focus(); }, 0);
-  }
-  function pickColumnInModal(col) {
-    modalColumn = col;
-    document.querySelectorAll('#col-pills .col-pill').forEach(function (el) {
-      el.classList.toggle('selected', el.getAttribute('data-column') === col);
-    });
   }
   function submitNewCard() {
     var titleEl = document.getElementById('new-card-title');
     var errEl = document.getElementById('new-card-error');
     var title = titleEl.value.trim();
     if (!title) { errEl.textContent = t('newCard.errorTitleRequired'); errEl.classList.remove('hidden'); return; }
-    api('/api/cards', { method: 'POST', body: { projectId: state.projectId, title: title, column: modalColumn } }).then(function (card) {
+    api('/api/cards', { method: 'POST', body: { projectId: state.projectId, title: title } }).then(function (card) {
       upsertCard(card);
       closeModal();
       renderMain();
@@ -1764,6 +1932,7 @@
       '<div class="modal-head"><span class="modal-title">' + escapeHtml(t('project.editTitle')) + '</span><button class="icon-btn" data-action="close-modal" aria-label="' + escapeHtml(t('common.close')) + '">✕</button></div>' +
       '<div class="modal-label">' + escapeHtml(t('project.name')) + '</div><input id="project-edit-name" class="modal-input" value="' + escapeHtml(project.name) + '">' +
       buildRepoSectionHTML() +
+      buildProjectExtraFieldsHTML(project) +
       '<div class="modal-label">' + escapeHtml(t('project.checkCmd')) + '</div><input id="project-edit-checkcmd" class="modal-input mono" placeholder="go test ./..." value="' + escapeHtml(project.checkCmd || '') + '">' +
       '<div id="project-modal-error" class="modal-error hidden"></div>' +
       '<div class="modal-foot"><button class="btn-outline" data-action="close-modal">' + escapeHtml(t('common.cancel')) + '</button>' +
@@ -1782,11 +1951,13 @@
   function submitProjectEdit(projectId) {
     var name = document.getElementById('project-edit-name').value.trim();
     var checkCmd = document.getElementById('project-edit-checkcmd').value.trim();
+    var description = document.getElementById('project-description').value.trim();
+    var contextPrompt = document.getElementById('project-context-prompt').value.trim();
     var errEl = document.getElementById('project-modal-error');
     if (!name) { errEl.textContent = t('project.errorNameRequired'); errEl.classList.remove('hidden'); return; }
     var repos = collectReposForSubmit();
     if (repos.length === 0) { errEl.textContent = t('project.errorReposRequired'); errEl.classList.remove('hidden'); return; }
-    api('/api/projects/' + projectId, { method: 'PATCH', body: { name: name, checkCmd: checkCmd, repos: reposToBody(repos) } }).then(function (project) {
+    api('/api/projects/' + projectId, { method: 'PATCH', body: { name: name, checkCmd: checkCmd, repos: reposToBody(repos), description: description, contextPrompt: contextPrompt } }).then(function (project) {
       upsertProject(project);
       closeModal();
       renderSidebar(); renderMain();
@@ -1878,6 +2049,20 @@
 
   // Espace de travail (réglages + synchronisation git)
 
+  function buildPreferencesSectionHTML() {
+    var settings = state.settings || {};
+    return '<div class="modal-label">' + escapeHtml(t('preferences.title')) + '</div>' +
+      '<div class="workspace-remote-row">' +
+        '<input id="settings-display-name" class="modal-input" placeholder="' + escapeHtml(t('preferences.displayNamePlaceholder')) + '" value="' + escapeHtml(settings.displayName || '') + '">' +
+        '<button class="link-save-btn" data-action="save-display-name">' + escapeHtml(t('common.save')) + '</button>' +
+      '</div>' +
+      '<div class="preferences-lang-row">' +
+        '<span class="preferences-lang-label">' + escapeHtml(t('preferences.langLabel')) + '</span>' +
+        buildLangSwitchHTML() +
+      '</div>' +
+      '<div class="preferences-divider"></div>';
+  }
+
   function buildWorkspaceModalBodyHTML() {
     var ws = state.workspace || {};
     var gitEnabled = !!ws.gitEnabled;
@@ -1898,7 +2083,8 @@
       primaryHTML = '<button class="btn-green btn-block" data-action="activate-workspace-git">' + escapeHtml(t('workspace.activate')) + '</button>';
     }
 
-    return '<div class="workspace-state">' + escapeHtml(stateLabel) + '</div>' +
+    return buildPreferencesSectionHTML() +
+      '<div class="workspace-state">' + escapeHtml(stateLabel) + '</div>' +
       '<div class="modal-label">' + escapeHtml(t('workspace.remoteLabel')) + '</div>' +
       '<div class="workspace-remote-row">' +
         '<input id="workspace-remote-input" class="modal-input mono" placeholder="git@github.com:vous/sillage-workspace.git" value="' + escapeHtml(ws.remote || '') + '">' +
@@ -1927,6 +2113,20 @@
   function refreshWorkspaceModalBody() {
     var body = document.getElementById('workspace-modal-body');
     if (body) body.innerHTML = buildWorkspaceModalBodyHTML();
+  }
+  function saveDisplayName() {
+    var el = document.getElementById('settings-display-name');
+    var name = el ? el.value.trim() : '';
+    var errEl = document.getElementById('workspace-modal-error');
+    api('/api/settings', { method: 'PATCH', body: { displayName: name } }).then(function (settings) {
+      state.settings = settings || Object.assign({}, state.settings, { displayName: name });
+      refreshWorkspaceModalBody();
+    }).catch(function (e) {
+      if (errEl) {
+        errEl.textContent = (e instanceof ApiError && e.message) || t('preferences.errorSaveFailed');
+        errEl.classList.remove('hidden');
+      }
+    });
   }
   function saveWorkspaceRemote() {
     var el = document.getElementById('workspace-remote-input');
@@ -2107,6 +2307,11 @@
     }
   }
 
+  function onSettingsEvent(settings) {
+    state.settings = settings || state.settings;
+    refreshWorkspaceModalBody();
+  }
+
   function fetchStateSilently() {
     return api('/api/state').then(function (data) {
       if (data) { hydrateState(data); render(); }
@@ -2123,6 +2328,7 @@
     es.addEventListener('agents', function (e) { try { onAgentsEvent(JSON.parse(e.data)); } catch (er) {} });
     es.addEventListener('project', function (e) { try { onProjectEvent(JSON.parse(e.data)); } catch (er) {} });
     es.addEventListener('workspace', function (e) { try { onWorkspaceEvent(JSON.parse(e.data)); } catch (er) {} });
+    es.addEventListener('settings', function (e) { try { onSettingsEvent(JSON.parse(e.data)); } catch (er) {} });
     es.onopen = function () {
       if (sseOpenedOnce) fetchStateSilently();
       sseOpenedOnce = true;
@@ -2138,7 +2344,7 @@
       if (!data) return;
       hydrateState(data);
       hideLogin();
-      render();
+      applyRoute();
       connectSSE();
       if (state.workspace && state.workspace.setupDone === false) {
         openOnboardingModal();
@@ -2167,7 +2373,7 @@
       case 'set-tab': setTab(el.getAttribute('data-panel-tab')); break;
       case 'toggle-card-menu': toggleCardMenu(el.getAttribute('data-card-id')); break;
       case 'move-card': moveCard(el.getAttribute('data-card-id'), el.getAttribute('data-column')); break;
-      case 'open-new-card': openNewCardModal(el.getAttribute('data-column')); break;
+      case 'open-new-card': openNewCardModal(); break;
       case 'open-new-task': if (state.cardId) openNewTaskModal(state.cardId); break;
       case 'open-new-project': openNewProjectModal(); break;
       case 'open-edit-project': openEditProjectModal(); break;
@@ -2179,13 +2385,13 @@
       case 'submit-agent': submitAgent(el.getAttribute('data-agent-id') || null); break;
       case 'close-modal': closeModal(); break;
       case 'pick-agent': pickAgentInModal(el.getAttribute('data-agent-id')); break;
-      case 'pick-column': pickColumnInModal(el.getAttribute('data-column')); break;
       case 'submit-new-task': submitNewTask(el.getAttribute('data-card-id')); break;
       case 'submit-new-project': submitNewProject(); break;
       case 'submit-new-card': submitNewCard(); break;
       case 'interrupt': doInterrupt(el.getAttribute('data-task-id')); break;
       case 'accept': doAccept(el.getAttribute('data-task-id')); break;
       case 'reopen': doReopen(el.getAttribute('data-task-id')); break;
+      case 'finish-task': doFinish(el.getAttribute('data-task-id')); break;
       case 'confirm-click': handleConfirmClickDispatch(el); break;
       case 'select-diff-file': selectDiffFile(el.getAttribute('data-task-id'), el.getAttribute('data-path')); break;
       case 'send-message': sendMessage(el.getAttribute('data-task-id')); break;
@@ -2198,6 +2404,7 @@
       case 'set-lang': setLang(el.getAttribute('data-lang')); break;
       case 'open-workspace-modal': openWorkspaceModal(); break;
       case 'save-workspace-remote': saveWorkspaceRemote(); break;
+      case 'save-display-name': saveDisplayName(); break;
       case 'activate-workspace-git': activateWorkspaceGit(); break;
       case 'toggle-onboarding-card': toggleOnboardingCard(el.getAttribute('data-key')); break;
       case 'submit-onboarding': submitOnboarding(el.getAttribute('data-mode')); break;
@@ -2230,6 +2437,7 @@
     if (form) form.addEventListener('submit', onLoginSubmit);
     document.addEventListener('click', onGlobalClick);
     document.addEventListener('keydown', onGlobalKeydown);
+    window.addEventListener('hashchange', applyRoute);
     boot();
   });
 })();

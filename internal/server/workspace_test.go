@@ -119,7 +119,7 @@ func TestResolveTaskRepo(t *testing.T) {
 		t.Fatalf("NewStore: %v", err)
 	}
 
-	single, err := s.AddProject("mono", []Repo{{Path: "/tmp/mono"}})
+	single, err := s.AddProject("mono", "", "", []Repo{{Path: "/tmp/mono"}})
 	if err != nil {
 		t.Fatalf("AddProject: %v", err)
 	}
@@ -131,7 +131,7 @@ func TestResolveTaskRepo(t *testing.T) {
 		t.Fatalf("repo attendu /tmp/mono, reçu %+v", repo)
 	}
 
-	multi, err := s.AddProject("multi", []Repo{{Name: "api", Path: "/tmp/api"}, {Name: "web", Path: "/tmp/web"}})
+	multi, err := s.AddProject("multi", "", "", []Repo{{Name: "api", Path: "/tmp/api"}, {Name: "web", Path: "/tmp/web"}})
 	if err != nil {
 		t.Fatalf("AddProject: %v", err)
 	}

@@ -1,4 +1,4 @@
-# Sillage : contrat d'API (v0.3)
+# Sillage : contrat d'API (v0.3.1)
 
 Serveur Go sur `:8787`. Frontend statique servi sur `/`. Tout le JSON est en camelCase.
 Auth par cookie de session (`sillage_session`, HttpOnly). Toute route `/api/*` (sauf `/api/login`) renvoie `401` sans session valide : le frontend affiche alors l'écran de connexion.
@@ -12,8 +12,9 @@ Tokens  { "input": 0, "output": 0, "costUsd": 0.0 }
 
 Repo    { "name": "api", "path": "/abs/path" }   // name court et unique dans le projet
 
-Project { "id": "p1", "name": "sillage", "repos": [Repo, ...], "unread": 2,
-          "tokens": Tokens, "checkCmd": "go test ./..." }   // checkCmd peut être vide
+Project { "id": "p1", "name": "sillage", "description": "...", "repos": [Repo, ...], "unread": 2,
+          "tokens": Tokens, "checkCmd": "go test ./...", "contextPrompt": "..." }
+          // description : une phrase, affichée sous le nom. checkCmd/contextPrompt/description peuvent être vides.
 
 Card    { "id": "c1", "projectId": "p1", "column": "soon|doing|done", "title": "...",
           "tasksTotal": 4, "tasksDone": 1, "docsCount": 2, "messagesCount": 12,
@@ -25,7 +26,7 @@ Agent   { "id": "bolt", "name": "Bolt", "emoji": "🐝", "color": "#f2b705",
 
 Task    { "id": "t1", "cardId": "c1", "projectId": "p1", "ref": 482, "title": "...",
           "agentId": "bolt", "repoName": "api", "branch": "sillage/482-slug",
-          "status": "running|review|ready|shipped",
+          "status": "running|review|ready|shipped|done|cancelled",
           "messagesCount": 5, "filesCount": 3, "docsCount": 1,
           "checks": [ { "label": "go test", "ok": true } ],   // [] si aucun
           "liveActivity": "Edit · internal/server/store.go" | null,
@@ -34,16 +35,23 @@ Task    { "id": "t1", "cardId": "c1", "projectId": "p1", "ref": 482, "title": ".
 
 Message { "id": "m1", "taskId": "t1", "author": "user|agent", "authorName": "Bolt",
           "text": "markdown...", "createdAt": "..." }
-          // authorName : nom de l'agent pour author="agent" ; vide pour author="user"
-          // (mono-utilisateur : le frontend affiche alors "Vous"/"You")
+          // authorName : nom de l'agent pour author="agent" ; displayName des Settings pour
+          // author="user" (vide si non renseigné, le frontend affiche alors "Vous"/"You")
 
 WorkspaceStatus { "setupDone": true, "gitEnabled": true, "remote": "git@host:org/repo.git",
                   "dirty": false, "lastCommitAt": "..." | null, "lastSyncAt": "..." | null }
+
+Settings { "displayName": "Ada", "lang": "fr" }   // lang : ""|"fr"|"en"
 ```
 
-`Card.progress` = tasksDone/tasksTotal en % (0 si vide). Les compteurs de Card sont calculés côté serveur. `tasksDone` = tâches `shipped`. `reviewCount` = tâches `review`.
+`Card.progress` = tasksDone/tasksTotal en % (0 si vide). Les compteurs de Card sont calculés côté serveur. `tasksDone` = tâches `shipped`+`done`. `reviewCount` = tâches `review`. Les tâches `cancelled` sont exclues de `tasksTotal`/`tasksDone`/`progress`, mais comptent comme terminales pour l'auto-déplacement de carte (voir plus bas).
 
 `Project.repos` : un projet regroupe un ou plusieurs dépôts git. `Repo.name` est unique dans le projet (défaut : basename du chemin si omis en entrée). L'ancien champ `path` (v0.1/v0.2, un seul dépôt) n'est plus exposé dans le modèle mais reste accepté en entrée de `POST /api/projects` (voir ci-dessous) ; les projets existants migrent automatiquement au chargement (`repos = [{name: basename(path), path}]`).
+
+`Project.contextPrompt`, s'il est non vide, est transmis à l'agent lors du lancement d'une tâche (voir runner.go) :
+- claude : ajouté à `--append-system-prompt`, après le contexte de l'agent et une ligne vide : `<agent.contextPrompt>\n\nProject context:\n<project.contextPrompt>`.
+- codex : préfixe le prompt utilisateur : `Project context:\n<project.contextPrompt>\n\n---\n\n<prompt>`.
+- fake : ignoré.
 
 ## Endpoints
 
@@ -51,30 +59,39 @@ WorkspaceStatus { "setupDone": true, "gitEnabled": true, "remote": "git@host:org
 |---|---|---|---|
 | POST | `/api/login` | `{password}` | 204 ou 401 `{error}` |
 | POST | `/api/logout` | | 204 |
-| GET | `/api/state` | | `{projects, cards, tasks, agents, workspace, tokens:{global:Tokens}}` |
+| GET | `/api/state` | | `{projects, cards, tasks, agents, workspace, settings, tokens:{global:Tokens}}` |
 | GET | `/api/workspace` | | WorkspaceStatus |
 | POST | `/api/workspace/setup` | `{mode:"local"\|"init"\|"clone", remote?}` | WorkspaceStatus (voir ci-dessous) |
 | PATCH | `/api/workspace` | `{remote}` | WorkspaceStatus (définit/remplace origin ; 400 si git non initialisé) |
 | POST | `/api/workspace/sync` | `{confirm:true}` | `{output, lastSyncAt}` (voir ci-dessous). **Validation humaine obligatoire** : refus 400 sans `confirm` |
+| PATCH | `/api/settings` | `{displayName?, lang?}` | Settings (`lang` doit être `""`, `"fr"` ou `"en"`, 400 sinon) |
 | POST | `/api/agents` | `{name, emoji?, color?, cli, model?, contextPrompt?}` | Agent (name et cli requis ; cli ∈ {claude, codex, fake} ; id = slug du name, 400 si déjà pris) |
 | PATCH | `/api/agents/{id}` | mêmes champs, tous optionnels | Agent |
 | DELETE | `/api/agents/{id}` | | 204 (400 si une tâche référence encore l'agent) |
-| POST | `/api/projects` | `{name, path}` ou `{name, repos:[{name?,path}, ...]}` | Project (400 si un path est invalide/pas un dépôt git, ou noms de repo dupliqués) |
-| PATCH | `/api/projects/{id}` | `{name?, checkCmd?, repos?}` | Project (repos, si fourni, remplace la liste entière ; retirer un repo ne casse pas les tâches existantes) |
-| POST | `/api/cards` | `{projectId, title, column?}` | Card |
-| PATCH | `/api/cards/{id}` | `{column}` | Card |
+| POST | `/api/projects` | `{name, path}` ou `{name, repos:[{name?,path}, ...], description?, contextPrompt?}` | Project (400 si un path est invalide/pas un dépôt git, ou noms de repo dupliqués) |
+| PATCH | `/api/projects/{id}` | `{name?, description?, checkCmd?, contextPrompt?, repos?}` | Project (repos, si fourni, remplace la liste entière ; retirer un repo ne casse pas les tâches existantes) |
+| POST | `/api/cards` | `{projectId, title, column?}` | Card. `column`, si fourni, doit valoir `"soon"` (400 `"cards are created in the soon column"` sinon) : les cartes se créent toujours dans "Bientôt" |
+| PATCH | `/api/cards/{id}` | `{column}` | Card (déplacement manuel inchangé, toutes colonnes acceptées) |
 | POST | `/api/tasks` | `{cardId, title, agentId, prompt?, repoName?}` | Task (créée `running`, agent lancé avec title+prompt). `repoName` optionnel si le projet n'a qu'un repo ; sinon 400 `"repoName required (project has several repositories)"` ou 400 si inconnu |
 | GET | `/api/tasks/{id}` | | `{task, messages}` |
 | POST | `/api/tasks/{id}/messages` | `{text}` | 202 ; relance l'agent (statut → running) |
-| POST | `/api/tasks/{id}/interrupt` | | Task (→ review) |
+| POST | `/api/tasks/{id}/interrupt` | | Task (running → review) |
 | POST | `/api/tasks/{id}/accept` | | Task (review → ready) |
 | POST | `/api/tasks/{id}/ship` | `{confirm:true}` | `{task, output}` : fait le `git push` réel. **Validation humaine obligatoire** : refus 400 sans `confirm` |
 | POST | `/api/tasks/{id}/pr` | `{confirm:true}` | `{url}` : ouvre la pull request (voir ci-dessous). **Validation humaine obligatoire** : refus 400 sans `confirm` ; tâche `shipped` uniquement (400 sinon) |
-| POST | `/api/tasks/{id}/reopen` | | Task (shipped → review) |
+| POST | `/api/tasks/{id}/finish` | | Task (review/ready/shipped → done). 400 depuis `running` (`"task must be reviewed before finishing"`) ou depuis done/cancelled |
+| POST | `/api/tasks/{id}/cancel` | | Task (running/review/ready → cancelled). Si `running`, l'agent est d'abord interrompu (même mécanique qu'`/interrupt`). 400 depuis shipped/done/cancelled |
+| POST | `/api/tasks/{id}/reopen` | | Task (shipped/done/cancelled → review). 400 sinon |
 | POST | `/api/tasks/{id}/read` | | 204 (unread=false) |
 | GET | `/api/tasks/{id}/diff` | | voir ci-dessous |
 | GET | `/api/tasks/{id}/deliverables` | | voir ci-dessous |
 | GET | `/api/events` | | SSE |
+
+### Cycle de vie des tâches et auto-déplacement de carte
+
+Statuts : `running → review → ready → shipped`, plus `done` (via `/finish`) et `cancelled` (via `/cancel`). `/reopen` accepte shipped/done/cancelled et ramène en `review`.
+
+Après chaque changement de statut de tâche, la carte est automatiquement replacée : si elle a au moins une tâche et que toutes ses tâches sont terminales (`shipped`/`done`/`cancelled`), `card.column` passe à `"done"` ; si une tâche redevient active (reopen, nouvelle tâche) alors que la carte est en `"done"`, elle repasse en `"doing"`. Le déplacement manuel (PATCH `/api/cards/{id}`) reste indépendant de cette règle. Chaque changement republie l'événement SSE `cards`.
 
 ### Ouvrir la PR
 
@@ -119,6 +136,7 @@ Le répertoire de données (dataDir) peut devenir un dépôt git optionnel, pour
 - `agents` : liste des Agents (pour l'indicateur d'activité, et après chaque mutation CRUD).
 - `project` : Project complet (après PATCH `/api/projects/{id}`).
 - `workspace` : WorkspaceStatus (après setup, changement de remote ou sync).
+- `settings` : Settings (après PATCH `/api/settings`).
 
 Le frontend maintient son état en mémoire à partir de `/api/state` + SSE ; reconnexion SSE automatique (EventSource natif) et re-fetch de `/api/state` à la reconnexion.
 
