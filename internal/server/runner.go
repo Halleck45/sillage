@@ -51,6 +51,9 @@ func (r *Runner) publishCards(projectID string) {
 	r.hub.Publish(Event{Name: "cards", Data: r.store.CardsByProject(projectID)})
 }
 func (r *Runner) publishProject(p Project) { r.hub.Publish(Event{Name: "project", Data: p}) }
+func (r *Runner) publishWorkspace(w WorkspaceStatus) {
+	r.hub.Publish(Event{Name: "workspace", Data: w})
+}
 func (r *Runner) publishActivity(taskID string, line *string) {
 	r.hub.Publish(Event{Name: "activity", Data: map[string]any{"taskId": taskID, "line": line}})
 }

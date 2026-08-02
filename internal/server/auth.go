@@ -95,6 +95,28 @@ func LoadOrInitPasswordHash(dataDir string) (hash string, generated string, err 
 	return string(h), pass, nil
 }
 
+// ReadPasswordHash lit le hash de mot de passe depuis config.json dans
+// dataDir, sans jamais en générer un nouveau si absent (contrairement à
+// LoadOrInitPasswordHash). Utilisé après le rapatriement (clone) d'un espace
+// de travail pour recharger immédiatement le mot de passe en mémoire.
+func ReadPasswordHash(dataDir string) (hash string, ok bool, err error) {
+	data, err := os.ReadFile(configPath(dataDir))
+	if err != nil {
+		if os.IsNotExist(err) {
+			return "", false, nil
+		}
+		return "", false, err
+	}
+	var cfg Config
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		return "", false, err
+	}
+	if cfg.PasswordHash == "" {
+		return "", false, nil
+	}
+	return cfg.PasswordHash, true, nil
+}
+
 // SessionManager gère les sessions en mémoire (token -> expiration).
 type SessionManager struct {
 	mu       sync.Mutex

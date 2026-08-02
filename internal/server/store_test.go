@@ -12,7 +12,7 @@ func TestStoreRoundtripSaveLoad(t *testing.T) {
 		t.Fatalf("NewStore: %v", err)
 	}
 
-	project, err := s1.AddProject("sillage", "/tmp/sillage")
+	project, err := s1.AddProject("sillage", []Repo{{Path: "/tmp/sillage"}})
 	if err != nil {
 		t.Fatalf("AddProject: %v", err)
 	}
@@ -28,9 +28,12 @@ func TestStoreRoundtripSaveLoad(t *testing.T) {
 	if ref < 100 {
 		t.Fatalf("la référence doit démarrer à 100 ou plus, reçue %d", ref)
 	}
-	task, err := s1.CreateTask(taskID, ref, card.ID, project.ID, "Titre de tâche", "echo", "sillage/100-titre", "main", "/tmp/worktree")
+	task, err := s1.CreateTask(taskID, ref, card.ID, project.ID, "Titre de tâche", "echo", "sillage/100-titre", "main", "/tmp/worktree", "sillage")
 	if err != nil {
 		t.Fatalf("CreateTask: %v", err)
+	}
+	if task.RepoName != "sillage" {
+		t.Fatalf("repoName attendu 'sillage', reçu %q", task.RepoName)
 	}
 	if task.Status != "running" {
 		t.Fatalf("statut initial attendu 'running', reçu %q", task.Status)
@@ -93,8 +96,8 @@ func TestStoreRoundtripSaveLoad(t *testing.T) {
 	if !ok {
 		t.Fatalf("projet %s introuvable après rechargement", project.ID)
 	}
-	if loadedProject.Path != "/tmp/sillage" {
-		t.Fatalf("chemin de projet inattendu après rechargement : %q", loadedProject.Path)
+	if len(loadedProject.Repos) != 1 || loadedProject.Repos[0].Path != "/tmp/sillage" {
+		t.Fatalf("repos de projet inattendus après rechargement : %+v", loadedProject.Repos)
 	}
 
 	// Les agents seedés doivent survivre au rechargement.
@@ -110,7 +113,7 @@ func TestDerivedCounters(t *testing.T) {
 		t.Fatalf("NewStore: %v", err)
 	}
 
-	project, err := s.AddProject("sillage", "/tmp/sillage")
+	project, err := s.AddProject("sillage", []Repo{{Path: "/tmp/sillage"}})
 	if err != nil {
 		t.Fatalf("AddProject: %v", err)
 	}
@@ -123,7 +126,7 @@ func TestDerivedCounters(t *testing.T) {
 	var taskIDs []string
 	for _, st := range statuses {
 		id, ref := s.ReserveTaskID()
-		task, err := s.CreateTask(id, ref, card.ID, project.ID, "T "+st, "echo", "sillage/"+id, "main", "/tmp/wt-"+id)
+		task, err := s.CreateTask(id, ref, card.ID, project.ID, "T "+st, "echo", "sillage/"+id, "main", "/tmp/wt-"+id, "sillage")
 		if err != nil {
 			t.Fatalf("CreateTask: %v", err)
 		}
@@ -222,7 +225,7 @@ func TestDeleteAgentGuardsReferencedAgent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewStore: %v", err)
 	}
-	project, err := s.AddProject("sillage", "/tmp/sillage")
+	project, err := s.AddProject("sillage", []Repo{{Path: "/tmp/sillage"}})
 	if err != nil {
 		t.Fatalf("AddProject: %v", err)
 	}
@@ -231,7 +234,7 @@ func TestDeleteAgentGuardsReferencedAgent(t *testing.T) {
 		t.Fatalf("AddCard: %v", err)
 	}
 	id, ref := s.ReserveTaskID()
-	if _, err := s.CreateTask(id, ref, card.ID, project.ID, "T", "echo", "sillage/"+id, "main", "/tmp/wt"); err != nil {
+	if _, err := s.CreateTask(id, ref, card.ID, project.ID, "T", "echo", "sillage/"+id, "main", "/tmp/wt", "sillage"); err != nil {
 		t.Fatalf("CreateTask: %v", err)
 	}
 
@@ -279,18 +282,30 @@ func TestUpdateProjectFields(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewStore: %v", err)
 	}
-	p, err := s.AddProject("sillage", "/tmp/sillage")
+	p, err := s.AddProject("sillage", []Repo{{Path: "/tmp/sillage"}})
 	if err != nil {
 		t.Fatalf("AddProject: %v", err)
 	}
 
 	name := "Nouveau nom"
 	checkCmd := "go test ./..."
-	updated, err := s.UpdateProject(p.ID, &name, &checkCmd)
+	updated, err := s.UpdateProject(p.ID, &name, &checkCmd, nil)
 	if err != nil {
 		t.Fatalf("UpdateProject: %v", err)
 	}
 	if updated.Name != name || updated.CheckCmd != checkCmd {
 		t.Fatalf("mise à jour du projet inattendue : %+v", updated)
+	}
+	if len(updated.Repos) != 1 || updated.Repos[0].Path != "/tmp/sillage" {
+		t.Fatalf("repos ne devraient pas changer quand repos=nil : %+v", updated.Repos)
+	}
+
+	newRepos := []Repo{{Name: "a", Path: "/tmp/a"}, {Name: "b", Path: "/tmp/b"}}
+	updated, err = s.UpdateProject(p.ID, nil, nil, &newRepos)
+	if err != nil {
+		t.Fatalf("UpdateProject (repos): %v", err)
+	}
+	if len(updated.Repos) != 2 {
+		t.Fatalf("repos attendus au nombre de 2, reçu %+v", updated.Repos)
 	}
 }

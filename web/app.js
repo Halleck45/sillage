@@ -54,7 +54,12 @@
       'project.editTitle': 'Projet',
       'project.name': 'Nom',
       'project.checkCmd': 'Commande de vérification',
+      'project.reposLabel': 'Dépôts',
+      'project.repoNamePlaceholder': 'Nom du dépôt',
+      'project.addRepo': '+ dépôt',
+      'project.removeRepo': 'Retirer',
       'project.errorNameRequired': 'Le nom est requis.',
+      'project.errorReposRequired': 'Au moins un dépôt est requis.',
       'project.errorSaveFailed': 'Erreur lors de l\'enregistrement.',
       'work.emptyCard': 'Aucune tâche pour l\'instant.',
       'filter.all': 'Toutes {n}',
@@ -91,6 +96,7 @@
       'newTask.titlePlaceholder': 'Que doit faire l\'agent ?',
       'newTask.promptPlaceholder': 'Description ou instructions détaillées (optionnel)',
       'newTask.agentLabel': 'Agent',
+      'newTask.repoLabel': 'Dépôt',
       'newTask.hint': 'La conversation s\'ouvre après la création',
       'newTask.submit': 'Créer et discuter',
       'newTask.errorTitleRequired': 'Le titre est requis.',
@@ -99,9 +105,8 @@
       'newProject.title': 'Nouveau projet',
       'newProject.nameLabel': 'Nom',
       'newProject.namePlaceholder': 'mon-projet',
-      'newProject.pathLabel': 'Chemin absolu du dépôt git',
       'newProject.pathPlaceholder': '/home/utilisateur/projets/mon-projet',
-      'newProject.errorRequired': 'Nom et chemin sont requis.',
+      'newProject.errorRequired': 'Nom et au moins un dépôt sont requis.',
       'newProject.errorCreateFailed': 'Erreur lors de la création du projet.',
       'newCard.title': 'Nouvelle carte',
       'newCard.titleLabel': 'Titre',
@@ -138,7 +143,39 @@
       'errors.interruptFailed': 'Échec de l\'interruption.',
       'errors.genericFailed': 'Échec.',
       'errors.shipFailed': 'Échec du push.',
-      'errors.prFailed': 'Échec de l\'ouverture de la PR.'
+      'errors.prFailed': 'Échec de l\'ouverture de la PR.',
+      'onboarding.title': 'Bienvenue dans Sillage',
+      'onboarding.intro': 'Choisissez comment sauvegarder votre espace de travail.',
+      'onboarding.local.title': 'Travailler en local',
+      'onboarding.local.desc': 'Aucune sauvegarde distante. Vous pourrez l\'activer plus tard.',
+      'onboarding.local.submit': 'Confirmer',
+      'onboarding.init.title': 'Initialiser un dépôt de sauvegarde',
+      'onboarding.init.desc': 'Un dépôt git local, avec un remote optionnel.',
+      'onboarding.init.submit': 'Initialiser',
+      'onboarding.clone.title': 'Rapatrier un espace existant',
+      'onboarding.clone.desc': 'Cloner un espace de travail Sillage déjà sauvegardé.',
+      'onboarding.clone.warning': 'Le mot de passe de connexion deviendra celui de l\'espace rapatrié.',
+      'onboarding.clone.submit': 'Rapatrier',
+      'onboarding.errorRemoteRequired': 'L\'URL du dépôt est requise.',
+      'onboarding.errorFailed': 'Échec de la configuration.',
+      'workspace.tooltip': 'Espace de travail',
+      'workspace.title': 'Espace de travail',
+      'workspace.state.local': 'Local seul, pas de sauvegarde git',
+      'workspace.state.gitNoRemote': 'Git activé, sans remote',
+      'workspace.state.gitRemote': 'Git activé, avec remote',
+      'workspace.remoteLabel': 'Remote',
+      'workspace.privateWarning': 'Dépôt privé recommandé : l\'espace contient vos conversations.',
+      'workspace.sync': 'Synchroniser',
+      'workspace.syncConfirm': 'Confirmer la synchronisation ?',
+      'workspace.activate': 'Activer la sauvegarde git',
+      'workspace.lastCommit': 'Dernier commit : {time}',
+      'workspace.lastSync': 'Dernière sync : {time}',
+      'workspace.never': 'jamais',
+      'workspace.dirtyNote': 'Modifications en attente',
+      'workspace.syncedJustNow': 'Synchronisé il y a un instant',
+      'workspace.errorSaveFailed': 'Échec de l\'enregistrement du remote.',
+      'workspace.errorActivateFailed': 'Échec de l\'activation.',
+      'workspace.errorSyncFailed': 'Échec de la synchronisation.'
     },
     en: {
       'nav.inbox': 'Inbox',
@@ -186,7 +223,12 @@
       'project.editTitle': 'Project',
       'project.name': 'Name',
       'project.checkCmd': 'Check command',
+      'project.reposLabel': 'Repositories',
+      'project.repoNamePlaceholder': 'Repository name',
+      'project.addRepo': '+ repo',
+      'project.removeRepo': 'Remove',
       'project.errorNameRequired': 'Name is required.',
+      'project.errorReposRequired': 'At least one repository is required.',
       'project.errorSaveFailed': 'Failed to save.',
       'work.emptyCard': 'No tasks yet.',
       'filter.all': 'All {n}',
@@ -223,6 +265,7 @@
       'newTask.titlePlaceholder': 'What should the agent do?',
       'newTask.promptPlaceholder': 'Description or detailed instructions (optional)',
       'newTask.agentLabel': 'Agent',
+      'newTask.repoLabel': 'Repository',
       'newTask.hint': 'The conversation opens after creation',
       'newTask.submit': 'Create and chat',
       'newTask.errorTitleRequired': 'A title is required.',
@@ -231,9 +274,8 @@
       'newProject.title': 'New project',
       'newProject.nameLabel': 'Name',
       'newProject.namePlaceholder': 'my-project',
-      'newProject.pathLabel': 'Absolute path to the git repository',
       'newProject.pathPlaceholder': '/home/user/projects/my-project',
-      'newProject.errorRequired': 'Name and path are required.',
+      'newProject.errorRequired': 'Name and at least one repository are required.',
       'newProject.errorCreateFailed': 'Failed to create the project.',
       'newCard.title': 'New card',
       'newCard.titleLabel': 'Title',
@@ -270,7 +312,39 @@
       'errors.interruptFailed': 'Failed to stop the agent.',
       'errors.genericFailed': 'Failed.',
       'errors.shipFailed': 'Failed to push.',
-      'errors.prFailed': 'Failed to open the PR.'
+      'errors.prFailed': 'Failed to open the PR.',
+      'onboarding.title': 'Welcome to Sillage',
+      'onboarding.intro': 'Choose how to back up your workspace.',
+      'onboarding.local.title': 'Work locally',
+      'onboarding.local.desc': 'No remote backup. You can enable it later.',
+      'onboarding.local.submit': 'Confirm',
+      'onboarding.init.title': 'Initialize a backup repository',
+      'onboarding.init.desc': 'A local git repository, with an optional remote.',
+      'onboarding.init.submit': 'Initialize',
+      'onboarding.clone.title': 'Restore an existing workspace',
+      'onboarding.clone.desc': 'Clone an already backed-up Sillage workspace.',
+      'onboarding.clone.warning': 'The login password will become that of the restored workspace.',
+      'onboarding.clone.submit': 'Restore',
+      'onboarding.errorRemoteRequired': 'The repository URL is required.',
+      'onboarding.errorFailed': 'Setup failed.',
+      'workspace.tooltip': 'Workspace',
+      'workspace.title': 'Workspace',
+      'workspace.state.local': 'Local only, no git backup',
+      'workspace.state.gitNoRemote': 'Git enabled, no remote',
+      'workspace.state.gitRemote': 'Git enabled, with remote',
+      'workspace.remoteLabel': 'Remote',
+      'workspace.privateWarning': 'Private repository recommended: the workspace contains your conversations.',
+      'workspace.sync': 'Sync',
+      'workspace.syncConfirm': 'Confirm sync?',
+      'workspace.activate': 'Enable git backup',
+      'workspace.lastCommit': 'Last commit: {time}',
+      'workspace.lastSync': 'Last sync: {time}',
+      'workspace.never': 'never',
+      'workspace.dirtyNote': 'Pending changes',
+      'workspace.syncedJustNow': 'Synced just now',
+      'workspace.errorSaveFailed': 'Failed to save the remote.',
+      'workspace.errorActivateFailed': 'Failed to activate.',
+      'workspace.errorSyncFailed': 'Failed to sync.'
     }
   };
 
@@ -319,6 +393,7 @@
 
   var state = {
     lang: detectInitialLang(),
+    workspace: null,
     projects: [], cards: [], tasks: [], agents: [],
     projectsById: {}, cardsById: {}, tasksById: {}, agentsById: {},
     tokens: { global: { input: 0, output: 0, costUsd: 0 } },
@@ -336,6 +411,9 @@
 
   var modalAgentId = null;
   var modalColumn = 'soon';
+  var modalRepos = []; // [{name, path}] pour la modale projet (création/édition)
+  var modalRepoCreateMode = true;
+  var onboardingExpanded = null;
   var sseOpenedOnce = false;
 
   // ---------------------------------------------------------------------
@@ -496,6 +574,7 @@
     state.tasks = data.tasks || [];
     state.agents = data.agents || [];
     state.tokens = data.tokens || { global: { input: 0, output: 0, costUsd: 0 } };
+    state.workspace = data.workspace || state.workspace || null;
     reindex();
   }
 
@@ -564,6 +643,7 @@
       if (kind === 'ship') doShip(id);
       else if (kind === 'pr') doPr(id);
       else if (kind === 'agent-delete') doDeleteAgent(id);
+      else if (kind === 'workspace-sync') doWorkspaceSync();
     });
   }
 
@@ -685,6 +765,7 @@
         '<span class="sidebar-tokens" id="sidebar-tokens">' + tokenSummary(state.tokens.global) + '</span>' +
         '<div class="sidebar-footer-actions">' +
           buildLangSwitchHTML() +
+          '<button class="icon-btn-sm" data-action="open-workspace-modal" title="' + escapeHtml(t('workspace.tooltip')) + '" aria-label="' + escapeHtml(t('workspace.tooltip')) + '">⚙</button>' +
           '<button class="logout-link" data-action="logout">' + escapeHtml(t('nav.logout')) + '</button>' +
         '</div>' +
       '</div>';
@@ -957,6 +1038,8 @@
     var glyph = STATUS_GLYPH[task.status] || STATUS_GLYPH.running;
     var soft = softColor(agent.color);
     var err = state.detailErrorByTask[task.id];
+    var taskProject = state.projectsById[task.projectId];
+    var multiRepo = !!(taskProject && taskProject.repos && taskProject.repos.length > 1);
     var action = primaryActionInfo(task);
     var tabs = ['chat', 'diff', 'files'];
     var tabLabels = { chat: t('tabs.conversation'), diff: t('tabs.diff'), files: t('tabs.deliverables') };
@@ -1004,6 +1087,7 @@
               '<span class="agent-chip"><span class="agent-avatar-sm" style="background:' + soft + '">' + agent.emoji + '</span>' + escapeHtml(agent.name) + '</span>' +
               '<span class="mono">' + escapeHtml(agent.model || '') + '</span>' +
               '<span class="mono">' + escapeHtml(task.branch || '') + '</span>' +
+              (multiRepo && task.repoName ? '<span class="repo-chip">' + escapeHtml(task.repoName) + '</span>' : '') +
             '</div>' +
           '</div>' +
           '<button class="icon-btn" data-action="close-panel" aria-label="' + escapeHtml(t('common.close')) + '">✕</button>' +
@@ -1379,11 +1463,22 @@
         '<span class="agent-choice-model mono">' + escapeHtml(a.model || '') + '</span></span></button>';
     }).join('');
     var selected = state.agentsById[modalAgentId];
+    var project = state.projectsById[card.projectId];
+    var repos = (project && project.repos) || [];
+    var repoSelectHTML = '';
+    if (repos.length > 1) {
+      var repoOptions = repos.map(function (r) {
+        return '<option value="' + escapeHtml(r.name) + '">' + escapeHtml(r.name) + '</option>';
+      }).join('');
+      repoSelectHTML = '<div class="modal-label">' + escapeHtml(t('newTask.repoLabel')) + '</div>' +
+        '<select id="new-task-repo" class="modal-input">' + repoOptions + '</select>';
+    }
     return '<div class="modal">' +
       '<div class="modal-head"><span class="modal-title">' + escapeHtml(t('newTask.title')) + '</span><span class="modal-sub">' + escapeHtml(card.title) + '</span>' +
       '<button class="icon-btn" data-action="close-modal" aria-label="' + escapeHtml(t('common.close')) + '">✕</button></div>' +
       '<input id="new-task-title" class="modal-input" placeholder="' + escapeHtml(t('newTask.titlePlaceholder')) + '">' +
       '<textarea id="new-task-prompt" class="modal-textarea" placeholder="' + escapeHtml(t('newTask.promptPlaceholder')) + '" rows="3"></textarea>' +
+      repoSelectHTML +
       '<div class="modal-label">' + escapeHtml(t('newTask.agentLabel')) + '</div>' +
       '<div class="agent-choices" id="agent-choices">' + agentChoices + '</div>' +
       '<div class="agent-context-preview" id="agent-context-preview">' + (selected ? escapeHtml(selected.contextPrompt || '') : '') + '</div>' +
@@ -1422,6 +1517,8 @@
     if (!modalAgentId) { errEl.textContent = t('newTask.errorAgentRequired'); errEl.classList.remove('hidden'); return; }
     var body = { cardId: cardId, title: title, agentId: modalAgentId };
     if (prompt) body.prompt = prompt;
+    var repoEl = document.getElementById('new-task-repo');
+    if (repoEl && repoEl.value) body.repoName = repoEl.value;
     api('/api/tasks', { method: 'POST', body: body }).then(function (task) {
       upsertTask(task);
       closeModal();
@@ -1433,31 +1530,98 @@
     });
   }
 
+  // Dépôts de projet (lignes éditables, réutilisées par les modales
+  // Nouveau projet et Projet). En création avec un seul dépôt, seul le champ
+  // chemin est visible (le nom est déduit du basename côté serveur) ; dès
+  // qu'il y a plusieurs dépôts (ou en édition), chaque ligne affiche nom + chemin.
+
+  function buildRepoRowsHTML() {
+    var simple = modalRepoCreateMode && modalRepos.length === 1;
+    if (simple) {
+      return '<div class="repo-row repo-row-simple">' +
+        '<input class="modal-input mono repo-row-path" placeholder="' + escapeHtml(t('newProject.pathPlaceholder')) + '" value="' + escapeHtml(modalRepos[0].path) + '">' +
+        '</div>';
+    }
+    return modalRepos.map(function (r, i) {
+      var canRemove = modalRepos.length > 1;
+      return '<div class="repo-row">' +
+        '<input class="modal-input repo-row-name" placeholder="' + escapeHtml(t('project.repoNamePlaceholder')) + '" value="' + escapeHtml(r.name) + '">' +
+        '<input class="modal-input mono repo-row-path" placeholder="' + escapeHtml(t('newProject.pathPlaceholder')) + '" value="' + escapeHtml(r.path) + '">' +
+        (canRemove ? '<button class="icon-btn repo-row-remove" data-action="remove-repo-row" data-index="' + i + '" aria-label="' + escapeHtml(t('project.removeRepo')) + '">✕</button>' : '') +
+        '</div>';
+    }).join('');
+  }
+  function captureRepoRowsFromDOM() {
+    var nameInputs = document.querySelectorAll('.repo-row-name');
+    var pathInputs = document.querySelectorAll('.repo-row-path');
+    if (pathInputs.length === 0) return;
+    if (nameInputs.length === pathInputs.length) {
+      modalRepos = Array.prototype.map.call(pathInputs, function (input, i) {
+        return { name: nameInputs[i].value, path: input.value };
+      });
+    } else {
+      modalRepos = [{ name: modalRepos[0] ? modalRepos[0].name : '', path: pathInputs[0].value }];
+    }
+  }
+  function refreshRepoRowsUI() {
+    var container = document.getElementById('repo-rows');
+    if (container) container.innerHTML = buildRepoRowsHTML();
+  }
+  function addRepoRow() {
+    captureRepoRowsFromDOM();
+    modalRepos.push({ name: '', path: '' });
+    refreshRepoRowsUI();
+  }
+  function removeRepoRow(index) {
+    captureRepoRowsFromDOM();
+    if (modalRepos.length <= 1) return;
+    modalRepos.splice(index, 1);
+    refreshRepoRowsUI();
+  }
+  function buildRepoSectionHTML() {
+    return '<div class="modal-label">' + escapeHtml(t('project.reposLabel')) + '</div>' +
+      '<div id="repo-rows">' + buildRepoRowsHTML() + '</div>' +
+      '<button class="add-repo-link" data-action="add-repo-row">' + escapeHtml(t('project.addRepo')) + '</button>';
+  }
+  function collectReposForSubmit() {
+    captureRepoRowsFromDOM();
+    return modalRepos.map(function (r) {
+      return { name: (r.name || '').trim(), path: (r.path || '').trim() };
+    }).filter(function (r) { return r.path; });
+  }
+  function reposToBody(repos) {
+    return repos.map(function (r) {
+      var o = { path: r.path };
+      if (r.name) o.name = r.name;
+      return o;
+    });
+  }
+
   // Nouveau projet
 
   function buildNewProjectModalHTML() {
     return '<div class="modal modal-sm">' +
       '<div class="modal-head"><span class="modal-title">' + escapeHtml(t('newProject.title')) + '</span><button class="icon-btn" data-action="close-modal" aria-label="' + escapeHtml(t('common.close')) + '">✕</button></div>' +
       '<div class="modal-label">' + escapeHtml(t('newProject.nameLabel')) + '</div><input id="new-project-name" class="modal-input" placeholder="' + escapeHtml(t('newProject.namePlaceholder')) + '">' +
-      '<div class="modal-label">' + escapeHtml(t('newProject.pathLabel')) + '</div>' +
-      '<input id="new-project-path" class="modal-input mono" placeholder="' + escapeHtml(t('newProject.pathPlaceholder')) + '">' +
+      buildRepoSectionHTML() +
       '<div id="new-project-error" class="modal-error hidden"></div>' +
       '<div class="modal-foot"><button class="btn-outline" data-action="close-modal">' + escapeHtml(t('common.cancel')) + '</button>' +
       '<button class="btn-green" data-action="submit-new-project">' + escapeHtml(t('common.create')) + '</button></div>' +
       '</div>';
   }
   function openNewProjectModal() {
+    modalRepoCreateMode = true;
+    modalRepos = [{ name: '', path: '' }];
     openModal(buildNewProjectModalHTML());
     setTimeout(function () { var el = document.getElementById('new-project-name'); if (el) el.focus(); }, 0);
   }
   function submitNewProject() {
     var nameEl = document.getElementById('new-project-name');
-    var pathEl = document.getElementById('new-project-path');
     var errEl = document.getElementById('new-project-error');
     var name = nameEl.value.trim();
-    var path = pathEl.value.trim();
-    if (!name || !path) { errEl.textContent = t('newProject.errorRequired'); errEl.classList.remove('hidden'); return; }
-    api('/api/projects', { method: 'POST', body: { name: name, path: path } }).then(function (project) {
+    var repos = collectReposForSubmit();
+    if (!name || repos.length === 0) { errEl.textContent = t('newProject.errorRequired'); errEl.classList.remove('hidden'); return; }
+    api('/api/projects', { method: 'POST', body: { name: name, repos: reposToBody(repos) } }).then(function (project) {
       upsertProject(project);
       closeModal();
       goProject(project.id);
@@ -1599,6 +1763,7 @@
     return '<div class="modal modal-sm">' +
       '<div class="modal-head"><span class="modal-title">' + escapeHtml(t('project.editTitle')) + '</span><button class="icon-btn" data-action="close-modal" aria-label="' + escapeHtml(t('common.close')) + '">✕</button></div>' +
       '<div class="modal-label">' + escapeHtml(t('project.name')) + '</div><input id="project-edit-name" class="modal-input" value="' + escapeHtml(project.name) + '">' +
+      buildRepoSectionHTML() +
       '<div class="modal-label">' + escapeHtml(t('project.checkCmd')) + '</div><input id="project-edit-checkcmd" class="modal-input mono" placeholder="go test ./..." value="' + escapeHtml(project.checkCmd || '') + '">' +
       '<div id="project-modal-error" class="modal-error hidden"></div>' +
       '<div class="modal-foot"><button class="btn-outline" data-action="close-modal">' + escapeHtml(t('common.cancel')) + '</button>' +
@@ -1608,6 +1773,9 @@
   function openEditProjectModal() {
     var project = state.projectsById[state.projectId];
     if (!project) return;
+    modalRepoCreateMode = false;
+    var repos = (project.repos && project.repos.length) ? project.repos : [{ name: '', path: '' }];
+    modalRepos = repos.map(function (r) { return { name: r.name || '', path: r.path || '' }; });
     openModal(buildProjectModalHTML(project));
     setTimeout(function () { var el = document.getElementById('project-edit-name'); if (el) el.focus(); }, 0);
   }
@@ -1616,13 +1784,202 @@
     var checkCmd = document.getElementById('project-edit-checkcmd').value.trim();
     var errEl = document.getElementById('project-modal-error');
     if (!name) { errEl.textContent = t('project.errorNameRequired'); errEl.classList.remove('hidden'); return; }
-    api('/api/projects/' + projectId, { method: 'PATCH', body: { name: name, checkCmd: checkCmd } }).then(function (project) {
+    var repos = collectReposForSubmit();
+    if (repos.length === 0) { errEl.textContent = t('project.errorReposRequired'); errEl.classList.remove('hidden'); return; }
+    api('/api/projects/' + projectId, { method: 'PATCH', body: { name: name, checkCmd: checkCmd, repos: reposToBody(repos) } }).then(function (project) {
       upsertProject(project);
       closeModal();
       renderSidebar(); renderMain();
     }).catch(function (e) {
       errEl.textContent = (e instanceof ApiError && e.message) || t('project.errorSaveFailed');
       errEl.classList.remove('hidden');
+    });
+  }
+
+  // Onboarding (modale de bienvenue, une fois par installation)
+
+  function buildOnboardingModalHTML() {
+    var cards = [
+      { key: 'local', title: t('onboarding.local.title'), desc: t('onboarding.local.desc') },
+      { key: 'init', title: t('onboarding.init.title'), desc: t('onboarding.init.desc') },
+      { key: 'clone', title: t('onboarding.clone.title'), desc: t('onboarding.clone.desc') }
+    ];
+    var cardsHTML = cards.map(function (c) {
+      var expanded = onboardingExpanded === c.key;
+      var body = '';
+      if (expanded) {
+        if (c.key === 'local') {
+          body = '<div class="onboarding-body">' +
+            '<button class="btn-green btn-block" data-action="submit-onboarding" data-mode="local">' + escapeHtml(t('onboarding.local.submit')) + '</button>' +
+            '</div>';
+        } else if (c.key === 'init') {
+          body = '<div class="onboarding-body">' +
+            '<input id="onboarding-init-remote" class="modal-input mono" placeholder="git@github.com:vous/sillage-workspace.git">' +
+            '<button class="btn-green btn-block" data-action="submit-onboarding" data-mode="init">' + escapeHtml(t('onboarding.init.submit')) + '</button>' +
+            '</div>';
+        } else if (c.key === 'clone') {
+          body = '<div class="onboarding-body">' +
+            '<input id="onboarding-clone-remote" class="modal-input mono" placeholder="git@github.com:vous/sillage-workspace.git">' +
+            '<div class="workspace-warning">' + escapeHtml(t('onboarding.clone.warning')) + '</div>' +
+            '<button class="btn-green btn-block" data-action="submit-onboarding" data-mode="clone">' + escapeHtml(t('onboarding.clone.submit')) + '</button>' +
+            '</div>';
+        }
+      }
+      return '<div class="onboarding-card ' + (expanded ? 'expanded' : '') + '">' +
+        '<button class="onboarding-card-head" data-action="toggle-onboarding-card" data-key="' + c.key + '">' +
+          '<span class="onboarding-card-title">' + escapeHtml(c.title) + '</span>' +
+          '<span class="onboarding-card-desc">' + escapeHtml(c.desc) + '</span>' +
+        '</button>' +
+        body +
+        '</div>';
+    }).join('');
+    return '<div class="modal">' +
+      '<div class="modal-head"><span class="modal-title">' + escapeHtml(t('onboarding.title')) + '</span></div>' +
+      '<div class="onboarding-intro">' + escapeHtml(t('onboarding.intro')) + '</div>' +
+      '<div id="onboarding-error" class="modal-error hidden"></div>' +
+      '<div class="onboarding-cards" id="onboarding-cards">' + cardsHTML + '</div>' +
+      '</div>';
+  }
+  function openOnboardingModal() {
+    onboardingExpanded = null;
+    openModal(buildOnboardingModalHTML());
+  }
+  function toggleOnboardingCard(key) {
+    onboardingExpanded = (onboardingExpanded === key) ? null : key;
+    openModal(buildOnboardingModalHTML());
+  }
+  function submitOnboarding(mode) {
+    var errEl = document.getElementById('onboarding-error');
+    var body = { mode: mode };
+    if (mode === 'init') {
+      var initEl = document.getElementById('onboarding-init-remote');
+      var initRemote = initEl ? initEl.value.trim() : '';
+      if (initRemote) body.remote = initRemote;
+    } else if (mode === 'clone') {
+      var cloneEl = document.getElementById('onboarding-clone-remote');
+      var cloneRemote = cloneEl ? cloneEl.value.trim() : '';
+      if (!cloneRemote) {
+        if (errEl) { errEl.textContent = t('onboarding.errorRemoteRequired'); errEl.classList.remove('hidden'); }
+        return;
+      }
+      body.remote = cloneRemote;
+    }
+    api('/api/workspace/setup', { method: 'POST', body: body }).then(function (workspace) {
+      state.workspace = workspace || state.workspace;
+      closeModal();
+      if (mode === 'clone') return fetchStateSilently();
+    }).catch(function (e) {
+      if (errEl) {
+        errEl.textContent = (e instanceof ApiError && e.message) || t('onboarding.errorFailed');
+        errEl.classList.remove('hidden');
+      }
+    });
+  }
+
+  // Espace de travail (réglages + synchronisation git)
+
+  function buildWorkspaceModalBodyHTML() {
+    var ws = state.workspace || {};
+    var gitEnabled = !!ws.gitEnabled;
+    var hasRemote = !!ws.remote;
+    var stateLabel = !gitEnabled ? t('workspace.state.local') : (hasRemote ? t('workspace.state.gitRemote') : t('workspace.state.gitNoRemote'));
+    var lastCommit = ws.lastCommitAt ? timeAgo(ws.lastCommitAt) : t('workspace.never');
+    var lastSync = ws.lastSyncAt ? timeAgo(ws.lastSyncAt) : t('workspace.never');
+    var dirtyNote = ws.dirty ? '<div class="workspace-dirty-note">' + escapeHtml(t('workspace.dirtyNote')) + '</div>' : '';
+
+    var syncKey = 'workspace-sync';
+    var syncPending = isPendingConfirm(syncKey);
+    var syncLabel = syncPending ? t('workspace.syncConfirm') : t('workspace.sync');
+
+    var primaryHTML;
+    if (gitEnabled) {
+      primaryHTML = '<button class="btn-green btn-block" data-action="confirm-click" data-confirm-key="' + syncKey + '" data-confirm-action="workspace-sync" data-default-label="' + escapeHtml(t('workspace.sync')) + '" data-confirm-label="' + escapeHtml(t('workspace.syncConfirm')) + '">' + escapeHtml(syncLabel) + '</button>';
+    } else {
+      primaryHTML = '<button class="btn-green btn-block" data-action="activate-workspace-git">' + escapeHtml(t('workspace.activate')) + '</button>';
+    }
+
+    return '<div class="workspace-state">' + escapeHtml(stateLabel) + '</div>' +
+      '<div class="modal-label">' + escapeHtml(t('workspace.remoteLabel')) + '</div>' +
+      '<div class="workspace-remote-row">' +
+        '<input id="workspace-remote-input" class="modal-input mono" placeholder="git@github.com:vous/sillage-workspace.git" value="' + escapeHtml(ws.remote || '') + '">' +
+        '<button class="link-save-btn" data-action="save-workspace-remote">' + escapeHtml(t('common.save')) + '</button>' +
+      '</div>' +
+      '<div class="workspace-warning">' + escapeHtml(t('workspace.privateWarning')) + '</div>' +
+      '<div id="workspace-modal-error" class="modal-error hidden"></div>' +
+      '<div id="workspace-sync-message" class="workspace-sync-message hidden"></div>' +
+      '<div class="secondary-row">' + primaryHTML + '</div>' +
+      '<div class="workspace-meta">' +
+        '<span>' + escapeHtml(t('workspace.lastCommit', { time: lastCommit })) + '</span>' +
+        '<span>' + escapeHtml(t('workspace.lastSync', { time: lastSync })) + '</span>' +
+      '</div>' +
+      dirtyNote;
+  }
+  function buildWorkspaceModalHTML() {
+    return '<div class="modal modal-sm">' +
+      '<div class="modal-head"><span class="modal-title">' + escapeHtml(t('workspace.title')) + '</span><button class="icon-btn" data-action="close-modal" aria-label="' + escapeHtml(t('common.close')) + '">✕</button></div>' +
+      '<div id="workspace-modal-body">' + buildWorkspaceModalBodyHTML() + '</div>' +
+      '</div>';
+  }
+  function openWorkspaceModal() {
+    openModal(buildWorkspaceModalHTML());
+    setTimeout(function () { var el = document.getElementById('workspace-remote-input'); if (el) el.focus(); }, 0);
+  }
+  function refreshWorkspaceModalBody() {
+    var body = document.getElementById('workspace-modal-body');
+    if (body) body.innerHTML = buildWorkspaceModalBodyHTML();
+  }
+  function saveWorkspaceRemote() {
+    var el = document.getElementById('workspace-remote-input');
+    var remote = el ? el.value.trim() : '';
+    var errEl = document.getElementById('workspace-modal-error');
+    api('/api/workspace', { method: 'PATCH', body: { remote: remote } }).then(function (ws) {
+      state.workspace = ws || state.workspace;
+      refreshWorkspaceModalBody();
+    }).catch(function (e) {
+      if (errEl) {
+        errEl.textContent = (e instanceof ApiError && e.message) || t('workspace.errorSaveFailed');
+        errEl.classList.remove('hidden');
+      }
+    });
+  }
+  function activateWorkspaceGit() {
+    var el = document.getElementById('workspace-remote-input');
+    var remote = el ? el.value.trim() : '';
+    var body = { mode: 'init' };
+    if (remote) body.remote = remote;
+    var errEl = document.getElementById('workspace-modal-error');
+    api('/api/workspace/setup', { method: 'POST', body: body }).then(function (ws) {
+      state.workspace = ws || state.workspace;
+      refreshWorkspaceModalBody();
+    }).catch(function (e) {
+      if (errEl) {
+        errEl.textContent = (e instanceof ApiError && e.message) || t('workspace.errorActivateFailed');
+        errEl.classList.remove('hidden');
+      }
+    });
+  }
+  function showWorkspaceSyncMessage() {
+    var el = document.getElementById('workspace-sync-message');
+    if (!el) return;
+    el.textContent = t('workspace.syncedJustNow');
+    el.classList.remove('hidden');
+    setTimeout(function () {
+      var el2 = document.getElementById('workspace-sync-message');
+      if (el2) el2.classList.add('hidden');
+    }, 5000);
+  }
+  function doWorkspaceSync() {
+    var errEl = document.getElementById('workspace-modal-error');
+    api('/api/workspace/sync', { method: 'POST', body: { confirm: true } }).then(function (res) {
+      state.workspace = state.workspace || {};
+      if (res && res.lastSyncAt) state.workspace.lastSyncAt = res.lastSyncAt;
+      refreshWorkspaceModalBody();
+      showWorkspaceSyncMessage();
+    }).catch(function (e) {
+      if (errEl) {
+        errEl.textContent = (e instanceof ApiError && e.message) || t('workspace.errorSyncFailed');
+        errEl.classList.remove('hidden');
+      }
     });
   }
 
@@ -1742,6 +2099,14 @@
     renderMain();
   }
 
+  function onWorkspaceEvent(workspace) {
+    state.workspace = workspace;
+    refreshWorkspaceModalBody();
+    if (workspace && workspace.setupDone && document.getElementById('onboarding-cards')) {
+      closeModal();
+    }
+  }
+
   function fetchStateSilently() {
     return api('/api/state').then(function (data) {
       if (data) { hydrateState(data); render(); }
@@ -1757,6 +2122,7 @@
     es.addEventListener('cards', function (e) { try { onCardsEvent(JSON.parse(e.data)); } catch (er) {} });
     es.addEventListener('agents', function (e) { try { onAgentsEvent(JSON.parse(e.data)); } catch (er) {} });
     es.addEventListener('project', function (e) { try { onProjectEvent(JSON.parse(e.data)); } catch (er) {} });
+    es.addEventListener('workspace', function (e) { try { onWorkspaceEvent(JSON.parse(e.data)); } catch (er) {} });
     es.onopen = function () {
       if (sseOpenedOnce) fetchStateSilently();
       sseOpenedOnce = true;
@@ -1774,6 +2140,9 @@
       hideLogin();
       render();
       connectSSE();
+      if (state.workspace && state.workspace.setupDone === false) {
+        openOnboardingModal();
+      }
     }).catch(function () { /* showLogin déjà déclenché par api() sur 401 */ });
   }
 
@@ -1803,6 +2172,8 @@
       case 'open-new-project': openNewProjectModal(); break;
       case 'open-edit-project': openEditProjectModal(); break;
       case 'submit-project-edit': submitProjectEdit(el.getAttribute('data-project-id')); break;
+      case 'add-repo-row': addRepoRow(); break;
+      case 'remove-repo-row': removeRepoRow(parseInt(el.getAttribute('data-index'), 10)); break;
       case 'open-new-agent': openNewAgentModal(); break;
       case 'edit-agent': openEditAgentModal(el.getAttribute('data-agent-id')); break;
       case 'submit-agent': submitAgent(el.getAttribute('data-agent-id') || null); break;
@@ -1825,6 +2196,11 @@
       case 'toggle-sidebar': toggleSidebarDrawer(); break;
       case 'close-sidebar-drawer': closeSidebarDrawer(); break;
       case 'set-lang': setLang(el.getAttribute('data-lang')); break;
+      case 'open-workspace-modal': openWorkspaceModal(); break;
+      case 'save-workspace-remote': saveWorkspaceRemote(); break;
+      case 'activate-workspace-git': activateWorkspaceGit(); break;
+      case 'toggle-onboarding-card': toggleOnboardingCard(el.getAttribute('data-key')); break;
+      case 'submit-onboarding': submitOnboarding(el.getAttribute('data-mode')); break;
     }
   }
 

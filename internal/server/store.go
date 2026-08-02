@@ -21,39 +21,120 @@ type Store struct {
 	mu      sync.Mutex
 	dataDir string
 
-	Projects map[string]Project
-	Cards    map[string]Card
-	Tasks    map[string]Task
-	Messages map[string][]Message
-	Agents   map[string]Agent
+	Projects  map[string]Project
+	Cards     map[string]Card
+	Tasks     map[string]Task
+	Messages  map[string][]Message
+	Agents    map[string]Agent
+	Workspace Workspace
 
 	NextProjectN int
 	NextCardN    int
 	NextTaskN    int
 	NextMessageN int
 	NextRef      int
+
+	// commitTimer pilote le commit automatique debounced (2 s) de l'espace de
+	// travail après chaque sauvegarde. Non sérialisé (non exporté).
+	commitTimer *time.Timer
 }
 
 // NewStore charge state.json s'il existe, sinon initialise un état neuf
 // avec les agents seedés.
 func NewStore(dataDir string) (*Store, error) {
-	s := &Store{dataDir: dataDir}
-	data, err := os.ReadFile(s.statePath())
-	if err == nil {
-		if err := json.Unmarshal(data, s); err != nil {
-			return nil, fmt.Errorf("lecture de state.json impossible : %w", err)
+	s, err := loadStoreFile(dataDir)
+	if err != nil {
+		if !errors.Is(err, os.ErrNotExist) {
+			return nil, err
 		}
-		s.ensureMaps()
-		return s, nil
+		s = &Store{dataDir: dataDir}
+		s.initEmpty()
 	}
-	if !errors.Is(err, os.ErrNotExist) {
-		return nil, err
-	}
-	s.initEmpty()
 	if err := s.save(); err != nil {
 		return nil, err
 	}
 	return s, nil
+}
+
+// loadStoreFile lit et parse state.json depuis dataDir, migrations comprises
+// (dépôts legacy path->repos, workspace absent -> setupDone=true mode local).
+// Retourne une erreur enveloppant os.ErrNotExist si le fichier n'existe pas.
+func loadStoreFile(dataDir string) (*Store, error) {
+	s := &Store{dataDir: dataDir}
+	data, err := os.ReadFile(s.statePath())
+	if err != nil {
+		return nil, err
+	}
+	if err := json.Unmarshal(data, s); err != nil {
+		return nil, fmt.Errorf("lecture de state.json impossible : %w", err)
+	}
+	s.ensureMaps()
+	migrateLegacyRepos(data, s)
+	migrateLegacyWorkspace(data, s)
+	return s, nil
+}
+
+// migrateLegacyRepos migre les projets antérieurs à la v0.3 (champ "path"
+// unique) vers la liste "repos" : si repos est vide et qu'un path legacy est
+// présent, repos devient [{name: basename(path), path}].
+func migrateLegacyRepos(data []byte, s *Store) {
+	var legacy struct {
+		Projects map[string]struct {
+			Path string `json:"path"`
+		} `json:"Projects"`
+	}
+	if err := json.Unmarshal(data, &legacy); err != nil {
+		return
+	}
+	for id, lp := range legacy.Projects {
+		if lp.Path == "" {
+			continue
+		}
+		p, ok := s.Projects[id]
+		if !ok || len(p.Repos) > 0 {
+			continue
+		}
+		p.Repos = []Repo{{Name: filepath.Base(lp.Path), Path: lp.Path}}
+		s.Projects[id] = p
+	}
+}
+
+// migrateLegacyWorkspace migre les installations antérieures à la v0.3 (state
+// déjà rempli, aucun champ "Workspace") : setupDone=true, mode local, pour ne
+// jamais afficher l'onboarding sur un espace déjà utilisé.
+func migrateLegacyWorkspace(data []byte, s *Store) {
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return
+	}
+	if _, ok := raw["Workspace"]; !ok {
+		s.Workspace = Workspace{SetupDone: true}
+	}
+}
+
+// ReloadFromDisk relit state.json depuis dataDir et remplace l'état en
+// mémoire, sans changer le pointeur Store : les sessions actives et les
+// abonnements SSE restent valides. Utilisé après le rapatriement (clone)
+// d'un espace de travail.
+func (s *Store) ReloadFromDisk() error {
+	fresh, err := loadStoreFile(s.dataDir)
+	if err != nil {
+		return err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.Projects = fresh.Projects
+	s.Cards = fresh.Cards
+	s.Tasks = fresh.Tasks
+	s.Messages = fresh.Messages
+	s.Agents = fresh.Agents
+	s.Workspace = fresh.Workspace
+	s.NextProjectN = fresh.NextProjectN
+	s.NextCardN = fresh.NextCardN
+	s.NextTaskN = fresh.NextTaskN
+	s.NextMessageN = fresh.NextMessageN
+	s.NextRef = fresh.NextRef
+	return nil
 }
 
 func (s *Store) statePath() string {
@@ -127,7 +208,24 @@ func (s *Store) save() error {
 		os.Remove(tmpName)
 		return err
 	}
-	return os.Rename(tmpName, s.statePath())
+	if err := os.Rename(tmpName, s.statePath()); err != nil {
+		return err
+	}
+	s.scheduleWorkspaceCommit()
+	return nil
+}
+
+// scheduleWorkspaceCommit (re)démarre le minuteur de commit automatique
+// debounced (2 s) de l'espace de travail. Doit être appelée avec le verrou
+// déjà tenu (comme save()) ; sans effet si dataDir n'est pas un dépôt git.
+func (s *Store) scheduleWorkspaceCommit() {
+	if s.commitTimer != nil {
+		s.commitTimer.Stop()
+	}
+	dataDir := s.dataDir
+	s.commitTimer = time.AfterFunc(2*time.Second, func() {
+		commitWorkspace(dataDir)
+	})
 }
 
 // idNum extrait la partie numérique d'un identifiant ("t12" -> 12) pour un tri stable.
@@ -372,13 +470,79 @@ func (s *Store) GetMessages(taskID string) []Message {
 	return out
 }
 
-// AddProject crée un projet. La validation du chemin (existence, dépôt git)
-// est faite par l'appelant (handlers.go) avant l'appel.
-func (s *Store) AddProject(name, path string) (Project, error) {
+// GetWorkspace retourne l'état persisté de synchronisation git de l'espace de travail.
+func (s *Store) GetWorkspace() Workspace {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.Workspace
+}
+
+// UpdateWorkspace applique fn à l'état persisté de l'espace de travail et
+// sauvegarde le résultat (déclenche le commit automatique debounced).
+func (s *Store) UpdateWorkspace(fn func(w *Workspace)) (Workspace, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	fn(&s.Workspace)
+	if err := s.save(); err != nil {
+		return Workspace{}, err
+	}
+	return s.Workspace, nil
+}
+
+// NormalizeRepos valide et normalise une liste de dépôts : au moins un repo,
+// chemins et noms non vides, noms uniques (défaut : basename du chemin).
+// Ne vérifie PAS que le chemin existe ni qu'il s'agit d'un dépôt git : cette
+// validation coûteuse (filesystem + exec git) reste à la charge de l'appelant
+// (handlers.go), voir ValidateRepoPath.
+func NormalizeRepos(repos []Repo) ([]Repo, error) {
+	if len(repos) == 0 {
+		return nil, fmt.Errorf("at least one repository is required")
+	}
+	out := make([]Repo, len(repos))
+	seen := map[string]bool{}
+	for i, r := range repos {
+		path := strings.TrimSpace(r.Path)
+		if path == "" {
+			return nil, fmt.Errorf("repository path is required")
+		}
+		name := strings.TrimSpace(r.Name)
+		if name == "" {
+			name = filepath.Base(path)
+		}
+		if seen[name] {
+			return nil, fmt.Errorf("duplicate repository name: %s", name)
+		}
+		seen[name] = true
+		out[i] = Repo{Name: name, Path: path}
+	}
+	return out, nil
+}
+
+// ValidateRepoPath vérifie que path existe et est un dépôt git valide.
+// Validation coûteuse (filesystem + exec git) : appelée par les handlers
+// avant de persister un projet, jamais par le Store lui-même (pour que les
+// tests puissent construire des projets avec des chemins de test simples).
+func ValidateRepoPath(path string) error {
+	info, err := os.Stat(path)
+	if err != nil || !info.IsDir() {
+		return fmt.Errorf("invalid repository path %q: directory not found", path)
+	}
+	if !IsGitRepo(path) {
+		return fmt.Errorf("invalid repository path %q: not a git repository", path)
+	}
+	return nil
+}
+
+// AddProject crée un projet avec un ou plusieurs dépôts git (repos).
+func (s *Store) AddProject(name string, repos []Repo) (Project, error) {
+	normalized, err := NormalizeRepos(repos)
+	if err != nil {
+		return Project{}, err
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.NextProjectN++
-	p := Project{ID: fmt.Sprintf("p%d", s.NextProjectN), Name: name, Path: path}
+	p := Project{ID: fmt.Sprintf("p%d", s.NextProjectN), Name: name, Repos: normalized}
 	s.Projects[p.ID] = p
 	if err := s.save(); err != nil {
 		return Project{}, err
@@ -386,9 +550,20 @@ func (s *Store) AddProject(name, path string) (Project, error) {
 	return p, nil
 }
 
-// UpdateProject modifie le nom et/ou la commande de vérification d'un projet.
-// Les champs nil ne sont pas modifiés.
-func (s *Store) UpdateProject(id string, name, checkCmd *string) (Project, error) {
+// UpdateProject modifie le nom, la commande de vérification et/ou la liste
+// des dépôts d'un projet. Les champs nil ne sont pas modifiés ; repos, s'il
+// est fourni (même vide), remplace entièrement la liste existante (mêmes
+// validations que AddProject). Retirer un repo ne casse pas les tâches
+// existantes : leur worktree déjà créé vit sa vie indépendamment.
+func (s *Store) UpdateProject(id string, name, checkCmd *string, repos *[]Repo) (Project, error) {
+	var normalized []Repo
+	if repos != nil {
+		var err error
+		normalized, err = NormalizeRepos(*repos)
+		if err != nil {
+			return Project{}, err
+		}
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	p, ok := s.Projects[id]
@@ -404,11 +579,41 @@ func (s *Store) UpdateProject(id string, name, checkCmd *string) (Project, error
 	if checkCmd != nil {
 		p.CheckCmd = *checkCmd
 	}
+	if repos != nil {
+		p.Repos = normalized
+	}
 	s.Projects[id] = p
 	if err := s.save(); err != nil {
 		return Project{}, err
 	}
 	return p, nil
+}
+
+// ResolveTaskRepo détermine le dépôt à utiliser pour une nouvelle tâche.
+// repoName est optionnel si le projet n'a qu'un seul dépôt (il est alors
+// ignoré) ; obligatoire et validé sinon.
+func (s *Store) ResolveTaskRepo(projectID, repoName string) (Repo, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	p, ok := s.Projects[projectID]
+	if !ok {
+		return Repo{}, fmt.Errorf("project not found")
+	}
+	if len(p.Repos) == 0 {
+		return Repo{}, fmt.Errorf("project has no repositories")
+	}
+	if len(p.Repos) == 1 {
+		return p.Repos[0], nil
+	}
+	if repoName == "" {
+		return Repo{}, fmt.Errorf("repoName required (project has several repositories)")
+	}
+	for _, r := range p.Repos {
+		if r.Name == repoName {
+			return r, nil
+		}
+	}
+	return Repo{}, fmt.Errorf("unknown repository")
 }
 
 var validColumns = map[string]bool{"soon": true, "doing": true, "done": true}
@@ -465,12 +670,12 @@ func (s *Store) ReserveTaskID() (id string, ref int) {
 }
 
 // CreateTask enregistre une nouvelle tâche (statut initial "running").
-func (s *Store) CreateTask(id string, ref int, cardID, projectID, title, agentID, branch, base, worktreeDir string) (Task, error) {
+func (s *Store) CreateTask(id string, ref int, cardID, projectID, title, agentID, branch, base, worktreeDir, repoName string) (Task, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	t := Task{
 		ID: id, CardID: cardID, ProjectID: projectID, Ref: ref, Title: title,
-		AgentID: agentID, Branch: branch, Status: "running", Checks: []Check{},
+		AgentID: agentID, RepoName: repoName, Branch: branch, Status: "running", Checks: []Check{},
 		Unread: false, UpdatedAt: time.Now().UTC(), Tokens: Tokens{},
 		Base: base, WorktreeDir: worktreeDir,
 	}

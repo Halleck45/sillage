@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -302,4 +303,76 @@ func fallbackCompareURL(dir, base, branch string) (string, error) {
 		return "", fmt.Errorf("origin remote is not a github.com repository")
 	}
 	return fmt.Sprintf("https://github.com/%s/%s/compare/%s...%s?expand=1", owner, repo, base, branch), nil
+}
+
+// --- Synchronisation de l'espace de travail (dataDir uniquement) ---
+
+// ErrSyncConflict signale un conflit de rebase lors de la synchronisation de
+// l'espace de travail (le remote a divergé).
+var ErrSyncConflict = errors.New("sync conflict")
+
+// SyncPush synchronise l'espace de travail (dataDir) avec son remote : commit
+// des changements en attente, puis `git pull --rebase origin main`, puis
+// `git push -u origin main`. C'est, avec Ship (dépôts de projet), le SEUL
+// autre endroit du code qui exécute `git push` : il ne peut opérer que sur
+// dataDir, jamais sur un dépôt de projet. L'appelant (handlers.go) ne doit
+// lui passer que le dataDir configuré côté serveur, jamais une valeur issue
+// d'une entrée utilisateur.
+func SyncPush(dataDir string) (string, error) {
+	var out strings.Builder
+
+	addOut, err := gitAddWorkspaceFiles(dataDir)
+	out.WriteString(addOut)
+	if err != nil {
+		return out.String(), fmt.Errorf("git add failed: %w", err)
+	}
+	statusOut, err := runGit(dataDir, gitDefaultTimeout, "status", "--porcelain")
+	if err != nil {
+		return out.String(), err
+	}
+	if strings.TrimSpace(statusOut) != "" {
+		commitOut, err := runGit(dataDir, gitDefaultTimeout, "commit", "-m", "sillage: update")
+		out.WriteString(commitOut)
+		if err != nil {
+			return out.String(), fmt.Errorf("git commit failed: %w", err)
+		}
+	}
+
+	pullOut, pullErr := runGit(dataDir, gitPushTimeout, "pull", "--rebase", "origin", "main")
+	out.WriteString(pullOut)
+	if pullErr != nil {
+		// Première sync vers un remote vierge : pas de branche main distante,
+		// rien à rebaser, on pousse directement. (Message git localisé selon
+		// la machine, d'où le double test.)
+		errLower := strings.ToLower(pullErr.Error())
+		emptyRemote := strings.Contains(errLower, "couldn't find remote ref") ||
+			strings.Contains(errLower, "impossible de trouver la référence distante")
+		if !emptyRemote {
+			conflict := isRebaseInProgress(dataDir)
+			_, _ = runGit(dataDir, gitDefaultTimeout, "rebase", "--abort")
+			if conflict {
+				return out.String(), fmt.Errorf("%w: the remote workspace diverged, resolve manually in %s", ErrSyncConflict, dataDir)
+			}
+			return out.String(), fmt.Errorf("git pull --rebase failed: %w", pullErr)
+		}
+	}
+
+	pushOut, err := runGit(dataDir, gitPushTimeout, "push", "-u", "origin", "main")
+	out.WriteString(pushOut)
+	if err != nil {
+		return out.String(), fmt.Errorf("push failed: %w", err)
+	}
+	return out.String(), nil
+}
+
+// isRebaseInProgress indique si un rebase git est en cours dans dataDir :
+// distingue un vrai conflit d'un simple échec (réseau, remote absent...).
+func isRebaseInProgress(dataDir string) bool {
+	gitDir := filepath.Join(dataDir, ".git")
+	for _, name := range []string{"rebase-apply", "rebase-merge"} {
+		if info, err := os.Stat(filepath.Join(gitDir, name)); err == nil && info.IsDir() {
+			return true
+		}
+	}
+	return false
 }

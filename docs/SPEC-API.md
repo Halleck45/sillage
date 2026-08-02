@@ -1,4 +1,4 @@
-# Sillage : contrat d'API (v0.2)
+# Sillage : contrat d'API (v0.3)
 
 Serveur Go sur `:8787`. Frontend statique servi sur `/`. Tout le JSON est en camelCase.
 Auth par cookie de session (`sillage_session`, HttpOnly). Toute route `/api/*` (sauf `/api/login`) renvoie `401` sans session valide : le frontend affiche alors l'écran de connexion.
@@ -10,7 +10,9 @@ Mono-utilisateur : un seul mot de passe partagé (pas de comptes, pas de rôles)
 ```jsonc
 Tokens  { "input": 0, "output": 0, "costUsd": 0.0 }
 
-Project { "id": "p1", "name": "sillage", "path": "/abs/path", "unread": 2,
+Repo    { "name": "api", "path": "/abs/path" }   // name court et unique dans le projet
+
+Project { "id": "p1", "name": "sillage", "repos": [Repo, ...], "unread": 2,
           "tokens": Tokens, "checkCmd": "go test ./..." }   // checkCmd peut être vide
 
 Card    { "id": "c1", "projectId": "p1", "column": "soon|doing|done", "title": "...",
@@ -22,20 +24,26 @@ Agent   { "id": "bolt", "name": "Bolt", "emoji": "🐝", "color": "#f2b705",
           "active": true }        // active = une tâche running lui est assignée
 
 Task    { "id": "t1", "cardId": "c1", "projectId": "p1", "ref": 482, "title": "...",
-          "agentId": "bolt", "branch": "sillage/482-slug",
+          "agentId": "bolt", "repoName": "api", "branch": "sillage/482-slug",
           "status": "running|review|ready|shipped",
           "messagesCount": 5, "filesCount": 3, "docsCount": 1,
           "checks": [ { "label": "go test", "ok": true } ],   // [] si aucun
           "liveActivity": "Edit · internal/server/store.go" | null,
           "unread": true, "updatedAt": "2026-08-02T10:00:00Z", "tokens": Tokens }
+          // repoName : nom du Repo du projet utilisé pour le worktree
 
 Message { "id": "m1", "taskId": "t1", "author": "user|agent", "authorName": "Bolt",
           "text": "markdown...", "createdAt": "..." }
           // authorName : nom de l'agent pour author="agent" ; vide pour author="user"
           // (mono-utilisateur : le frontend affiche alors "Vous"/"You")
+
+WorkspaceStatus { "setupDone": true, "gitEnabled": true, "remote": "git@host:org/repo.git",
+                  "dirty": false, "lastCommitAt": "..." | null, "lastSyncAt": "..." | null }
 ```
 
 `Card.progress` = tasksDone/tasksTotal en % (0 si vide). Les compteurs de Card sont calculés côté serveur. `tasksDone` = tâches `shipped`. `reviewCount` = tâches `review`.
+
+`Project.repos` : un projet regroupe un ou plusieurs dépôts git. `Repo.name` est unique dans le projet (défaut : basename du chemin si omis en entrée). L'ancien champ `path` (v0.1/v0.2, un seul dépôt) n'est plus exposé dans le modèle mais reste accepté en entrée de `POST /api/projects` (voir ci-dessous) ; les projets existants migrent automatiquement au chargement (`repos = [{name: basename(path), path}]`).
 
 ## Endpoints
 
@@ -43,15 +51,19 @@ Message { "id": "m1", "taskId": "t1", "author": "user|agent", "authorName": "Bol
 |---|---|---|---|
 | POST | `/api/login` | `{password}` | 204 ou 401 `{error}` |
 | POST | `/api/logout` | | 204 |
-| GET | `/api/state` | | `{projects, cards, tasks, agents, tokens:{global:Tokens}}` |
+| GET | `/api/state` | | `{projects, cards, tasks, agents, workspace, tokens:{global:Tokens}}` |
+| GET | `/api/workspace` | | WorkspaceStatus |
+| POST | `/api/workspace/setup` | `{mode:"local"\|"init"\|"clone", remote?}` | WorkspaceStatus (voir ci-dessous) |
+| PATCH | `/api/workspace` | `{remote}` | WorkspaceStatus (définit/remplace origin ; 400 si git non initialisé) |
+| POST | `/api/workspace/sync` | `{confirm:true}` | `{output, lastSyncAt}` (voir ci-dessous). **Validation humaine obligatoire** : refus 400 sans `confirm` |
 | POST | `/api/agents` | `{name, emoji?, color?, cli, model?, contextPrompt?}` | Agent (name et cli requis ; cli ∈ {claude, codex, fake} ; id = slug du name, 400 si déjà pris) |
 | PATCH | `/api/agents/{id}` | mêmes champs, tous optionnels | Agent |
 | DELETE | `/api/agents/{id}` | | 204 (400 si une tâche référence encore l'agent) |
-| POST | `/api/projects` | `{name, path}` | Project (400 si path invalide/pas un dépôt git) |
-| PATCH | `/api/projects/{id}` | `{name?, checkCmd?}` | Project |
+| POST | `/api/projects` | `{name, path}` ou `{name, repos:[{name?,path}, ...]}` | Project (400 si un path est invalide/pas un dépôt git, ou noms de repo dupliqués) |
+| PATCH | `/api/projects/{id}` | `{name?, checkCmd?, repos?}` | Project (repos, si fourni, remplace la liste entière ; retirer un repo ne casse pas les tâches existantes) |
 | POST | `/api/cards` | `{projectId, title, column?}` | Card |
 | PATCH | `/api/cards/{id}` | `{column}` | Card |
-| POST | `/api/tasks` | `{cardId, title, agentId, prompt?}` | Task (créée `running`, agent lancé avec title+prompt) |
+| POST | `/api/tasks` | `{cardId, title, agentId, prompt?, repoName?}` | Task (créée `running`, agent lancé avec title+prompt). `repoName` optionnel si le projet n'a qu'un repo ; sinon 400 `"repoName required (project has several repositories)"` ou 400 si inconnu |
 | GET | `/api/tasks/{id}` | | `{task, messages}` |
 | POST | `/api/tasks/{id}/messages` | `{text}` | 202 ; relance l'agent (statut → running) |
 | POST | `/api/tasks/{id}/interrupt` | | Task (→ review) |
@@ -67,6 +79,16 @@ Message { "id": "m1", "taskId": "t1", "author": "user|agent", "authorName": "Bol
 ### Ouvrir la PR
 
 `POST /api/tasks/{id}/pr` ne pousse jamais rien : la branche a déjà été poussée par `/ship`. Implémentation : `gh pr create` dans le worktree (si `gh` est disponible) ; en cas d'échec ou d'absence de `gh`, repli sur une URL de comparaison GitHub en lecture seule (`https://github.com/<owner>/<repo>/compare/<base>...<branch>?expand=1`), déduite de `git remote get-url origin` (ssh ou https). Si ni l'un ni l'autre n'aboutit (remote non-GitHub ou absent) : 502 `{error}`.
+
+### Espace de travail (synchronisation git de dataDir)
+
+Le répertoire de données (dataDir) peut devenir un dépôt git optionnel, pour sauvegarder/synchroniser `state.json`, `config.json` et `.gitignore` (seuls fichiers versionnés ; `.gitignore` exclut `worktrees/` et `*.tmp`). Après chaque sauvegarde du state, un commit local debounced (2 s) est tenté silencieusement si git est activé. Jamais de push automatique.
+
+- `mode:"local"` : marque `setupDone`, aucun git. Refusé (400) si déjà fait.
+- `mode:"init"` : `git init` (branche main), écrit `.gitignore`, premier commit ; `remote` optionnel (`git remote add`, jamais de push). Rejouable plus tard (depuis les réglages) pour activer git sur un espace resté local, même si `setupDone` est déjà vrai.
+- `mode:"clone"` (`remote` requis) : clone dans un répertoire temporaire, vérifie que `state.json` existe à sa racine (sinon 400 `"remote does not look like a Sillage workspace"`), puis remplace `state.json`/`config.json`/`.git` de dataDir par ceux du clone et recharge le store en mémoire, sans redémarrage (les sessions actives restent valides). Le mot de passe devient celui de l'espace rapatrié. Refusé (400) si déjà fait.
+- `POST /api/workspace/sync` : commit d'abord si nécessaire, puis `git pull --rebase origin main`, puis `git push -u origin main` (fonction dédiée `SyncPush`, qui n'opère jamais sur un dépôt de projet). En cas de conflit de rebase : `git rebase --abort` puis 409 `{"error":"sync conflict: the remote workspace diverged, resolve manually in <dataDir>"}`.
+- Compatibilité : un state.json existant sans champ `workspace` (installation antérieure à la v0.3) migre vers `setupDone=true` en mode local au chargement : l'onboarding ne s'affiche jamais sur un espace déjà utilisé.
 
 ### Diff
 
@@ -96,11 +118,12 @@ Message { "id": "m1", "taskId": "t1", "author": "user|agent", "authorName": "Bol
 - `cards` : liste des Cards recalculées du projet touché.
 - `agents` : liste des Agents (pour l'indicateur d'activité, et après chaque mutation CRUD).
 - `project` : Project complet (après PATCH `/api/projects/{id}`).
+- `workspace` : WorkspaceStatus (après setup, changement de remote ou sync).
 
 Le frontend maintient son état en mémoire à partir de `/api/state` + SSE ; reconnexion SSE automatique (EventSource natif) et re-fetch de `/api/state` à la reconnexion.
 
 ## Règles produit à respecter côté UI
 
-- Push / livraison uniquement via le bouton du détail de tâche avec confirmation explicite (double clic de confirmation ou bouton qui devient « Confirmer le push ? »). Jamais automatique. Même règle pour l'ouverture de la PR.
+- Push / livraison uniquement via le bouton du détail de tâche avec confirmation explicite (double clic de confirmation ou bouton qui devient « Confirmer le push ? »). Jamais automatique. Même règle pour l'ouverture de la PR et pour la synchronisation de l'espace de travail (`/api/workspace/sync`).
 - Tokens visibles : total global en bas de sidebar (`Σ 12,4k tokens · 0,84 $`), par projet dans l'en-tête kanban, par tâche dans le détail (sous l'en-tête).
 - Une tâche s'ouvre → POST `/read`.

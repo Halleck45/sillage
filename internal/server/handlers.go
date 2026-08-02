@@ -2,12 +2,14 @@ package server
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/fs"
 	"net"
 	"net/http"
-	"os"
 	"strings"
+	"sync"
+	"time"
 
 	"golang.org/x/crypto/bcrypt"
 )
@@ -19,9 +21,13 @@ type Server struct {
 	runner       *Runner
 	sessions     *SessionManager
 	loginLimiter *LoginLimiter
-	passwordHash string
 	dataDir      string
 	static       http.Handler
+
+	// pwMu protège passwordHash, qui peut être remplacé en mémoire après le
+	// rapatriement (clone) d'un espace de travail, sans redémarrage.
+	pwMu         sync.RWMutex
+	passwordHash string
 }
 
 // NewServer construit le serveur Sillage. webFS doit pointer vers le sous-répertoire
@@ -40,6 +46,18 @@ func NewServer(store *Store, passwordHash, dataDir string, webFS fs.FS) *Server 
 	}
 }
 
+func (s *Server) getPasswordHash() string {
+	s.pwMu.RLock()
+	defer s.pwMu.RUnlock()
+	return s.passwordHash
+}
+
+func (s *Server) setPasswordHash(hash string) {
+	s.pwMu.Lock()
+	defer s.pwMu.Unlock()
+	s.passwordHash = hash
+}
+
 // Handler construit le mux HTTP complet avec ses middlewares.
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
@@ -47,6 +65,10 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/login", s.handleLogin)
 	mux.HandleFunc("POST /api/logout", s.handleLogout)
 	mux.HandleFunc("GET /api/state", s.handleState)
+	mux.HandleFunc("GET /api/workspace", s.handleGetWorkspace)
+	mux.HandleFunc("POST /api/workspace/setup", s.handleWorkspaceSetup)
+	mux.HandleFunc("PATCH /api/workspace", s.handleUpdateWorkspaceRemote)
+	mux.HandleFunc("POST /api/workspace/sync", s.handleWorkspaceSync)
 	mux.HandleFunc("POST /api/agents", s.handleCreateAgent)
 	mux.HandleFunc("PATCH /api/agents/{id}", s.handleUpdateAgent)
 	mux.HandleFunc("DELETE /api/agents/{id}", s.handleDeleteAgent)
@@ -159,7 +181,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if bcrypt.CompareHashAndPassword([]byte(s.passwordHash), []byte(body.Password)) != nil {
+	if bcrypt.CompareHashAndPassword([]byte(s.getPasswordHash()), []byte(body.Password)) != nil {
 		s.loginLimiter.RecordFailure(ip)
 		writeError(w, http.StatusUnauthorized, "invalid password")
 		return
@@ -185,7 +207,154 @@ func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 // --- État global ---
 
 func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, s.store.Snapshot())
+	state := s.store.Snapshot()
+	state.Workspace = s.workspaceStatus()
+	writeJSON(w, http.StatusOK, state)
+}
+
+// --- Espace de travail (synchronisation git de dataDir) ---
+
+func (s *Server) handleGetWorkspace(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, s.workspaceStatus())
+}
+
+func (s *Server) handleWorkspaceSetup(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Mode   string `json:"mode"`
+		Remote string `json:"remote"`
+	}
+	if err := decodeJSON(r, &body); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	ws := s.store.GetWorkspace()
+	// "init" reste autorisé après coup pour activer git sur un espace local ;
+	// "local" et "clone" ne peuvent être joués qu'une seule fois.
+	if body.Mode != "init" && ws.SetupDone {
+		writeError(w, http.StatusBadRequest, "workspace setup already done")
+		return
+	}
+
+	switch body.Mode {
+	case "local":
+		if _, err := s.store.UpdateWorkspace(func(w *Workspace) { w.SetupDone = true }); err != nil {
+			writeError(w, http.StatusInternalServerError, "failed to save workspace")
+			return
+		}
+
+	case "init":
+		if err := InitWorkspaceGit(s.dataDir, body.Remote); err != nil {
+			writeError(w, http.StatusBadGateway, err.Error())
+			return
+		}
+		if _, err := s.store.UpdateWorkspace(func(w *Workspace) {
+			w.SetupDone = true
+			if body.Remote != "" {
+				w.SyncRemote = body.Remote
+			}
+		}); err != nil {
+			writeError(w, http.StatusInternalServerError, "failed to save workspace")
+			return
+		}
+
+	case "clone":
+		if body.Remote == "" {
+			writeError(w, http.StatusBadRequest, "remote is required")
+			return
+		}
+		cloneDir, err := CloneWorkspace(s.dataDir, body.Remote)
+		if err != nil {
+			writeError(w, http.StatusBadGateway, err.Error())
+			return
+		}
+		if err := ReplaceWorkspaceFiles(s.dataDir, cloneDir); err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		if err := s.store.ReloadFromDisk(); err != nil {
+			writeError(w, http.StatusInternalServerError, "failed to reload workspace: "+err.Error())
+			return
+		}
+		// Le mot de passe devient celui de l'espace rapatrié, sans redémarrage.
+		if hash, ok, err := ReadPasswordHash(s.dataDir); err == nil && ok {
+			s.setPasswordHash(hash)
+		}
+		if _, err := s.store.UpdateWorkspace(func(w *Workspace) {
+			w.SetupDone = true
+			w.SyncRemote = body.Remote
+		}); err != nil {
+			writeError(w, http.StatusInternalServerError, "failed to save workspace")
+			return
+		}
+
+	default:
+		writeError(w, http.StatusBadRequest, "invalid mode: must be local, init or clone")
+		return
+	}
+
+	status := s.workspaceStatus()
+	s.runner.publishWorkspace(status)
+	writeJSON(w, http.StatusOK, status)
+}
+
+func (s *Server) handleUpdateWorkspaceRemote(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Remote string `json:"remote"`
+	}
+	if err := decodeJSON(r, &body); err != nil || body.Remote == "" {
+		writeError(w, http.StatusBadRequest, "remote is required")
+		return
+	}
+	if !WorkspaceGitEnabled(s.dataDir) {
+		writeError(w, http.StatusBadRequest, "git is not initialized for this workspace")
+		return
+	}
+	if err := SetWorkspaceRemote(s.dataDir, body.Remote); err != nil {
+		writeError(w, http.StatusBadGateway, err.Error())
+		return
+	}
+	if _, err := s.store.UpdateWorkspace(func(w *Workspace) { w.SyncRemote = body.Remote }); err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to save workspace")
+		return
+	}
+	status := s.workspaceStatus()
+	s.runner.publishWorkspace(status)
+	writeJSON(w, http.StatusOK, status)
+}
+
+func (s *Server) handleWorkspaceSync(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Confirm bool `json:"confirm"`
+	}
+	if err := decodeJSON(r, &body); err != nil || !body.Confirm {
+		writeError(w, http.StatusBadRequest, "confirmation required")
+		return
+	}
+	if !WorkspaceGitEnabled(s.dataDir) {
+		writeError(w, http.StatusBadRequest, "git is not initialized for this workspace")
+		return
+	}
+
+	// SyncPush n'opère que sur s.dataDir (le dataDir configuré côté serveur) :
+	// jamais une valeur issue de la requête.
+	output, err := SyncPush(s.dataDir)
+	if err != nil {
+		if errors.Is(err, ErrSyncConflict) {
+			writeError(w, http.StatusConflict, err.Error())
+			return
+		}
+		writeError(w, http.StatusBadGateway, err.Error())
+		return
+	}
+
+	now := time.Now().UTC()
+	if _, err := s.store.UpdateWorkspace(func(w *Workspace) { w.LastSyncAt = &now }); err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to save workspace")
+		return
+	}
+	s.runner.publishWorkspace(s.workspaceStatus())
+	writeJSON(w, http.StatusOK, SyncResponse{Output: output, LastSyncAt: now})
 }
 
 // --- Agents ---
@@ -257,23 +426,30 @@ func (s *Server) handleDeleteAgent(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleCreateProject(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		Name string `json:"name"`
-		Path string `json:"path"`
+		Name  string `json:"name"`
+		Path  string `json:"path"`
+		Repos []Repo `json:"repos"`
 	}
-	if err := decodeJSON(r, &body); err != nil || body.Name == "" || body.Path == "" {
-		writeError(w, http.StatusBadRequest, "name and path are required")
+	if err := decodeJSON(r, &body); err != nil || body.Name == "" {
+		writeError(w, http.StatusBadRequest, "name is required")
 		return
 	}
-	info, err := os.Stat(body.Path)
-	if err != nil || !info.IsDir() {
-		writeError(w, http.StatusBadRequest, "invalid project path: directory not found")
+	repos := body.Repos
+	if len(repos) == 0 && body.Path != "" {
+		repos = []Repo{{Path: body.Path}}
+	}
+	normalized, err := NormalizeRepos(repos)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	if !IsGitRepo(body.Path) {
-		writeError(w, http.StatusBadRequest, "invalid project path: not a git repository")
-		return
+	for _, repo := range normalized {
+		if err := ValidateRepoPath(repo.Path); err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
 	}
-	project, err := s.store.AddProject(body.Name, body.Path)
+	project, err := s.store.AddProject(body.Name, normalized)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to create project")
 		return
@@ -286,12 +462,27 @@ func (s *Server) handleUpdateProject(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Name     *string `json:"name"`
 		CheckCmd *string `json:"checkCmd"`
+		Repos    *[]Repo `json:"repos"`
 	}
 	if err := decodeJSON(r, &body); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-	project, err := s.store.UpdateProject(id, body.Name, body.CheckCmd)
+	if body.Repos != nil {
+		normalized, err := NormalizeRepos(*body.Repos)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		for _, repo := range normalized {
+			if err := ValidateRepoPath(repo.Path); err != nil {
+				writeError(w, http.StatusBadRequest, err.Error())
+				return
+			}
+		}
+		body.Repos = &normalized
+	}
+	project, err := s.store.UpdateProject(id, body.Name, body.CheckCmd, body.Repos)
 	if err != nil {
 		writeError(w, statusForStoreError(err), err.Error())
 		return
@@ -343,10 +534,11 @@ func (s *Server) handleUpdateCard(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleCreateTask(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		CardID  string `json:"cardId"`
-		Title   string `json:"title"`
-		AgentID string `json:"agentId"`
-		Prompt  string `json:"prompt"`
+		CardID   string `json:"cardId"`
+		Title    string `json:"title"`
+		AgentID  string `json:"agentId"`
+		Prompt   string `json:"prompt"`
+		RepoName string `json:"repoName"`
 	}
 	if err := decodeJSON(r, &body); err != nil || body.CardID == "" || body.Title == "" || body.AgentID == "" {
 		writeError(w, http.StatusBadRequest, "cardId, title and agentId are required")
@@ -366,16 +558,21 @@ func (s *Server) handleCreateTask(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "project not found")
 		return
 	}
+	repo, err := s.store.ResolveTaskRepo(project.ID, body.RepoName)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 
 	id, ref := s.store.ReserveTaskID()
 	branch := fmt.Sprintf("sillage/%d-%s", ref, Slugify(body.Title))
-	dir, base, err := CreateWorktree(project.Path, s.dataDir, id, branch)
+	dir, base, err := CreateWorktree(repo.Path, s.dataDir, id, branch)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "failed to create worktree: "+err.Error())
 		return
 	}
 
-	task, err := s.store.CreateTask(id, ref, card.ID, project.ID, body.Title, body.AgentID, branch, base, dir)
+	task, err := s.store.CreateTask(id, ref, card.ID, project.ID, body.Title, body.AgentID, branch, base, dir, repo.Name)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to create task")
 		return

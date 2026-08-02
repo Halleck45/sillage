@@ -10,11 +10,18 @@ type Tokens struct {
 	CostUsd float64 `json:"costUsd"`
 }
 
-// Project est un dépôt git suivi par Sillage.
+// Repo est un dépôt git parmi ceux d'un projet. Name est court et affichable,
+// unique dans le projet ; Path est un chemin absolu vers un dépôt git valide.
+type Repo struct {
+	Name string `json:"name"`
+	Path string `json:"path"`
+}
+
+// Project est suivi par Sillage et peut regrouper plusieurs dépôts git (Repos).
 type Project struct {
 	ID     string `json:"id"`
 	Name   string `json:"name"`
-	Path   string `json:"path"`
+	Repos  []Repo `json:"repos"`
 	Unread int    `json:"unread"`
 	Tokens Tokens `json:"tokens"`
 
@@ -64,6 +71,7 @@ type Task struct {
 	Ref           int       `json:"ref"`
 	Title         string    `json:"title"`
 	AgentID       string    `json:"agentId"`
+	RepoName      string    `json:"repoName"` // dépôt du projet utilisé pour le worktree
 	Branch        string    `json:"branch"`
 	Status        string    `json:"status"` // running|review|ready|shipped
 	MessagesCount int       `json:"messagesCount"`
@@ -94,13 +102,40 @@ type Message struct {
 	CreatedAt  time.Time `json:"createdAt"`
 }
 
+// Workspace est l'état de synchronisation git persisté de l'espace de
+// données (dataDir), stocké dans state.json.
+type Workspace struct {
+	SetupDone  bool       `json:"setupDone"`
+	SyncRemote string     `json:"syncRemote"`
+	LastSyncAt *time.Time `json:"lastSyncAt"`
+}
+
+// WorkspaceStatus est la réponse de GET /api/workspace, le contenu de
+// l'événement SSE "workspace" et le champ State.Workspace : elle combine
+// l'état persisté (Workspace) et des faits git calculés à la volée.
+type WorkspaceStatus struct {
+	SetupDone    bool       `json:"setupDone"`
+	GitEnabled   bool       `json:"gitEnabled"`
+	Remote       string     `json:"remote"`
+	Dirty        bool       `json:"dirty"`
+	LastCommitAt *time.Time `json:"lastCommitAt"`
+	LastSyncAt   *time.Time `json:"lastSyncAt"`
+}
+
+// SyncResponse est la réponse de POST /api/workspace/sync.
+type SyncResponse struct {
+	Output     string    `json:"output"`
+	LastSyncAt time.Time `json:"lastSyncAt"`
+}
+
 // State est la réponse de GET /api/state.
 type State struct {
-	Projects []Project `json:"projects"`
-	Cards    []Card    `json:"cards"`
-	Tasks    []Task    `json:"tasks"`
-	Agents   []Agent   `json:"agents"`
-	Tokens   struct {
+	Projects  []Project       `json:"projects"`
+	Cards     []Card          `json:"cards"`
+	Tasks     []Task          `json:"tasks"`
+	Agents    []Agent         `json:"agents"`
+	Workspace WorkspaceStatus `json:"workspace"`
+	Tokens    struct {
 		Global Tokens `json:"global"`
 	} `json:"tokens"`
 }
