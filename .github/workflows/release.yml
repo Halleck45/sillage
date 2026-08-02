@@ -22,16 +22,14 @@ jobs:
           for target in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64; do
             GOOS=${target%/*}
             GOARCH=${target#*/}
-            out="sillage_${GITHUB_REF_NAME}_${GOOS}_${GOARCH}"
-            CGO_ENABLED=0 GOOS=$GOOS GOARCH=$GOARCH go build -trimpath -ldflags "-s -w" -o "dist/$out/sillage" .
-            tar -czf "dist/$out.tar.gz" -C "dist/$out" sillage
-            rm -r "dist/$out"
+            CGO_ENABLED=0 GOOS=$GOOS GOARCH=$GOARCH go build -trimpath -ldflags "-s -w" \
+              -o "dist/sillage_${GITHUB_REF_NAME}_${GOOS}_${GOARCH}" .
           done
-          (cd dist && sha256sum *.tar.gz > checksums.txt)
+          (cd dist && sha256sum sillage_* > checksums.txt)
       - name: Create release
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            dist/*.tar.gz
+            dist/sillage_*
             dist/checksums.txt
           generate_release_notes: true
