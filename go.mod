@@ -1,4 +1,4 @@
-module atelier
+module sillage
 
 go 1.24.0
 

@@ -1,14 +1,14 @@
-# Atelier : contrat d'API (v1)
+# Sillage : contrat d'API (v1)
 
 Serveur Go sur `:8787`. Frontend statique servi sur `/`. Tout le JSON est en camelCase.
-Auth par cookie de session (`atelier_session`, HttpOnly). Toute route `/api/*` (sauf `/api/login`) renvoie `401` sans session valide : le frontend affiche alors l'écran de connexion.
+Auth par cookie de session (`sillage_session`, HttpOnly). Toute route `/api/*` (sauf `/api/login`) renvoie `401` sans session valide : le frontend affiche alors l'écran de connexion.
 
 ## Modèles
 
 ```jsonc
 Tokens  { "input": 0, "output": 0, "costUsd": 0.0 }
 
-Project { "id": "p1", "name": "atelier", "path": "/abs/path", "unread": 2, "tokens": Tokens }
+Project { "id": "p1", "name": "sillage", "path": "/abs/path", "unread": 2, "tokens": Tokens }
 
 Card    { "id": "c1", "projectId": "p1", "column": "soon|doing|done", "title": "...",
           "tasksTotal": 4, "tasksDone": 1, "docsCount": 2, "messagesCount": 12,
@@ -19,7 +19,7 @@ Agent   { "id": "bolt", "name": "Bolt", "emoji": "🐝", "color": "#f2b705",
           "active": true }        // active = une tâche running lui est assignée
 
 Task    { "id": "t1", "cardId": "c1", "projectId": "p1", "ref": 482, "title": "...",
-          "agentId": "bolt", "branch": "atelier/482-slug",
+          "agentId": "bolt", "branch": "sillage/482-slug",
           "status": "running|review|ready|shipped",
           "messagesCount": 5, "filesCount": 3, "docsCount": 1,
           "checks": [ { "label": "go test", "ok": true } ],   // [] si aucun
@@ -57,7 +57,7 @@ Message { "id": "m1", "taskId": "t1", "author": "user|agent", "text": "markdown.
 ### Diff
 
 ```jsonc
-{ "branch": "atelier/482-slug", "base": "main",
+{ "branch": "sillage/482-slug", "base": "main",
   "files": [ { "path": "a/b.go", "additions": 10, "deletions": 2,
                "hunks": [ { "header": "@@ -1,4 +1,6 @@",
                             "lines": [ {"type":"ctx|add|del", "text":"..."} ] } ] } ] }

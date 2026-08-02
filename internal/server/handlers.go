@@ -24,7 +24,7 @@ type Server struct {
 	static       http.Handler
 }
 
-// NewServer construit le serveur Atelier. webFS doit pointer vers le sous-répertoire
+// NewServer construit le serveur Sillage. webFS doit pointer vers le sous-répertoire
 // "web" du système de fichiers embarqué (frontend statique).
 func NewServer(store *Store, passwordHash, dataDir string, webFS fs.FS) *Server {
 	hub := NewHub()
@@ -270,7 +270,7 @@ func (s *Server) handleCreateTask(w http.ResponseWriter, r *http.Request) {
 	}
 
 	id, ref := s.store.ReserveTaskID()
-	branch := fmt.Sprintf("atelier/%d-%s", ref, Slugify(body.Title))
+	branch := fmt.Sprintf("sillage/%d-%s", ref, Slugify(body.Title))
 	dir, base, err := CreateWorktree(project.Path, s.dataDir, id, branch)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "création du worktree impossible : "+err.Error())

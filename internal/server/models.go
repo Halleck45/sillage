@@ -1,4 +1,4 @@
-// Package server implémente le backend HTTP/JSON/SSE de l'application Atelier.
+// Package server implémente le backend HTTP/JSON/SSE de l'application Sillage.
 package server
 
 import "time"
@@ -10,7 +10,7 @@ type Tokens struct {
 	CostUsd float64 `json:"costUsd"`
 }
 
-// Project est un dépôt git suivi par Atelier.
+// Project est un dépôt git suivi par Sillage.
 type Project struct {
 	ID     string `json:"id"`
 	Name   string `json:"name"`

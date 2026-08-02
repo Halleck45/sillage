@@ -415,10 +415,10 @@ func (r *Runner) runClaude(task *Task, agent Agent, handle *procHandle, cliInput
 func (r *Runner) runCodex(task *Task, agent Agent, handle *procHandle, cliInput string) error {
 	// workspace-write : écriture limitée au worktree, réseau coupé ; le push
 	// reste impossible et ne passe que par Ship (git.go) après validation humaine.
-	// ATELIER_CODEX_SANDBOX permet de choisir un autre mode (ex : danger-full-access
-	// sur les machines où bwrap est bloqué par AppArmor) ; le confinement d'Atelier
+	// SILLAGE_CODEX_SANDBOX permet de choisir un autre mode (ex : danger-full-access
+	// sur les machines où bwrap est bloqué par AppArmor) ; le confinement d'Sillage
 	// (worktree dédié, pas de push agent) reste alors la seule barrière.
-	sandbox := os.Getenv("ATELIER_CODEX_SANDBOX")
+	sandbox := os.Getenv("SILLAGE_CODEX_SANDBOX")
 	if sandbox == "" {
 		sandbox = "workspace-write"
 	}
@@ -571,10 +571,10 @@ func (r *Runner) runFake(task *Task, agent Agent, handle *procHandle) error {
 		}
 	}
 
-	content := fmt.Sprintf("# Atelier : tâche de test\n\nGénéré le %s par l'agent %s.\n", time.Now().UTC().Format(time.RFC3339), agent.Name)
-	_ = os.WriteFile(filepath.Join(task.WorktreeDir, "ATELIER-TEST.md"), []byte(content), 0o644)
+	content := fmt.Sprintf("# Sillage : tâche de test\n\nGénéré le %s par l'agent %s.\n", time.Now().UTC().Format(time.RFC3339), agent.Name)
+	_ = os.WriteFile(filepath.Join(task.WorktreeDir, "SILLAGE-TEST.md"), []byte(content), 0o644)
 
-	msg, t, err := r.store.AddMessage(task.ID, "agent", "Tâche simulée terminée : ATELIER-TEST.md mis à jour.")
+	msg, t, err := r.store.AddMessage(task.ID, "agent", "Tâche simulée terminée : SILLAGE-TEST.md mis à jour.")
 	if err == nil {
 		r.publishMessage(msg)
 		*task = t

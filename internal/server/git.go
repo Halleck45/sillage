@@ -208,7 +208,7 @@ func Ship(dir, branch, title string) (string, error) {
 		return out.String(), err
 	}
 	if strings.TrimSpace(statusOut) != "" {
-		commitOut, err := runGit(dir, gitDefaultTimeout, "commit", "-m", "Atelier: "+title)
+		commitOut, err := runGit(dir, gitDefaultTimeout, "commit", "-m", "Sillage: "+title)
 		out.WriteString(commitOut)
 		if err != nil {
 			return out.String(), fmt.Errorf("git commit a échoué : %w", err)

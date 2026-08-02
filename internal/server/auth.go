@@ -15,7 +15,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-const sessionCookieName = "atelier_session"
+const sessionCookieName = "sillage_session"
 const sessionTTL = 30 * 24 * time.Hour
 
 // Config est le contenu persisté de config.json.
@@ -46,12 +46,12 @@ func GenerateRandomPassword(n int) (string, error) {
 // LoadOrInitPasswordHash détermine le hash bcrypt du mot de passe à utiliser.
 //
 // Priorité :
-//  1. ATELIER_PASSWORD (si présent au démarrage), pour les tests ; non persisté.
+//  1. SILLAGE_PASSWORD (si présent au démarrage), pour les tests ; non persisté.
 //  2. config.json existant dans dataDir.
 //  3. Génération d'un mot de passe aléatoire, affiché une seule fois
 //     (valeur non vide de generated), et persistance du hash dans config.json.
 func LoadOrInitPasswordHash(dataDir string) (hash string, generated string, err error) {
-	if envPass := os.Getenv("ATELIER_PASSWORD"); envPass != "" {
+	if envPass := os.Getenv("SILLAGE_PASSWORD"); envPass != "" {
 		h, err := bcrypt.GenerateFromPassword([]byte(envPass), bcrypt.DefaultCost)
 		if err != nil {
 			return "", "", err

@@ -1,6 +1,6 @@
-# Atelier : spec interne backend (Go)
+# Sillage : spec interne backend (Go)
 
-Binaire unique `atelier`. Go 1.24. Seule dépendance externe autorisée : `golang.org/x/crypto/bcrypt`.
+Binaire unique `sillage`. Go 1.24. Seule dépendance externe autorisée : `golang.org/x/crypto/bcrypt`.
 Frontend embarqué via `//go:embed web`. Respecter SPEC-API.md à la lettre.
 
 ## Arborescence
@@ -20,8 +20,8 @@ internal/server/
 
 ## Flags et config
 
-- `-addr` (défaut `127.0.0.1:8787`), `-data` (défaut `~/.local/share/atelier`).
-- `config.json` dans dataDir : `{ "passwordHash": "..." }`. Au premier lancement sans hash : générer un mot de passe aléatoire (16 chars alphanum, crypto/rand), l'afficher UNE FOIS sur stdout (`Mot de passe initial : ...`), stocker le hash bcrypt. Env `ATELIER_PASSWORD` (si présent au démarrage) remplace le hash (pratique pour tests).
+- `-addr` (défaut `127.0.0.1:8787`), `-data` (défaut `~/.local/share/sillage`).
+- `config.json` dans dataDir : `{ "passwordHash": "..." }`. Au premier lancement sans hash : générer un mot de passe aléatoire (16 chars alphanum, crypto/rand), l'afficher UNE FOIS sur stdout (`Mot de passe initial : ...`), stocker le hash bcrypt. Env `SILLAGE_PASSWORD` (si présent au démarrage) remplace le hash (pratique pour tests).
 - `state.json` dans dataDir : tout l'état (projects, cards, tasks, messages, agents, refCounter, usages tokens). Écriture atomique : fichier temp + `os.Rename`, à chaque mutation (fichier petit).
 
 ## Store
@@ -31,7 +31,7 @@ Tokens : cumulés dans Task.tokens ; agrégats projet/global calculés en somman
 
 ## Auth
 
-- Sessions en mémoire : token 32 octets crypto/rand hex, map[token]expiry (30 jours). Cookie `atelier_session` HttpOnly SameSite=Lax, Secure si TLS ou `X-Forwarded-Proto: https`.
+- Sessions en mémoire : token 32 octets crypto/rand hex, map[token]expiry (30 jours). Cookie `sillage_session` HttpOnly SameSite=Lax, Secure si TLS ou `X-Forwarded-Proto: https`.
 - Rate-limit login : max 5 échecs/minute par IP (map + fenêtre glissante), réponse 429.
 - Toute mutation exige `Content-Type: application/json` (403 sinon) : protection CSRF avec SameSite=Lax.
 - Middleware auth sur tout `/api/*` sauf `/api/login`. Les fichiers statiques sont publics mais ne contiennent rien de sensible.
@@ -42,12 +42,12 @@ Hub : `Subscribe() (ch chan Event, unsub func())`, `Publish(Event{Name, Data any
 
 ## Git (git.go)
 
-Chaque tâche travaille dans un **worktree** dédié : `<dataDir>/worktrees/<taskId>`, branche `atelier/<ref>-<slug>` créée depuis la branche par défaut du repo (`git rev-parse --abbrev-ref HEAD` au moment de la création ; stockée comme `base` dans la tâche).
+Chaque tâche travaille dans un **worktree** dédié : `<dataDir>/worktrees/<taskId>`, branche `sillage/<ref>-<slug>` créée depuis la branche par défaut du repo (`git rev-parse --abbrev-ref HEAD` au moment de la création ; stockée comme `base` dans la tâche).
 
 - `CreateWorktree(repoPath, taskID, branch) (dir, base, error)` : `git worktree add -b <branch> <dir>` depuis base.
 - `Diff(dir, base)` : d'abord `git add -A -N` (fait apparaître les fichiers non suivis), puis `git diff <base>` ; parser le unified diff en structure de SPEC-API.md (fichiers, additions/deletions, hunks, lignes ctx/add/del). Parser robuste : ignorer les lignes binaires, gérer rename.
 - `Commits(dir, base)` : `git log <base>..HEAD --pretty=format:%h|%s|%cr`.
-- `Ship(dir, branch, title)` : `git add -A` ; commit `Atelier: <title>` si changements ; `git push -u origin <branch>`. Retourner la sortie combinée. Erreur claire si pas de remote. **C'est le SEUL endroit du code qui exécute `git push`.**
+- `Ship(dir, branch, title)` : `git add -A` ; commit `Sillage: <title>` si changements ; `git push -u origin <branch>`. Retourner la sortie combinée. Erreur claire si pas de remote. **C'est le SEUL endroit du code qui exécute `git push`.**
 - Toutes les commandes git : `exec.Command` avec `Dir` fixé, env hérité + `GIT_TERMINAL_PROMPT=0`, timeout 60 s (120 s pour push) via context.
 
 ## Runner (runner.go)
@@ -93,7 +93,7 @@ Jamais de `--dangerously-skip-permissions`. Jamais `git push` dans allowedTools.
 
 ### Adaptateur fake (`cli:"fake"`)
 
-Sans exec : goroutine qui simule ~3 s de travail : 3 lignes d'activité espacées, écrit/complète un fichier `ATELIER-TEST.md` dans le worktree (contenu horodaté), un Message agent de synthèse, usage fictif `{input:1200, output:340, costUsd:0.004}`. Sert aux tests et à la démo sans coût.
+Sans exec : goroutine qui simule ~3 s de travail : 3 lignes d'activité espacées, écrit/complète un fichier `SILLAGE-TEST.md` dans le worktree (contenu horodaté), un Message agent de synthèse, usage fictif `{input:1200, output:340, costUsd:0.004}`. Sert aux tests et à la démo sans coût.
 
 ## Seed (premier lancement)
 

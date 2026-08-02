@@ -102,7 +102,7 @@ func TestWorktreeAndDiff(t *testing.T) {
 
 	wantBase := strings.TrimSpace(runTestGit(t, repo, "rev-parse", "--abbrev-ref", "HEAD"))
 
-	dir, base, err := CreateWorktree(repo, dataDir, "t1", "atelier/100-test")
+	dir, base, err := CreateWorktree(repo, dataDir, "t1", "sillage/100-test")
 	if err != nil {
 		t.Fatalf("CreateWorktree: %v", err)
 	}

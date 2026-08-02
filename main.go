@@ -1,4 +1,4 @@
-// Atelier : serveur backend unique (API + frontend statique embarqué).
+// Sillage : serveur backend unique (API + frontend statique embarqué).
 package main
 
 import (
@@ -11,7 +11,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"atelier/internal/server"
+	"sillage/internal/server"
 )
 
 //go:embed web
@@ -46,7 +46,7 @@ func main() {
 
 	srv := server.NewServer(store, hash, *dataDir, webContent)
 
-	log.Printf("Atelier écoute sur %s (données : %s)", *addr, *dataDir)
+	log.Printf("Sillage écoute sur %s (données : %s)", *addr, *dataDir)
 	if err := http.ListenAndServe(*addr, srv.Handler()); err != nil {
 		log.Fatalf("serveur arrêté : %v", err)
 	}
@@ -55,7 +55,7 @@ func main() {
 func defaultDataDir() string {
 	home, err := os.UserHomeDir()
 	if err != nil {
-		return ".atelier-data"
+		return ".sillage-data"
 	}
-	return filepath.Join(home, ".local", "share", "atelier")
+	return filepath.Join(home, ".local", "share", "sillage")
 }

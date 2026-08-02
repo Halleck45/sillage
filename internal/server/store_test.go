@@ -12,7 +12,7 @@ func TestStoreRoundtripSaveLoad(t *testing.T) {
 		t.Fatalf("NewStore: %v", err)
 	}
 
-	project, err := s1.AddProject("atelier", "/tmp/atelier")
+	project, err := s1.AddProject("sillage", "/tmp/sillage")
 	if err != nil {
 		t.Fatalf("AddProject: %v", err)
 	}
@@ -28,7 +28,7 @@ func TestStoreRoundtripSaveLoad(t *testing.T) {
 	if ref < 100 {
 		t.Fatalf("la référence doit démarrer à 100 ou plus, reçue %d", ref)
 	}
-	task, err := s1.CreateTask(taskID, ref, card.ID, project.ID, "Titre de tâche", "echo", "atelier/100-titre", "main", "/tmp/worktree")
+	task, err := s1.CreateTask(taskID, ref, card.ID, project.ID, "Titre de tâche", "echo", "sillage/100-titre", "main", "/tmp/worktree")
 	if err != nil {
 		t.Fatalf("CreateTask: %v", err)
 	}
@@ -92,7 +92,7 @@ func TestStoreRoundtripSaveLoad(t *testing.T) {
 	if !ok {
 		t.Fatalf("projet %s introuvable après rechargement", project.ID)
 	}
-	if loadedProject.Path != "/tmp/atelier" {
+	if loadedProject.Path != "/tmp/sillage" {
 		t.Fatalf("chemin de projet inattendu après rechargement : %q", loadedProject.Path)
 	}
 
@@ -109,7 +109,7 @@ func TestDerivedCounters(t *testing.T) {
 		t.Fatalf("NewStore: %v", err)
 	}
 
-	project, err := s.AddProject("atelier", "/tmp/atelier")
+	project, err := s.AddProject("sillage", "/tmp/sillage")
 	if err != nil {
 		t.Fatalf("AddProject: %v", err)
 	}
@@ -122,7 +122,7 @@ func TestDerivedCounters(t *testing.T) {
 	var taskIDs []string
 	for _, st := range statuses {
 		id, ref := s.ReserveTaskID()
-		task, err := s.CreateTask(id, ref, card.ID, project.ID, "T "+st, "echo", "atelier/"+id, "main", "/tmp/wt-"+id)
+		task, err := s.CreateTask(id, ref, card.ID, project.ID, "T "+st, "echo", "sillage/"+id, "main", "/tmp/wt-"+id)
 		if err != nil {
 			t.Fatalf("CreateTask: %v", err)
 		}

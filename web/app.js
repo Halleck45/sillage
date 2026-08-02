@@ -1,4 +1,4 @@
-// Atelier : frontend SPA vanilla (zéro framework, zéro dépendance).
+// Sillage : frontend SPA vanilla (zéro framework, zéro dépendance).
 // Contrat d'API : voir SPEC-API.md à la racine du dépôt.
 (function () {
   'use strict';
@@ -308,7 +308,7 @@
     }).join('');
 
     return '' +
-      '<div class="sidebar-brand"><span class="brand-mark"></span><span class="brand-name">Atelier</span></div>' +
+      '<div class="sidebar-brand"><span class="brand-mark"></span><span class="brand-name">Sillage</span></div>' +
       '<div class="sidebar-search-wrap">' +
         '<button class="search-btn" data-action="open-search"><span>⌕</span><span class="search-btn-label">Rechercher</span>' +
         '<span class="kbd">' + (isMac() ? '⌘K' : 'Ctrl+K') + '</span></button>' +
