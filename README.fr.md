@@ -24,7 +24,6 @@ Travailler avec plusieurs agents IA tourne vite à l'enfer des onglets : cinq te
 - **Agent gratuit intégré** (Écho 🧪) pour essayer tout le workflow sans dépenser un token.
 - **UI en français et en anglais**, bascule dans la sidebar, détection automatique du navigateur.
 - **Agents gérés depuis l'interface** : créer, modifier (nom, emoji, CLI, modèle, prompt de contexte).
-- **Multi-utilisateur simple** : espace partagé, comptes identifiant + mot de passe, gestion par un admin dans l'UI.
 - **Ouvrir une PR** GitHub pour une tâche livrée (`gh pr create`, avec la même confirmation explicite que la livraison).
 
 ![Vue kanban](docs/screenshots/kanban.png)
@@ -40,7 +39,7 @@ sillage
 
 Ou depuis les sources : `go build -o sillage . && ./sillage`
 
-Puis ouvrir http://127.0.0.1:8787 et se connecter avec l'identifiant `admin`. Au premier lancement, un mot de passe est généré et affiché une seule fois dans le terminal. Pour choisir le vôtre : `SILLAGE_PASSWORD=votremotdepasse sillage`. Les autres comptes se créent via l'icône réglages de la sidebar (admin uniquement).
+Puis ouvrir http://127.0.0.1:8787. Au premier lancement, un mot de passe est généré et affiché une seule fois dans le terminal. Pour choisir le vôtre : `SILLAGE_PASSWORD=votremotdepasse sillage`.
 
 Ajoutez un projet (n'importe quel dépôt git local), créez une carte, une tâche, choisissez un agent : il démarre immédiatement dans son worktree. Commencez par Écho si vous voulez voir le flux sans aucun coût d'API.
 
@@ -63,7 +62,9 @@ Binaire Go unique, frontend vanilla embarqué (pas de framework, pas de build), 
 
 ## Feuille de route
 
-Non-lus par utilisateur et permissions par projet, suppression et archivage de projets, autres adaptateurs de CLI d'agents, autres langues d'interface.
+Suppression et archivage de projets, autres adaptateurs de CLI d'agents, autres langues d'interface.
+
+Le multi-utilisateur a été essayé puis volontairement retiré : Sillage reste un outil personnel, et cette simplicité est une fonctionnalité.
 
 Contributions bienvenues : voir [CONTRIBUTING.md](CONTRIBUTING.md).
 

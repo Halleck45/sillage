@@ -25,7 +25,6 @@ Working with several AI agents quickly turns into tab hell: five terminals, thre
 - **Built-in free agent** (Écho 🧪): a simulated agent to try the whole workflow without spending a token.
 - **English and French UI**, switchable from the sidebar, auto-detected from your browser.
 - **Agents managed from the UI**: create and edit agents (name, emoji, CLI, model, context prompt).
-- **Simple multi-user**: shared workspace, username and password accounts, an admin manages users from the UI.
 - **Open a PR** on GitHub for a shipped task (`gh pr create`, with the same explicit confirmation as shipping).
 
 ![Kanban view](docs/screenshots/kanban.png)
@@ -41,7 +40,7 @@ sillage
 
 Or from source: `go build -o sillage . && ./sillage`
 
-Then open http://127.0.0.1:8787 and log in as `admin`. On first start, a password is generated and printed once in the terminal. To choose your own: `SILLAGE_PASSWORD=yourpassword sillage`. Additional users can be created from the settings icon in the sidebar (admin only).
+Then open http://127.0.0.1:8787. On first start, a password is generated and printed once in the terminal. To choose your own: `SILLAGE_PASSWORD=yourpassword sillage`.
 
 Add a project (any local git repository), create a card, create a task, pick an agent: it starts working immediately in its own worktree. Try the free agent Écho first if you want to see the flow without any API cost.
 
@@ -79,10 +78,11 @@ web/                  index.html, style.css, app.js
 
 ## Roadmap
 
-- Per-user unread state and per-project permissions.
 - Project deletion and archiving.
 - More agent CLI adapters.
 - More languages for the UI.
+
+Multi-user support was tried and deliberately removed: Sillage stays a personal tool, and that simplicity is a feature.
 
 Contributions welcome: see [CONTRIBUTING.md](CONTRIBUTING.md).
 

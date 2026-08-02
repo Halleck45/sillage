@@ -3,7 +3,7 @@
 Serveur Go sur `:8787`. Frontend statique servi sur `/`. Tout le JSON est en camelCase.
 Auth par cookie de session (`sillage_session`, HttpOnly). Toute route `/api/*` (sauf `/api/login`) renvoie `401` sans session valide : le frontend affiche alors l'écran de connexion.
 
-Espace de travail partagé par tous les utilisateurs (pas de permissions par projet, pas de non-lus par utilisateur). Tous les messages d'erreur API (`{"error": "..."}`) sont en anglais, courts (ex : `"confirmation required"`, `"task not found"`, `"invalid project path: not a git repository"`).
+Mono-utilisateur : un seul mot de passe partagé (pas de comptes, pas de rôles). Tous les messages d'erreur API (`{"error": "..."}`) sont en anglais, courts (ex : `"confirmation required"`, `"task not found"`, `"invalid project path: not a git repository"`).
 
 ## Modèles
 
@@ -29,12 +29,10 @@ Task    { "id": "t1", "cardId": "c1", "projectId": "p1", "ref": 482, "title": ".
           "liveActivity": "Edit · internal/server/store.go" | null,
           "unread": true, "updatedAt": "2026-08-02T10:00:00Z", "tokens": Tokens }
 
-Message { "id": "m1", "taskId": "t1", "author": "user|agent", "authorName": "Alice",
+Message { "id": "m1", "taskId": "t1", "author": "user|agent", "authorName": "Bolt",
           "text": "markdown...", "createdAt": "..." }
-          // authorName : nom de l'utilisateur (author="user") ou de l'agent (author="agent")
-
-User    { "id": "u1", "name": "admin", "role": "admin|member" }
-          // représentation publique : jamais de champ passwordHash exposé par l'API
+          // authorName : nom de l'agent pour author="agent" ; vide pour author="user"
+          // (mono-utilisateur : le frontend affiche alors "Vous"/"You")
 ```
 
 `Card.progress` = tasksDone/tasksTotal en % (0 si vide). Les compteurs de Card sont calculés côté serveur. `tasksDone` = tâches `shipped`. `reviewCount` = tâches `review`.
@@ -43,14 +41,9 @@ User    { "id": "u1", "name": "admin", "role": "admin|member" }
 
 | Méthode | Route | Corps | Réponse |
 |---|---|---|---|
-| POST | `/api/login` | `{username, password}` | 204 ou 401 `{error}` |
+| POST | `/api/login` | `{password}` | 204 ou 401 `{error}` |
 | POST | `/api/logout` | | 204 |
-| GET | `/api/me` | | `{id, name, role}` (utilisateur courant) |
-| GET | `/api/state` | | `{projects, cards, tasks, agents, me, tokens:{global:Tokens}}` |
-| GET | `/api/users` | | liste de User (admin uniquement, 403 sinon) |
-| POST | `/api/users` | `{name, password, role?}` | User (admin uniquement ; role défaut `member` ; name unique et non vide, 400 sinon) |
-| PATCH | `/api/users/{id}` | `{password?, role?}` | User (admin uniquement) |
-| DELETE | `/api/users/{id}` | | 204 (admin uniquement ; 400 pour soi-même ou pour le dernier admin) |
+| GET | `/api/state` | | `{projects, cards, tasks, agents, tokens:{global:Tokens}}` |
 | POST | `/api/agents` | `{name, emoji?, color?, cli, model?, contextPrompt?}` | Agent (name et cli requis ; cli ∈ {claude, codex, fake} ; id = slug du name, 400 si déjà pris) |
 | PATCH | `/api/agents/{id}` | mêmes champs, tous optionnels | Agent |
 | DELETE | `/api/agents/{id}` | | 204 (400 si une tâche référence encore l'agent) |
@@ -70,8 +63,6 @@ User    { "id": "u1", "name": "admin", "role": "admin|member" }
 | GET | `/api/tasks/{id}/diff` | | voir ci-dessous |
 | GET | `/api/tasks/{id}/deliverables` | | voir ci-dessous |
 | GET | `/api/events` | | SSE |
-
-Agents et projets sont accessibles à tout utilisateur connecté (pas réservé admin). Seuls les endpoints `/api/users/*` exigent le rôle `admin` (403 sinon).
 
 ### Ouvrir la PR
 

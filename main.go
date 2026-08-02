@@ -30,18 +30,13 @@ func main() {
 	if err != nil {
 		log.Fatalf("initialisation de l'authentification impossible : %v", err)
 	}
+	if generated != "" {
+		fmt.Printf("Mot de passe initial : %s\n", generated)
+	}
 
 	store, err := server.NewStore(*dataDir)
 	if err != nil {
 		log.Fatalf("chargement de l'état impossible : %v", err)
-	}
-	// Migration : crée (ou met à jour) le compte admin à partir du hash hérité
-	// de config.json (ou du mot de passe généré ci-dessous au tout premier lancement).
-	if err := store.MigrateUsers(hash); err != nil {
-		log.Fatalf("initialisation des utilisateurs impossible : %v", err)
-	}
-	if generated != "" {
-		fmt.Printf("Mot de passe initial (admin) : %s\n", generated)
 	}
 
 	webContent, err := fs.Sub(webFS, "web")
@@ -49,7 +44,7 @@ func main() {
 		log.Fatalf("frontend embarqué introuvable : %v", err)
 	}
 
-	srv := server.NewServer(store, *dataDir, webContent)
+	srv := server.NewServer(store, hash, *dataDir, webContent)
 
 	log.Printf("Sillage écoute sur %s (données : %s)", *addr, *dataDir)
 	if err := http.ListenAndServe(*addr, srv.Handler()); err != nil {

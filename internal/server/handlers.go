@@ -1,7 +1,6 @@
 package server
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"io/fs"
@@ -20,13 +19,14 @@ type Server struct {
 	runner       *Runner
 	sessions     *SessionManager
 	loginLimiter *LoginLimiter
+	passwordHash string
 	dataDir      string
 	static       http.Handler
 }
 
 // NewServer construit le serveur Sillage. webFS doit pointer vers le sous-répertoire
 // "web" du système de fichiers embarqué (frontend statique).
-func NewServer(store *Store, dataDir string, webFS fs.FS) *Server {
+func NewServer(store *Store, passwordHash, dataDir string, webFS fs.FS) *Server {
 	hub := NewHub()
 	return &Server{
 		store:        store,
@@ -34,6 +34,7 @@ func NewServer(store *Store, dataDir string, webFS fs.FS) *Server {
 		runner:       NewRunner(store, hub),
 		sessions:     NewSessionManager(),
 		loginLimiter: NewLoginLimiter(),
+		passwordHash: passwordHash,
 		dataDir:      dataDir,
 		static:       http.FileServer(http.FS(webFS)),
 	}
@@ -45,12 +46,7 @@ func (s *Server) Handler() http.Handler {
 
 	mux.HandleFunc("POST /api/login", s.handleLogin)
 	mux.HandleFunc("POST /api/logout", s.handleLogout)
-	mux.HandleFunc("GET /api/me", s.handleMe)
 	mux.HandleFunc("GET /api/state", s.handleState)
-	mux.HandleFunc("GET /api/users", s.handleListUsers)
-	mux.HandleFunc("POST /api/users", s.handleCreateUser)
-	mux.HandleFunc("PATCH /api/users/{id}", s.handleUpdateUser)
-	mux.HandleFunc("DELETE /api/users/{id}", s.handleDeleteUser)
 	mux.HandleFunc("POST /api/agents", s.handleCreateAgent)
 	mux.HandleFunc("PATCH /api/agents/{id}", s.handleUpdateAgent)
 	mux.HandleFunc("DELETE /api/agents/{id}", s.handleDeleteAgent)
@@ -75,30 +71,6 @@ func (s *Server) Handler() http.Handler {
 	return s.withMiddleware(mux)
 }
 
-// --- Contexte utilisateur ---
-
-type ctxKey int
-
-const userCtxKey ctxKey = iota
-
-// userFromContext retourne l'utilisateur authentifié attaché à la requête
-// par withMiddleware.
-func userFromContext(r *http.Request) (User, bool) {
-	u, ok := r.Context().Value(userCtxKey).(User)
-	return u, ok
-}
-
-// requireAdmin exige que l'utilisateur courant ait le rôle admin ; écrit une
-// réponse 403 et retourne false sinon.
-func requireAdmin(w http.ResponseWriter, r *http.Request) (User, bool) {
-	user, ok := userFromContext(r)
-	if !ok || user.Role != "admin" {
-		writeError(w, http.StatusForbidden, "admin privileges required")
-		return User{}, false
-	}
-	return user, true
-}
-
 // withMiddleware applique l'authentification et la protection CSRF sur /api/*.
 func (s *Server) withMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -117,21 +89,10 @@ func (s *Server) withMiddleware(next http.Handler) http.Handler {
 
 		if r.URL.Path != "/api/login" {
 			cookie, err := r.Cookie(sessionCookieName)
-			if err != nil {
+			if err != nil || !s.sessions.Validate(cookie.Value) {
 				writeError(w, http.StatusUnauthorized, "authentication required")
 				return
 			}
-			userID, ok := s.sessions.Validate(cookie.Value)
-			if !ok {
-				writeError(w, http.StatusUnauthorized, "authentication required")
-				return
-			}
-			user, ok := s.store.GetUser(userID)
-			if !ok {
-				writeError(w, http.StatusUnauthorized, "authentication required")
-				return
-			}
-			r = r.WithContext(context.WithValue(r.Context(), userCtxKey, user))
 		}
 
 		next.ServeHTTP(w, r)
@@ -172,6 +133,15 @@ func clientIP(r *http.Request) string {
 	return host
 }
 
+// statusForStoreError distingue "not found" (404) des autres erreurs de
+// validation (400) renvoyées par les méthodes du Store.
+func statusForStoreError(err error) int {
+	if strings.Contains(err.Error(), "not found") {
+		return http.StatusNotFound
+	}
+	return http.StatusBadRequest
+}
+
 // --- Auth ---
 
 func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
@@ -182,22 +152,20 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var body struct {
-		Username string `json:"username"`
 		Password string `json:"password"`
 	}
-	if err := decodeJSON(r, &body); err != nil || body.Username == "" || body.Password == "" {
-		writeError(w, http.StatusBadRequest, "username and password are required")
+	if err := decodeJSON(r, &body); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 
-	user, ok := s.store.FindUserByName(body.Username)
-	if !ok || bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(body.Password)) != nil {
+	if bcrypt.CompareHashAndPassword([]byte(s.passwordHash), []byte(body.Password)) != nil {
 		s.loginLimiter.RecordFailure(ip)
-		writeError(w, http.StatusUnauthorized, "invalid username or password")
+		writeError(w, http.StatusUnauthorized, "invalid password")
 		return
 	}
 
-	token, err := s.sessions.Create(user.ID)
+	token, err := s.sessions.Create()
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "session creation failed")
 		return
@@ -214,106 +182,10 @@ func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
-	user, ok := userFromContext(r)
-	if !ok {
-		writeError(w, http.StatusUnauthorized, "authentication required")
-		return
-	}
-	writeJSON(w, http.StatusOK, user.Public())
-}
-
-// --- Utilisateurs (admin uniquement) ---
-
-func (s *Server) handleListUsers(w http.ResponseWriter, r *http.Request) {
-	if _, ok := requireAdmin(w, r); !ok {
-		return
-	}
-	users := s.store.ListUsers()
-	out := make([]UserPublic, len(users))
-	for i, u := range users {
-		out[i] = u.Public()
-	}
-	writeJSON(w, http.StatusOK, out)
-}
-
-func (s *Server) handleCreateUser(w http.ResponseWriter, r *http.Request) {
-	if _, ok := requireAdmin(w, r); !ok {
-		return
-	}
-	var body struct {
-		Name     string `json:"name"`
-		Password string `json:"password"`
-		Role     string `json:"role"`
-	}
-	if err := decodeJSON(r, &body); err != nil || body.Name == "" || body.Password == "" {
-		writeError(w, http.StatusBadRequest, "name and password are required")
-		return
-	}
-	user, err := s.store.AddUser(body.Name, body.Password, body.Role)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
-		return
-	}
-	writeJSON(w, http.StatusOK, user.Public())
-}
-
-func (s *Server) handleUpdateUser(w http.ResponseWriter, r *http.Request) {
-	if _, ok := requireAdmin(w, r); !ok {
-		return
-	}
-	id := r.PathValue("id")
-	var body struct {
-		Password *string `json:"password"`
-		Role     *string `json:"role"`
-	}
-	if err := decodeJSON(r, &body); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body")
-		return
-	}
-	user, err := s.store.UpdateUser(id, body.Password, body.Role)
-	if err != nil {
-		writeError(w, statusForStoreError(err), err.Error())
-		return
-	}
-	writeJSON(w, http.StatusOK, user.Public())
-}
-
-func (s *Server) handleDeleteUser(w http.ResponseWriter, r *http.Request) {
-	me, ok := requireAdmin(w, r)
-	if !ok {
-		return
-	}
-	id := r.PathValue("id")
-	if id == me.ID {
-		writeError(w, http.StatusBadRequest, "cannot delete your own account")
-		return
-	}
-	if err := s.store.DeleteUser(id); err != nil {
-		writeError(w, statusForStoreError(err), err.Error())
-		return
-	}
-	s.sessions.DeleteByUser(id)
-	w.WriteHeader(http.StatusNoContent)
-}
-
-// statusForStoreError distingue "not found" (404) des autres erreurs de
-// validation (400) renvoyées par les méthodes du Store.
-func statusForStoreError(err error) int {
-	if strings.Contains(err.Error(), "not found") {
-		return http.StatusNotFound
-	}
-	return http.StatusBadRequest
-}
-
 // --- État global ---
 
 func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
-	state := s.store.Snapshot()
-	if user, ok := userFromContext(r); ok {
-		state.Me = user.Public()
-	}
-	writeJSON(w, http.StatusOK, state)
+	writeJSON(w, http.StatusOK, s.store.Snapshot())
 }
 
 // --- Agents ---
@@ -515,11 +387,7 @@ func (s *Server) handleCreateTask(w http.ResponseWriter, r *http.Request) {
 	if body.Prompt != "" {
 		cliInput = body.Title + "\n\n" + body.Prompt
 	}
-	authorName := ""
-	if me, ok := userFromContext(r); ok {
-		authorName = me.Name
-	}
-	if err := s.runner.Start(task.ID, true, cliInput, authorName); err != nil {
+	if err := s.runner.Start(task.ID, true, cliInput); err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to start agent: "+err.Error())
 		return
 	}
@@ -553,11 +421,7 @@ func (s *Server) handlePostMessage(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "text is required")
 		return
 	}
-	authorName := ""
-	if me, ok := userFromContext(r); ok {
-		authorName = me.Name
-	}
-	if err := s.runner.Start(id, false, body.Text, authorName); err != nil {
+	if err := s.runner.Start(id, false, body.Text); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}

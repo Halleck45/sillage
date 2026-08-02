@@ -58,9 +58,9 @@ func (r *Runner) publishActivity(taskID string, line *string) {
 // Start lance (ou relance) l'agent d'une tâche. initial=true correspond au
 // lancement initial (text = titre + description, aucun Message ajouté) ;
 // initial=false correspond à un nouveau message utilisateur (text = son
-// contenu, ajouté comme Message puis transmis à l'agent). authorName est le
-// nom affiché pour ce message utilisateur (ignoré si initial=true).
-func (r *Runner) Start(taskID string, initial bool, text string, authorName string) error {
+// contenu, ajouté comme Message puis transmis à l'agent). Mono-utilisateur :
+// l'AuthorName du message utilisateur reste vide (le frontend affiche "Vous"/"You").
+func (r *Runner) Start(taskID string, initial bool, text string) error {
 	r.mu.Lock()
 	if _, exists := r.procs[taskID]; exists {
 		r.mu.Unlock()
@@ -85,7 +85,7 @@ func (r *Runner) Start(taskID string, initial bool, text string, authorName stri
 	r.publishAgents()
 
 	if !initial {
-		msg, updated, err := r.store.AddMessage(taskID, "user", authorName, text)
+		msg, updated, err := r.store.AddMessage(taskID, "user", "", text)
 		if err != nil {
 			return err
 		}

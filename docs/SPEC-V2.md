@@ -1,5 +1,7 @@
 # Sillage v0.2 : spec des évolutions
 
+Note : la section 1 (multi-utilisateur) a été implémentée puis retirée le 2026-08-02, hors périmètre du produit.
+
 Deltas par rapport à docs/SPEC-API.md et docs/SPEC-BACKEND.md. Mot d'ordre : SIMPLE. Pas de framework, pas de nouvelle dépendance Go, pas de refonte.
 
 ## 1. Multi-utilisateur (simple, espace partagé)

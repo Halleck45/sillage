@@ -122,27 +122,9 @@
       'agent.errorNameRequired': 'Le nom est requis.',
       'agent.errorSaveFailed': 'Erreur lors de l\'enregistrement.',
       'agent.errorDeleteFailed': 'Erreur lors de la suppression.',
-      'users.tooltip': 'Utilisateurs',
-      'users.title': 'Utilisateurs',
-      'users.empty': 'Aucun utilisateur.',
-      'users.reset': 'Réinitialiser',
-      'users.delete': 'Supprimer',
-      'users.deleteConfirm': 'Confirmer ?',
-      'users.addTitle': 'Ajouter un utilisateur',
-      'users.namePlaceholder': 'Nom',
-      'users.passwordPlaceholder': 'Mot de passe',
-      'users.newPasswordPlaceholder': 'Nouveau mot de passe',
-      'users.add': 'Ajouter',
-      'users.errorRequired': 'Nom et mot de passe sont requis.',
-      'users.errorCreateFailed': 'Erreur lors de la création.',
-      'users.errorUpdateFailed': 'Erreur lors de la mise à jour.',
-      'users.errorDeleteFailed': 'Erreur lors de la suppression.',
-      'role.admin': 'Administrateur',
-      'role.member': 'Membre',
-      'login.usernamePlaceholder': 'admin',
       'login.passwordPlaceholder': 'Mot de passe',
       'login.submit': 'Se connecter',
-      'login.error': 'Identifiant ou mot de passe incorrect.',
+      'login.error': 'Mot de passe incorrect.',
       'time.now': 'à l\'instant',
       'time.min': 'il y a {n} min',
       'time.hour': 'il y a {n} h',
@@ -272,27 +254,9 @@
       'agent.errorNameRequired': 'Name is required.',
       'agent.errorSaveFailed': 'Failed to save.',
       'agent.errorDeleteFailed': 'Failed to delete.',
-      'users.tooltip': 'Users',
-      'users.title': 'Users',
-      'users.empty': 'No users.',
-      'users.reset': 'Reset',
-      'users.delete': 'Delete',
-      'users.deleteConfirm': 'Confirm?',
-      'users.addTitle': 'Add a user',
-      'users.namePlaceholder': 'Name',
-      'users.passwordPlaceholder': 'Password',
-      'users.newPasswordPlaceholder': 'New password',
-      'users.add': 'Add',
-      'users.errorRequired': 'Name and password are required.',
-      'users.errorCreateFailed': 'Failed to create.',
-      'users.errorUpdateFailed': 'Failed to update.',
-      'users.errorDeleteFailed': 'Failed to delete.',
-      'role.admin': 'Admin',
-      'role.member': 'Member',
-      'login.usernamePlaceholder': 'admin',
       'login.passwordPlaceholder': 'Password',
       'login.submit': 'Log in',
-      'login.error': 'Incorrect username or password.',
+      'login.error': 'Incorrect password.',
       'time.now': 'just now',
       'time.min': '{n} min ago',
       'time.hour': '{n} h ago',
@@ -355,8 +319,6 @@
 
   var state = {
     lang: detectInitialLang(),
-    me: null,
-    users: null,
     projects: [], cards: [], tasks: [], agents: [],
     projectsById: {}, cardsById: {}, tasksById: {}, agentsById: {},
     tokens: { global: { input: 0, output: 0, costUsd: 0 } },
@@ -374,7 +336,6 @@
 
   var modalAgentId = null;
   var modalColumn = 'soon';
-  var usersResetRowId = null;
   var sseOpenedOnce = false;
 
   // ---------------------------------------------------------------------
@@ -535,7 +496,6 @@
     state.tasks = data.tasks || [];
     state.agents = data.agents || [];
     state.tokens = data.tokens || { global: { input: 0, output: 0, costUsd: 0 } };
-    state.me = data.me || state.me || null;
     reindex();
   }
 
@@ -604,7 +564,6 @@
       if (kind === 'ship') doShip(id);
       else if (kind === 'pr') doPr(id);
       else if (kind === 'agent-delete') doDeleteAgent(id);
-      else if (kind === 'user-delete') doDeleteUser(id);
     });
   }
 
@@ -709,11 +668,6 @@
         '</div>';
     }).join('');
 
-    var isAdmin = !!(state.me && state.me.role === 'admin');
-    var adminGearHTML = isAdmin
-      ? '<button class="icon-btn-sm" data-action="open-users-modal" title="' + escapeHtml(t('users.tooltip')) + '" aria-label="' + escapeHtml(t('users.tooltip')) + '">⚙</button>'
-      : '';
-
     return '' +
       '<div class="sidebar-brand"><span class="brand-mark"></span><span class="brand-name">Sillage</span></div>' +
       '<div class="sidebar-search-wrap">' +
@@ -731,7 +685,6 @@
         '<span class="sidebar-tokens" id="sidebar-tokens">' + tokenSummary(state.tokens.global) + '</span>' +
         '<div class="sidebar-footer-actions">' +
           buildLangSwitchHTML() +
-          adminGearHTML +
           '<button class="logout-link" data-action="logout">' + escapeHtml(t('nav.logout')) + '</button>' +
         '</div>' +
       '</div>';
@@ -1412,7 +1365,6 @@
   }
   function closeModal() {
     state.modal = null;
-    usersResetRowId = null;
     var root = document.getElementById('modal-root');
     root.innerHTML = '';
   }
@@ -1674,125 +1626,14 @@
     });
   }
 
-  // Utilisateurs (admin)
-
-  function buildUsersModalBodyHTML() {
-    if (state.users === null) {
-      return '<div class="conv-loading">' + escapeHtml(t('common.loading')) + '</div>';
-    }
-    var rows = state.users.map(function (u) {
-      var delKey = 'user-delete:' + u.id;
-      var delPending = isPendingConfirm(delKey);
-      var delLabel = delPending ? t('users.deleteConfirm') : t('users.delete');
-      var resetOpen = usersResetRowId === u.id;
-      var resetBlock = resetOpen ? (
-        '<div class="user-reset-row">' +
-          '<input type="password" id="user-reset-password-' + u.id + '" class="modal-input user-reset-input" placeholder="' + escapeHtml(t('users.newPasswordPlaceholder')) + '">' +
-          '<button class="btn-green" data-action="submit-user-reset" data-user-id="' + u.id + '">' + escapeHtml(t('common.save')) + '</button>' +
-        '</div>'
-      ) : '';
-      return '<div class="user-row">' +
-        '<div class="user-row-main">' +
-          '<span class="user-name">' + escapeHtml(u.name) + '</span>' +
-          '<span class="user-role-tag">' + escapeHtml(u.role === 'admin' ? t('role.admin') : t('role.member')) + '</span>' +
-          '<div class="user-row-actions">' +
-            '<button class="link-btn" data-action="toggle-user-reset" data-user-id="' + u.id + '">' + escapeHtml(t('users.reset')) + '</button>' +
-            '<button class="link-btn link-danger" data-action="confirm-click" data-confirm-key="' + delKey + '" data-confirm-action="user-delete" data-confirm-id="' + u.id + '" data-default-label="' + escapeHtml(t('users.delete')) + '" data-confirm-label="' + escapeHtml(t('users.deleteConfirm')) + '">' + escapeHtml(delLabel) + '</button>' +
-          '</div>' +
-        '</div>' +
-        resetBlock +
-        '</div>';
-    }).join('');
-    return '<div class="user-list">' + (rows || '<div class="empty-note">' + escapeHtml(t('users.empty')) + '</div>') + '</div>' +
-      '<div id="users-modal-error" class="modal-error hidden"></div>' +
-      '<div class="modal-label">' + escapeHtml(t('users.addTitle')) + '</div>' +
-      '<input id="new-user-name" class="modal-input" placeholder="' + escapeHtml(t('users.namePlaceholder')) + '">' +
-      '<input type="password" id="new-user-password" class="modal-input" placeholder="' + escapeHtml(t('users.passwordPlaceholder')) + '">' +
-      '<select id="new-user-role" class="modal-input">' +
-        '<option value="member">' + escapeHtml(t('role.member')) + '</option>' +
-        '<option value="admin">' + escapeHtml(t('role.admin')) + '</option>' +
-      '</select>' +
-      '<div class="modal-foot"><button class="btn-green" data-action="submit-new-user">' + escapeHtml(t('users.add')) + '</button></div>';
-  }
-  function buildUsersModalHTML() {
-    return '<div class="modal modal-sm">' +
-      '<div class="modal-head"><span class="modal-title">' + escapeHtml(t('users.title')) + '</span><button class="icon-btn" data-action="close-modal" aria-label="' + escapeHtml(t('common.close')) + '">✕</button></div>' +
-      '<div id="users-modal-body">' + buildUsersModalBodyHTML() + '</div>' +
-      '</div>';
-  }
-  function openUsersModal() {
-    usersResetRowId = null;
-    openModal(buildUsersModalHTML());
-    loadUsers();
-  }
-  function loadUsers() {
-    api('/api/users').then(function (list) {
-      state.users = list || [];
-    }).catch(function () {
-      state.users = [];
-    }).then(function () {
-      refreshUsersModalBody();
-    });
-  }
-  function refreshUsersModalBody() {
-    var body = document.getElementById('users-modal-body');
-    if (body) body.innerHTML = buildUsersModalBodyHTML();
-  }
-  function setUsersModalError(msg) {
-    var el = document.getElementById('users-modal-error');
-    if (el) { el.textContent = msg; el.classList.remove('hidden'); }
-  }
-  function toggleUserReset(userId) {
-    usersResetRowId = (usersResetRowId === userId) ? null : userId;
-    refreshUsersModalBody();
-  }
-  function submitUserReset(userId) {
-    var input = document.getElementById('user-reset-password-' + userId);
-    var pwd = input ? input.value.trim() : '';
-    if (!pwd) return;
-    api('/api/users/' + userId, { method: 'PATCH', body: { password: pwd } }).then(function () {
-      usersResetRowId = null;
-      refreshUsersModalBody();
-    }).catch(function (e) {
-      setUsersModalError((e instanceof ApiError && e.message) || t('users.errorUpdateFailed'));
-    });
-  }
-  function submitNewUser() {
-    var nameEl = document.getElementById('new-user-name');
-    var pwdEl = document.getElementById('new-user-password');
-    var roleEl = document.getElementById('new-user-role');
-    var name = nameEl.value.trim();
-    var password = pwdEl.value;
-    var role = roleEl.value;
-    if (!name || !password) { setUsersModalError(t('users.errorRequired')); return; }
-    api('/api/users', { method: 'POST', body: { name: name, password: password, role: role } }).then(function (user) {
-      state.users = state.users || [];
-      state.users.push(user);
-      refreshUsersModalBody();
-    }).catch(function (e) {
-      setUsersModalError((e instanceof ApiError && e.message) || t('users.errorCreateFailed'));
-    });
-  }
-  function doDeleteUser(userId) {
-    api('/api/users/' + userId, { method: 'DELETE' }).then(function () {
-      state.users = (state.users || []).filter(function (u) { return u.id !== userId; });
-      refreshUsersModalBody();
-    }).catch(function (e) {
-      setUsersModalError((e instanceof ApiError && e.message) || t('users.errorDeleteFailed'));
-      refreshUsersModalBody();
-    });
-  }
-
   // ---------------------------------------------------------------------
   // Authentification
   // ---------------------------------------------------------------------
 
   function applyStaticTranslations() {
     document.documentElement.setAttribute('lang', state.lang);
-    var u = document.getElementById('login-username');
     var p = document.getElementById('login-password');
     var s = document.getElementById('login-submit');
-    if (u) u.placeholder = t('login.usernamePlaceholder');
     if (p) p.placeholder = t('login.passwordPlaceholder');
     if (s) s.textContent = t('login.submit');
   }
@@ -1817,13 +1658,12 @@
 
   function onLoginSubmit(e) {
     e.preventDefault();
-    var userEl = document.getElementById('login-username');
     var pwdEl = document.getElementById('login-password');
     var errEl = document.getElementById('login-error');
     errEl.classList.add('hidden');
     fetch('/api/login', {
       method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username: userEl.value, password: pwdEl.value })
+      body: JSON.stringify({ password: pwdEl.value })
     }).then(function (res) {
       if (res.status === 204) { return boot(); }
       return res.text().then(function (text) {
@@ -1966,10 +1806,6 @@
       case 'open-new-agent': openNewAgentModal(); break;
       case 'edit-agent': openEditAgentModal(el.getAttribute('data-agent-id')); break;
       case 'submit-agent': submitAgent(el.getAttribute('data-agent-id') || null); break;
-      case 'open-users-modal': openUsersModal(); break;
-      case 'toggle-user-reset': toggleUserReset(el.getAttribute('data-user-id')); break;
-      case 'submit-user-reset': submitUserReset(el.getAttribute('data-user-id')); break;
-      case 'submit-new-user': submitNewUser(); break;
       case 'close-modal': closeModal(); break;
       case 'pick-agent': pickAgentInModal(el.getAttribute('data-agent-id')); break;
       case 'pick-column': pickColumnInModal(el.getAttribute('data-column')); break;

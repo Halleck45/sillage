@@ -563,19 +563,6 @@ button, input, textarea { font-family: inherit; }
 .delete-link { border: 0; background: transparent; color: var(--red); opacity: 0.8; font-size: 12px; cursor: pointer; padding: 4px 2px; }
 .delete-link:hover { opacity: 1; text-decoration: underline; }
 
-.user-list { display: flex; flex-direction: column; gap: 2px; margin-top: 8px; }
-.user-row { padding: 8px 4px; border-bottom: 1px solid var(--border-2); }
-.user-row-main { display: flex; align-items: center; gap: 8px; }
-.user-name { font-size: 13px; font-weight: 600; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.user-role-tag { font-size: 11px; color: var(--muted-2); background: var(--bg); padding: 2px 7px; border-radius: 6px; flex: none; }
-.user-row-actions { display: flex; gap: 10px; flex: none; }
-.link-btn { border: 0; background: transparent; color: var(--muted-3); font-size: 11.5px; cursor: pointer; padding: 2px 2px; }
-.link-btn:hover { color: var(--text-2); text-decoration: underline; }
-.link-danger { color: var(--red); opacity: 0.8; }
-.link-danger:hover { color: var(--red); opacity: 1; }
-.user-reset-row { display: flex; gap: 8px; margin: 6px 0 4px; }
-.user-reset-input { margin-top: 0; flex: 1; height: 34px; }
-
 /* ---------- Search overlay ---------- */
 
 .search-overlay {

@@ -82,7 +82,9 @@ type Task struct {
 	SessionID   string `json:"sessionId"`   // session claude, pour --resume
 }
 
-// Message est un message échangé dans le fil d'une tâche.
+// Message est un message échangé dans le fil d'une tâche. AuthorName porte
+// le nom de l'agent pour author="agent" ; il reste vide pour author="user"
+// (mono-utilisateur : le frontend affiche alors "Vous"/"You").
 type Message struct {
 	ID         string    `json:"id"`
 	TaskID     string    `json:"taskId"`
@@ -92,35 +94,12 @@ type Message struct {
 	CreatedAt  time.Time `json:"createdAt"`
 }
 
-// User est un compte de l'espace de travail partagé. PasswordHash n'est
-// jamais exposé par l'API : voir UserPublic et User.Public().
-type User struct {
-	ID           string `json:"id"`
-	Name         string `json:"name"`
-	Role         string `json:"role"` // admin|member
-	PasswordHash string `json:"passwordHash"`
-}
-
-// UserPublic est la représentation d'un utilisateur exposée par l'API
-// (sans le hash du mot de passe).
-type UserPublic struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
-	Role string `json:"role"`
-}
-
-// Public retourne la représentation sûre d'un utilisateur, pour l'API.
-func (u User) Public() UserPublic {
-	return UserPublic{ID: u.ID, Name: u.Name, Role: u.Role}
-}
-
 // State est la réponse de GET /api/state.
 type State struct {
-	Projects []Project  `json:"projects"`
-	Cards    []Card     `json:"cards"`
-	Tasks    []Task     `json:"tasks"`
-	Agents   []Agent    `json:"agents"`
-	Me       UserPublic `json:"me"`
+	Projects []Project `json:"projects"`
+	Cards    []Card    `json:"cards"`
+	Tasks    []Task    `json:"tasks"`
+	Agents   []Agent   `json:"agents"`
 	Tokens   struct {
 		Global Tokens `json:"global"`
 	} `json:"tokens"`

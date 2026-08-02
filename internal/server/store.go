@@ -12,8 +12,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-
-	"golang.org/x/crypto/bcrypt"
 )
 
 // Store est l'état en mémoire de l'application, persisté dans state.json.
@@ -28,14 +26,12 @@ type Store struct {
 	Tasks    map[string]Task
 	Messages map[string][]Message
 	Agents   map[string]Agent
-	Users    map[string]User
 
 	NextProjectN int
 	NextCardN    int
 	NextTaskN    int
 	NextMessageN int
 	NextRef      int
-	NextUserN    int
 }
 
 // NewStore charge state.json s'il existe, sinon initialise un état neuf
@@ -79,9 +75,6 @@ func (s *Store) ensureMaps() {
 	}
 	if s.Agents == nil {
 		s.Agents = map[string]Agent{}
-	}
-	if s.Users == nil {
-		s.Users = map[string]User{}
 	}
 }
 
@@ -377,172 +370,6 @@ func (s *Store) GetMessages(taskID string) []Message {
 	out := make([]Message, len(msgs))
 	copy(out, msgs)
 	return out
-}
-
-// --- Utilisateurs ---
-
-var validRole = map[string]bool{"admin": true, "member": true}
-
-// GetUser retourne un utilisateur par son identifiant.
-func (s *Store) GetUser(id string) (User, bool) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	u, ok := s.Users[id]
-	return u, ok
-}
-
-// FindUserByName retourne un utilisateur par son nom (utilisé par le login).
-func (s *Store) FindUserByName(name string) (User, bool) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.findUserByNameLocked(name)
-}
-
-// findUserByNameLocked suppose le verrou déjà tenu par l'appelant.
-func (s *Store) findUserByNameLocked(name string) (User, bool) {
-	for _, u := range s.Users {
-		if u.Name == name {
-			return u, true
-		}
-	}
-	return User{}, false
-}
-
-// countAdminsLocked suppose le verrou déjà tenu par l'appelant.
-func (s *Store) countAdminsLocked() int {
-	n := 0
-	for _, u := range s.Users {
-		if u.Role == "admin" {
-			n++
-		}
-	}
-	return n
-}
-
-// ListUsers retourne tous les utilisateurs, triés par identifiant.
-func (s *Store) ListUsers() []User {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	out := make([]User, 0, len(s.Users))
-	for _, u := range s.Users {
-		out = append(out, u)
-	}
-	sort.Slice(out, func(i, j int) bool { return idNum(out[i].ID) < idNum(out[j].ID) })
-	return out
-}
-
-// MigrateUsers assure la présence d'un compte "admin", à partir du hash de
-// mot de passe hérité (config.json existant, ou mot de passe généré au tout
-// premier lancement). Si state.json contient déjà des utilisateurs, ne fait
-// rien, sauf si SILLAGE_PASSWORD est positionnée dans l'environnement : dans
-// ce cas le mot de passe de "admin" est toujours remplacé (compte créé s'il
-// est absent). C'est le point d'entrée de compatibilité avec les installations
-// antérieures à la v0.2 (state.json sans utilisateurs).
-func (s *Store) MigrateUsers(legacyHash string) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.ensureMaps()
-
-	envSet := os.Getenv("SILLAGE_PASSWORD") != ""
-	if !envSet && len(s.Users) > 0 {
-		return nil
-	}
-
-	if admin, ok := s.findUserByNameLocked("admin"); ok {
-		admin.PasswordHash = legacyHash
-		s.Users[admin.ID] = admin
-	} else {
-		s.NextUserN++
-		id := fmt.Sprintf("u%d", s.NextUserN)
-		s.Users[id] = User{ID: id, Name: "admin", Role: "admin", PasswordHash: legacyHash}
-	}
-	return s.save()
-}
-
-// AddUser crée un utilisateur. name non vide et unique ; role par défaut
-// "member" ; le mot de passe est haché avant stockage.
-func (s *Store) AddUser(name, password, role string) (User, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if strings.TrimSpace(name) == "" {
-		return User{}, fmt.Errorf("name is required")
-	}
-	if password == "" {
-		return User{}, fmt.Errorf("password is required")
-	}
-	if role == "" {
-		role = "member"
-	}
-	if !validRole[role] {
-		return User{}, fmt.Errorf("invalid role: must be admin or member")
-	}
-	if _, exists := s.findUserByNameLocked(name); exists {
-		return User{}, fmt.Errorf("a user with this name already exists")
-	}
-	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
-	if err != nil {
-		return User{}, err
-	}
-	s.NextUserN++
-	id := fmt.Sprintf("u%d", s.NextUserN)
-	u := User{ID: id, Name: name, Role: role, PasswordHash: string(hash)}
-	s.Users[id] = u
-	if err := s.save(); err != nil {
-		return User{}, err
-	}
-	return u, nil
-}
-
-// UpdateUser met à jour le mot de passe et/ou le rôle d'un utilisateur.
-// Refuse de rétrograder le dernier administrateur.
-func (s *Store) UpdateUser(id string, password, role *string) (User, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	u, ok := s.Users[id]
-	if !ok {
-		return User{}, fmt.Errorf("user not found")
-	}
-	if role != nil {
-		if !validRole[*role] {
-			return User{}, fmt.Errorf("invalid role: must be admin or member")
-		}
-		if u.Role == "admin" && *role != "admin" && s.countAdminsLocked() <= 1 {
-			return User{}, fmt.Errorf("cannot demote the last admin")
-		}
-		u.Role = *role
-	}
-	if password != nil {
-		if *password == "" {
-			return User{}, fmt.Errorf("password is required")
-		}
-		hash, err := bcrypt.GenerateFromPassword([]byte(*password), bcrypt.DefaultCost)
-		if err != nil {
-			return User{}, err
-		}
-		u.PasswordHash = string(hash)
-	}
-	s.Users[id] = u
-	if err := s.save(); err != nil {
-		return User{}, err
-	}
-	return u, nil
-}
-
-// DeleteUser supprime un utilisateur. Refusé pour le dernier administrateur
-// (la garde "refus pour soi-même" est appliquée par l'appelant, qui connaît
-// l'identité de l'utilisateur courant).
-func (s *Store) DeleteUser(id string) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	u, ok := s.Users[id]
-	if !ok {
-		return fmt.Errorf("user not found")
-	}
-	if u.Role == "admin" && s.countAdminsLocked() <= 1 {
-		return fmt.Errorf("cannot delete the last admin")
-	}
-	delete(s.Users, id)
-	return s.save()
 }
 
 // AddProject crée un projet. La validation du chemin (existence, dépôt git)
