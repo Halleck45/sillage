@@ -25,6 +25,13 @@ Le serveur ne parle que HTTP : ne jamais l'exposer nu sur Internet. Deux options
 - **Tokens** : entrée/sortie/coût cumulés par tâche, agrégés par projet et en global (sidebar).
 - **Agents** : Bolt 🐝 (claude, sonnet), Muse 🦊 (claude, opus), Otto 🦉 (codex), Écho 🧪 (agent factice local, gratuit, pour essayer l'interface).
 
+## Note sur Otto (codex)
+
+Par défaut, les agents codex tournent en `--sandbox workspace-write`. Sur certaines machines (dont celle-ci), AppArmor bloque bwrap (`bwrap: Operation not permitted`) et codex ne peut alors rien écrire. Deux issues :
+
+1. Autoriser les namespaces non privilégiés (le vrai correctif, à faire en connaissance de cause) : `sudo sysctl kernel.apparmor_restrict_unprivileged_userns=0`.
+2. Lancer Atelier avec `ATELIER_CODEX_SANDBOX=danger-full-access` : codex perd son isolation système ; le confinement restant est celui d'Atelier (worktree dédié, aucun push possible par l'agent, validation humaine avant livraison).
+
 ## Développement
 
 - `go test ./...`, `go vet ./...`.

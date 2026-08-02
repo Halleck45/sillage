@@ -413,7 +413,16 @@ func (r *Runner) runClaude(task *Task, agent Agent, handle *procHandle, cliInput
 // --- Adaptateur codex (best-effort) ---
 
 func (r *Runner) runCodex(task *Task, agent Agent, handle *procHandle, cliInput string) error {
-	args := []string{"exec", "--json", "-C", task.WorktreeDir}
+	// workspace-write : écriture limitée au worktree, réseau coupé ; le push
+	// reste impossible et ne passe que par Ship (git.go) après validation humaine.
+	// ATELIER_CODEX_SANDBOX permet de choisir un autre mode (ex : danger-full-access
+	// sur les machines où bwrap est bloqué par AppArmor) ; le confinement d'Atelier
+	// (worktree dédié, pas de push agent) reste alors la seule barrière.
+	sandbox := os.Getenv("ATELIER_CODEX_SANDBOX")
+	if sandbox == "" {
+		sandbox = "workspace-write"
+	}
+	args := []string{"exec", "--json", "--sandbox", sandbox, "-C", task.WorktreeDir}
 	if agent.Model != "" {
 		args = append(args, "--model", agent.Model)
 	}
@@ -511,7 +520,13 @@ func extractCodexMessage(m map[string]any) (string, bool) {
 func extractCodexTokens(m map[string]any) (Tokens, bool) {
 	raw, ok := m["token_count"]
 	if !ok {
-		return Tokens{}, false
+		// Forme récente : {"type":"turn.completed","usage":{"input_tokens":N,...}}.
+		if m["type"] == "turn.completed" {
+			raw, ok = m["usage"]
+		}
+		if !ok {
+			return Tokens{}, false
+		}
 	}
 	tc, ok := raw.(map[string]any)
 	if !ok {
