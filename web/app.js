@@ -17,6 +17,8 @@
       'common.tasksWord': 'Tâches',
       'common.close': 'Fermer',
       'common.cancel': 'Annuler',
+      'panel.expand': 'Agrandir le panneau',
+      'panel.collapse': 'Réduire le panneau',
       'common.save': 'Enregistrer',
       'common.create': 'Créer',
       'common.loading': 'Chargement…',
@@ -233,6 +235,8 @@
       'common.tasksWord': 'Tasks',
       'common.close': 'Close',
       'common.cancel': 'Cancel',
+      'panel.expand': 'Expand panel',
+      'panel.collapse': 'Collapse panel',
       'common.save': 'Save',
       'common.create': 'Create',
       'common.loading': 'Loading…',
@@ -500,7 +504,7 @@
     loading: {},
     screen: 'inbox', // 'inbox' | 'projects' | 'kanban' | 'work'
     projectId: null, cardId: null, taskId: null,
-    panelTab: 'chat', taskFilter: 'all',
+    panelTab: 'chat', panelExpanded: false, taskFilter: 'all',
     searchOpen: false, modal: null,
     pendingConfirm: null, // { key, timer }
     sidebarOpen: false // tiroir mobile (< 860px)
@@ -858,6 +862,7 @@
     if (state.taskId) {
       state.panelTab = route.tab === 'diff' ? 'diff' : (route.tab === 'deliverables' ? 'files' : 'chat');
       if (state.taskId !== prevTaskId) {
+        state.panelExpanded = false;
         var t = state.tasksById[state.taskId];
         if (t) t.unread = false;
         api('/api/tasks/' + state.taskId + '/read', { method: 'POST' }).catch(function () {});
@@ -884,6 +889,10 @@
   function closePanel() {
     if (state.cardId) navigateTo('#/p/' + encodeURIComponent(state.projectId) + '/c/' + encodeURIComponent(state.cardId));
     else goInbox();
+  }
+  function togglePanelExpand() {
+    state.panelExpanded = !state.panelExpanded;
+    renderMain();
   }
   function setFilter(f) { state.taskFilter = f; renderMain(); }
   function setTab(tabKey) {
@@ -1223,7 +1232,8 @@
     var paneInnerHTML = buildTaskListPaneInnerHTML(tasksAll, opts);
     var task = state.taskId ? state.tasksById[state.taskId] : null;
     var panelHTML = task ? buildDetailPanelHTML(task) : '';
-    return buildHeaderHTML() + '<div class="view-body work-body ' + (task ? 'has-panel' : '') + '" style="padding:0;">' +
+    var bodyClass = 'view-body work-body' + (task ? ' has-panel' : '') + (task && state.panelExpanded ? ' panel-expanded' : '');
+    return buildHeaderHTML() + '<div class="' + bodyClass + '" style="padding:0;">' +
       '<div class="task-list-pane">' + paneInnerHTML + '</div>' +
       panelHTML +
       '</div>';
@@ -1440,6 +1450,7 @@
               (multiRepo && task.repoName ? '<span class="repo-chip">' + escapeHtml(task.repoName) + '</span>' : '') +
             '</div>' +
           '</div>' +
+          '<button class="icon-btn" data-action="toggle-panel-expand" aria-label="' + escapeHtml(state.panelExpanded ? t('panel.collapse') : t('panel.expand')) + '" title="' + escapeHtml(state.panelExpanded ? t('panel.collapse') : t('panel.expand')) + '">' + (state.panelExpanded ? '⤡' : '⤢') + '</button>' +
           '<button class="icon-btn" data-action="close-panel" aria-label="' + escapeHtml(t('common.close')) + '">✕</button>' +
         '</div>' +
         buildStatusBadgeHTML(task.status) +
@@ -2971,6 +2982,7 @@
       case 'go-back': goBack(); break;
       case 'open-task': openTask(el.getAttribute('data-task-id')); break;
       case 'close-panel': closePanel(); break;
+      case 'toggle-panel-expand': togglePanelExpand(); break;
       case 'set-filter': setFilter(el.getAttribute('data-filter')); break;
       case 'set-tab': setTab(el.getAttribute('data-panel-tab')); break;
       case 'toggle-card-menu': toggleCardMenu(el.getAttribute('data-card-id')); break;
