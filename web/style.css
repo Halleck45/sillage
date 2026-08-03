@@ -185,6 +185,7 @@ button, input, textarea { font-family: inherit; }
 
 .project-list { display: flex; flex-direction: column; gap: 1px; padding: 0 8px; overflow-y: auto; }
 .project-item .hash { color: var(--muted-5); flex: none; }
+.project-item-spinner { flex: none; }
 .project-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .badge-unread {
   flex: none;

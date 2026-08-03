@@ -938,6 +938,10 @@
     return Object.keys(ids).map(function (id) { return state.agentsById[id]; }).filter(Boolean);
   }
 
+  function projectHasRunningTask(pid) {
+    return state.tasks.some(function (t) { return t.projectId === pid && t.status === 'running'; });
+  }
+
   // ---------------------------------------------------------------------
   // Confirmation en deux temps (générique : ship, PR, suppressions)
   // ---------------------------------------------------------------------
@@ -1159,8 +1163,13 @@
     var projectsHTML = state.projects.map(function (p) {
       var active = (state.screen === 'kanban' || state.screen === 'work') && state.projectId === p.id;
       var unread = projectUnread(p.id);
+      // Le fuseau remplace le dièse quand un agent travaille dans le projet :
+      // même repère visuel qu'une tâche en cours, vu de la sidebar.
+      var hashHTML = projectHasRunningTask(p.id)
+        ? '<span class="task-spinner project-item-spinner" title="' + escapeHtml(t('status.running')) + '"></span>'
+        : '<span class="hash">#</span>';
       return '<button class="project-item ' + (active ? 'active' : '') + '" data-action="nav-project" data-project-id="' + p.id + '">' +
-        '<span class="hash">#</span><span class="project-name">' + escapeHtml(p.name) + '</span>' +
+        hashHTML + '<span class="project-name">' + escapeHtml(p.name) + '</span>' +
         (unread ? '<span class="badge-unread">' + unread + '</span>' : '') +
         '</button>';
     }).join('');
@@ -1276,6 +1285,11 @@
     var avatarsHTML = agents.map(function (a) {
       return '<span class="card-avatar" style="background:' + softColor(a.color) + '">' + a.emoji + '</span>';
     }).join('');
+    // Même pastille animée que sur une tâche en cours (task-glyph-running) :
+    // un agent qui tourne dans le chantier se repère sans lire chaque tâche.
+    var runningGlyph = agents.length
+      ? '<span class="task-glyph task-glyph-running" title="' + escapeHtml(t('status.running')) + '"><span class="task-spinner"></span></span>'
+      : '';
     var barColor = colKey === 'done' ? 'var(--green-live)' : 'var(--accent)';
     var liveHTML = c.liveActivity ? '<div class="card-live"><span class="live-dot"></span><span class="live-text mono">' +
       escapeHtml(c.liveActivity) + '</span></div>' : '';
@@ -1287,6 +1301,7 @@
     }).join('');
     return '<article class="kanban-card" data-action="open-card" data-card-id="' + c.id + '">' +
       '<div class="card-top">' +
+        runningGlyph +
         '<h3 class="card-title ' + (colKey === 'done' ? 'card-title-done' : '') + '">' + escapeHtml(c.title) + '</h3>' +
         '<div class="card-avatars">' + avatarsHTML + '</div>' +
         '<button class="card-menu-btn" data-action="toggle-card-menu" data-card-id="' + c.id + '">⋯</button>' +
