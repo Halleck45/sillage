@@ -1,0 +1,237 @@
+---
+layout: null
+title: Sillage
+description: A calm dashboard for your AI coding agents.
+---
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sillage: a calm dashboard for your AI coding agents</title>
+<meta name="description" content="Sillage is a calm dashboard for your AI coding agents: isolated git worktrees, human validation before anything ships, and clear token accounting.">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+
+<header class="site-header wrap">
+  <div class="brand"><span class="brand-mark" aria-hidden="true"></span>Sillage</div>
+  <div class="header-links">
+    <a href="#install">Install</a>
+    <a href="https://github.com/Halleck45/sillage">GitHub</a>
+  </div>
+</header>
+
+<main>
+
+  <section class="hero wrap">
+    <h1>Sillage</h1>
+    <p class="tagline">A calm dashboard for your AI coding agents</p>
+    <p class="subtitle">Every task runs in its own isolated git worktree, nothing ships without your explicit validation, and every token is accounted for, per task, per agent, per project.</p>
+    <div class="hero-actions">
+      <a class="btn-primary" href="#install">Install in 2 seconds</a>
+      <a class="link-github" href="https://github.com/Halleck45/sillage">View on GitHub &rarr;</a>
+    </div>
+  </section>
+
+  <section class="install wrap" id="install">
+    <div class="install-panel">
+      <h2>Install in 2 seconds</h2>
+      <p class="install-lede">Pick your platform, copy the command, run it.</p>
+
+      <div class="install-tabs" role="tablist" aria-label="Platform">
+        <button type="button" class="install-tab" data-target="linux-amd64" role="tab">Linux amd64</button>
+        <button type="button" class="install-tab" data-target="linux-arm64" role="tab">Linux arm64</button>
+        <button type="button" class="install-tab" data-target="mac-arm64" role="tab">macOS Apple Silicon</button>
+        <button type="button" class="install-tab" data-target="mac-amd64" role="tab">macOS Intel</button>
+        <button type="button" class="install-tab" data-target="go" role="tab">Go</button>
+      </div>
+
+      <div class="install-command-box">
+        <pre class="install-command mono" id="install-command"></pre>
+        <button type="button" class="copy-btn" id="copy-btn">Copy</button>
+      </div>
+
+      <p class="install-note">Single self-contained binary. No database, no runtime, no dependencies.</p>
+    </div>
+  </section>
+
+  <section class="showcase wrap">
+    <div class="screenshot-frame">
+      <img src="assets/kanban.png" alt="Sillage kanban board showing workstreams and tasks" loading="lazy" width="2880" height="1800">
+    </div>
+
+    <div class="features-head">
+      <h2>Everything stays visible</h2>
+      <p>Agents propose, you decide. Nothing is hidden, nothing ships silently.</p>
+    </div>
+
+    <div class="features-grid">
+      <div class="feature-card">
+        <div class="feature-icon" aria-hidden="true">&#9670;</div>
+        <h3>Workstreams &amp; layered context</h3>
+        <p>Group related tasks into workstreams that carry their own context, so agents stay on track across an entire feature, not just one prompt.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon" aria-hidden="true">&#10003;</div>
+        <h3>Human validation, structural</h3>
+        <p>Review is not a suggestion bolted on top: it is a required step baked into the workflow, before anything reaches your codebase.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon" aria-hidden="true">&#9202;</div>
+        <h3>Token accounting</h3>
+        <p>See exactly what each task, agent, and project costs, in real time, without digging through provider dashboards.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon" aria-hidden="true">&#9881;</div>
+        <h3>Git-backed workspace</h3>
+        <p>Every task runs in its own isolated git worktree. Your working copy stays clean, and nothing collides.</p>
+      </div>
+      <div class="feature-card has-thumb">
+        <div class="feature-icon" aria-hidden="true">&#128241;</div>
+        <h3>Works from your phone</h3>
+        <p>Review a diff, ship a task, or check on an agent from anywhere. The dashboard is fully responsive.</p>
+        <img class="feature-thumb" src="assets/mobile.png" alt="Sillage dashboard on a mobile phone" loading="lazy" width="780" height="1688">
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon" aria-hidden="true">&#9733;</div>
+        <h3>Free built-in agent to try</h3>
+        <p>Get started right away with a built-in agent, no API key required, then bring your own when you are ready.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="how wrap">
+    <div class="how-panel">
+      <h2>How it works</h2>
+      <div class="how-steps">
+        <div class="how-step">
+          <div class="how-step-num">1</div>
+          <h3>Delegate a task</h3>
+          <p>Describe what you need. The agent works in its own isolated worktree, no risk to your working copy.</p>
+        </div>
+        <div class="how-step">
+          <div class="how-step-num">2</div>
+          <h3>Review the diff</h3>
+          <p>Read the change, the conversation, and the token cost, all in one place, before deciding anything.</p>
+        </div>
+        <div class="how-step">
+          <div class="how-step-num">3</div>
+          <h3>Ship it</h3>
+          <p>One confirmed click merges the work. Nothing leaves the worktree without that click.</p>
+        </div>
+      </div>
+      <div class="how-visual">
+        <img src="assets/task-detail.png" alt="Sillage task detail view with conversation and diff" loading="lazy" width="2880" height="1800">
+      </div>
+    </div>
+  </section>
+
+  <section class="security wrap">
+    <div class="security-panel">
+      <div class="security-kicker">Security</div>
+      <h2>Agents can never push. Git push exists in exactly one place, behind your click.</h2>
+      <p>Agents propose changes inside their isolated worktree. Only your explicit, confirmed action can ship a change to a real branch. There is no other path.</p>
+    </div>
+  </section>
+
+</main>
+
+<footer class="site-footer wrap">
+  <div class="footer-links">
+    <span>MIT License</span>
+    <span class="footer-dot">&middot;</span>
+    <a href="https://github.com/Halleck45/sillage">GitHub</a>
+    <span class="footer-dot">&middot;</span>
+    <span>Made with Claude Code</span>
+  </div>
+</footer>
+
+<script>
+(function () {
+  "use strict";
+
+  var COMMANDS = {
+    "linux-amd64": "curl -fsSL https://github.com/Halleck45/sillage/releases/latest/download/sillage_linux_amd64 -o sillage && chmod +x sillage && ./sillage",
+    "linux-arm64": "curl -fsSL https://github.com/Halleck45/sillage/releases/latest/download/sillage_linux_arm64 -o sillage && chmod +x sillage && ./sillage",
+    "mac-arm64": "curl -fsSL https://github.com/Halleck45/sillage/releases/latest/download/sillage_darwin_arm64 -o sillage && chmod +x sillage && ./sillage",
+    "mac-amd64": "curl -fsSL https://github.com/Halleck45/sillage/releases/latest/download/sillage_darwin_amd64 -o sillage && chmod +x sillage && ./sillage",
+    "go": "go install github.com/Halleck45/sillage@latest"
+  };
+
+  function detectDefaultTarget() {
+    var platform = (navigator.platform || "").toLowerCase();
+    var ua = (navigator.userAgent || "").toLowerCase();
+
+    var isMac = platform.indexOf("mac") !== -1 || ua.indexOf("mac os") !== -1;
+    var isLinux = !isMac && (platform.indexOf("linux") !== -1 || ua.indexOf("linux") !== -1) && ua.indexOf("android") === -1;
+    var isArm = ua.indexOf("arm") !== -1 || ua.indexOf("aarch64") !== -1;
+
+    if (isMac) {
+      return "mac-arm64";
+    }
+    if (isLinux) {
+      return isArm ? "linux-arm64" : "linux-amd64";
+    }
+    return "linux-amd64";
+  }
+
+  var tabs = Array.prototype.slice.call(document.querySelectorAll(".install-tab"));
+  var commandEl = document.getElementById("install-command");
+  var copyBtn = document.getElementById("copy-btn");
+  var copyTimer = null;
+
+  function selectTarget(target) {
+    tabs.forEach(function (tab) {
+      var active = tab.getAttribute("data-target") === target;
+      tab.classList.toggle("active", active);
+      tab.setAttribute("aria-selected", active ? "true" : "false");
+    });
+    commandEl.textContent = COMMANDS[target] || COMMANDS["linux-amd64"];
+  }
+
+  tabs.forEach(function (tab) {
+    tab.addEventListener("click", function () {
+      selectTarget(tab.getAttribute("data-target"));
+    });
+  });
+
+  copyBtn.addEventListener("click", function () {
+    var text = commandEl.textContent || "";
+    var done = function () {
+      copyBtn.textContent = "Copied";
+      copyBtn.classList.add("copied");
+      window.clearTimeout(copyTimer);
+      copyTimer = window.setTimeout(function () {
+        copyBtn.textContent = "Copy";
+        copyBtn.classList.remove("copied");
+      }, 1600);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done, function () {
+        fallbackCopy(text, done);
+      });
+    } else {
+      fallbackCopy(text, done);
+    }
+  });
+
+  function fallbackCopy(text, done) {
+    var ta = document.createElement("textarea");
+    ta.value = text;
+    ta.setAttribute("readonly", "");
+    ta.style.position = "absolute";
+    ta.style.left = "-9999px";
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand("copy"); } catch (e) { /* no-op */ }
+    document.body.removeChild(ta);
+    done();
+  }
+
+  selectTarget(detectDefaultTarget());
+})();
+</script>
+
+</body>
+</html>
