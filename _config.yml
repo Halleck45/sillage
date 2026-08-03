@@ -7,5 +7,6 @@ description: >-
 # Ces fichiers documentent la branche, ils n'ont rien à faire sur le site publié.
 exclude:
   - README.md
+  - tools
   - Gemfile
   - Gemfile.lock
