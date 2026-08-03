@@ -178,7 +178,7 @@ func (s *Server) withMiddleware(next http.Handler) http.Handler {
 			}
 		}
 
-		if r.URL.Path != "/api/login" {
+		if r.URL.Path != "/api/login" && s.getPasswordHash() != "" {
 			cookie, err := r.Cookie(sessionCookieName)
 			if err != nil || !s.sessions.Validate(cookie.Value) {
 				writeError(w, http.StatusUnauthorized, "authentication required")

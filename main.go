@@ -4,7 +4,6 @@ package main
 import (
 	"embed"
 	"flag"
-	"fmt"
 	"io/fs"
 	"log"
 	"net/http"
@@ -26,12 +25,12 @@ func main() {
 		log.Fatalf("cannot create data directory %s: %v", *dataDir, err)
 	}
 
-	hash, generated, err := server.LoadOrInitPasswordHash(*dataDir)
+	hash, err := server.LoadPasswordHash(*dataDir)
 	if err != nil {
 		log.Fatalf("cannot initialize authentication: %v", err)
 	}
-	if generated != "" {
-		fmt.Printf("Initial password: %s\n", generated)
+	if hash == "" {
+		log.Print("No SILLAGE_PASSWORD set: running without a login password.")
 	}
 
 	store, err := server.NewStore(*dataDir)

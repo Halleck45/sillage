@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- The password is now optional: no login is required unless `SILLAGE_PASSWORD` is set. No more random password generated and printed on first start.
 - Workstreams are feature branches. A workstream now owns a `sillage/ws-<ref>-<slug>` branch per repository, with its own worktree; task branches start from it and are merged into it when accepted, so a task created after an acceptance builds on the work already accepted.
 - Shipping moved from the task to the workstream: one button at the top of the workstream view, with a one-line announcement of what it will do, and a recap panel whose action button is the confirmation. Two clicks instead of four, and the second one informed.
 - Reviewing a task is now Accept / Refuse, revealed on hover in the task list. Accepting merges locally (no confirmation, reversible with Reopen); a merge conflict leaves the task in review and says which files clash.
