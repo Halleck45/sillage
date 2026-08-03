@@ -54,15 +54,20 @@
       'cardMenu.moveTo': 'Déplacer vers {column}',
       'project.editTooltip': 'Modifier le projet',
       'project.editTitle': 'Projet',
+      'project.sectionGeneral': 'Général',
+      'project.sectionDelivery': 'Livraison',
+      'project.sectionAgent': 'Agent',
       'project.name': 'Nom',
       'project.checkCmd': 'Commande de vérification',
       'project.reposLabel': 'Dépôts',
+      'project.reposHint': 'Chemins locaux des dépôts git de ce projet.',
       'project.repoNamePlaceholder': 'Nom du dépôt',
       'project.addRepo': '+ dépôt',
       'project.removeRepo': 'Retirer',
       'project.errorNameRequired': 'Le nom est requis.',
       'project.errorReposRequired': 'Au moins un dépôt est requis.',
       'project.errorSaveFailed': 'Erreur lors de l\'enregistrement.',
+      'project.dangerZone': 'Zone dangereuse',
       'project.delete': 'Supprimer le projet',
       'project.deleteConfirm': 'Confirmer la suppression ?',
       'project.deleteSubtext': 'Supprime aussi {cards} chantiers et {tasks} tâches.',
@@ -361,15 +366,20 @@
       'cardMenu.moveTo': 'Move to {column}',
       'project.editTooltip': 'Edit project',
       'project.editTitle': 'Project',
+      'project.sectionGeneral': 'General',
+      'project.sectionDelivery': 'Delivery',
+      'project.sectionAgent': 'Agent',
       'project.name': 'Name',
       'project.checkCmd': 'Check command',
       'project.reposLabel': 'Repositories',
+      'project.reposHint': 'Local paths of this project\'s git repositories.',
       'project.repoNamePlaceholder': 'Repository name',
       'project.addRepo': '+ repo',
       'project.removeRepo': 'Remove',
       'project.errorNameRequired': 'Name is required.',
       'project.errorReposRequired': 'At least one repository is required.',
       'project.errorSaveFailed': 'Failed to save.',
+      'project.dangerZone': 'Danger zone',
       'project.delete': 'Delete the project',
       'project.deleteConfirm': 'Confirm deletion?',
       'project.deleteSubtext': 'Also deletes {cards} workstreams and {tasks} tasks.',
@@ -2941,7 +2951,8 @@
     refreshRepoRowsUI();
   }
   function buildRepoSectionHTML() {
-    return '<div class="modal-label">' + escapeHtml(t('project.reposLabel')) + '</div>' +
+    return '<div class="modal-section-title">' + escapeHtml(t('project.reposLabel')) + '</div>' +
+      '<div class="modal-section-hint">' + escapeHtml(t('project.reposHint')) + '</div>' +
       '<div id="repo-rows">' + buildRepoRowsHTML() + '</div>' +
       '<button class="add-repo-link" data-action="add-repo-row">' + escapeHtml(t('project.addRepo')) + '</button>';
   }
@@ -2976,10 +2987,13 @@
     var warning = project && project.deliveryWarning
       ? '<div class="modal-note modal-note-warning">⚠ ' + escapeHtml(deliveryWarningText(project.deliveryWarning)) + '</div>'
       : '';
-    return '<div class="modal-label">' + escapeHtml(t('delivery.label')) + '</div>' +
-      '<select id="project-delivery-mode" class="modal-input" data-action="delivery-mode-change">' + optionsHTML + '</select>' +
-      '<div class="modal-label">' + escapeHtml(t('delivery.targetLabel')) + '</div>' +
-      '<input id="project-delivery-target" class="modal-input mono" placeholder="' + escapeHtml(t('delivery.targetPlaceholder')) + '" value="' + escapeHtml(target) + '">' +
+    return '<div class="modal-section-title">' + escapeHtml(t('project.sectionDelivery')) + '</div>' +
+      '<div class="delivery-grid">' +
+        '<div><div class="modal-label">' + escapeHtml(t('delivery.label')) + '</div>' +
+        '<select id="project-delivery-mode" class="modal-input" data-action="delivery-mode-change">' + optionsHTML + '</select></div>' +
+        '<div><div class="modal-label">' + escapeHtml(t('delivery.targetLabel')) + '</div>' +
+        '<input id="project-delivery-target" class="modal-input mono" placeholder="' + escapeHtml(t('delivery.targetPlaceholder')) + '" value="' + escapeHtml(target) + '"></div>' +
+      '</div>' +
       '<div id="delivery-mode-note" class="modal-note">' + escapeHtml(deliveryModeNote(mode)) + '</div>' +
       warning;
   }
@@ -3065,7 +3079,7 @@
     refreshLinkRowsUI();
   }
   function buildLinksSectionHTML() {
-    return '<div class="modal-label">' + escapeHtml(t('project.linksLabel')) + '</div>' +
+    return '<div class="modal-section-title">' + escapeHtml(t('project.linksLabel')) + '</div>' +
       '<div id="link-rows">' + buildLinkRowsHTML() + '</div>' +
       '<div class="link-add-row">' +
         '<input id="new-link-url" class="modal-input mono" placeholder="https://…">' +
@@ -3091,10 +3105,12 @@
   function buildNewProjectModalHTML() {
     return '<div class="modal modal-sm">' +
       '<div class="modal-head"><span class="modal-title">' + escapeHtml(t('newProject.title')) + '</span><button class="icon-btn" data-action="close-modal" aria-label="' + escapeHtml(t('common.close')) + '">✕</button></div>' +
-      '<div class="modal-label">' + escapeHtml(t('newProject.nameLabel')) + '</div><input id="new-project-name" class="modal-input" placeholder="' + escapeHtml(t('newProject.namePlaceholder')) + '">' +
-      buildRepoSectionHTML() +
-      buildDeliverySectionHTML(null) +
-      buildProjectExtraFieldsHTML(null) +
+      '<div class="modal-section">' +
+        '<div class="modal-label">' + escapeHtml(t('newProject.nameLabel')) + '</div><input id="new-project-name" class="modal-input" placeholder="' + escapeHtml(t('newProject.namePlaceholder')) + '">' +
+      '</div>' +
+      '<div class="modal-section">' + buildRepoSectionHTML() + '</div>' +
+      '<div class="modal-section">' + buildDeliverySectionHTML(null) + '</div>' +
+      '<div class="modal-section">' + buildProjectExtraFieldsHTML(null) + '</div>' +
       '<div id="new-project-error" class="modal-error hidden"></div>' +
       '<div class="modal-foot"><button class="btn-outline" data-action="close-modal">' + escapeHtml(t('common.cancel')) + '</button>' +
       '<button class="btn-green" data-action="submit-new-project">' + escapeHtml(t('common.create')) + '</button></div>' +
@@ -3322,18 +3338,29 @@
     var deleteLabel = deletePending ? t('project.deleteConfirm') : t('project.delete');
     var cardCount = state.cards.filter(function (c) { return c.projectId === project.id; }).length;
     var taskCount = state.tasks.filter(function (tk) { return tk.projectId === project.id; }).length;
-    return '<div class="modal modal-sm">' +
+    return '<div class="modal modal-lg">' +
       '<div class="modal-head"><span class="modal-title">' + escapeHtml(t('project.editTitle')) + '</span><button class="icon-btn" data-action="close-modal" aria-label="' + escapeHtml(t('common.close')) + '">✕</button></div>' +
-      '<div class="modal-label">' + escapeHtml(t('project.name')) + '</div><input id="project-edit-name" class="modal-input" value="' + escapeHtml(project.name) + '">' +
-      buildRepoSectionHTML() +
-      buildDeliverySectionHTML(project) +
-      buildProjectExtraFieldsHTML(project) +
-      '<div class="modal-label">' + escapeHtml(t('project.checkCmd')) + '</div><input id="project-edit-checkcmd" class="modal-input mono" placeholder="go test ./..." value="' + escapeHtml(project.checkCmd || '') + '">' +
-      buildLinksSectionHTML() +
+      '<div class="modal-section">' +
+        '<div class="modal-section-title">' + escapeHtml(t('project.sectionGeneral')) + '</div>' +
+        '<div class="modal-label">' + escapeHtml(t('project.name')) + '</div><input id="project-edit-name" class="modal-input" value="' + escapeHtml(project.name) + '">' +
+        '<div class="modal-label">' + escapeHtml(t('project.description')) + '</div><input id="project-description" class="modal-input" placeholder="' + escapeHtml(t('project.descriptionPlaceholder')) + '" value="' + escapeHtml(project.description || '') + '">' +
+      '</div>' +
+      '<div class="modal-section">' + buildRepoSectionHTML() + '</div>' +
+      '<div class="modal-section">' + buildDeliverySectionHTML(project) + '</div>' +
+      '<div class="modal-section">' +
+        '<div class="modal-section-title">' + escapeHtml(t('project.sectionAgent')) + '</div>' +
+        '<div class="modal-label">' + escapeHtml(t('project.contextPrompt')) + '</div>' +
+        '<textarea id="project-context-prompt" class="modal-textarea" rows="3" placeholder="' + escapeHtml(t('project.contextPromptPlaceholder')) + '">' + escapeHtml(project.contextPrompt || '') + '</textarea>' +
+        '<div class="modal-label">' + escapeHtml(t('project.checkCmd')) + '</div><input id="project-edit-checkcmd" class="modal-input mono" placeholder="go test ./..." value="' + escapeHtml(project.checkCmd || '') + '">' +
+      '</div>' +
+      '<div class="modal-section">' + buildLinksSectionHTML() + '</div>' +
       '<div id="project-modal-error" class="modal-error hidden"></div>' +
-      '<div class="modal-delete-row">' +
+      '<div class="modal-danger-zone">' +
+        '<div class="modal-danger-text">' +
+          '<div class="modal-danger-title">' + escapeHtml(t('project.dangerZone')) + '</div>' +
+          '<div class="modal-delete-subtext">' + escapeHtml(t('project.deleteSubtext', { cards: cardCount, tasks: taskCount })) + '</div>' +
+        '</div>' +
         '<button class="delete-link" data-action="confirm-click" data-confirm-key="' + deleteKey + '" data-confirm-action="project-delete" data-confirm-id="' + project.id + '" data-default-label="' + escapeHtml(t('project.delete')) + '" data-confirm-label="' + escapeHtml(t('project.deleteConfirm')) + '">' + escapeHtml(deleteLabel) + '</button>' +
-        '<div class="modal-delete-subtext">' + escapeHtml(t('project.deleteSubtext', { cards: cardCount, tasks: taskCount })) + '</div>' +
       '</div>' +
       '<div class="modal-foot"><button class="btn-outline" data-action="close-modal">' + escapeHtml(t('common.cancel')) + '</button>' +
       '<button class="btn-green" data-action="submit-project-edit" data-project-id="' + project.id + '">' + escapeHtml(t('common.save')) + '</button></div>' +
