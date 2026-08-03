@@ -612,8 +612,9 @@ button, input, textarea { font-family: inherit; }
 .detail-delete-row { margin-top: 8px; }
 .detail-link-danger { color: var(--red); opacity: 0.8; }
 .detail-link-danger:hover { color: var(--red); opacity: 1; }
-.checks { flex: none; font-size: 12px; font-weight: 600; white-space: nowrap; display: flex; gap: 8px; }
-.check { display: inline-flex; align-items: center; gap: 3px; }
+.checks { flex: none; white-space: nowrap; display: flex; gap: 6px; }
+.check { display: inline-flex; align-items: center; cursor: help; }
+.check-svg { display: block; }
 .check-ok { color: var(--green-live); }
 .check-fail { color: var(--red); }
 
