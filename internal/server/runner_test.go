@@ -54,6 +54,58 @@ func TestParseCodexTokenStreamNoEvent(t *testing.T) {
 	}
 }
 
+// TestBuildSystemPrompt couvre l'adaptateur claude : chaque bloc (agent,
+// projet, chantier) n'apparaît que s'il est non vide, séparés par des lignes
+// vides, dans cet ordre.
+func TestBuildSystemPrompt(t *testing.T) {
+	if got := buildSystemPrompt("", "", ""); got != "" {
+		t.Fatalf("attendu une chaîne vide quand tout est vide, reçu %q", got)
+	}
+	if got := buildSystemPrompt("Agent context", "", ""); got != "Agent context" {
+		t.Fatalf("résultat inattendu (agent seul) : %q", got)
+	}
+	if got := buildSystemPrompt("", "Project ctx", ""); got != "Project context:\nProject ctx" {
+		t.Fatalf("résultat inattendu (projet seul) : %q", got)
+	}
+	if got := buildSystemPrompt("", "", "Workstream ctx"); got != "Workstream context:\nWorkstream ctx" {
+		t.Fatalf("résultat inattendu (chantier seul) : %q", got)
+	}
+	want := "Agent context\n\nProject context:\nProject ctx\n\nWorkstream context:\nWorkstream ctx"
+	if got := buildSystemPrompt("Agent context", "Project ctx", "Workstream ctx"); got != want {
+		t.Fatalf("résultat combiné attendu %q, reçu %q", want, got)
+	}
+	// Projet seul manquant, agent + chantier présents : pas de bloc vide entre les deux.
+	want2 := "Agent context\n\nWorkstream context:\nWorkstream ctx"
+	if got := buildSystemPrompt("Agent context", "", "Workstream ctx"); got != want2 {
+		t.Fatalf("résultat attendu %q, reçu %q", want2, got)
+	}
+}
+
+// TestContextPartsCodexPrefix couvre l'adaptateur codex : le préfixe de
+// prompt combine "Project context:"/"Workstream context:" (blocs omis s'ils
+// sont vides) avant le séparateur "---".
+func TestContextPartsCodexPrefix(t *testing.T) {
+	prefixFor := func(project, workstream string) string {
+		blocks := strings.Join(contextParts(project, workstream), "\n\n")
+		if blocks == "" {
+			return ""
+		}
+		return blocks + "\n\n---\n\n"
+	}
+
+	if got := prefixFor("", ""); got != "" {
+		t.Fatalf("aucun préfixe attendu quand tout est vide, reçu %q", got)
+	}
+	want := "Project context:\nP\n\nWorkstream context:\nW\n\n---\n\n"
+	if got := prefixFor("P", "W"); got != want {
+		t.Fatalf("préfixe attendu %q, reçu %q", want, got)
+	}
+	want2 := "Workstream context:\nW\n\n---\n\n"
+	if got := prefixFor("", "W"); got != want2 {
+		t.Fatalf("préfixe attendu %q, reçu %q", want2, got)
+	}
+}
+
 func TestBuildTranscript(t *testing.T) {
 	msgs := []Message{
 		{Author: "agent", AuthorName: "Otto", Text: "J'ai trouvé le bloc dans show_lead.html.twig lignes 78-80."},

@@ -20,7 +20,7 @@ func TestStoreRoundtripSaveLoad(t *testing.T) {
 	if err != nil {
 		t.Fatalf("AddProject: %v", err)
 	}
-	card, err := s1.AddCard(project.ID, "Ma carte", "")
+	card, err := s1.AddCard(project.ID, "Ma carte", "", "")
 	if err != nil {
 		t.Fatalf("AddCard: %v", err)
 	}
@@ -121,7 +121,7 @@ func TestDerivedCounters(t *testing.T) {
 	if err != nil {
 		t.Fatalf("AddProject: %v", err)
 	}
-	card, err := s.AddCard(project.ID, "Carte", "")
+	card, err := s.AddCard(project.ID, "Carte", "", "")
 	if err != nil {
 		t.Fatalf("AddCard: %v", err)
 	}
@@ -197,7 +197,7 @@ func TestDerivedCounters(t *testing.T) {
 	}
 
 	// progress à 0 si aucune tâche.
-	emptyCard, err := s.AddCard(project.ID, "Vide", "")
+	emptyCard, err := s.AddCard(project.ID, "Vide", "", "")
 	if err != nil {
 		t.Fatalf("AddCard: %v", err)
 	}
@@ -233,7 +233,7 @@ func TestDeleteAgentGuardsReferencedAgent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("AddProject: %v", err)
 	}
-	card, err := s.AddCard(project.ID, "Carte", "")
+	card, err := s.AddCard(project.ID, "Carte", "", "")
 	if err != nil {
 		t.Fatalf("AddCard: %v", err)
 	}
@@ -352,16 +352,16 @@ func TestAddCardRejectsNonSoonColumn(t *testing.T) {
 		t.Fatalf("AddProject: %v", err)
 	}
 
-	if _, err := s.AddCard(project.ID, "Carte", "doing"); err == nil {
+	if _, err := s.AddCard(project.ID, "Carte", "doing", ""); err == nil {
 		t.Fatalf("une carte créée en doing devrait être refusée")
 	} else if err.Error() != "cards are created in the soon column" {
 		t.Fatalf("message d'erreur inattendu : %q", err.Error())
 	}
-	if _, err := s.AddCard(project.ID, "Carte", "done"); err == nil {
+	if _, err := s.AddCard(project.ID, "Carte", "done", ""); err == nil {
 		t.Fatalf("une carte créée en done devrait être refusée")
 	}
 
-	c, err := s.AddCard(project.ID, "Carte", "")
+	c, err := s.AddCard(project.ID, "Carte", "", "")
 	if err != nil {
 		t.Fatalf("AddCard (vide): %v", err)
 	}
@@ -369,12 +369,83 @@ func TestAddCardRejectsNonSoonColumn(t *testing.T) {
 		t.Fatalf("colonne attendue 'soon', reçue %q", c.Column)
 	}
 
-	c2, err := s.AddCard(project.ID, "Carte2", "soon")
+	c2, err := s.AddCard(project.ID, "Carte2", "soon", "")
 	if err != nil {
 		t.Fatalf("AddCard (soon explicite): %v", err)
 	}
 	if c2.Column != "soon" {
 		t.Fatalf("colonne attendue 'soon', reçue %q", c2.Column)
+	}
+}
+
+// --- Contexte de chantier : Card.contextPrompt (v0.3.3 section 1) ---
+
+func TestAddCardWithContextPrompt(t *testing.T) {
+	dir := t.TempDir()
+	s, err := NewStore(dir)
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+	project, err := s.AddProject("p", "", "", []Repo{{Path: "/tmp/p"}})
+	if err != nil {
+		t.Fatalf("AddProject: %v", err)
+	}
+
+	c, err := s.AddCard(project.ID, "Chantier", "", "Contexte du chantier")
+	if err != nil {
+		t.Fatalf("AddCard: %v", err)
+	}
+	if c.ContextPrompt != "Contexte du chantier" {
+		t.Fatalf("contextPrompt attendu 'Contexte du chantier', reçu %q", c.ContextPrompt)
+	}
+}
+
+func TestUpdateCardTitleAndContextPrompt(t *testing.T) {
+	dir := t.TempDir()
+	s, err := NewStore(dir)
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+	project, err := s.AddProject("p", "", "", []Repo{{Path: "/tmp/p"}})
+	if err != nil {
+		t.Fatalf("AddProject: %v", err)
+	}
+	c, err := s.AddCard(project.ID, "Chantier", "", "")
+	if err != nil {
+		t.Fatalf("AddCard: %v", err)
+	}
+
+	// Titre vide refusé.
+	empty := ""
+	if _, err := s.UpdateCard(c.ID, nil, &empty, nil); err == nil {
+		t.Fatalf("un titre vide devrait être refusé")
+	}
+
+	title := "Nouveau titre"
+	ctx := "Nouveau contexte"
+	updated, err := s.UpdateCard(c.ID, nil, &title, &ctx)
+	if err != nil {
+		t.Fatalf("UpdateCard: %v", err)
+	}
+	if updated.Title != title || updated.ContextPrompt != ctx {
+		t.Fatalf("mise à jour inattendue : %+v", updated)
+	}
+	if updated.Column != "soon" {
+		t.Fatalf("la colonne ne devrait pas changer quand column=nil, reçue %q", updated.Column)
+	}
+
+	// column peut toujours être modifiée seule (déplacement manuel).
+	col := "doing"
+	updated, err = s.UpdateCard(c.ID, &col, nil, nil)
+	if err != nil {
+		t.Fatalf("UpdateCard (column): %v", err)
+	}
+	if updated.Column != "doing" || updated.Title != title {
+		t.Fatalf("mise à jour inattendue : %+v", updated)
+	}
+
+	if _, err := s.UpdateCard("inconnue", &col, nil, nil); err == nil {
+		t.Fatalf("une carte inconnue devrait être refusée")
 	}
 }
 
@@ -406,7 +477,7 @@ func TestTaskFinishTransitions(t *testing.T) {
 	if err != nil {
 		t.Fatalf("AddProject: %v", err)
 	}
-	card, err := s.AddCard(project.ID, "Carte", "")
+	card, err := s.AddCard(project.ID, "Carte", "", "")
 	if err != nil {
 		t.Fatalf("AddCard: %v", err)
 	}
@@ -451,7 +522,7 @@ func TestTaskCancelTransitions(t *testing.T) {
 	if err != nil {
 		t.Fatalf("AddProject: %v", err)
 	}
-	card, err := s.AddCard(project.ID, "Carte", "")
+	card, err := s.AddCard(project.ID, "Carte", "", "")
 	if err != nil {
 		t.Fatalf("AddCard: %v", err)
 	}
@@ -485,7 +556,7 @@ func TestTaskReopenTransitions(t *testing.T) {
 	if err != nil {
 		t.Fatalf("AddProject: %v", err)
 	}
-	card, err := s.AddCard(project.ID, "Carte", "")
+	card, err := s.AddCard(project.ID, "Carte", "", "")
 	if err != nil {
 		t.Fatalf("AddCard: %v", err)
 	}
@@ -521,7 +592,7 @@ func TestCardAutoMoveToDoneAndBack(t *testing.T) {
 	if err != nil {
 		t.Fatalf("AddProject: %v", err)
 	}
-	card, err := s.AddCard(project.ID, "Carte", "")
+	card, err := s.AddCard(project.ID, "Carte", "", "")
 	if err != nil {
 		t.Fatalf("AddCard: %v", err)
 	}
@@ -601,7 +672,7 @@ func TestCardCountersExcludeCancelled(t *testing.T) {
 	if err != nil {
 		t.Fatalf("AddProject: %v", err)
 	}
-	card, err := s.AddCard(project.ID, "Carte", "")
+	card, err := s.AddCard(project.ID, "Carte", "", "")
 	if err != nil {
 		t.Fatalf("AddCard: %v", err)
 	}
@@ -692,7 +763,7 @@ func TestReassignTask(t *testing.T) {
 	if err != nil {
 		t.Fatalf("AddProject: %v", err)
 	}
-	card, err := s.AddCard(project.ID, "Carte", "")
+	card, err := s.AddCard(project.ID, "Carte", "", "")
 	if err != nil {
 		t.Fatalf("AddCard: %v", err)
 	}
@@ -851,7 +922,7 @@ func TestCardAutoMovesFromSoonToDoingWhenTaskStarts(t *testing.T) {
 		t.Fatalf("NewStore: %v", err)
 	}
 	p, _ := s.AddProject("p", "", "", []Repo{{Name: "r", Path: "/tmp/x"}})
-	card, _ := s.AddCard(p.ID, "Carte", "")
+	card, _ := s.AddCard(p.ID, "Carte", "", "")
 	if card.Column != "soon" {
 		t.Fatalf("colonne initiale attendue soon, reçue %q", card.Column)
 	}

@@ -36,9 +36,13 @@ type Store struct {
 	NextMessageN int
 	NextRef      int
 
-	// commitTimer pilote le commit automatique debounced (2 s) de l'espace de
-	// travail après chaque sauvegarde. Non sérialisé (non exporté).
+	// commitTimer pilote le commit automatique throttlé de l'espace de travail
+	// après chaque sauvegarde. Non sérialisé (non exporté).
 	commitTimer *time.Timer
+
+	// commitInterval surcharge workspaceCommitInterval quand elle est non
+	// nulle (uniquement les tests : attendre 15 minutes n'est pas une option).
+	commitInterval time.Duration
 }
 
 // NewStore charge state.json s'il existe, sinon initialise un état neuf
@@ -218,15 +222,40 @@ func (s *Store) save() error {
 	return nil
 }
 
-// scheduleWorkspaceCommit (re)démarre le minuteur de commit automatique
-// debounced (2 s) de l'espace de travail. Doit être appelée avec le verrou
-// déjà tenu (comme save()) ; sans effet si dataDir n'est pas un dépôt git.
+// workspaceCommitInterval borne la fréquence du commit automatique de
+// l'espace de travail : au plus un commit par intervalle, quel que soit le
+// nombre de sauvegardes (un agent actif en déclenche plusieurs par seconde :
+// lignes d'activité, messages, tokens). Un commit stocke un blob complet de
+// state.json ; commiter à chaque sauvegarde gonfle le dépôt en objets libres
+// pour aucun gain, state.json étant de toute façon déjà écrit atomiquement
+// sur disque à chaque mutation. Le commit n'est qu'un point de restauration.
+const workspaceCommitInterval = 15 * time.Minute
+
+// scheduleWorkspaceCommit arme le minuteur de commit automatique de l'espace
+// de travail s'il ne l'est pas déjà. C'est un throttle, pas un debounce : un
+// minuteur en attente n'est jamais repoussé, sinon une activité continue
+// (agent qui tourne) empêcherait indéfiniment tout commit.
+//
+// Doit être appelée avec le verrou déjà tenu (comme save()) ; commitWorkspace
+// est sans effet si dataDir n'est pas un dépôt git. Un arrêt du process avant
+// l'échéance ne perd que le commit, pas l'état : la sauvegarde faite par
+// NewStore au démarrage suivant réarme le minuteur, et une synchronisation
+// manuelle (SyncPush) commite de toute façon ce qui est en attente.
 func (s *Store) scheduleWorkspaceCommit() {
 	if s.commitTimer != nil {
-		s.commitTimer.Stop()
+		return
+	}
+	interval := s.commitInterval
+	if interval <= 0 {
+		interval = workspaceCommitInterval
 	}
 	dataDir := s.dataDir
-	s.commitTimer = time.AfterFunc(2*time.Second, func() {
+	s.commitTimer = time.AfterFunc(interval, func() {
+		// Libérer le créneau avant de commiter (git tourne hors verrou) :
+		// une sauvegarde survenant pendant le commit réarme un minuteur.
+		s.mu.Lock()
+		s.commitTimer = nil
+		s.mu.Unlock()
 		commitWorkspace(dataDir)
 	})
 }
@@ -743,8 +772,9 @@ func (s *Store) ResolveTaskRepo(projectID, repoName string) (Repo, error) {
 
 var validColumns = map[string]bool{"soon": true, "doing": true, "done": true}
 
-// AddCard crée une carte dans un projet. column vide => "soon".
-func (s *Store) AddCard(projectID, title, column string) (Card, error) {
+// AddCard crée une carte (chantier) dans un projet. column vide => "soon".
+// contextPrompt est optionnel (texte libre transmis aux agents).
+func (s *Store) AddCard(projectID, title, column, contextPrompt string) (Card, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if _, ok := s.Projects[projectID]; !ok {
@@ -757,7 +787,10 @@ func (s *Store) AddCard(projectID, title, column string) (Card, error) {
 		return Card{}, fmt.Errorf("cards are created in the soon column")
 	}
 	s.NextCardN++
-	c := Card{ID: fmt.Sprintf("c%d", s.NextCardN), ProjectID: projectID, Column: column, Title: title}
+	c := Card{
+		ID: fmt.Sprintf("c%d", s.NextCardN), ProjectID: projectID, Column: column, Title: title,
+		ContextPrompt: contextPrompt,
+	}
 	s.Cards[c.ID] = c
 	s.recomputeCard(c.ID)
 	if err := s.save(); err != nil {
@@ -766,18 +799,31 @@ func (s *Store) AddCard(projectID, title, column string) (Card, error) {
 	return s.Cards[c.ID], nil
 }
 
-// UpdateCardColumn déplace une carte vers une autre colonne du kanban.
-func (s *Store) UpdateCardColumn(id, column string) (Card, error) {
+// UpdateCard modifie la colonne, le titre et/ou le contexte agent d'une
+// carte. Les champs nil ne sont pas modifiés ; title, s'il est fourni, doit
+// être non vide.
+func (s *Store) UpdateCard(id string, column, title, contextPrompt *string) (Card, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	c, ok := s.Cards[id]
 	if !ok {
 		return Card{}, fmt.Errorf("card not found")
 	}
-	if !validColumns[column] {
-		return Card{}, fmt.Errorf("invalid column")
+	if column != nil {
+		if !validColumns[*column] {
+			return Card{}, fmt.Errorf("invalid column")
+		}
+		c.Column = *column
 	}
-	c.Column = column
+	if title != nil {
+		if strings.TrimSpace(*title) == "" {
+			return Card{}, fmt.Errorf("title is required")
+		}
+		c.Title = *title
+	}
+	if contextPrompt != nil {
+		c.ContextPrompt = *contextPrompt
+	}
 	s.Cards[id] = c
 	if err := s.save(); err != nil {
 		return Card{}, err

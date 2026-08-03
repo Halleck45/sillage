@@ -35,7 +35,8 @@ type Project struct {
 	ContextPrompt string `json:"contextPrompt"`
 }
 
-// Card est une colonne du kanban d'un projet.
+// Card est un chantier (vocabulaire produit) : regroupe des tâches dans une
+// colonne du kanban d'un projet. Le nom technique Card/cards ne change pas.
 type Card struct {
 	ID            string  `json:"id"`
 	ProjectID     string  `json:"projectId"`
@@ -48,6 +49,10 @@ type Card struct {
 	ReviewCount   int     `json:"reviewCount"`
 	Progress      int     `json:"progress"`
 	LiveActivity  *string `json:"liveActivity"`
+
+	// ContextPrompt est un texte libre transmis aux agents (voir runner.go :
+	// ajouté au system prompt claude, préfixe du prompt codex, ignoré par fake).
+	ContextPrompt string `json:"contextPrompt"`
 }
 
 // Agent est un profil d'agent IA (claude, codex ou fake).

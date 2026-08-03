@@ -29,7 +29,7 @@ Pour tester le flux complet sans coût, utiliser l'agent seedé Écho 🧪 (`cli
 
 Ce sont les promesses de sécurité du produit (voir `CONTRIBUTING.md`) :
 
-1. **`git push` n'existe qu'à deux endroits** : `Ship()` dans `internal/server/git.go` (branche d'une tâche) et `SyncPush()` dans `internal/server/workspace.go` (synchronisation de l'espace de données, jamais un dépôt de projet). Aucune entrée capable de pousser dans les allowlists d'outils des agents, aucun flag de contournement de permissions (`--dangerously-skip-permissions` interdit).
+1. **`git push` n'existe qu'à deux endroits, tous deux dans `internal/server/git.go`** : `Ship()` (branche d'une tâche) et `SyncPush()` (synchronisation de l'espace de données, jamais un dépôt de projet). Aucune entrée capable de pousser dans les allowlists d'outils des agents, aucun flag de contournement de permissions (`--dangerously-skip-permissions` interdit).
 2. **Les actions sortantes exigent `{"confirm": true}`** sur une requête authentifiée : ship, ouverture de PR, sync de l'espace de travail.
 3. Le serveur reste sûr sur un portable : localhost par défaut, mot de passe bcrypt, rate-limit du login, `Content-Type: application/json` obligatoire sur les mutations (protection CSRF avec SameSite=Lax).
 4. Une seule dépendance Go externe : `golang.org/x/crypto`. En ajouter une demande une très bonne raison.
@@ -51,8 +51,8 @@ internal/server/
   store.go                  état en mémoire + persistance atomique + compteurs dérivés
   handlers.go               routage (net/http ServeMux avec patterns méthode+chemin), middlewares
   runner.go                 adaptateurs claude / codex / fake, un process max par tâche
-  git.go                    worktrees, parser de diff unifié, commits, Ship (push), OpenPR
-  workspace.go              dataDir en dépôt git optionnel (setup, commit auto, SyncPush)
+  git.go                    worktrees, parser de diff unifié, commits, Ship + SyncPush (les deux push), OpenPR
+  workspace.go              dataDir en dépôt git optionnel (setup, clone, commit auto throttlé)
   auth.go                   bcrypt, sessions en mémoire, rate-limit login
   sse.go                    Hub pub/sub
 web/                        index.html + style.css + app.js (SPA vanilla, zéro dépendance)
@@ -64,7 +64,7 @@ web/                        index.html + style.css + app.js (SPA vanilla, zéro 
 
 - Un `sync.Mutex` protège tout. Les helpers `recomputeCard/Project/Agent/All` doivent être appelés **verrou tenu** et recalculent les champs dérivés (progression, compteurs, `unread`, tokens agrégés, `active`).
 - `recomputeCard` porte aussi une règle produit : la colonne de la carte suit ses tâches (toutes terminales → `done` ; du travail actif → `doing`).
-- `save()` écrit un fichier temporaire puis `os.Rename` (atomique), et arme un commit git debounced (2 s) de l'espace de travail.
+- `save()` écrit un fichier temporaire puis `os.Rename` (atomique), et arme le commit git de l'espace de travail. Ce commit est **throttlé** (`workspaceCommitInterval`, 15 min) et non debouncé : un minuteur en attente n'est jamais repoussé, sinon un agent actif (plusieurs sauvegardes par seconde) empêcherait tout commit. Chaque commit stockant un blob complet de `state.json`, commiter à chaque sauvegarde gonfle le dépôt en objets libres pour aucun gain.
 - Les migrations de format se font au chargement dans `loadStoreFile` (`migrateLegacyRepos`, `migrateLegacyWorkspace`) en relisant le JSON brut : ajouter une migration là, pas ailleurs.
 - `AgentOut.Warning` (santé de l'agent : binaire absent du PATH, sandbox codex bloqué par AppArmor) est calculé à chaque `ListAgents` et **jamais persisté** : `Agent` n'a pas ce champ.
 - `ReloadFromDisk()` remplace le contenu sans changer le pointeur `Store`, pour que sessions et abonnements SSE survivent au rapatriement d'un espace de travail.

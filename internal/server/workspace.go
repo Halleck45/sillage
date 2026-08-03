@@ -103,6 +103,13 @@ func InitWorkspaceGit(dataDir, remote string) error {
 		_, _ = runGit(dataDir, gitDefaultTimeout, "config", "user.name", "Sillage")
 	}
 
+	// gc.auto bas (défaut git : 6700 objets libres, soit ~2200 commits ici).
+	// Chaque commit écrit un blob complet de state.json : sans ça, le dépôt
+	// accumule des centaines de mégaoctets d'objets libres avant que git ne
+	// les compacte tout seul. Appliqué aussi aux espaces déjà initialisés,
+	// le mode "init" étant rejouable depuis les réglages.
+	_, _ = runGit(dataDir, gitDefaultTimeout, "config", "gc.auto", "256")
+
 	gitignorePath := filepath.Join(dataDir, ".gitignore")
 	if _, err := os.Stat(gitignorePath); os.IsNotExist(err) {
 		if err := os.WriteFile(gitignorePath, []byte(workspaceGitignore), 0o644); err != nil {

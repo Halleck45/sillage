@@ -328,13 +328,14 @@ func (r *Runner) run(task Task, agent Agent, handle *procHandle, cliInput string
 	}()
 
 	project, _ := r.store.GetProject(task.ProjectID)
+	card, _ := r.store.GetCard(task.CardID)
 
 	var runErr error
 	switch agent.Cli {
 	case "claude":
-		runErr = r.runClaude(&task, agent, project, handle, cliInput)
+		runErr = r.runClaude(&task, agent, project, card, handle, cliInput)
 	case "codex":
-		runErr = r.runCodex(&task, agent, project, handle, cliInput)
+		runErr = r.runCodex(&task, agent, project, card, handle, cliInput)
 	case "fake":
 		runErr = r.runFake(&task, agent, handle)
 	default:
@@ -432,18 +433,30 @@ func truncate(s string, n int) string {
 	return s[:n-3] + "..."
 }
 
-// buildSystemPrompt combine le contexte de l'agent et celui du projet pour
-// --append-system-prompt (adaptateur claude) : contexte agent, puis ligne
-// vide, puis "Project context:\n<projectContext>" si projectContext est non
-// vide. Retourne une chaîne vide si les deux le sont (pas de flag ajouté).
-func buildSystemPrompt(agentContext, projectContext string) string {
-	if projectContext == "" {
-		return agentContext
+// contextParts assemble les blocs "Project context:"/"Workstream context:"
+// (chacun omis s'il est vide, dans cet ordre). Partagé par l'adaptateur
+// claude (buildSystemPrompt) et l'adaptateur codex (préfixe de prompt).
+func contextParts(projectContext, workstreamContext string) []string {
+	var parts []string
+	if projectContext != "" {
+		parts = append(parts, "Project context:\n"+projectContext)
 	}
-	if agentContext == "" {
-		return "Project context:\n" + projectContext
+	if workstreamContext != "" {
+		parts = append(parts, "Workstream context:\n"+workstreamContext)
 	}
-	return agentContext + "\n\nProject context:\n" + projectContext
+	return parts
+}
+
+// buildSystemPrompt combine le contexte de l'agent, celui du projet et celui
+// du chantier (Card) pour --append-system-prompt (adaptateur claude) : chaque
+// bloc n'est ajouté que s'il est non vide, séparés par des lignes vides.
+// Retourne une chaîne vide si tout est vide (pas de flag ajouté).
+func buildSystemPrompt(agentContext, projectContext, workstreamContext string) string {
+	parts := contextParts(projectContext, workstreamContext)
+	if agentContext != "" {
+		parts = append([]string{agentContext}, parts...)
+	}
+	return strings.Join(parts, "\n\n")
 }
 
 // summarizeToolUse construit la ligne d'activité affichée pour un tool_use claude.
@@ -484,7 +497,7 @@ type claudeEnvelope struct {
 	IsError bool `json:"is_error"`
 }
 
-func (r *Runner) runClaude(task *Task, agent Agent, project Project, handle *procHandle, cliInput string) error {
+func (r *Runner) runClaude(task *Task, agent Agent, project Project, card Card, handle *procHandle, cliInput string) error {
 	args := []string{
 		"-p", "--output-format", "stream-json", "--verbose",
 		"--permission-mode", "acceptEdits",
@@ -493,7 +506,7 @@ func (r *Runner) runClaude(task *Task, agent Agent, project Project, handle *pro
 	if agent.Model != "" {
 		args = append(args, "--model", agent.Model)
 	}
-	if systemPrompt := buildSystemPrompt(agent.ContextPrompt, project.ContextPrompt); systemPrompt != "" {
+	if systemPrompt := buildSystemPrompt(agent.ContextPrompt, project.ContextPrompt, card.ContextPrompt); systemPrompt != "" {
 		args = append(args, "--append-system-prompt", systemPrompt)
 	}
 	if task.SessionID != "" {
@@ -608,7 +621,7 @@ func (r *Runner) runClaude(task *Task, agent Agent, project Project, handle *pro
 
 // --- Adaptateur codex (best-effort) ---
 
-func (r *Runner) runCodex(task *Task, agent Agent, project Project, handle *procHandle, cliInput string) error {
+func (r *Runner) runCodex(task *Task, agent Agent, project Project, card Card, handle *procHandle, cliInput string) error {
 	// workspace-write : écriture limitée au worktree, réseau coupé ; le push
 	// reste impossible et ne passe que par Ship (git.go) après validation humaine.
 	// SILLAGE_CODEX_SANDBOX permet de choisir un autre mode (ex : danger-full-access
@@ -618,8 +631,8 @@ func (r *Runner) runCodex(task *Task, agent Agent, project Project, handle *proc
 	if sandbox == "" {
 		sandbox = "workspace-write"
 	}
-	if project.ContextPrompt != "" {
-		cliInput = "Project context:\n" + project.ContextPrompt + "\n\n---\n\n" + cliInput
+	if blocks := strings.Join(contextParts(project.ContextPrompt, card.ContextPrompt), "\n\n"); blocks != "" {
+		cliInput = blocks + "\n\n---\n\n" + cliInput
 	}
 	args := []string{"exec", "--json", "--sandbox", sandbox, "-C", task.WorktreeDir}
 	if agent.Model != "" {

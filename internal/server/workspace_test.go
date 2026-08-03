@@ -5,8 +5,10 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 )
 
 // --- Migration des dépôts (path legacy -> repos) ---
@@ -180,6 +182,15 @@ func TestInitWorkspaceGit(t *testing.T) {
 	}
 	if WorkspaceLastCommitAt(dir) == nil {
 		t.Fatalf("un commit initial devrait exister")
+	}
+	// gc.auto bas : chaque commit écrit un blob complet de state.json, il faut
+	// que git compacte souvent au lieu d'attendre son seuil de 6700 objets.
+	gcAuto, err := runGit(dir, gitDefaultTimeout, "config", "--get", "gc.auto")
+	if err != nil {
+		t.Fatalf("config --get gc.auto: %v", err)
+	}
+	if strings.TrimSpace(gcAuto) != "256" {
+		t.Fatalf("gc.auto attendu 256, reçu %q", gcAuto)
 	}
 
 	// Ré-exécuter init avec un remote doit rester idempotent et le définir.
@@ -436,4 +447,123 @@ func TestSyncPushNeverTouchesProjectRepo(t *testing.T) {
 	if strings.TrimSpace(wsLog) != "sillage: update" {
 		t.Fatalf("le remote de l'espace de travail devrait avoir reçu le commit, log : %q", wsLog)
 	}
+}
+
+// --- Fréquence du commit automatique ---
+
+// currentCommitTimer lit le minuteur de commit sous verrou.
+func currentCommitTimer(s *Store) *time.Timer {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.commitTimer
+}
+
+// TestWorkspaceCommitThrottledNotDebounced vérifie que des sauvegardes
+// rapprochées ne repoussent pas le commit automatique : le minuteur armé par
+// la première doit survivre aux suivantes (throttle). Avec un debounce, une
+// activité continue d'agent (plusieurs sauvegardes par seconde) réarmerait le
+// minuteur sans fin et ne commiterait jamais ; à l'inverse, commiter à chaque
+// sauvegarde gonflerait le dépôt en objets libres.
+func TestWorkspaceCommitThrottledNotDebounced(t *testing.T) {
+	s, err := NewStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+
+	// NewStore sauvegarde déjà une fois : le minuteur doit être armé.
+	first := currentCommitTimer(s)
+	if first == nil {
+		t.Fatalf("le minuteur de commit devrait être armé après la première sauvegarde")
+	}
+
+	// Plusieurs mutations rapprochées, comme un agent qui travaille.
+	project, err := s.AddProject("sillage", "", "", []Repo{{Path: "/tmp/sillage"}})
+	if err != nil {
+		t.Fatalf("AddProject: %v", err)
+	}
+	if _, err := s.AddCard(project.ID, "Ma carte", "", ""); err != nil {
+		t.Fatalf("AddCard: %v", err)
+	}
+	if _, err := s.UpdateSettings(nil, nil); err != nil {
+		t.Fatalf("UpdateSettings: %v", err)
+	}
+
+	if got := currentCommitTimer(s); got != first {
+		t.Fatalf("le minuteur a été réarmé par les sauvegardes suivantes (debounce) : attendu %p, reçu %p", first, got)
+	}
+
+	// L'intervalle doit rester assez large pour que le nombre de commits sur
+	// une journée de travail reste faible.
+	if workspaceCommitInterval < time.Minute {
+		t.Fatalf("workspaceCommitInterval trop court : %v", workspaceCommitInterval)
+	}
+}
+
+// waitForCommitCount attend que dataDir atteigne le nombre de commits attendu.
+func waitForCommitCount(t *testing.T, dataDir string, want int) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	var got string
+	for time.Now().Before(deadline) {
+		got = strings.TrimSpace(runTestGit(t, dataDir, "rev-list", "--count", "HEAD"))
+		if got == strconv.Itoa(want) {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatalf("%d commits attendus dans l'espace de travail, reçu %q", want, got)
+}
+
+// TestWorkspaceCommitFiresOncePerInterval vérifie le mécanisme complet sur un
+// espace de travail réellement versionné : plusieurs mutations dans le même
+// créneau ne produisent qu'UN commit, et un créneau suivant en produit un
+// nouveau (le minuteur se réarme après avoir tiré).
+func TestWorkspaceCommitFiresOncePerInterval(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git non disponible dans cet environnement")
+	}
+	dir := t.TempDir()
+
+	s, err := NewStore(dir)
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+	if err := InitWorkspaceGit(dir, ""); err != nil {
+		t.Fatalf("InitWorkspaceGit: %v", err)
+	}
+	baseCount := strings.TrimSpace(runTestGit(t, dir, "rev-list", "--count", "HEAD"))
+	if baseCount != "1" {
+		t.Fatalf("un seul commit initial attendu, reçu %q", baseCount)
+	}
+
+	// Créneau court pour le test, et on repart d'un minuteur non armé.
+	s.mu.Lock()
+	if s.commitTimer != nil {
+		s.commitTimer.Stop()
+		s.commitTimer = nil
+	}
+	s.commitInterval = 40 * time.Millisecond
+	s.mu.Unlock()
+
+	// Trois mutations dans le même créneau : un seul commit attendu.
+	project, err := s.AddProject("sillage", "", "", []Repo{{Path: "/tmp/sillage"}})
+	if err != nil {
+		t.Fatalf("AddProject: %v", err)
+	}
+	if _, err := s.AddCard(project.ID, "Ma carte", "", ""); err != nil {
+		t.Fatalf("AddCard: %v", err)
+	}
+	if _, err := s.UpdateSettings(nil, nil); err != nil {
+		t.Fatalf("UpdateSettings: %v", err)
+	}
+	waitForCommitCount(t, dir, 2)
+
+	// Le créneau est libéré après le tir : une nouvelle mutation en réarme un.
+	if got := currentCommitTimer(s); got != nil {
+		t.Fatalf("le minuteur devrait être libéré après le commit, reçu %p", got)
+	}
+	if _, err := s.AddCard(project.ID, "Autre carte", "", ""); err != nil {
+		t.Fatalf("AddCard (second créneau): %v", err)
+	}
+	waitForCommitCount(t, dir, 3)
 }

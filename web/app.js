@@ -36,12 +36,12 @@
       'header.newProject': '+ Nouveau projet',
       'allProjects.emptyTitle': 'Aucun projet pour l\'instant',
       'allProjects.emptySub': 'Créez votre premier projet pour commencer.',
-      'allProjects.cardCount.one': '{n} carte',
-      'allProjects.cardCount.other': '{n} cartes',
+      'allProjects.cardCount.one': '{n} chantier',
+      'allProjects.cardCount.other': '{n} chantiers',
       'inbox.empty': 'Boîte de réception vide. Tout est à jour !',
       'kanban.addCard': '+ Ajouter',
-      'kanban.empty': 'Aucune carte pour l\'instant.',
-      'kanban.emptyAction': 'Créer la première carte',
+      'kanban.empty': 'Aucun chantier pour l\'instant.',
+      'kanban.emptyAction': 'Créer le premier chantier',
       'kanban.card.tasksLabel': 'tâches',
       'kanban.card.reviewCount': '{n} à relire',
       'column.soon': 'Bientôt',
@@ -107,6 +107,7 @@
       'newTask.agentLabel': 'Agent',
       'newTask.repoLabel': 'Dépôt',
       'newTask.projectContextNote': '+ contexte du projet',
+      'newTask.workstreamContextNote': '+ contexte du chantier',
       'newTask.hint': 'La conversation s\'ouvre après la création',
       'newTask.submit': 'Créer et discuter',
       'newTask.errorTitleRequired': 'Le titre est requis.',
@@ -118,11 +119,14 @@
       'newProject.pathPlaceholder': '/home/utilisateur/projets/mon-projet',
       'newProject.errorRequired': 'Nom et au moins un dépôt sont requis.',
       'newProject.errorCreateFailed': 'Erreur lors de la création du projet.',
-      'newCard.title': 'Nouvelle carte',
-      'newCard.titleLabel': 'Titre',
-      'newCard.titlePlaceholder': 'Titre de la carte',
+      'newCard.title': 'Nouveau chantier',
+      'newCard.titleLabel': 'Titre du chantier',
+      'newCard.titlePlaceholder': 'Titre du chantier',
       'newCard.errorTitleRequired': 'Le titre est requis.',
-      'newCard.errorCreateFailed': 'Erreur lors de la création de la carte.',
+      'newCard.errorCreateFailed': 'Erreur lors de la création du chantier.',
+      'workstream.editTooltip': 'Modifier le chantier',
+      'workstream.editTitle': 'Chantier',
+      'workstream.errorSaveFailed': 'Erreur lors de l\'enregistrement.',
       'agent.newTitle': 'Nouvel agent',
       'agent.editTitle': 'Modifier l\'agent',
       'agent.name': 'Nom',
@@ -225,12 +229,12 @@
       'header.newProject': '+ New project',
       'allProjects.emptyTitle': 'No projects yet',
       'allProjects.emptySub': 'Create your first project to get started.',
-      'allProjects.cardCount.one': '{n} card',
-      'allProjects.cardCount.other': '{n} cards',
+      'allProjects.cardCount.one': '{n} workstream',
+      'allProjects.cardCount.other': '{n} workstreams',
       'inbox.empty': 'Inbox is empty. All caught up!',
       'kanban.addCard': '+ Add',
-      'kanban.empty': 'No cards yet.',
-      'kanban.emptyAction': 'Create the first card',
+      'kanban.empty': 'No workstreams yet.',
+      'kanban.emptyAction': 'Create the first workstream',
       'kanban.card.tasksLabel': 'tasks',
       'kanban.card.reviewCount': '{n} to review',
       'column.soon': 'Soon',
@@ -296,6 +300,7 @@
       'newTask.agentLabel': 'Agent',
       'newTask.repoLabel': 'Repository',
       'newTask.projectContextNote': '+ project context',
+      'newTask.workstreamContextNote': '+ workstream context',
       'newTask.hint': 'The conversation opens after creation',
       'newTask.submit': 'Create and chat',
       'newTask.errorTitleRequired': 'A title is required.',
@@ -307,11 +312,14 @@
       'newProject.pathPlaceholder': '/home/user/projects/my-project',
       'newProject.errorRequired': 'Name and at least one repository are required.',
       'newProject.errorCreateFailed': 'Failed to create the project.',
-      'newCard.title': 'New card',
-      'newCard.titleLabel': 'Title',
-      'newCard.titlePlaceholder': 'Card title',
+      'newCard.title': 'New workstream',
+      'newCard.titleLabel': 'Workstream title',
+      'newCard.titlePlaceholder': 'Workstream title',
       'newCard.errorTitleRequired': 'A title is required.',
-      'newCard.errorCreateFailed': 'Failed to create the card.',
+      'newCard.errorCreateFailed': 'Failed to create the workstream.',
+      'workstream.editTooltip': 'Edit workstream',
+      'workstream.editTitle': 'Workstream',
+      'workstream.errorSaveFailed': 'Failed to save.',
       'agent.newTitle': 'New agent',
       'agent.editTitle': 'Edit agent',
       'agent.name': 'Name',
@@ -909,7 +917,7 @@
   // ---------------------------------------------------------------------
 
   function buildHeaderHTML() {
-    var back = '', title = '', sub = '', actions = '';
+    var back = '', title = '', sub = '', actions = '', editBtn = '';
     if (state.screen === 'inbox') {
       title = t('nav.inbox');
     } else if (state.screen === 'projects') {
@@ -924,10 +932,13 @@
       var pr = state.projectsById[state.projectId];
       title = c ? c.title : '';
       sub = pr ? '<span class="crumb-sub">' + escapeHtml(pr.name) + '</span>' : '';
+      if (c) {
+        editBtn = '<button class="icon-btn" data-action="open-edit-card" title="' + escapeHtml(t('workstream.editTooltip')) + '" aria-label="' + escapeHtml(t('workstream.editTooltip')) + '">✎</button>';
+      }
       actions = '<button class="btn-primary" data-action="open-new-task">' + escapeHtml(t('header.newTask')) + '</button>';
     }
     var hamburger = '<button class="icon-btn hamburger-btn" data-action="toggle-sidebar" aria-label="' + escapeHtml(t('aria.menu')) + '">☰</button>';
-    return '<header class="topbar">' + hamburger + back + '<span class="crumb-title">' + escapeHtml(title) + '</span>' + sub +
+    return '<header class="topbar">' + hamburger + back + '<span class="crumb-title">' + escapeHtml(title) + '</span>' + editBtn + sub +
       '<div class="topbar-actions">' + actions + '</div></header>';
   }
 
@@ -1735,6 +1746,7 @@
       '<div class="agent-choices" id="agent-choices">' + agentChoices + '</div>' +
       '<div class="agent-context-preview" id="agent-context-preview">' + (selected ? escapeHtml(selected.contextPrompt || '') : '') + '</div>' +
       (project && project.contextPrompt ? '<div class="project-context-note">' + escapeHtml(t('newTask.projectContextNote')) + '</div>' : '') +
+      (card && card.contextPrompt ? '<div class="project-context-note">' + escapeHtml(t('newTask.workstreamContextNote')) + '</div>' : '') +
       '<div id="new-task-error" class="modal-error hidden"></div>' +
       '<div class="modal-foot"><span class="modal-hint">' + escapeHtml(t('newTask.hint')) + '</span>' +
       '<button class="btn-outline" data-action="close-modal">' + escapeHtml(t('common.cancel')) + '</button>' +
@@ -1898,6 +1910,8 @@
     return '<div class="modal modal-sm">' +
       '<div class="modal-head"><span class="modal-title">' + escapeHtml(t('newCard.title')) + '</span><button class="icon-btn" data-action="close-modal" aria-label="' + escapeHtml(t('common.close')) + '">✕</button></div>' +
       '<div class="modal-label">' + escapeHtml(t('newCard.titleLabel')) + '</div><input id="new-card-title" class="modal-input" placeholder="' + escapeHtml(t('newCard.titlePlaceholder')) + '">' +
+      '<div class="modal-label">' + escapeHtml(t('project.contextPrompt')) + '</div>' +
+      '<textarea id="new-card-context" class="modal-textarea" rows="3" placeholder="' + escapeHtml(t('project.contextPromptPlaceholder')) + '"></textarea>' +
       '<div id="new-card-error" class="modal-error hidden"></div>' +
       '<div class="modal-foot"><button class="btn-outline" data-action="close-modal">' + escapeHtml(t('common.cancel')) + '</button>' +
       '<button class="btn-green" data-action="submit-new-card">' + escapeHtml(t('common.create')) + '</button></div>' +
@@ -1910,15 +1924,52 @@
   }
   function submitNewCard() {
     var titleEl = document.getElementById('new-card-title');
+    var contextEl = document.getElementById('new-card-context');
     var errEl = document.getElementById('new-card-error');
     var title = titleEl.value.trim();
+    var contextPrompt = contextEl.value.trim();
     if (!title) { errEl.textContent = t('newCard.errorTitleRequired'); errEl.classList.remove('hidden'); return; }
-    api('/api/cards', { method: 'POST', body: { projectId: state.projectId, title: title } }).then(function (card) {
+    api('/api/cards', { method: 'POST', body: { projectId: state.projectId, title: title, contextPrompt: contextPrompt } }).then(function (card) {
       upsertCard(card);
       closeModal();
       renderMain();
     }).catch(function (e) {
       errEl.textContent = (e instanceof ApiError && e.message) || t('newCard.errorCreateFailed');
+      errEl.classList.remove('hidden');
+    });
+  }
+
+  // Édition d'un chantier (titre + contexte)
+
+  function buildCardEditModalHTML(card) {
+    return '<div class="modal modal-sm">' +
+      '<div class="modal-head"><span class="modal-title">' + escapeHtml(t('workstream.editTitle')) + '</span><button class="icon-btn" data-action="close-modal" aria-label="' + escapeHtml(t('common.close')) + '">✕</button></div>' +
+      '<div class="modal-label">' + escapeHtml(t('newCard.titleLabel')) + '</div><input id="card-edit-title" class="modal-input" value="' + escapeHtml(card.title) + '">' +
+      '<div class="modal-label">' + escapeHtml(t('project.contextPrompt')) + '</div>' +
+      '<textarea id="card-edit-context" class="modal-textarea" rows="3" placeholder="' + escapeHtml(t('project.contextPromptPlaceholder')) + '">' + escapeHtml(card.contextPrompt || '') + '</textarea>' +
+      '<div id="card-edit-error" class="modal-error hidden"></div>' +
+      '<div class="modal-foot"><button class="btn-outline" data-action="close-modal">' + escapeHtml(t('common.cancel')) + '</button>' +
+      '<button class="btn-green" data-action="submit-card-edit" data-card-id="' + card.id + '">' + escapeHtml(t('common.save')) + '</button></div>' +
+      '</div>';
+  }
+  function openEditCardModal() {
+    var card = state.cardsById[state.cardId];
+    if (!card) return;
+    openModal(buildCardEditModalHTML(card));
+    setTimeout(function () { var el = document.getElementById('card-edit-title'); if (el) el.focus(); }, 0);
+  }
+  function submitCardEdit(cardId) {
+    var title = document.getElementById('card-edit-title').value.trim();
+    var contextPrompt = document.getElementById('card-edit-context').value.trim();
+    var errEl = document.getElementById('card-edit-error');
+    if (!title) { errEl.textContent = t('newCard.errorTitleRequired'); errEl.classList.remove('hidden'); return; }
+    api('/api/cards/' + cardId, { method: 'PATCH', body: { title: title, contextPrompt: contextPrompt } }).then(function (card) {
+      upsertCard(card);
+      closeModal();
+      renderSidebar();
+      renderMain();
+    }).catch(function (e) {
+      errEl.textContent = (e instanceof ApiError && e.message) || t('workstream.errorSaveFailed');
       errEl.classList.remove('hidden');
     });
   }
@@ -2465,6 +2516,8 @@
       case 'open-new-project': openNewProjectModal(); break;
       case 'open-edit-project': openEditProjectModal(); break;
       case 'submit-project-edit': submitProjectEdit(el.getAttribute('data-project-id')); break;
+      case 'open-edit-card': openEditCardModal(); break;
+      case 'submit-card-edit': submitCardEdit(el.getAttribute('data-card-id')); break;
       case 'add-repo-row': addRepoRow(); break;
       case 'remove-repo-row': removeRepoRow(parseInt(el.getAttribute('data-index'), 10)); break;
       case 'open-new-agent': openNewAgentModal(); break;

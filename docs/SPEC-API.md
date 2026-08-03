@@ -1,4 +1,4 @@
-# Sillage : contrat d'API (v0.3.2)
+# Sillage : contrat d'API (v0.3.3)
 
 Serveur Go sur `:8787`. Frontend statique servi sur `/`. Tout le JSON est en camelCase.
 Auth par cookie de session (`sillage_session`, HttpOnly). Toute route `/api/*` (sauf `/api/login`) renvoie `401` sans session valide : le frontend affiche alors l'écran de connexion.
@@ -18,7 +18,9 @@ Project { "id": "p1", "name": "sillage", "description": "...", "repos": [Repo, .
 
 Card    { "id": "c1", "projectId": "p1", "column": "soon|doing|done", "title": "...",
           "tasksTotal": 4, "tasksDone": 1, "docsCount": 2, "messagesCount": 12,
-          "reviewCount": 1, "progress": 25, "liveActivity": "..." | null }
+          "reviewCount": 1, "progress": 25, "liveActivity": "..." | null, "contextPrompt": "..." }
+          // Card = chantier (vocabulaire produit) ; nom technique inchangé. contextPrompt :
+          // texte libre transmis aux agents (voir plus bas), peut être vide.
 
 Agent   { "id": "bolt", "name": "Bolt", "emoji": "🐝", "color": "#f2b705",
           "model": "claude-sonnet-5", "cli": "claude", "contextPrompt": "...",
@@ -51,10 +53,10 @@ Settings { "displayName": "Ada", "lang": "fr" }   // lang : ""|"fr"|"en"
 
 `Project.repos` : un projet regroupe un ou plusieurs dépôts git. `Repo.name` est unique dans le projet (défaut : basename du chemin si omis en entrée). L'ancien champ `path` (v0.1/v0.2, un seul dépôt) n'est plus exposé dans le modèle mais reste accepté en entrée de `POST /api/projects` (voir ci-dessous) ; les projets existants migrent automatiquement au chargement (`repos = [{name: basename(path), path}]`).
 
-`Project.contextPrompt`, s'il est non vide, est transmis à l'agent lors du lancement d'une tâche (voir runner.go) :
-- claude : ajouté à `--append-system-prompt`, après le contexte de l'agent et une ligne vide : `<agent.contextPrompt>\n\nProject context:\n<project.contextPrompt>`.
-- codex : préfixe le prompt utilisateur : `Project context:\n<project.contextPrompt>\n\n---\n\n<prompt>`.
-- fake : ignoré.
+`Project.contextPrompt` et `Card.contextPrompt` (le contexte du chantier de la tâche), s'ils sont non vides, sont transmis à l'agent lors du lancement d'une tâche (voir runner.go). Chaque bloc n'est ajouté que s'il est non vide :
+- claude : ajoutés à `--append-system-prompt`, séparés par des lignes vides, dans cet ordre : contexte de l'agent, puis `Project context:\n<project.contextPrompt>`, puis `Workstream context:\n<card.contextPrompt>`.
+- codex : préfixent le prompt utilisateur, dans le même ordre (sans le contexte agent, propre à claude) : `Project context:\n<project.contextPrompt>\n\nWorkstream context:\n<card.contextPrompt>\n\n---\n\n<prompt>`.
+- fake : ignorés.
 
 ## Endpoints
 
@@ -73,8 +75,8 @@ Settings { "displayName": "Ada", "lang": "fr" }   // lang : ""|"fr"|"en"
 | DELETE | `/api/agents/{id}` | | 204 (400 si une tâche référence encore l'agent) |
 | POST | `/api/projects` | `{name, path}` ou `{name, repos:[{name?,path}, ...], description?, contextPrompt?}` | Project (400 si un path est invalide/pas un dépôt git, ou noms de repo dupliqués) |
 | PATCH | `/api/projects/{id}` | `{name?, description?, checkCmd?, contextPrompt?, repos?}` | Project (repos, si fourni, remplace la liste entière ; retirer un repo ne casse pas les tâches existantes) |
-| POST | `/api/cards` | `{projectId, title, column?}` | Card. `column`, si fourni, doit valoir `"soon"` (400 `"cards are created in the soon column"` sinon) : les cartes se créent toujours dans "Bientôt" |
-| PATCH | `/api/cards/{id}` | `{column}` | Card (déplacement manuel inchangé, toutes colonnes acceptées) |
+| POST | `/api/cards` | `{projectId, title, column?, contextPrompt?}` | Card. `column`, si fourni, doit valoir `"soon"` (400 `"cards are created in the soon column"` sinon) : les cartes se créent toujours dans "Bientôt" |
+| PATCH | `/api/cards/{id}` | `{column?, title?, contextPrompt?}` | Card. `title`, si fourni, doit être non vide. Le déplacement manuel de colonne (toutes colonnes acceptées) reste indépendant de l'auto-déplacement (voir plus bas) |
 | POST | `/api/tasks` | `{cardId, title, agentId, prompt?, repoName?}` | Task (créée `running`, agent lancé avec title+prompt). `repoName` optionnel si le projet n'a qu'un repo ; sinon 400 `"repoName required (project has several repositories)"` ou 400 si inconnu |
 | PATCH | `/api/tasks/{id}` | `{agentId}` | Task : réassigne l'agent (voir « Réassignation » ci-dessous). 400 si `status=running` (`"interrupt the agent before reassigning"`) ou si l'agent est inconnu |
 | GET | `/api/tasks/{id}` | | `{task, messages}` |
@@ -116,7 +118,7 @@ Départ frais : quand la session CLI est vide (lancement initial, ou premier mes
 
 ### Espace de travail (synchronisation git de dataDir)
 
-Le répertoire de données (dataDir) peut devenir un dépôt git optionnel, pour sauvegarder/synchroniser `state.json`, `config.json` et `.gitignore` (seuls fichiers versionnés ; `.gitignore` exclut `worktrees/` et `*.tmp`). Après chaque sauvegarde du state, un commit local debounced (2 s) est tenté silencieusement si git est activé. Jamais de push automatique.
+Le répertoire de données (dataDir) peut devenir un dépôt git optionnel, pour sauvegarder/synchroniser `state.json`, `config.json` et `.gitignore` (seuls fichiers versionnés ; `.gitignore` exclut `worktrees/` et `*.tmp`). Un commit local est tenté silencieusement si git est activé, throttlé à au plus un par quart d'heure (`workspaceCommitInterval`) : chaque commit stocke un blob complet de `state.json`, et un agent qui travaille déclenche plusieurs sauvegardes par seconde. La sauvegarde de `state.json` elle-même reste atomique et immédiate à chaque mutation ; le commit n'est qu'un point de restauration. Le dépôt de l'espace de travail est configuré en `gc.auto 256` pour que git compacte souvent. Jamais de push automatique.
 
 - `mode:"local"` : marque `setupDone`, aucun git. Refusé (400) si déjà fait.
 - `mode:"init"` : `git init` (branche main), écrit `.gitignore`, premier commit ; `remote` optionnel (`git remote add`, jamais de push). Rejouable plus tard (depuis les réglages) pour activer git sur un espace resté local, même si `setupDone` est déjà vrai.

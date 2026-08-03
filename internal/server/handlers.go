@@ -523,15 +523,16 @@ func (s *Server) handleUpdateProject(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleCreateCard(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		ProjectID string `json:"projectId"`
-		Title     string `json:"title"`
-		Column    string `json:"column"`
+		ProjectID     string `json:"projectId"`
+		Title         string `json:"title"`
+		Column        string `json:"column"`
+		ContextPrompt string `json:"contextPrompt"`
 	}
 	if err := decodeJSON(r, &body); err != nil || body.ProjectID == "" || body.Title == "" {
 		writeError(w, http.StatusBadRequest, "projectId and title are required")
 		return
 	}
-	card, err := s.store.AddCard(body.ProjectID, body.Title, body.Column)
+	card, err := s.store.AddCard(body.ProjectID, body.Title, body.Column, body.ContextPrompt)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
@@ -543,15 +544,17 @@ func (s *Server) handleCreateCard(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleUpdateCard(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	var body struct {
-		Column string `json:"column"`
+		Column        *string `json:"column"`
+		Title         *string `json:"title"`
+		ContextPrompt *string `json:"contextPrompt"`
 	}
-	if err := decodeJSON(r, &body); err != nil || body.Column == "" {
-		writeError(w, http.StatusBadRequest, "column is required")
+	if err := decodeJSON(r, &body); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-	card, err := s.store.UpdateCardColumn(id, body.Column)
+	card, err := s.store.UpdateCard(id, body.Column, body.Title, body.ContextPrompt)
 	if err != nil {
-		writeError(w, http.StatusNotFound, err.Error())
+		writeError(w, statusForStoreError(err), err.Error())
 		return
 	}
 	s.runner.publishCards(card.ProjectID)
