@@ -41,6 +41,7 @@ Or with Homebrew:
 
 ```bash
 brew tap halleck45/sillage https://github.com/Halleck45/sillage
+brew trust halleck45/sillage   # Homebrew requires explicit trust for third-party taps
 brew install sillage
 ```
 
