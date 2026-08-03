@@ -64,7 +64,7 @@ func LoadOrInitPasswordHash(dataDir string) (hash string, generated string, err 
 	if err == nil {
 		var cfg Config
 		if err := json.Unmarshal(data, &cfg); err != nil {
-			return "", "", fmt.Errorf("lecture de config.json impossible : %w", err)
+			return "", "", fmt.Errorf("cannot read config.json: %w", err)
 		}
 		if cfg.PasswordHash != "" {
 			return cfg.PasswordHash, "", nil

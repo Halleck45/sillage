@@ -72,7 +72,7 @@ func loadStoreFile(dataDir string) (*Store, error) {
 		return nil, err
 	}
 	if err := json.Unmarshal(data, s); err != nil {
-		return nil, fmt.Errorf("lecture de state.json impossible : %w", err)
+		return nil, fmt.Errorf("cannot read state.json: %w", err)
 	}
 	s.ensureMaps()
 	migrateLegacyRepos(data, s)
