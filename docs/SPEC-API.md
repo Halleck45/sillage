@@ -1,4 +1,4 @@
-# Sillage : contrat d'API (v0.3.6)
+# Sillage : contrat d'API (v0.3.7)
 
 Serveur Go sur `:8787`. Frontend statique servi sur `/`. Tout le JSON est en camelCase.
 Auth par cookie de session (`sillage_session`, HttpOnly). Toute route `/api/*` (sauf `/api/login`) renvoie `401` sans session valide : le frontend affiche alors l'écran de connexion.
@@ -49,7 +49,11 @@ Message { "id": "m1", "taskId": "t1", "author": "user|agent", "authorName": "Bol
           // author="user" (vide si non renseigné, le frontend affiche alors "Vous"/"You")
 
 WorkspaceStatus { "setupDone": true, "gitEnabled": true, "remote": "git@host:org/repo.git",
-                  "dirty": false, "lastCommitAt": "..." | null, "lastSyncAt": "..." | null }
+                  "dirty": false, "lastCommitAt": "..." | null, "lastSyncAt": "..." | null,
+                  "autoSync": false, "lastSyncError": "" }
+                  // autoSync : persisté (Workspace.autoSync). lastSyncError : en mémoire
+                  // uniquement (jamais persisté, remis à "" à chaque redémarrage) ; voir
+                  // "Synchronisation automatique" ci-dessous.
 
 Settings { "displayName": "Ada", "lang": "fr" }   // lang : ""|"fr"|"en"
 ```
@@ -72,7 +76,7 @@ Settings { "displayName": "Ada", "lang": "fr" }   // lang : ""|"fr"|"en"
 | GET | `/api/state` | | `{projects, cards, tasks, agents, workspace, settings, tokens:{global:Tokens}}` |
 | GET | `/api/workspace` | | WorkspaceStatus |
 | POST | `/api/workspace/setup` | `{mode:"local"\|"init"\|"clone", remote?}` | WorkspaceStatus (voir ci-dessous) |
-| PATCH | `/api/workspace` | `{remote}` | WorkspaceStatus (définit/remplace origin ; 400 si git non initialisé) |
+| PATCH | `/api/workspace` | `{remote?, autoSync?}` | WorkspaceStatus (au moins un des deux champs requis ; `remote` définit/remplace origin, 400 si git non initialisé ; `autoSync:true` exige git initialisé ET un remote déjà défini, celui fourni dans le même appel compte, 400 sinon ; voir "Synchronisation automatique" ci-dessous) |
 | POST | `/api/workspace/sync` | `{confirm:true}` | `{output, lastSyncAt}` (voir ci-dessous). **Validation humaine obligatoire** : refus 400 sans `confirm` |
 | PATCH | `/api/settings` | `{displayName?, lang?}` | Settings (`lang` doit être `""`, `"fr"` ou `"en"`, 400 sinon) |
 | POST | `/api/agents` | `{name, emoji?, color?, cli, model?, contextPrompt?}` | Agent (name et cli requis ; cli ∈ {claude, codex, fake} ; id = slug du name, 400 si déjà pris) |
@@ -144,13 +148,25 @@ Actions destructives, jamais déclenchées depuis les listes : confirmation doub
 
 ### Espace de travail (synchronisation git de dataDir)
 
-Le répertoire de données (dataDir) peut devenir un dépôt git optionnel, pour sauvegarder/synchroniser `state.json`, `config.json` et `.gitignore` (seuls fichiers versionnés ; `.gitignore` exclut `worktrees/` et `*.tmp`). Un commit local est tenté silencieusement si git est activé, throttlé à au plus un par quart d'heure (`workspaceCommitInterval`) : chaque commit stocke un blob complet de `state.json`, et un agent qui travaille déclenche plusieurs sauvegardes par seconde. La sauvegarde de `state.json` elle-même reste atomique et immédiate à chaque mutation ; le commit n'est qu'un point de restauration. Le dépôt de l'espace de travail est configuré en `gc.auto 256` pour que git compacte souvent. Jamais de push automatique.
+Le répertoire de données (dataDir) peut devenir un dépôt git optionnel, pour sauvegarder/synchroniser `state.json`, `config.json` et `.gitignore` (seuls fichiers versionnés ; `.gitignore` exclut `worktrees/` et `*.tmp`). Un commit local est tenté silencieusement si git est activé, throttlé à au plus un par quart d'heure (`workspaceCommitInterval`) : chaque commit stocke un blob complet de `state.json`, et un agent qui travaille déclenche plusieurs sauvegardes par seconde. La sauvegarde de `state.json` elle-même reste atomique et immédiate à chaque mutation ; le commit n'est qu'un point de restauration. Le dépôt de l'espace de travail est configuré en `gc.auto 256` pour que git compacte souvent. Jamais de push automatique en dehors de la synchronisation automatique optionnelle (`autoSync`, voir ci-dessous), qui reste désactivée par défaut.
 
 - `mode:"local"` : marque `setupDone`, aucun git. Refusé (400) si déjà fait.
 - `mode:"init"` : `git init` (branche main), écrit `.gitignore`, premier commit ; `remote` optionnel (`git remote add`, jamais de push). Rejouable plus tard (depuis les réglages) pour activer git sur un espace resté local, même si `setupDone` est déjà vrai.
 - `mode:"clone"` (`remote` requis) : clone dans un répertoire temporaire, vérifie que `state.json` existe à sa racine (sinon 400 `"remote does not look like a Sillage workspace"`), puis remplace `state.json`/`config.json`/`.git` de dataDir par ceux du clone et recharge le store en mémoire, sans redémarrage (les sessions actives restent valides). Le mot de passe devient celui de l'espace rapatrié. Refusé (400) si déjà fait.
-- `POST /api/workspace/sync` : commit d'abord si nécessaire, puis `git pull --rebase origin main`, puis `git push -u origin main` (fonction dédiée `SyncPush`, qui n'opère jamais sur un dépôt de projet). En cas de conflit de rebase : `git rebase --abort` puis 409 `{"error":"sync conflict: the remote workspace diverged, resolve manually in <dataDir>"}`.
+- `POST /api/workspace/sync` : commit d'abord si nécessaire, puis `git pull --rebase origin main`, puis `git push -u origin main` (fonction dédiée `SyncPush`, qui n'opère jamais sur un dépôt de projet). En cas de conflit de rebase : `git rebase --abort` puis 409 `{"error":"sync conflict: the remote workspace diverged, resolve manually in <dataDir>"}`. Une synchronisation manuelle réussie efface toujours `lastSyncError`, y compris si l'auto-sync était en pause sur conflit (voir ci-dessous).
 - Compatibilité : un state.json existant sans champ `workspace` (installation antérieure à la v0.3) migre vers `setupDone=true` en mode local au chargement : l'onboarding ne s'affiche jamais sur un espace déjà utilisé.
+
+### Synchronisation automatique de l'espace de travail (`autoSync`)
+
+`Workspace.autoSync` (persisté, `false` par défaut) active une synchronisation périodique automatique de l'espace de travail (dataDir uniquement, jamais un dépôt de projet), avec la même logique que la synchronisation manuelle (`SyncPush`).
+
+- Activation : `PATCH /api/workspace {autoSync:true}` exige que git soit initialisé ET qu'un remote soit déjà défini (celui fourni dans le même appel compte) ; 400 sinon (`"git must be initialized with a remote before enabling automatic sync"`).
+- Une goroutine dédiée (ticker de 15 min) est démarrée au démarrage du serveur si `autoSync` est déjà actif dans state.json, et à chaque activation via PATCH ; elle est arrêtée proprement à la désactivation (`autoSync:false`).
+- Chaque tick : si `autoSync` n'est plus actif, ou si une erreur de conflit non résolue est en attente (voir plus bas), le tick ne fait rien. Sinon, il appelle la même logique que `POST /api/workspace/sync` :
+  - **Succès** : `lastSyncAt` est mis à jour, `lastSyncError` est vidé, l'événement SSE `workspace` est republié.
+  - **Échec** (hors conflit) : `lastSyncError` est renseigné avec le message d'erreur, l'événement SSE `workspace` est republié, et `autoSync` **reste actif** (nouvelle tentative au tick suivant, 15 min plus tard).
+  - **Conflit** (`ErrSyncConflict`) : `lastSyncError` est renseigné, l'événement SSE `workspace` est republié, et la synchronisation automatique **se met en pause** : `autoSync` reste `true`, mais les ticks suivants ne tentent plus rien tant que `lastSyncError` signale ce conflit. Seule une synchronisation manuelle réussie (`POST /api/workspace/sync`) efface l'erreur et relance l'auto-sync au tick suivant.
+- `lastSyncError` n'est jamais persisté : un redémarrage du serveur repart avec `lastSyncError` vide (mais respecte `autoSync` s'il était actif).
 
 ### Diff
 
@@ -180,7 +196,7 @@ Le répertoire de données (dataDir) peut devenir un dépôt git optionnel, pour
 - `cards` : liste des Cards recalculées du projet touché.
 - `agents` : liste des Agents (pour l'indicateur d'activité, et après chaque mutation CRUD).
 - `project` : Project complet (après PATCH `/api/projects/{id}`).
-- `workspace` : WorkspaceStatus (après setup, changement de remote ou sync).
+- `workspace` : WorkspaceStatus (après setup, changement de remote/autoSync, sync manuelle, ou tick d'auto-sync).
 - `settings` : Settings (après PATCH `/api/settings`).
 - `taskDeleted` : `{taskId, cardId, projectId}` (après `DELETE /api/tasks/{id}`, une fois par tâche supprimée y compris en cascade).
 - `cardDeleted` : `{cardId, projectId}` (après `DELETE /api/cards/{id}`).

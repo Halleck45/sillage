@@ -209,9 +209,11 @@
       'workspace.never': 'jamais',
       'workspace.dirtyNote': 'Modifications en attente',
       'workspace.syncedJustNow': 'Synchronisé il y a un instant',
+      'workspace.autoSync': 'Synchronisation automatique (toutes les 15 min)',
       'workspace.errorSaveFailed': 'Échec de l\'enregistrement du remote.',
       'workspace.errorActivateFailed': 'Échec de l\'activation.',
       'workspace.errorSyncFailed': 'Échec de la synchronisation.',
+      'workspace.errorAutoSyncFailed': 'Échec de l\'enregistrement.',
       'preferences.title': 'Préférences',
       'preferences.displayNamePlaceholder': 'Prénom',
       'preferences.langLabel': 'Langue',
@@ -418,9 +420,11 @@
       'workspace.never': 'never',
       'workspace.dirtyNote': 'Pending changes',
       'workspace.syncedJustNow': 'Synced just now',
+      'workspace.autoSync': 'Auto-sync every 15 minutes',
       'workspace.errorSaveFailed': 'Failed to save the remote.',
       'workspace.errorActivateFailed': 'Failed to activate.',
       'workspace.errorSyncFailed': 'Failed to sync.',
+      'workspace.errorAutoSyncFailed': 'Failed to save.',
       'preferences.title': 'Preferences',
       'preferences.displayNamePlaceholder': 'First name',
       'preferences.langLabel': 'Language',
@@ -2563,6 +2567,16 @@
       primaryHTML = '<button class="btn-green btn-block" data-action="activate-workspace-git">' + escapeHtml(t('workspace.activate')) + '</button>';
     }
 
+    var autoSyncRow = '';
+    if (gitEnabled && hasRemote) {
+      var lastSyncErrorHTML = ws.lastSyncError ? '<div class="workspace-sync-error">' + escapeHtml(ws.lastSyncError) + '</div>' : '';
+      autoSyncRow = '<label class="workspace-autosync-row">' +
+        '<input type="checkbox" id="workspace-autosync-checkbox" data-action="toggle-autosync"' + (ws.autoSync ? ' checked' : '') + '>' +
+        '<span>' + escapeHtml(t('workspace.autoSync')) + '</span>' +
+        '</label>' +
+        lastSyncErrorHTML;
+    }
+
     return buildPreferencesSectionHTML() +
       '<div class="workspace-state">' + escapeHtml(stateLabel) + '</div>' +
       '<div class="modal-label">' + escapeHtml(t('workspace.remoteLabel')) + '</div>' +
@@ -2576,6 +2590,7 @@
       '<div id="workspace-modal-error" class="modal-error hidden"></div>' +
       '<div id="workspace-sync-message" class="workspace-sync-message hidden"></div>' +
       '<div class="secondary-row">' + primaryHTML + '</div>' +
+      autoSyncRow +
       '<div class="workspace-meta">' +
         '<span>' + escapeHtml(t('workspace.lastCommit', { time: lastCommit })) + '</span>' +
         '<span>' + escapeHtml(t('workspace.lastSync', { time: lastSync })) + '</span>' +
@@ -2622,6 +2637,19 @@
         errEl.textContent = (e instanceof ApiError && e.message) || t('workspace.errorSaveFailed');
         errEl.classList.remove('hidden');
       }
+    });
+  }
+  function saveAutoSync(enabled) {
+    var errEl = document.getElementById('workspace-modal-error');
+    api('/api/workspace', { method: 'PATCH', body: { autoSync: enabled } }).then(function (ws) {
+      state.workspace = ws || state.workspace;
+      refreshWorkspaceModalBody();
+    }).catch(function (e) {
+      if (errEl) {
+        errEl.textContent = (e instanceof ApiError && e.message) || t('workspace.errorAutoSyncFailed');
+        errEl.classList.remove('hidden');
+      }
+      refreshWorkspaceModalBody();
     });
   }
   function activateWorkspaceGit() {
@@ -2939,6 +2967,7 @@
       case 'set-lang': setLang(el.getAttribute('data-lang')); break;
       case 'open-workspace-modal': openWorkspaceModal(); break;
       case 'save-workspace-remote': saveWorkspaceRemote(); break;
+      case 'toggle-autosync': saveAutoSync(el.checked); break;
       case 'save-display-name': saveDisplayName(); break;
       case 'activate-workspace-git': activateWorkspaceGit(); break;
       case 'toggle-onboarding-card': toggleOnboardingCard(el.getAttribute('data-key')); break;

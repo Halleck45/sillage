@@ -2,12 +2,16 @@ package server
 
 import (
 	"errors"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
+	"testing/fstest"
 	"time"
 )
 
@@ -602,4 +606,170 @@ func TestWorkspaceCommitFiresOncePerInterval(t *testing.T) {
 		t.Fatalf("AddCard (second créneau): %v", err)
 	}
 	waitForCommitCount(t, dir, 3)
+}
+
+// --- Synchronisation automatique de l'espace de travail (autoSync) ---
+
+// newAutoSyncTestServer construit un Server dont le dataDir du Store et celui
+// du Server sont le MÊME répertoire (contrairement à newTestServer, qui les
+// isole volontairement pour les tests de confirmation) : nécessaire ici, les
+// vérifications git (WorkspaceGitEnabled, InitWorkspaceGit...) et le Store
+// doivent porter sur le même dossier, comme en production (main.go).
+func newAutoSyncTestServer(t *testing.T) (*Server, string) {
+	t.Helper()
+	dataDir := t.TempDir()
+	s, err := NewStore(dataDir)
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+	srv := NewServer(s, "", dataDir, fstest.MapFS{})
+	t.Cleanup(srv.stopAutoSync)
+	return srv, dataDir
+}
+
+func TestUpdateWorkspaceAutoSyncRequiresGitAndRemote(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git non disponible dans cet environnement")
+	}
+	srv, dataDir := newAutoSyncTestServer(t)
+
+	// Ni git ni remote : refusé.
+	req := httptest.NewRequest(http.MethodPatch, "/", strings.NewReader(`{"autoSync":true}`))
+	w := httptest.NewRecorder()
+	srv.handleUpdateWorkspace(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("attendu 400 (ni git ni remote), reçu %d (body=%s)", w.Code, w.Body.String())
+	}
+
+	// git initialisé mais sans remote : toujours refusé.
+	if err := InitWorkspaceGit(dataDir, ""); err != nil {
+		t.Fatalf("InitWorkspaceGit: %v", err)
+	}
+	req2 := httptest.NewRequest(http.MethodPatch, "/", strings.NewReader(`{"autoSync":true}`))
+	w2 := httptest.NewRecorder()
+	srv.handleUpdateWorkspace(w2, req2)
+	if w2.Code != http.StatusBadRequest {
+		t.Fatalf("attendu 400 (pas de remote), reçu %d (body=%s)", w2.Code, w2.Body.String())
+	}
+	if ws := srv.store.GetWorkspace(); ws.AutoSync {
+		t.Fatalf("autoSync ne devrait pas avoir été activé")
+	}
+
+	// git + remote présents : accepté.
+	req3 := httptest.NewRequest(http.MethodPatch, "/", strings.NewReader(`{"remote":"`+dataDir+`","autoSync":true}`))
+	w3 := httptest.NewRecorder()
+	srv.handleUpdateWorkspace(w3, req3)
+	if w3.Code != http.StatusOK {
+		t.Fatalf("attendu 200 (git+remote fournis dans le même appel), reçu %d (body=%s)", w3.Code, w3.Body.String())
+	}
+	if ws := srv.store.GetWorkspace(); !ws.AutoSync {
+		t.Fatalf("autoSync devrait être activé")
+	}
+}
+
+func TestAutoSyncTickSuccessUpdatesLastSyncAt(t *testing.T) {
+	srv, _ := newAutoSyncTestServer(t)
+	if _, err := srv.store.UpdateWorkspace(func(w *Workspace) {
+		w.SetupDone, w.SyncRemote, w.AutoSync = true, "origin", true
+	}); err != nil {
+		t.Fatalf("UpdateWorkspace: %v", err)
+	}
+
+	orig := syncPushFn
+	defer func() { syncPushFn = orig }()
+	gitEnabled := workspaceGitEnabledFn
+	defer func() { workspaceGitEnabledFn = gitEnabled }()
+	workspaceGitEnabledFn = func(string) bool { return true }
+	syncPushFn = func(string) (string, error) { return "ok", nil }
+
+	srv.autoSyncTick()
+
+	ws := srv.store.GetWorkspace()
+	if ws.LastSyncAt == nil {
+		t.Fatalf("lastSyncAt devrait être renseigné après un tick réussi")
+	}
+	if got := srv.getLastSyncError(); got != "" {
+		t.Fatalf("lastSyncError devrait être vide après un tick réussi, reçu %q", got)
+	}
+}
+
+func TestAutoSyncTickFailureSetsLastSyncError(t *testing.T) {
+	srv, _ := newAutoSyncTestServer(t)
+	if _, err := srv.store.UpdateWorkspace(func(w *Workspace) {
+		w.SetupDone, w.SyncRemote, w.AutoSync = true, "origin", true
+	}); err != nil {
+		t.Fatalf("UpdateWorkspace: %v", err)
+	}
+
+	orig := syncPushFn
+	defer func() { syncPushFn = orig }()
+	gitEnabled := workspaceGitEnabledFn
+	defer func() { workspaceGitEnabledFn = gitEnabled }()
+	workspaceGitEnabledFn = func(string) bool { return true }
+	syncPushFn = func(string) (string, error) { return "", fmt.Errorf("network unreachable") }
+
+	srv.autoSyncTick()
+
+	got := srv.getLastSyncError()
+	if got == "" {
+		t.Fatalf("lastSyncError devrait être renseigné après un tick en échec")
+	}
+	if strings.Contains(got, ErrSyncConflict.Error()) {
+		t.Fatalf("cet échec ne devrait pas être signalé comme un conflit, reçu %q", got)
+	}
+	if ws := srv.store.GetWorkspace(); !ws.AutoSync || ws.LastSyncAt != nil {
+		t.Fatalf("autoSync doit rester actif et lastSyncAt rester vide après un échec non-conflit : %+v", ws)
+	}
+}
+
+func TestAutoSyncTickPausesOnConflictUntilManualSyncSucceeds(t *testing.T) {
+	srv, _ := newAutoSyncTestServer(t)
+	if _, err := srv.store.UpdateWorkspace(func(w *Workspace) {
+		w.SetupDone, w.SyncRemote, w.AutoSync = true, "origin", true
+	}); err != nil {
+		t.Fatalf("UpdateWorkspace: %v", err)
+	}
+
+	origSync := syncPushFn
+	defer func() { syncPushFn = origSync }()
+	gitEnabled := workspaceGitEnabledFn
+	defer func() { workspaceGitEnabledFn = gitEnabled }()
+	workspaceGitEnabledFn = func(string) bool { return true }
+
+	calls := 0
+	syncPushFn = func(dir string) (string, error) {
+		calls++
+		return "", fmt.Errorf("%w: the remote workspace diverged, resolve manually in %s", ErrSyncConflict, dir)
+	}
+
+	srv.autoSyncTick()
+	if calls != 1 {
+		t.Fatalf("le premier tick devrait appeler la synchronisation une fois, reçu %d appel(s)", calls)
+	}
+	if got := srv.getLastSyncError(); !strings.Contains(got, ErrSyncConflict.Error()) {
+		t.Fatalf("lastSyncError devrait signaler un conflit, reçu %q", got)
+	}
+
+	// Tant que le conflit n'est pas résolu, le tick suivant ne doit rien tenter.
+	srv.autoSyncTick()
+	if calls != 1 {
+		t.Fatalf("le tick devrait être en pause pendant un conflit non résolu, appels=%d", calls)
+	}
+	if ws := srv.store.GetWorkspace(); !ws.AutoSync {
+		t.Fatalf("autoSync ne doit pas être désactivé par un conflit : la pause n'est que temporaire")
+	}
+
+	// Une synchronisation manuelle réussie efface l'erreur et relance (ici
+	// simulée directement : c'est ce que fait handleWorkspaceSync en cas de
+	// succès).
+	srv.setLastSyncError("")
+	syncPushFn = func(string) (string, error) { calls++; return "output", nil }
+
+	srv.autoSyncTick()
+	if calls != 2 {
+		t.Fatalf("le tick devrait reprendre après la résolution du conflit, appels=%d", calls)
+	}
+	if ws := srv.store.GetWorkspace(); ws.LastSyncAt == nil {
+		t.Fatalf("lastSyncAt devrait être renseigné après la reprise réussie")
+	}
 }

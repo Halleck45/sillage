@@ -132,23 +132,32 @@ type Message struct {
 }
 
 // Workspace est l'état de synchronisation git persisté de l'espace de
-// données (dataDir), stocké dans state.json.
+// données (dataDir), stocké dans state.json. AutoSync active la
+// synchronisation périodique automatique (voir Server.autoSyncTick) ;
+// l'activer exige que git soit initialisé et qu'un remote soit défini.
 type Workspace struct {
 	SetupDone  bool       `json:"setupDone"`
 	SyncRemote string     `json:"syncRemote"`
 	LastSyncAt *time.Time `json:"lastSyncAt"`
+	AutoSync   bool       `json:"autoSync"`
 }
 
 // WorkspaceStatus est la réponse de GET /api/workspace, le contenu de
 // l'événement SSE "workspace" et le champ State.Workspace : elle combine
 // l'état persisté (Workspace) et des faits git calculés à la volée.
+// LastSyncError n'est jamais persisté (état en mémoire du serveur, remis à
+// zéro à chaque redémarrage) : dernier message d'échec de la synchronisation
+// automatique, vide si le dernier tick (ou la dernière sync manuelle) a
+// réussi.
 type WorkspaceStatus struct {
-	SetupDone    bool       `json:"setupDone"`
-	GitEnabled   bool       `json:"gitEnabled"`
-	Remote       string     `json:"remote"`
-	Dirty        bool       `json:"dirty"`
-	LastCommitAt *time.Time `json:"lastCommitAt"`
-	LastSyncAt   *time.Time `json:"lastSyncAt"`
+	SetupDone     bool       `json:"setupDone"`
+	GitEnabled    bool       `json:"gitEnabled"`
+	Remote        string     `json:"remote"`
+	Dirty         bool       `json:"dirty"`
+	LastCommitAt  *time.Time `json:"lastCommitAt"`
+	LastSyncAt    *time.Time `json:"lastSyncAt"`
+	AutoSync      bool       `json:"autoSync"`
+	LastSyncError string     `json:"lastSyncError"`
 }
 
 // SyncResponse est la réponse de POST /api/workspace/sync.

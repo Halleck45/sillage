@@ -28,13 +28,23 @@ type Server struct {
 	// rapatriement (clone) d'un espace de travail, sans redémarrage.
 	pwMu         sync.RWMutex
 	passwordHash string
+
+	// autoSyncMu protège autoSyncStop (goroutine de synchronisation
+	// automatique périodique, voir workspace.go).
+	autoSyncMu   sync.Mutex
+	autoSyncStop chan struct{}
+
+	// syncErrMu protège lastSyncErr, état en mémoire uniquement (jamais
+	// persisté) du dernier échec de synchronisation automatique.
+	syncErrMu   sync.Mutex
+	lastSyncErr string
 }
 
 // NewServer construit le serveur Sillage. webFS doit pointer vers le sous-répertoire
 // "web" du système de fichiers embarqué (frontend statique).
 func NewServer(store *Store, passwordHash, dataDir string, webFS fs.FS) *Server {
 	hub := NewHub()
-	return &Server{
+	s := &Server{
 		store:        store,
 		hub:          hub,
 		runner:       NewRunner(store, hub),
@@ -44,6 +54,10 @@ func NewServer(store *Store, passwordHash, dataDir string, webFS fs.FS) *Server 
 		dataDir:      dataDir,
 		static:       http.FileServer(http.FS(webFS)),
 	}
+	if store.GetWorkspace().AutoSync {
+		s.startAutoSync()
+	}
+	return s
 }
 
 func (s *Server) getPasswordHash() string {
@@ -67,7 +81,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/state", s.handleState)
 	mux.HandleFunc("GET /api/workspace", s.handleGetWorkspace)
 	mux.HandleFunc("POST /api/workspace/setup", s.handleWorkspaceSetup)
-	mux.HandleFunc("PATCH /api/workspace", s.handleUpdateWorkspaceRemote)
+	mux.HandleFunc("PATCH /api/workspace", s.handleUpdateWorkspace)
 	mux.HandleFunc("POST /api/workspace/sync", s.handleWorkspaceSync)
 	mux.HandleFunc("PATCH /api/settings", s.handleUpdateSettings)
 	mux.HandleFunc("POST /api/agents", s.handleCreateAgent)
@@ -324,26 +338,61 @@ func (s *Server) handleWorkspaceSetup(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, status)
 }
 
-func (s *Server) handleUpdateWorkspaceRemote(w http.ResponseWriter, r *http.Request) {
+// handleUpdateWorkspace applique remote et/ou autoSync (au moins un des deux
+// requis). Activer autoSync exige git initialisé ET un remote déjà défini
+// (celui fourni dans le même appel compte) : 400 sinon.
+func (s *Server) handleUpdateWorkspace(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		Remote string `json:"remote"`
+		Remote   *string `json:"remote"`
+		AutoSync *bool   `json:"autoSync"`
 	}
-	if err := decodeJSON(r, &body); err != nil || body.Remote == "" {
-		writeError(w, http.StatusBadRequest, "remote is required")
+	if err := decodeJSON(r, &body); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-	if !WorkspaceGitEnabled(s.dataDir) {
-		writeError(w, http.StatusBadRequest, "git is not initialized for this workspace")
+	if body.Remote == nil && body.AutoSync == nil {
+		writeError(w, http.StatusBadRequest, "remote or autoSync is required")
 		return
 	}
-	if err := SetWorkspaceRemote(s.dataDir, body.Remote); err != nil {
-		writeError(w, http.StatusBadGateway, err.Error())
-		return
+
+	if body.Remote != nil {
+		if *body.Remote == "" {
+			writeError(w, http.StatusBadRequest, "remote is required")
+			return
+		}
+		if !WorkspaceGitEnabled(s.dataDir) {
+			writeError(w, http.StatusBadRequest, "git is not initialized for this workspace")
+			return
+		}
+		if err := SetWorkspaceRemote(s.dataDir, *body.Remote); err != nil {
+			writeError(w, http.StatusBadGateway, err.Error())
+			return
+		}
+		if _, err := s.store.UpdateWorkspace(func(w *Workspace) { w.SyncRemote = *body.Remote }); err != nil {
+			writeError(w, http.StatusInternalServerError, "failed to save workspace")
+			return
+		}
 	}
-	if _, err := s.store.UpdateWorkspace(func(w *Workspace) { w.SyncRemote = body.Remote }); err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to save workspace")
-		return
+
+	if body.AutoSync != nil {
+		if *body.AutoSync {
+			ws := s.store.GetWorkspace()
+			if !WorkspaceGitEnabled(s.dataDir) || ws.SyncRemote == "" {
+				writeError(w, http.StatusBadRequest, "git must be initialized with a remote before enabling automatic sync")
+				return
+			}
+		}
+		if _, err := s.store.UpdateWorkspace(func(w *Workspace) { w.AutoSync = *body.AutoSync }); err != nil {
+			writeError(w, http.StatusInternalServerError, "failed to save workspace")
+			return
+		}
+		if *body.AutoSync {
+			s.startAutoSync()
+		} else {
+			s.stopAutoSync()
+		}
 	}
+
 	status := s.workspaceStatus()
 	s.runner.publishWorkspace(status)
 	writeJSON(w, http.StatusOK, status)
@@ -375,6 +424,10 @@ func (s *Server) handleWorkspaceSync(w http.ResponseWriter, r *http.Request) {
 	}
 
 	now := time.Now().UTC()
+	// Une synchronisation manuelle réussie efface toujours lastSyncError,
+	// même si elle ne venait pas d'un conflit : elle "relance" l'auto-sync
+	// mise en pause le cas échéant (voir Server.autoSyncTick).
+	s.setLastSyncError("")
 	if _, err := s.store.UpdateWorkspace(func(w *Workspace) { w.LastSyncAt = &now }); err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to save workspace")
 		return

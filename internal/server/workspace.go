@@ -20,6 +20,11 @@ func WorkspaceGitEnabled(dataDir string) bool {
 	return err == nil && info.IsDir()
 }
 
+// workspaceGitEnabledFn indirige l'appel à WorkspaceGitEnabled pour
+// Server.autoSyncTick, afin de pouvoir simuler un espace git+remote en test
+// sans dépôt git réel.
+var workspaceGitEnabledFn = WorkspaceGitEnabled
+
 // WorkspaceDirty indique s'il existe des changements non commités dans
 // dataDir (commit auto en attente ou modifications non commitées).
 func WorkspaceDirty(dataDir string) bool {
@@ -209,14 +214,110 @@ func (s *Server) workspaceStatus() WorkspaceStatus {
 	ws := s.store.GetWorkspace()
 	gitEnabled := WorkspaceGitEnabled(s.dataDir)
 	status := WorkspaceStatus{
-		SetupDone:  ws.SetupDone,
-		GitEnabled: gitEnabled,
-		Remote:     ws.SyncRemote,
-		LastSyncAt: ws.LastSyncAt,
+		SetupDone:     ws.SetupDone,
+		GitEnabled:    gitEnabled,
+		Remote:        ws.SyncRemote,
+		LastSyncAt:    ws.LastSyncAt,
+		AutoSync:      ws.AutoSync,
+		LastSyncError: s.getLastSyncError(),
 	}
 	if gitEnabled {
 		status.Dirty = WorkspaceDirty(s.dataDir)
 		status.LastCommitAt = WorkspaceLastCommitAt(s.dataDir)
 	}
 	return status
+}
+
+// --- Synchronisation automatique périodique de l'espace de travail ---
+
+// autoSyncInterval borne la fréquence de la synchronisation automatique.
+const autoSyncInterval = 15 * time.Minute
+
+// getLastSyncError retourne le dernier message d'échec de synchronisation
+// automatique (état en mémoire uniquement, jamais persisté).
+func (s *Server) getLastSyncError() string {
+	s.syncErrMu.Lock()
+	defer s.syncErrMu.Unlock()
+	return s.lastSyncErr
+}
+
+// setLastSyncError met à jour l'état en mémoire du dernier échec de
+// synchronisation automatique ("" pour effacer, ex : après un succès manuel
+// ou automatique).
+func (s *Server) setLastSyncError(msg string) {
+	s.syncErrMu.Lock()
+	defer s.syncErrMu.Unlock()
+	s.lastSyncErr = msg
+}
+
+// startAutoSync démarre la goroutine de synchronisation automatique
+// périodique si elle ne tourne pas déjà. Appelée au boot (NewServer) si
+// l'espace de travail a autoSync=true persisté, et à chaque activation via
+// PATCH /api/workspace.
+func (s *Server) startAutoSync() {
+	s.autoSyncMu.Lock()
+	defer s.autoSyncMu.Unlock()
+	if s.autoSyncStop != nil {
+		return // déjà en cours
+	}
+	stop := make(chan struct{})
+	s.autoSyncStop = stop
+	go func() {
+		ticker := time.NewTicker(autoSyncInterval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-stop:
+				return
+			case <-ticker.C:
+				s.autoSyncTick()
+			}
+		}
+	}()
+}
+
+// stopAutoSync arrête la goroutine de synchronisation automatique si elle
+// tourne. Appelée à la désactivation via PATCH /api/workspace ; sans effet
+// sinon.
+func (s *Server) stopAutoSync() {
+	s.autoSyncMu.Lock()
+	defer s.autoSyncMu.Unlock()
+	if s.autoSyncStop == nil {
+		return
+	}
+	close(s.autoSyncStop)
+	s.autoSyncStop = nil
+}
+
+// autoSyncTick exécute une tentative de synchronisation automatique : appelée
+// périodiquement par la goroutine démarrée par startAutoSync, et directement
+// par les tests (jamais d'attente réelle de autoSyncInterval). Sans effet si
+// autoSync n'est plus actif. En cas de conflit non résolu (lastSyncError
+// signale encore ErrSyncConflict), le tick est sauté : la synchronisation
+// automatique reste active (autoSync=true) mais en pause jusqu'à ce qu'une
+// synchronisation manuelle réussie efface l'erreur (voir handleWorkspaceSync).
+func (s *Server) autoSyncTick() {
+	ws := s.store.GetWorkspace()
+	if !ws.AutoSync {
+		return
+	}
+	if lastErr := s.getLastSyncError(); lastErr != "" && strings.Contains(lastErr, ErrSyncConflict.Error()) {
+		return // en pause : conflit non résolu, attend une synchronisation manuelle
+	}
+	if !workspaceGitEnabledFn(s.dataDir) || ws.SyncRemote == "" {
+		return // ne devrait pas arriver : activer autoSync exige déjà git+remote
+	}
+
+	if _, err := syncPushFn(s.dataDir); err != nil {
+		s.setLastSyncError(err.Error())
+		s.runner.publishWorkspace(s.workspaceStatus())
+		return
+	}
+
+	now := time.Now().UTC()
+	s.setLastSyncError("")
+	if _, err := s.store.UpdateWorkspace(func(w *Workspace) { w.LastSyncAt = &now }); err != nil {
+		return
+	}
+	s.runner.publishWorkspace(s.workspaceStatus())
 }

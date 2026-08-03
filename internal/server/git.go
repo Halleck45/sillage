@@ -340,6 +340,10 @@ func githubBranchURL(dir, branch string) string {
 // l'espace de travail (le remote a divergé).
 var ErrSyncConflict = errors.New("sync conflict")
 
+// syncPushFn indirige l'appel à SyncPush pour Server.autoSyncTick, afin de
+// pouvoir simuler succès/échec/conflit en test sans dépôt git réel.
+var syncPushFn = SyncPush
+
 // SyncPush synchronise l'espace de travail (dataDir) avec son remote : commit
 // des changements en attente, puis `git pull --rebase origin main`, puis
 // `git push -u origin main`. C'est, avec Ship (dépôts de projet), le SEUL
