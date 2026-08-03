@@ -236,7 +236,7 @@ func TestShipFromReviewAddsMarkerMessage(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewStore: %v", err)
 	}
-	project, err := s.AddProject("demo", "", "", []Repo{{Path: repo}})
+	project, err := s.AddProject("demo", "", "", []Repo{{Path: repo}}, nil)
 	if err != nil {
 		t.Fatalf("AddProject: %v", err)
 	}

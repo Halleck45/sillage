@@ -17,12 +17,21 @@ type Repo struct {
 	Path string `json:"path"`
 }
 
+// Link est une URL épinglée sur un projet (site, dépôt, dashboard...). Title
+// est fourni par l'utilisateur ou récupéré best-effort depuis la page
+// (voir links.go), avec le nom d'hôte en repli.
+type Link struct {
+	URL   string `json:"url"`
+	Title string `json:"title"`
+}
+
 // Project est suivi par Sillage et peut regrouper plusieurs dépôts git (Repos).
 type Project struct {
 	ID          string `json:"id"`
 	Name        string `json:"name"`
 	Description string `json:"description"` // une phrase, affichée sous le nom
 	Repos       []Repo `json:"repos"`
+	Links       []Link `json:"links"` // liens épinglés (max 12, http(s) uniquement)
 	Unread      int    `json:"unread"`
 	Tokens      Tokens `json:"tokens"`
 

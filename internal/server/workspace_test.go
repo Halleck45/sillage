@@ -157,7 +157,7 @@ func TestResolveTaskRepo(t *testing.T) {
 		t.Fatalf("NewStore: %v", err)
 	}
 
-	single, err := s.AddProject("mono", "", "", []Repo{{Path: "/tmp/mono"}})
+	single, err := s.AddProject("mono", "", "", []Repo{{Path: "/tmp/mono"}}, nil)
 	if err != nil {
 		t.Fatalf("AddProject: %v", err)
 	}
@@ -169,7 +169,7 @@ func TestResolveTaskRepo(t *testing.T) {
 		t.Fatalf("repo attendu /tmp/mono, reçu %+v", repo)
 	}
 
-	multi, err := s.AddProject("multi", "", "", []Repo{{Name: "api", Path: "/tmp/api"}, {Name: "web", Path: "/tmp/web"}})
+	multi, err := s.AddProject("multi", "", "", []Repo{{Name: "api", Path: "/tmp/api"}, {Name: "web", Path: "/tmp/web"}}, nil)
 	if err != nil {
 		t.Fatalf("AddProject: %v", err)
 	}
@@ -513,7 +513,7 @@ func TestWorkspaceCommitThrottledNotDebounced(t *testing.T) {
 	}
 
 	// Plusieurs mutations rapprochées, comme un agent qui travaille.
-	project, err := s.AddProject("sillage", "", "", []Repo{{Path: "/tmp/sillage"}})
+	project, err := s.AddProject("sillage", "", "", []Repo{{Path: "/tmp/sillage"}}, nil)
 	if err != nil {
 		t.Fatalf("AddProject: %v", err)
 	}
@@ -582,7 +582,7 @@ func TestWorkspaceCommitFiresOncePerInterval(t *testing.T) {
 	s.mu.Unlock()
 
 	// Trois mutations dans le même créneau : un seul commit attendu.
-	project, err := s.AddProject("sillage", "", "", []Repo{{Path: "/tmp/sillage"}})
+	project, err := s.AddProject("sillage", "", "", []Repo{{Path: "/tmp/sillage"}}, nil)
 	if err != nil {
 		t.Fatalf("AddProject: %v", err)
 	}

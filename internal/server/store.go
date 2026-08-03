@@ -691,8 +691,12 @@ func ValidateRepoPath(path string) error {
 
 // AddProject crée un projet avec un ou plusieurs dépôts git (repos).
 // description et contextPrompt peuvent être vides.
-func (s *Store) AddProject(name, description, contextPrompt string, repos []Repo) (Project, error) {
+func (s *Store) AddProject(name, description, contextPrompt string, repos []Repo, links []Link) (Project, error) {
 	normalized, err := NormalizeRepos(repos)
+	if err != nil {
+		return Project{}, err
+	}
+	normalizedLinks, err := NormalizeLinks(links)
 	if err != nil {
 		return Project{}, err
 	}
@@ -701,7 +705,7 @@ func (s *Store) AddProject(name, description, contextPrompt string, repos []Repo
 	s.NextProjectN++
 	p := Project{
 		ID: fmt.Sprintf("p%d", s.NextProjectN), Name: name, Description: description,
-		ContextPrompt: contextPrompt, Repos: normalized,
+		ContextPrompt: contextPrompt, Repos: normalized, Links: normalizedLinks,
 	}
 	s.Projects[p.ID] = p
 	if err := s.save(); err != nil {
@@ -711,16 +715,24 @@ func (s *Store) AddProject(name, description, contextPrompt string, repos []Repo
 }
 
 // UpdateProject modifie le nom, la description, la commande de vérification,
-// le contexte agent et/ou la liste des dépôts d'un projet. Les champs nil ne
-// sont pas modifiés ; repos, s'il est fourni (même vide), remplace entièrement
-// la liste existante (mêmes validations que AddProject). Retirer un repo ne
-// casse pas les tâches existantes : leur worktree déjà créé vit sa vie
-// indépendamment.
-func (s *Store) UpdateProject(id string, name, description, checkCmd, contextPrompt *string, repos *[]Repo) (Project, error) {
+// le contexte agent, la liste des dépôts et/ou les liens épinglés d'un
+// projet. Les champs nil ne sont pas modifiés ; repos et links, s'ils sont
+// fournis (même vides), remplacent entièrement la liste existante (mêmes
+// validations que AddProject). Retirer un repo ne casse pas les tâches
+// existantes : leur worktree déjà créé vit sa vie indépendamment.
+func (s *Store) UpdateProject(id string, name, description, checkCmd, contextPrompt *string, repos *[]Repo, links *[]Link) (Project, error) {
 	var normalized []Repo
 	if repos != nil {
 		var err error
 		normalized, err = NormalizeRepos(*repos)
+		if err != nil {
+			return Project{}, err
+		}
+	}
+	var normalizedLinks []Link
+	if links != nil {
+		var err error
+		normalizedLinks, err = NormalizeLinks(*links)
 		if err != nil {
 			return Project{}, err
 		}
@@ -748,6 +760,9 @@ func (s *Store) UpdateProject(id string, name, description, checkCmd, contextPro
 	}
 	if repos != nil {
 		p.Repos = normalized
+	}
+	if links != nil {
+		p.Links = normalizedLinks
 	}
 	s.Projects[id] = p
 	if err := s.save(); err != nil {
@@ -873,9 +888,24 @@ func (s *Store) CreateTask(id string, ref int, cardID, projectID, title, agentID
 	return s.Tasks[id], nil
 }
 
-// UpdateTask applique fn à une copie de la tâche puis persiste le résultat.
-// C'est le point d'entrée générique utilisé par les handlers et le runner.
+// UpdateTask applique fn à une copie de la tâche puis persiste le résultat,
+// en mettant à jour UpdatedAt. C'est le point d'entrée générique utilisé par
+// les handlers et le runner pour toute mutation qui doit faire remonter la
+// tâche dans un tri par updatedAt. Voir MarkTaskRead pour l'exception.
 func (s *Store) UpdateTask(id string, fn func(t *Task)) (Task, error) {
+	return s.updateTask(id, fn, true)
+}
+
+// MarkTaskRead marque une tâche comme lue (Unread=false) sans mettre à jour
+// UpdatedAt : ouvrir une tâche ne doit jamais la faire remonter dans une
+// liste triée par updatedAt (le tri sauterait sous le curseur).
+func (s *Store) MarkTaskRead(id string) (Task, error) {
+	return s.updateTask(id, func(t *Task) { t.Unread = false }, false)
+}
+
+// updateTask est l'implémentation commune de UpdateTask/MarkTaskRead.
+// bumpUpdatedAt contrôle si UpdatedAt est rafraîchi après fn.
+func (s *Store) updateTask(id string, fn func(t *Task), bumpUpdatedAt bool) (Task, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	t, ok := s.Tasks[id]
@@ -883,7 +913,9 @@ func (s *Store) UpdateTask(id string, fn func(t *Task)) (Task, error) {
 		return Task{}, fmt.Errorf("task not found")
 	}
 	fn(&t)
-	t.UpdatedAt = time.Now().UTC()
+	if bumpUpdatedAt {
+		t.UpdatedAt = time.Now().UTC()
+	}
 	s.Tasks[id] = t
 	s.recomputeCard(t.CardID)
 	s.recomputeProject(t.ProjectID)

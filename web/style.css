@@ -274,6 +274,14 @@ button, input, textarea { font-family: inherit; }
 .kanban-title-row { display: flex; align-items: center; gap: 6px; }
 .kanban-head h1 { margin: 0; font-size: 24px; font-weight: 600; letter-spacing: -0.028em; }
 .kanban-description { font-size: 12.5px; color: var(--muted); }
+.pinned-links { display: flex; align-items: center; gap: 8px; margin: -10px 0 20px; flex-wrap: wrap; }
+.pinned-link {
+  display: flex; align-items: center; justify-content: center; width: 22px; height: 22px;
+  border-radius: 6px; opacity: 0.85; transition: opacity .12s ease;
+}
+.pinned-link:hover { opacity: 1; }
+.pinned-link-icon { width: 16px; height: 16px; border-radius: 4px; display: block; }
+.pinned-link-fallback { font-size: 13px; color: var(--muted-3); }
 .kanban-stats { display: flex; gap: 18px; margin-left: auto; flex-wrap: wrap; }
 .kanban-stats span { font-size: 12.5px; color: var(--muted); white-space: nowrap; }
 .kanban-stats b { font-weight: 600; color: var(--text); font-variant-numeric: tabular-nums; }
@@ -627,6 +635,17 @@ button, input, textarea { font-family: inherit; }
   font-size: 12px; cursor: pointer; padding: 4px 2px;
 }
 .add-repo-link:hover { color: var(--text-2); text-decoration: underline; }
+.link-row { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+.link-row .modal-input { margin-top: 0; }
+.link-row-url { flex: 1; min-width: 0; }
+.link-row-title {
+  flex: none; max-width: 140px; font-size: 11px; color: var(--muted-2); overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap;
+}
+.link-row-remove { flex: none; }
+.link-add-row { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+.link-add-row .modal-input { margin-top: 0; flex: 1; min-width: 0; }
+.link-add-row .add-repo-link { margin-top: 0; flex: none; white-space: nowrap; }
 .repo-chip {
   font-size: 11px; color: var(--muted-2); background: var(--bg); padding: 2px 7px; border-radius: 6px;
   white-space: nowrap;

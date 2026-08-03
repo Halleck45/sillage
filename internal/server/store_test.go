@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestStoreRoundtripSaveLoad(t *testing.T) {
@@ -16,7 +17,7 @@ func TestStoreRoundtripSaveLoad(t *testing.T) {
 		t.Fatalf("NewStore: %v", err)
 	}
 
-	project, err := s1.AddProject("sillage", "", "", []Repo{{Path: "/tmp/sillage"}})
+	project, err := s1.AddProject("sillage", "", "", []Repo{{Path: "/tmp/sillage"}}, nil)
 	if err != nil {
 		t.Fatalf("AddProject: %v", err)
 	}
@@ -117,7 +118,7 @@ func TestDerivedCounters(t *testing.T) {
 		t.Fatalf("NewStore: %v", err)
 	}
 
-	project, err := s.AddProject("sillage", "", "", []Repo{{Path: "/tmp/sillage"}})
+	project, err := s.AddProject("sillage", "", "", []Repo{{Path: "/tmp/sillage"}}, nil)
 	if err != nil {
 		t.Fatalf("AddProject: %v", err)
 	}
@@ -206,6 +207,56 @@ func TestDerivedCounters(t *testing.T) {
 	}
 }
 
+// --- Lecture d'une tâche : ne doit jamais faire remonter la liste (v0.3.5) ---
+
+func TestMarkTaskReadDoesNotBumpUpdatedAt(t *testing.T) {
+	dir := t.TempDir()
+	s, err := NewStore(dir)
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+	project, err := s.AddProject("p", "", "", []Repo{{Path: "/tmp/p"}}, nil)
+	if err != nil {
+		t.Fatalf("AddProject: %v", err)
+	}
+	card, err := s.AddCard(project.ID, "Carte", "", "")
+	if err != nil {
+		t.Fatalf("AddCard: %v", err)
+	}
+	id, ref := s.ReserveTaskID()
+	task, err := s.CreateTask(id, ref, card.ID, project.ID, "T", "echo", "sillage/"+id, "main", "/tmp/wt", "p")
+	if err != nil {
+		t.Fatalf("CreateTask: %v", err)
+	}
+	task, err = s.UpdateTask(id, func(tk *Task) { tk.Unread = true })
+	if err != nil {
+		t.Fatalf("UpdateTask: %v", err)
+	}
+	before := task.UpdatedAt
+
+	time.Sleep(2 * time.Millisecond) // rend un éventuel bump détectable
+	updated, err := s.MarkTaskRead(id)
+	if err != nil {
+		t.Fatalf("MarkTaskRead: %v", err)
+	}
+	if updated.Unread {
+		t.Fatalf("Unread devrait être false après MarkTaskRead")
+	}
+	if !updated.UpdatedAt.Equal(before) {
+		t.Fatalf("UpdatedAt ne devrait pas changer : avant=%v après=%v", before, updated.UpdatedAt)
+	}
+
+	// Par contraste, UpdateTask (utilisé par les autres mutations) bump bien UpdatedAt.
+	time.Sleep(2 * time.Millisecond)
+	bumped, err := s.UpdateTask(id, func(tk *Task) { tk.Unread = true })
+	if err != nil {
+		t.Fatalf("UpdateTask: %v", err)
+	}
+	if !bumped.UpdatedAt.After(before) {
+		t.Fatalf("UpdateTask devrait mettre à jour UpdatedAt : avant=%v après=%v", before, bumped.UpdatedAt)
+	}
+}
+
 func TestSlugify(t *testing.T) {
 	cases := map[string]string{
 		"Ajouter le bouton Ship": "ajouter-le-bouton-ship",
@@ -229,7 +280,7 @@ func TestDeleteAgentGuardsReferencedAgent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewStore: %v", err)
 	}
-	project, err := s.AddProject("sillage", "", "", []Repo{{Path: "/tmp/sillage"}})
+	project, err := s.AddProject("sillage", "", "", []Repo{{Path: "/tmp/sillage"}}, nil)
 	if err != nil {
 		t.Fatalf("AddProject: %v", err)
 	}
@@ -286,14 +337,14 @@ func TestUpdateProjectFields(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewStore: %v", err)
 	}
-	p, err := s.AddProject("sillage", "", "", []Repo{{Path: "/tmp/sillage"}})
+	p, err := s.AddProject("sillage", "", "", []Repo{{Path: "/tmp/sillage"}}, nil)
 	if err != nil {
 		t.Fatalf("AddProject: %v", err)
 	}
 
 	name := "Nouveau nom"
 	checkCmd := "go test ./..."
-	updated, err := s.UpdateProject(p.ID, &name, nil, &checkCmd, nil, nil)
+	updated, err := s.UpdateProject(p.ID, &name, nil, &checkCmd, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("UpdateProject: %v", err)
 	}
@@ -305,7 +356,7 @@ func TestUpdateProjectFields(t *testing.T) {
 	}
 
 	newRepos := []Repo{{Name: "a", Path: "/tmp/a"}, {Name: "b", Path: "/tmp/b"}}
-	updated, err = s.UpdateProject(p.ID, nil, nil, nil, nil, &newRepos)
+	updated, err = s.UpdateProject(p.ID, nil, nil, nil, nil, &newRepos, nil)
 	if err != nil {
 		t.Fatalf("UpdateProject (repos): %v", err)
 	}
@@ -320,7 +371,7 @@ func TestUpdateProjectDescriptionAndContextPrompt(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewStore: %v", err)
 	}
-	p, err := s.AddProject("sillage", "Un projet", "Contexte initial", []Repo{{Path: "/tmp/sillage"}})
+	p, err := s.AddProject("sillage", "Un projet", "Contexte initial", []Repo{{Path: "/tmp/sillage"}}, nil)
 	if err != nil {
 		t.Fatalf("AddProject: %v", err)
 	}
@@ -330,7 +381,7 @@ func TestUpdateProjectDescriptionAndContextPrompt(t *testing.T) {
 
 	desc := "Nouvelle description"
 	ctx := "Nouveau contexte"
-	updated, err := s.UpdateProject(p.ID, nil, &desc, nil, &ctx, nil)
+	updated, err := s.UpdateProject(p.ID, nil, &desc, nil, &ctx, nil, nil)
 	if err != nil {
 		t.Fatalf("UpdateProject: %v", err)
 	}
@@ -347,7 +398,7 @@ func TestAddCardRejectsNonSoonColumn(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewStore: %v", err)
 	}
-	project, err := s.AddProject("p", "", "", []Repo{{Path: "/tmp/p"}})
+	project, err := s.AddProject("p", "", "", []Repo{{Path: "/tmp/p"}}, nil)
 	if err != nil {
 		t.Fatalf("AddProject: %v", err)
 	}
@@ -386,7 +437,7 @@ func TestAddCardWithContextPrompt(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewStore: %v", err)
 	}
-	project, err := s.AddProject("p", "", "", []Repo{{Path: "/tmp/p"}})
+	project, err := s.AddProject("p", "", "", []Repo{{Path: "/tmp/p"}}, nil)
 	if err != nil {
 		t.Fatalf("AddProject: %v", err)
 	}
@@ -406,7 +457,7 @@ func TestUpdateCardTitleAndContextPrompt(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewStore: %v", err)
 	}
-	project, err := s.AddProject("p", "", "", []Repo{{Path: "/tmp/p"}})
+	project, err := s.AddProject("p", "", "", []Repo{{Path: "/tmp/p"}}, nil)
 	if err != nil {
 		t.Fatalf("AddProject: %v", err)
 	}
@@ -473,7 +524,7 @@ func TestTaskFinishTransitions(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewStore: %v", err)
 	}
-	project, err := s.AddProject("p", "", "", []Repo{{Path: "/tmp/p"}})
+	project, err := s.AddProject("p", "", "", []Repo{{Path: "/tmp/p"}}, nil)
 	if err != nil {
 		t.Fatalf("AddProject: %v", err)
 	}
@@ -518,7 +569,7 @@ func TestTaskCancelTransitions(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewStore: %v", err)
 	}
-	project, err := s.AddProject("p", "", "", []Repo{{Path: "/tmp/p"}})
+	project, err := s.AddProject("p", "", "", []Repo{{Path: "/tmp/p"}}, nil)
 	if err != nil {
 		t.Fatalf("AddProject: %v", err)
 	}
@@ -552,7 +603,7 @@ func TestTaskReopenTransitions(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewStore: %v", err)
 	}
-	project, err := s.AddProject("p", "", "", []Repo{{Path: "/tmp/p"}})
+	project, err := s.AddProject("p", "", "", []Repo{{Path: "/tmp/p"}}, nil)
 	if err != nil {
 		t.Fatalf("AddProject: %v", err)
 	}
@@ -588,7 +639,7 @@ func TestCardAutoMoveToDoneAndBack(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewStore: %v", err)
 	}
-	project, err := s.AddProject("p", "", "", []Repo{{Path: "/tmp/p"}})
+	project, err := s.AddProject("p", "", "", []Repo{{Path: "/tmp/p"}}, nil)
 	if err != nil {
 		t.Fatalf("AddProject: %v", err)
 	}
@@ -668,7 +719,7 @@ func TestCardCountersExcludeCancelled(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewStore: %v", err)
 	}
-	project, err := s.AddProject("p", "", "", []Repo{{Path: "/tmp/p"}})
+	project, err := s.AddProject("p", "", "", []Repo{{Path: "/tmp/p"}}, nil)
 	if err != nil {
 		t.Fatalf("AddProject: %v", err)
 	}
@@ -759,7 +810,7 @@ func TestReassignTask(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewStore: %v", err)
 	}
-	project, err := s.AddProject("p", "", "", []Repo{{Path: "/tmp/p"}})
+	project, err := s.AddProject("p", "", "", []Repo{{Path: "/tmp/p"}}, nil)
 	if err != nil {
 		t.Fatalf("AddProject: %v", err)
 	}
@@ -921,7 +972,7 @@ func TestCardAutoMovesFromSoonToDoingWhenTaskStarts(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewStore: %v", err)
 	}
-	p, _ := s.AddProject("p", "", "", []Repo{{Name: "r", Path: "/tmp/x"}})
+	p, _ := s.AddProject("p", "", "", []Repo{{Name: "r", Path: "/tmp/x"}}, nil)
 	card, _ := s.AddCard(p.ID, "Carte", "", "")
 	if card.Column != "soon" {
 		t.Fatalf("colonne initiale attendue soon, reçue %q", card.Column)

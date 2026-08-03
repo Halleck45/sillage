@@ -454,6 +454,7 @@ func (s *Server) handleCreateProject(w http.ResponseWriter, r *http.Request) {
 		Repos         []Repo `json:"repos"`
 		Description   string `json:"description"`
 		ContextPrompt string `json:"contextPrompt"`
+		Links         []Link `json:"links"`
 	}
 	if err := decodeJSON(r, &body); err != nil || body.Name == "" {
 		writeError(w, http.StatusBadRequest, "name is required")
@@ -474,7 +475,13 @@ func (s *Server) handleCreateProject(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	project, err := s.store.AddProject(body.Name, body.Description, body.ContextPrompt, normalized)
+	links, err := NormalizeLinks(body.Links)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	links = fillMissingLinkTitles(links)
+	project, err := s.store.AddProject(body.Name, body.Description, body.ContextPrompt, normalized, links)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to create project")
 		return
@@ -490,6 +497,7 @@ func (s *Server) handleUpdateProject(w http.ResponseWriter, r *http.Request) {
 		CheckCmd      *string `json:"checkCmd"`
 		ContextPrompt *string `json:"contextPrompt"`
 		Repos         *[]Repo `json:"repos"`
+		Links         *[]Link `json:"links"`
 	}
 	if err := decodeJSON(r, &body); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid request body")
@@ -509,7 +517,16 @@ func (s *Server) handleUpdateProject(w http.ResponseWriter, r *http.Request) {
 		}
 		body.Repos = &normalized
 	}
-	project, err := s.store.UpdateProject(id, body.Name, body.Description, body.CheckCmd, body.ContextPrompt, body.Repos)
+	if body.Links != nil {
+		links, err := NormalizeLinks(*body.Links)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		links = fillMissingLinkTitles(links)
+		body.Links = &links
+	}
+	project, err := s.store.UpdateProject(id, body.Name, body.Description, body.CheckCmd, body.ContextPrompt, body.Repos, body.Links)
 	if err != nil {
 		writeError(w, statusForStoreError(err), err.Error())
 		return
@@ -814,9 +831,11 @@ func (s *Server) handleReopen(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, task)
 }
 
+// handleRead marque une tâche comme lue. N'affecte jamais UpdatedAt : ouvrir
+// une tâche ne doit pas la faire remonter dans une liste triée par date.
 func (s *Server) handleRead(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	task, err := s.store.UpdateTask(id, func(t *Task) { t.Unread = false })
+	task, err := s.store.MarkTaskRead(id)
 	if err != nil {
 		writeError(w, http.StatusNotFound, err.Error())
 		return

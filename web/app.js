@@ -59,6 +59,11 @@
       'project.errorNameRequired': 'Le nom est requis.',
       'project.errorReposRequired': 'Au moins un dépôt est requis.',
       'project.errorSaveFailed': 'Erreur lors de l\'enregistrement.',
+      'project.linksLabel': 'Liens épinglés',
+      'project.addLink': '+ lien',
+      'project.linksEmpty': 'Aucun lien épinglé.',
+      'project.linksInvalidUrl': 'Utilisez une URL http(s).',
+      'project.linksMax': 'Maximum 12 liens.',
       'project.description': 'Description',
       'project.descriptionPlaceholder': 'Une phrase pour situer le projet',
       'project.contextPrompt': 'Contexte pour les agents',
@@ -251,6 +256,11 @@
       'project.errorNameRequired': 'Name is required.',
       'project.errorReposRequired': 'At least one repository is required.',
       'project.errorSaveFailed': 'Failed to save.',
+      'project.linksLabel': 'Pinned links',
+      'project.addLink': '+ link',
+      'project.linksEmpty': 'No pinned links.',
+      'project.linksInvalidUrl': 'Use an http(s) URL.',
+      'project.linksMax': 'Maximum 12 links.',
       'project.description': 'Description',
       'project.descriptionPlaceholder': 'A sentence describing the project',
       'project.contextPrompt': 'Context for agents',
@@ -460,6 +470,7 @@
 
   var modalAgentId = null;
   var modalRepos = []; // [{name, path}] pour la modale projet (création/édition)
+  var modalLinks = []; // [{url, title}] liens épinglés, modale d'édition de projet
   var modalRepoCreateMode = true;
   var onboardingExpanded = null;
   var sseOpenedOnce = false;
@@ -480,6 +491,15 @@
   function isMac() {
     return /Mac|iPod|iPhone|iPad/.test(navigator.platform || '');
   }
+
+  // Fallback favicon (liens épinglés) : référencé depuis un attribut onerror
+  // généré côté chaîne HTML, doit donc être une fonction globale réelle.
+  window.__pinnedLinkIconError = function (img) {
+    var span = document.createElement('span');
+    span.className = 'pinned-link-fallback';
+    span.textContent = '🔗';
+    if (img && img.parentNode) img.parentNode.replaceChild(span, img);
+  };
 
   function softColor(hex, alpha) {
     if (!hex) return '#eeece6';
@@ -1003,6 +1023,21 @@
       '</article>';
   }
 
+  function buildPinnedLinksHTML(project) {
+    var links = (project && project.links) || [];
+    if (!links.length) return '';
+    var items = links.map(function (l) {
+      var host = '';
+      try { host = new URL(l.url).host; } catch (e) {}
+      var title = l.title || l.url;
+      var iconHTML = host
+        ? '<img src="https://' + escapeHtml(host) + '/favicon.ico" alt="" class="pinned-link-icon" onerror="window.__pinnedLinkIconError(this)">'
+        : '<span class="pinned-link-fallback">🔗</span>';
+      return '<a class="pinned-link" href="' + escapeHtml(l.url) + '" target="_blank" rel="noopener" title="' + escapeHtml(title) + '">' + iconHTML + '</a>';
+    }).join('');
+    return '<div class="pinned-links">' + items + '</div>';
+  }
+
   function buildKanbanHTML() {
     var project = state.projectsById[state.projectId];
     var cards = state.cards.filter(function (c) { return c.projectId === state.projectId; });
@@ -1035,6 +1070,7 @@
     head += '</div>';
     head += '<div class="kanban-stats"><span id="kanban-token-stat" class="token-stat">' + tokenTxt + '</span></div>';
     head += '</div>';
+    head += buildPinnedLinksHTML(project);
 
     var emptyNote = cards.length === 0
       ? '<button class="empty-cta" data-action="open-new-card">' +
@@ -1089,6 +1125,16 @@
     return t.status === filter;
   }
 
+  // Tri stable et déterministe : updatedAt décroissant, ref décroissante en
+  // départage (deux tâches ne changent jamais de position relative tant que
+  // ni l'un ni l'autre de ces deux champs ne change réellement ; ouvrir une
+  // tâche ne doit provoquer aucun re-tri visible).
+  function compareTasksForList(a, b) {
+    var diff = new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+    if (diff !== 0) return diff;
+    return (b.ref || 0) - (a.ref || 0);
+  }
+
   function buildTaskListPaneInnerHTML(tasksAll, opts) {
     var counts = tasksAll.reduce(function (acc, t) { acc[t.status] = (acc[t.status] || 0) + 1; return acc; }, {});
     var finishedCount = (counts.shipped || 0) + (counts.done || 0) + (counts.cancelled || 0);
@@ -1101,7 +1147,7 @@
       return '<button class="pill ' + (state.taskFilter === f.key ? 'pill-active' : '') + '" data-action="set-filter" data-filter="' + f.key + '">' + escapeHtml(f.label) + '</button>';
     }).join('');
     var visible = tasksAll.filter(function (t) { return taskMatchesFilter(t, state.taskFilter); })
-      .sort(function (a, b) { return new Date(b.updatedAt) - new Date(a.updatedAt); });
+      .sort(compareTasksForList);
     var rowsHTML;
     if (visible.length) {
       rowsHTML = visible.map(function (t) { return buildTaskRowHTML(t, opts.showProject); }).join('');
@@ -1983,6 +2029,76 @@
       '<textarea id="project-context-prompt" class="modal-textarea" rows="3" placeholder="' + escapeHtml(t('project.contextPromptPlaceholder')) + '">' + (project ? escapeHtml(project.contextPrompt || '') : '') + '</textarea>';
   }
 
+  // Liens épinglés (modale d'édition de projet uniquement)
+
+  function buildLinkRowsHTML() {
+    if (!modalLinks.length) return '<div class="empty-note-sm">' + escapeHtml(t('project.linksEmpty')) + '</div>';
+    return modalLinks.map(function (l, i) {
+      var titleNote = l.title ? '<span class="link-row-title">' + escapeHtml(l.title) + '</span>' : '';
+      return '<div class="link-row">' +
+        '<input class="modal-input mono link-row-url" placeholder="https://…" value="' + escapeHtml(l.url) + '">' +
+        titleNote +
+        '<button class="icon-btn link-row-remove" data-action="remove-link-row" data-index="' + i + '" aria-label="' + escapeHtml(t('project.removeRepo')) + '">✕</button>' +
+        '</div>';
+    }).join('');
+  }
+  function captureLinksFromDOM() {
+    var urlInputs = document.querySelectorAll('.link-row-url');
+    if (urlInputs.length === 0) return;
+    modalLinks = Array.prototype.map.call(urlInputs, function (input, i) {
+      return { url: input.value, title: modalLinks[i] ? modalLinks[i].title : '' };
+    });
+  }
+  function refreshLinkRowsUI() {
+    var container = document.getElementById('link-rows');
+    if (container) container.innerHTML = buildLinkRowsHTML();
+  }
+  function addLinkRow() {
+    var input = document.getElementById('new-link-url');
+    var url = input ? input.value.trim() : '';
+    var errEl = document.getElementById('project-modal-error');
+    if (!url) return;
+    if (!/^https?:\/\//i.test(url)) {
+      if (errEl) { errEl.textContent = t('project.linksInvalidUrl'); errEl.classList.remove('hidden'); }
+      return;
+    }
+    captureLinksFromDOM();
+    if (modalLinks.length >= 12) {
+      if (errEl) { errEl.textContent = t('project.linksMax'); errEl.classList.remove('hidden'); }
+      return;
+    }
+    modalLinks.push({ url: url, title: '' });
+    input.value = '';
+    if (errEl) errEl.classList.add('hidden');
+    refreshLinkRowsUI();
+  }
+  function removeLinkRow(index) {
+    captureLinksFromDOM();
+    modalLinks.splice(index, 1);
+    refreshLinkRowsUI();
+  }
+  function buildLinksSectionHTML() {
+    return '<div class="modal-label">' + escapeHtml(t('project.linksLabel')) + '</div>' +
+      '<div id="link-rows">' + buildLinkRowsHTML() + '</div>' +
+      '<div class="link-add-row">' +
+        '<input id="new-link-url" class="modal-input mono" placeholder="https://…">' +
+        '<button class="add-repo-link" data-action="add-link-row">' + escapeHtml(t('project.addLink')) + '</button>' +
+      '</div>';
+  }
+  function collectLinksForSubmit() {
+    captureLinksFromDOM();
+    return modalLinks.map(function (l) {
+      return { url: (l.url || '').trim(), title: (l.title || '').trim() };
+    }).filter(function (l) { return l.url; });
+  }
+  function linksToBody(links) {
+    return links.map(function (l) {
+      var o = { url: l.url };
+      if (l.title) o.title = l.title;
+      return o;
+    });
+  }
+
   // Nouveau projet
 
   function buildNewProjectModalHTML() {
@@ -2185,6 +2301,7 @@
       buildRepoSectionHTML() +
       buildProjectExtraFieldsHTML(project) +
       '<div class="modal-label">' + escapeHtml(t('project.checkCmd')) + '</div><input id="project-edit-checkcmd" class="modal-input mono" placeholder="go test ./..." value="' + escapeHtml(project.checkCmd || '') + '">' +
+      buildLinksSectionHTML() +
       '<div id="project-modal-error" class="modal-error hidden"></div>' +
       '<div class="modal-foot"><button class="btn-outline" data-action="close-modal">' + escapeHtml(t('common.cancel')) + '</button>' +
       '<button class="btn-green" data-action="submit-project-edit" data-project-id="' + project.id + '">' + escapeHtml(t('common.save')) + '</button></div>' +
@@ -2196,6 +2313,7 @@
     modalRepoCreateMode = false;
     var repos = (project.repos && project.repos.length) ? project.repos : [{ name: '', path: '' }];
     modalRepos = repos.map(function (r) { return { name: r.name || '', path: r.path || '' }; });
+    modalLinks = (project.links || []).map(function (l) { return { url: l.url || '', title: l.title || '' }; });
     openModal(buildProjectModalHTML(project));
     setTimeout(function () { var el = document.getElementById('project-edit-name'); if (el) el.focus(); }, 0);
   }
@@ -2208,7 +2326,8 @@
     if (!name) { errEl.textContent = t('project.errorNameRequired'); errEl.classList.remove('hidden'); return; }
     var repos = collectReposForSubmit();
     if (repos.length === 0) { errEl.textContent = t('project.errorReposRequired'); errEl.classList.remove('hidden'); return; }
-    api('/api/projects/' + projectId, { method: 'PATCH', body: { name: name, checkCmd: checkCmd, repos: reposToBody(repos), description: description, contextPrompt: contextPrompt } }).then(function (project) {
+    var links = collectLinksForSubmit();
+    api('/api/projects/' + projectId, { method: 'PATCH', body: { name: name, checkCmd: checkCmd, repos: reposToBody(repos), description: description, contextPrompt: contextPrompt, links: linksToBody(links) } }).then(function (project) {
       upsertProject(project);
       closeModal();
       renderSidebar(); renderMain();
@@ -2647,6 +2766,8 @@
       case 'submit-card-edit': submitCardEdit(el.getAttribute('data-card-id')); break;
       case 'add-repo-row': addRepoRow(); break;
       case 'remove-repo-row': removeRepoRow(parseInt(el.getAttribute('data-index'), 10)); break;
+      case 'add-link-row': addLinkRow(); break;
+      case 'remove-link-row': removeLinkRow(parseInt(el.getAttribute('data-index'), 10)); break;
       case 'open-new-agent': openNewAgentModal(); break;
       case 'edit-agent': openEditAgentModal(el.getAttribute('data-agent-id')); break;
       case 'submit-agent': submitAgent(el.getAttribute('data-agent-id') || null); break;

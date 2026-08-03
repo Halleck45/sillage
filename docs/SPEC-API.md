@@ -1,4 +1,4 @@
-# Sillage : contrat d'API (v0.3.4)
+# Sillage : contrat d'API (v0.3.5)
 
 Serveur Go sur `:8787`. Frontend statique servi sur `/`. Tout le JSON est en camelCase.
 Auth par cookie de session (`sillage_session`, HttpOnly). Toute route `/api/*` (sauf `/api/login`) renvoie `401` sans session valide : le frontend affiche alors l'écran de connexion.
@@ -12,9 +12,14 @@ Tokens  { "input": 0, "output": 0, "costUsd": 0.0 }
 
 Repo    { "name": "api", "path": "/abs/path" }   // name court et unique dans le projet
 
-Project { "id": "p1", "name": "sillage", "description": "...", "repos": [Repo, ...], "unread": 2,
+Link    { "url": "https://github.com/org/repo", "title": "org/repo" }
+          // title fourni par l'utilisateur, ou récupéré best-effort (voir plus bas), ou nom d'hôte.
+
+Project { "id": "p1", "name": "sillage", "description": "...", "repos": [Repo, ...],
+          "links": [Link, ...], "unread": 2,
           "tokens": Tokens, "checkCmd": "go test ./...", "contextPrompt": "..." }
           // description : une phrase, affichée sous le nom. checkCmd/contextPrompt/description peuvent être vides.
+          // links : au plus 12, http(s) uniquement (voir "Liens épinglés" ci-dessous).
 
 Card    { "id": "c1", "projectId": "p1", "column": "soon|doing|done", "title": "...",
           "tasksTotal": 4, "tasksDone": 1, "docsCount": 2, "messagesCount": 12,
@@ -73,8 +78,8 @@ Settings { "displayName": "Ada", "lang": "fr" }   // lang : ""|"fr"|"en"
 | POST | `/api/agents` | `{name, emoji?, color?, cli, model?, contextPrompt?}` | Agent (name et cli requis ; cli ∈ {claude, codex, fake} ; id = slug du name, 400 si déjà pris) |
 | PATCH | `/api/agents/{id}` | mêmes champs, tous optionnels | Agent |
 | DELETE | `/api/agents/{id}` | | 204 (400 si une tâche référence encore l'agent) |
-| POST | `/api/projects` | `{name, path}` ou `{name, repos:[{name?,path}, ...], description?, contextPrompt?}` | Project (400 si un path est invalide/pas un dépôt git, ou noms de repo dupliqués) |
-| PATCH | `/api/projects/{id}` | `{name?, description?, checkCmd?, contextPrompt?, repos?}` | Project (repos, si fourni, remplace la liste entière ; retirer un repo ne casse pas les tâches existantes) |
+| POST | `/api/projects` | `{name, path}` ou `{name, repos:[{name?,path}, ...], description?, contextPrompt?, links?:[{url,title?}, ...]}` | Project (400 si un path est invalide/pas un dépôt git, noms de repo dupliqués, ou lien invalide/en trop grand nombre : voir « Liens épinglés » ci-dessous) |
+| PATCH | `/api/projects/{id}` | `{name?, description?, checkCmd?, contextPrompt?, repos?, links?}` | Project (repos/links, si fournis, remplacent la liste entière ; retirer un repo ne casse pas les tâches existantes) |
 | POST | `/api/cards` | `{projectId, title, column?, contextPrompt?}` | Card. `column`, si fourni, doit valoir `"soon"` (400 `"cards are created in the soon column"` sinon) : les cartes se créent toujours dans "Bientôt" |
 | PATCH | `/api/cards/{id}` | `{column?, title?, contextPrompt?}` | Card. `title`, si fourni, doit être non vide. Le déplacement manuel de colonne (toutes colonnes acceptées) reste indépendant de l'auto-déplacement (voir plus bas) |
 | POST | `/api/tasks` | `{cardId, title, agentId, prompt?, repoName?}` | Task (créée `running`, agent lancé avec title+prompt). `repoName` optionnel si le projet n'a qu'un repo ; sinon 400 `"repoName required (project has several repositories)"` ou 400 si inconnu |
@@ -87,7 +92,7 @@ Settings { "displayName": "Ada", "lang": "fr" }   // lang : ""|"fr"|"en"
 | POST | `/api/tasks/{id}/finish` | | Task (review/shipped → done). 400 depuis `running` (`"task must be reviewed before finishing"`) ou depuis done/cancelled |
 | POST | `/api/tasks/{id}/cancel` | | Task (running/review → cancelled). Si `running`, l'agent est d'abord interrompu (même mécanique qu'`/interrupt`). 400 depuis shipped/done/cancelled |
 | POST | `/api/tasks/{id}/reopen` | | Task (shipped/done/cancelled → review). 400 sinon |
-| POST | `/api/tasks/{id}/read` | | 204 (unread=false) |
+| POST | `/api/tasks/{id}/read` | | 204 (unread=false, ne modifie jamais `updatedAt` : voir plus bas) |
 | GET | `/api/tasks/{id}/diff` | | voir ci-dessous |
 | GET | `/api/tasks/{id}/deliverables` | | voir ci-dessous |
 | GET | `/api/events` | | SSE |
@@ -99,6 +104,14 @@ Statuts : `running → review → shipped`, plus `done` (via `/finish`) et `canc
 Après un ship réussi : un Message marqueur est ajouté au fil (`author="agent"`, `authorName=""`, texte figé `"[shipped:<branch>]"` ; le frontend détecte ce marqueur et affiche une ligne système localisée). La réponse inclut aussi `branchUrl` : l'URL de la branche sur GitHub (`https://github.com/<owner>/<repo>/tree/<branch>`) si le remote `origin` du dépôt est un dépôt github.com, chaîne vide sinon (jamais d'erreur pour cette information optionnelle).
 
 Après chaque changement de statut de tâche, la carte est automatiquement replacée : si elle a au moins une tâche et que toutes ses tâches sont terminales (`shipped`/`done`/`cancelled`), `card.column` passe à `"done"` ; si une tâche redevient active (reopen, nouvelle tâche) alors que la carte est en `"done"`, elle repasse en `"doing"`. Le déplacement manuel (PATCH `/api/cards/{id}`) reste indépendant de cette règle. Chaque changement republie l'événement SSE `cards`.
+
+### Lecture d'une tâche : `updatedAt` inchangé
+
+`POST /api/tasks/{id}/read` (ouverture d'une tâche) ne met jamais à jour `updatedAt` (variante dédiée `Store.MarkTaskRead`, distincte de la mutation générique `UpdateTask` utilisée par toutes les autres actions) : une liste de tâches triée par `updatedAt` ne doit pas se réordonner sous le curseur quand on ouvre simplement une tâche pour la lire.
+
+### Liens épinglés de projet
+
+`Project.links` : au plus 12 liens, http(s) uniquement (400 sinon, `file://` et tout autre schéma refusés). Pour chaque lien envoyé sans `title`, le serveur tente de récupérer le `<title>` de la page à l'enregistrement (POST ou PATCH) : GET avec timeout global de 5 s, lecture plafonnée à 64 Ko, redirections suivies uniquement si elles restent en http(s) (au plus 5). Cette récupération est best-effort et ne bloque ni n'échoue jamais l'enregistrement : en cas d'échec (timeout, erreur HTTP, page sans `<title>`, hôte injoignable...), `title` devient le nom d'hôte de l'URL.
 
 ### Réassignation d'une tâche à un autre agent
 
