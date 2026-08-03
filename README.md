@@ -17,20 +17,14 @@ Working with several AI agents quickly turns into tab hell: five terminals, thre
 
 ## Features
 
-- **Kanban per project** (Soon / Doing / Done) of **workstreams**: small goals grouping tasks, moving across columns automatically as work starts and finishes.
-- **Tasks like pull requests**: status icons, live activity line, counters, filter pills, deep links (`#/p/…/c/…/t/…`). Lists inform, the detail panel acts, one primary action per state.
-- **Conversation with the agent** (markdown, code blocks, incremental rendering that never breaks your text selection), **colored diff**, **deliverables** in tabs. Messages sent while the agent is busy are queued and delivered when it finishes.
-- **Human validation is structural, not cosmetic**: agents work in a dedicated git worktree on a `sillage/<ref>-...` branch and are never allowed to push. `git push` exists in exactly one place in the code, triggered only by the ship button after an explicit confirmation. Shipping posts a system line with a direct link to the pushed branch.
-- **Layered context for agents**: each agent gets its own prompt, plus the project context, plus the workstream context. Write things once, at the right level.
-- **One or several git repositories per project**; each task works on exactly one of them.
-- **Token accounting everywhere**: input/output/cost per task, per project and global, updated live.
-- **Workspace backed by git** (optional): your projects, conversations and settings live in a local git repository with automatic local commits; sync it manually to a private remote to move between machines.
-- **Agents managed from the UI** (name, emoji, CLI, model, context prompt), with upfront health warnings (missing CLI, blocked sandbox) and one-click task reassignment to another agent.
-- **Open a PR** on GitHub for a shipped task (`gh pr create`, with the same explicit confirmation as shipping).
-- **Pinned links per project**: a discreet favicon row for your sites, repos and dashboards.
-- **English and French UI**, auto-detected, switchable in preferences.
-- **Mobile friendly** (drawer sidebar), great over Tailscale from your phone.
-- **Built-in free agent** (Écho 🧪) to try the whole workflow without spending a token.
+- **Delegate, then watch**: a kanban of workstreams per project, tasks like pull requests, live agent activity streamed to your browser.
+- **Agents can never push**: each task runs in an isolated git worktree; shipping is one confirmed click, and `git push` exists in exactly one place in the code, behind that click.
+- **Real conversations**: chat with the agent mid-task, review the colored diff, open the PR. Messages sent while it works are queued, context never gets lost.
+- **Layered context**: agent prompt + project context + workstream context. Write things once, at the right level.
+- **Token accounting everywhere**: input/output/cost per task, per project and global, live.
+- **Your workspace is a git repo** (optional): conversations, projects and settings versioned locally, synced to a private remote to follow you across machines.
+
+Also: multiple repositories per project, task reassignment, agent health warnings, pinned project links, English and French UI, works from your phone, and a free built-in agent to try everything without spending a token.
 
 ![Kanban view](docs/screenshots/kanban.png)
 
