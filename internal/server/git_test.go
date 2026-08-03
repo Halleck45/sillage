@@ -173,3 +173,113 @@ func TestParseGithubRemote(t *testing.T) {
 		}
 	}
 }
+
+// TestGithubBranchURL couvre le calcul de branchUrl fourni par la réponse de
+// ship : lecture seule (git remote get-url), jamais de commande réseau.
+func TestGithubBranchURL(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git non disponible dans cet environnement")
+	}
+	cases := []struct {
+		remote string
+		want   string
+	}{
+		{"git@github.com:acme/demo.git", "https://github.com/acme/demo/tree/sillage/100-demo"},
+		{"https://github.com/acme/demo.git", "https://github.com/acme/demo/tree/sillage/100-demo"},
+		{"git@gitlab.com:acme/demo.git", ""},
+		{"", ""},
+	}
+	for _, c := range cases {
+		dir := t.TempDir()
+		runTestGit(t, dir, "init")
+		if c.remote != "" {
+			runTestGit(t, dir, "remote", "add", "origin", c.remote)
+		}
+		if got := githubBranchURL(dir, "sillage/100-demo"); got != c.want {
+			t.Errorf("githubBranchURL(remote=%q) = %q, attendu %q", c.remote, got, c.want)
+		}
+	}
+}
+
+// TestShipFromReviewAddsMarkerMessage reproduit le flux de handleShip :
+// ship accepté directement depuis "review" (l'étape "ready" a disparu),
+// puis message marqueur "[shipped:<branch>]" (author=agent, authorName vide).
+func TestShipFromReviewAddsMarkerMessage(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git non disponible dans cet environnement")
+	}
+
+	bare := t.TempDir()
+	runTestGit(t, bare, "init", "--bare", "-b", "main")
+
+	repo := t.TempDir()
+	dataDir := t.TempDir()
+	runTestGit(t, repo, "init", "-b", "main")
+	runTestGit(t, repo, "config", "user.email", "test@example.com")
+	runTestGit(t, repo, "config", "user.name", "Test")
+	if err := os.WriteFile(filepath.Join(repo, "README.md"), []byte("# projet\n"), 0o644); err != nil {
+		t.Fatalf("écriture README impossible : %v", err)
+	}
+	runTestGit(t, repo, "add", "-A")
+	runTestGit(t, repo, "commit", "-m", "initial")
+	runTestGit(t, repo, "remote", "add", "origin", bare)
+
+	dir, base, err := CreateWorktree(repo, dataDir, "t1", "sillage/100-demo")
+	if err != nil {
+		t.Fatalf("CreateWorktree: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "feature.txt"), []byte("contenu\n"), 0o644); err != nil {
+		t.Fatalf("écriture feature.txt impossible : %v", err)
+	}
+
+	s, err := NewStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+	project, err := s.AddProject("demo", "", "", []Repo{{Path: repo}})
+	if err != nil {
+		t.Fatalf("AddProject: %v", err)
+	}
+	card, err := s.AddCard(project.ID, "Carte", "", "")
+	if err != nil {
+		t.Fatalf("AddCard: %v", err)
+	}
+	taskID, ref := s.ReserveTaskID()
+	task, err := s.CreateTask(taskID, ref, card.ID, project.ID, "Demo", "echo", "sillage/100-demo", base, dir, "demo")
+	if err != nil {
+		t.Fatalf("CreateTask: %v", err)
+	}
+	if _, err := s.UpdateTask(taskID, func(tk *Task) { tk.Status = "review" }); err != nil {
+		t.Fatalf("UpdateTask: %v", err)
+	}
+	task, _ = s.GetTask(taskID)
+	if task.Status != "review" {
+		t.Fatalf("précondition : la tâche devrait être en review")
+	}
+
+	// Reproduit le flux de handleShip : ship accepté depuis "review".
+	output, err := Ship(task.WorktreeDir, task.Branch, task.Title)
+	if err != nil {
+		t.Fatalf("Ship: %v (output=%s)", err, output)
+	}
+	task, err = s.UpdateTask(taskID, func(tk *Task) { tk.Status = "shipped" })
+	if err != nil {
+		t.Fatalf("UpdateTask (shipped): %v", err)
+	}
+	if task.Status != "shipped" {
+		t.Fatalf("statut attendu 'shipped', reçu %q", task.Status)
+	}
+
+	msg, task, err := s.AddMessage(task.ID, "agent", "", "[shipped:"+task.Branch+"]")
+	if err != nil {
+		t.Fatalf("AddMessage: %v", err)
+	}
+	wantText := "[shipped:sillage/100-demo]"
+	if msg.Author != "agent" || msg.AuthorName != "" || msg.Text != wantText {
+		t.Fatalf("message marqueur inattendu : %+v", msg)
+	}
+
+	if branchURL := githubBranchURL(task.WorktreeDir, task.Branch); branchURL != "" {
+		t.Fatalf("branchUrl attendu vide (remote non-GitHub), reçu %q", branchURL)
+	}
+}

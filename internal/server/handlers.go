@@ -82,7 +82,6 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/tasks/{id}", s.handleGetTask)
 	mux.HandleFunc("POST /api/tasks/{id}/messages", s.handlePostMessage)
 	mux.HandleFunc("POST /api/tasks/{id}/interrupt", s.handleInterrupt)
-	mux.HandleFunc("POST /api/tasks/{id}/accept", s.handleAccept)
 	mux.HandleFunc("POST /api/tasks/{id}/ship", s.handleShip)
 	mux.HandleFunc("POST /api/tasks/{id}/pr", s.handlePR)
 	mux.HandleFunc("POST /api/tasks/{id}/finish", s.handleFinish)
@@ -701,27 +700,10 @@ func (s *Server) handleInterrupt(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, task)
 }
 
-func (s *Server) handleAccept(w http.ResponseWriter, r *http.Request) {
-	id := r.PathValue("id")
-	task, ok := s.store.GetTask(id)
-	if !ok {
-		writeError(w, http.StatusNotFound, "task not found")
-		return
-	}
-	if task.Status != "review" {
-		writeError(w, http.StatusBadRequest, "task is not in review")
-		return
-	}
-	task, err := s.store.UpdateTask(id, func(t *Task) { t.Status = "ready" })
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	s.runner.publishTask(task)
-	s.runner.publishCards(task.ProjectID)
-	writeJSON(w, http.StatusOK, task)
-}
-
+// handleShip pousse la branche de la tâche (statut ready) : accepté depuis
+// "review" (l'étape d'acceptation manuelle a disparu, v0.3.4). Ajoute un
+// message marqueur "[shipped:<branch>]" et fournit branchUrl (GitHub
+// uniquement, vide sinon) dans la réponse.
 func (s *Server) handleShip(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	var body struct {
@@ -736,8 +718,8 @@ func (s *Server) handleShip(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "task not found")
 		return
 	}
-	if task.Status != "ready" {
-		writeError(w, http.StatusBadRequest, "task must be ready before shipping")
+	if task.Status != "review" {
+		writeError(w, http.StatusBadRequest, "task must be in review before shipping")
 		return
 	}
 
@@ -752,10 +734,17 @@ func (s *Server) handleShip(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	msg, task, err := s.store.AddMessage(task.ID, "agent", "", "[shipped:"+task.Branch+"]")
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
 	s.runner.publishTask(task)
+	s.runner.publishMessage(msg)
 	s.runner.publishCards(task.ProjectID)
 	s.runner.publishAgents()
-	writeJSON(w, http.StatusOK, ShipResponse{Task: task, Output: output})
+	branchUrl := githubBranchURL(task.WorktreeDir, task.Branch)
+	writeJSON(w, http.StatusOK, ShipResponse{Task: task, Output: output, BranchUrl: branchUrl})
 }
 
 // handlePR ouvre une pull request pour une tâche déjà livrée (shipped).

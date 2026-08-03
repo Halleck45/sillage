@@ -449,19 +449,9 @@ button, input, textarea { font-family: inherit; }
 .detail-meta { display: flex; align-items: center; gap: 8px; margin-top: 5px; flex-wrap: wrap; font-size: 12px; color: var(--muted-2); }
 .detail-tokens { margin-top: 10px; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
 
-.workflow { display: flex; align-items: center; gap: 8px; margin-top: 14px; }
-.wf-step { flex: 1; display: flex; flex-direction: column; gap: 5px; min-width: 0; }
-.wf-bar { height: 3px; border-radius: 3px; }
-.wf-bar-todo { background: var(--border); }
-.wf-bar-done { background: #a9cfba; }
-.wf-bar-current { background: var(--green); }
-.wf-label { font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted-4); }
-.wf-label-done { color: var(--text-2); }
-.wf-current { font-weight: 600; }
-.workflow-banner {
-  margin-top: 14px; padding: 8px 12px; background: var(--bg); border-radius: 8px;
-  font-size: 12.5px; color: var(--text-2); text-align: center;
-}
+.status-badge { display: flex; align-items: center; gap: 6px; margin-top: 14px; }
+.status-badge-icon { font-size: 13px; line-height: 1; }
+.status-badge-label { font-size: 12.5px; font-weight: 600; color: var(--text-2); }
 
 .action-row { display: flex; align-items: center; gap: 10px; margin-top: 14px; }
 .btn-action { flex: 1; min-width: 0; height: 40px; padding: 0 16px; border: 0; border-radius: 10px; font-size: 14px; font-weight: 600; letter-spacing: -0.01em; cursor: pointer; }
@@ -499,6 +489,7 @@ button, input, textarea { font-family: inherit; }
 
 .conversation { flex: 1; min-height: 0; overflow-y: auto; padding: 16px 18px 8px; display: flex; flex-direction: column; gap: 15px; }
 .msg-system { text-align: center; font-size: 11.5px; color: var(--muted-3); }
+.msg-system a { color: var(--accent); }
 .message { display: flex; gap: 10px; }
 .msg-avatar { width: 26px; height: 26px; flex: none; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 13px; }
 .msg-body { flex: 1; min-width: 0; }

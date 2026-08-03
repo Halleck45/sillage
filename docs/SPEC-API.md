@@ -1,4 +1,4 @@
-# Sillage : contrat d'API (v0.3.3)
+# Sillage : contrat d'API (v0.3.4)
 
 Serveur Go sur `:8787`. Frontend statique servi sur `/`. Tout le JSON est en camelCase.
 Auth par cookie de session (`sillage_session`, HttpOnly). Toute route `/api/*` (sauf `/api/login`) renvoie `401` sans session valide : le frontend affiche alors l'écran de connexion.
@@ -31,7 +31,7 @@ Agent   { "id": "bolt", "name": "Bolt", "emoji": "🐝", "color": "#f2b705",
 
 Task    { "id": "t1", "cardId": "c1", "projectId": "p1", "ref": 482, "title": "...",
           "agentId": "bolt", "repoName": "api", "branch": "sillage/482-slug",
-          "status": "running|review|ready|shipped|done|cancelled",
+          "status": "running|review|shipped|done|cancelled",
           "messagesCount": 5, "filesCount": 3, "docsCount": 1,
           "checks": [ { "label": "go test", "ok": true } ],   // [] si aucun
           "liveActivity": "Edit · internal/server/store.go" | null,
@@ -82,11 +82,10 @@ Settings { "displayName": "Ada", "lang": "fr" }   // lang : ""|"fr"|"en"
 | GET | `/api/tasks/{id}` | | `{task, messages}` |
 | POST | `/api/tasks/{id}/messages` | `{text}` | 202 ; relance l'agent (statut → running) |
 | POST | `/api/tasks/{id}/interrupt` | | Task (running → review) |
-| POST | `/api/tasks/{id}/accept` | | Task (review → ready) |
-| POST | `/api/tasks/{id}/ship` | `{confirm:true}` | `{task, output}` : fait le `git push` réel. **Validation humaine obligatoire** : refus 400 sans `confirm` |
+| POST | `/api/tasks/{id}/ship` | `{confirm:true}` | `{task, output, branchUrl}` : fait le `git push` réel, accepté depuis `review` (voir ci-dessous). **Validation humaine obligatoire** : refus 400 sans `confirm` |
 | POST | `/api/tasks/{id}/pr` | `{confirm:true}` | `{url}` : ouvre la pull request (voir ci-dessous). **Validation humaine obligatoire** : refus 400 sans `confirm` ; tâche `shipped` uniquement (400 sinon) |
-| POST | `/api/tasks/{id}/finish` | | Task (review/ready/shipped → done). 400 depuis `running` (`"task must be reviewed before finishing"`) ou depuis done/cancelled |
-| POST | `/api/tasks/{id}/cancel` | | Task (running/review/ready → cancelled). Si `running`, l'agent est d'abord interrompu (même mécanique qu'`/interrupt`). 400 depuis shipped/done/cancelled |
+| POST | `/api/tasks/{id}/finish` | | Task (review/shipped → done). 400 depuis `running` (`"task must be reviewed before finishing"`) ou depuis done/cancelled |
+| POST | `/api/tasks/{id}/cancel` | | Task (running/review → cancelled). Si `running`, l'agent est d'abord interrompu (même mécanique qu'`/interrupt`). 400 depuis shipped/done/cancelled |
 | POST | `/api/tasks/{id}/reopen` | | Task (shipped/done/cancelled → review). 400 sinon |
 | POST | `/api/tasks/{id}/read` | | 204 (unread=false) |
 | GET | `/api/tasks/{id}/diff` | | voir ci-dessous |
@@ -95,7 +94,9 @@ Settings { "displayName": "Ada", "lang": "fr" }   // lang : ""|"fr"|"en"
 
 ### Cycle de vie des tâches et auto-déplacement de carte
 
-Statuts : `running → review → ready → shipped`, plus `done` (via `/finish`) et `cancelled` (via `/cancel`). `/reopen` accepte shipped/done/cancelled et ramène en `review`.
+Statuts : `running → review → shipped`, plus `done` (via `/finish`) et `cancelled` (via `/cancel`). L'état intermédiaire `ready` (et l'étape d'acceptation manuelle `/accept`) a disparu : `ship` est accepté directement depuis `review`. `/reopen` accepte shipped/done/cancelled et ramène en `review`. Compatibilité : au chargement de state.json, toute tâche encore `ready` (installation antérieure à la v0.3.4) migre vers `review`.
+
+Après un ship réussi : un Message marqueur est ajouté au fil (`author="agent"`, `authorName=""`, texte figé `"[shipped:<branch>]"` ; le frontend détecte ce marqueur et affiche une ligne système localisée). La réponse inclut aussi `branchUrl` : l'URL de la branche sur GitHub (`https://github.com/<owner>/<repo>/tree/<branch>`) si le remote `origin` du dépôt est un dépôt github.com, chaîne vide sinon (jamais d'erreur pour cette information optionnelle).
 
 Après chaque changement de statut de tâche, la carte est automatiquement replacée : si elle a au moins une tâche et que toutes ses tâches sont terminales (`shipped`/`done`/`cancelled`), `card.column` passe à `"done"` ; si une tâche redevient active (reopen, nouvelle tâche) alors que la carte est en `"done"`, elle repasse en `"doing"`. Le déplacement manuel (PATCH `/api/cards/{id}`) reste indépendant de cette règle. Chaque changement republie l'événement SSE `cards`.
 

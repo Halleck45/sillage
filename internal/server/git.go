@@ -305,6 +305,22 @@ func fallbackCompareURL(dir, base, branch string) (string, error) {
 	return fmt.Sprintf("https://github.com/%s/%s/compare/%s...%s?expand=1", owner, repo, base, branch), nil
 }
 
+// githubBranchURL construit l'URL de la branche sur GitHub
+// (https://github.com/<owner>/<repo>/tree/<branch>) si le remote "origin" est
+// un dépôt github.com, chaîne vide sinon. Jamais d'erreur : c'est une
+// information optionnelle jointe à la réponse de Ship.
+func githubBranchURL(dir, branch string) string {
+	out, err := runGit(dir, gitDefaultTimeout, "remote", "get-url", "origin")
+	if err != nil {
+		return ""
+	}
+	owner, repo, ok := ParseGithubRemote(out)
+	if !ok {
+		return ""
+	}
+	return fmt.Sprintf("https://github.com/%s/%s/tree/%s", owner, repo, branch)
+}
+
 // --- Synchronisation de l'espace de travail (dataDir uniquement) ---
 
 // ErrSyncConflict signale un conflit de rebase lors de la synchronisation de

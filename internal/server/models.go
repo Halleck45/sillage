@@ -92,7 +92,7 @@ type Task struct {
 	AgentID       string    `json:"agentId"`
 	RepoName      string    `json:"repoName"` // dépôt du projet utilisé pour le worktree
 	Branch        string    `json:"branch"`
-	Status        string    `json:"status"` // running|review|ready|shipped|done|cancelled
+	Status        string    `json:"status"` // running|review|shipped|done|cancelled
 	MessagesCount int       `json:"messagesCount"`
 	FilesCount    int       `json:"filesCount"`
 	DocsCount     int       `json:"docsCount"`
@@ -223,10 +223,13 @@ type DeliverablesResponse struct {
 	Images []Item `json:"images"`
 }
 
-// ShipResponse est la réponse de POST /api/tasks/{id}/ship.
+// ShipResponse est la réponse de POST /api/tasks/{id}/ship. BranchUrl pointe
+// vers la branche sur GitHub (si le remote origin est un dépôt github.com),
+// vide sinon : jamais d'erreur pour cette information optionnelle.
 type ShipResponse struct {
-	Task   Task   `json:"task"`
-	Output string `json:"output"`
+	Task      Task   `json:"task"`
+	Output    string `json:"output"`
+	BranchUrl string `json:"branchUrl"`
 }
 
 // PRResponse est la réponse de POST /api/tasks/{id}/pr.

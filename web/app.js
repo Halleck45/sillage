@@ -68,17 +68,15 @@
       'work.emptyFiltered': 'Aucune tâche ne correspond à ce filtre.',
       'filter.all': 'Toutes {n}',
       'filter.review': 'À relire {n}',
-      'filter.ready': 'Prêt à livrer {n}',
       'filter.finished': 'Terminées {n}',
       'badge.new': 'NOUVEAU',
-      'workflow.step.review': 'À relire',
-      'workflow.step.accepted': 'Accepté',
-      'workflow.step.shipped': 'Livré',
-      'workflow.doneBanner': 'Tâche terminée',
-      'workflow.cancelledBanner': 'Tâche annulée',
+      'status.running': 'En cours',
+      'status.review': 'À relire',
+      'status.shipped': 'Livré',
+      'status.done': 'Terminé',
+      'status.cancelled': 'Annulé',
       'action.interrupt': 'Interrompre l\'agent',
-      'action.accept': 'Accepter le diff et les livrables',
-      'action.ship': 'Pousser et livrer',
+      'action.ship': 'Livrer',
       'action.shipConfirm': 'Confirmer le push ?',
       'action.reopen': 'Rouvrir la tâche',
       'action.pr': 'Ouvrir la PR',
@@ -92,10 +90,11 @@
       'chat.you': 'Vous',
       'chat.placeholder': 'Répondre à {name}…',
       'chat.send': 'Envoyer ⏎',
+      'chat.shippedBranch': 'Livré : branche {branch} poussée',
       'conversation.empty': 'Aucun message pour l\'instant.',
       'diff.empty': 'Aucune modification.',
       'detail.diff.pushButton': 'Push',
-      'detail.diff.pushDisabledTooltip': 'Disponible une fois prêt à livrer',
+      'detail.diff.pushDisabledTooltip': 'Disponible une fois la tâche à relire',
       'detail.diff.prDisabledTooltip': 'Disponible une fois livré',
       'deliverables.code': 'Code',
       'deliverables.docs': 'Documents',
@@ -261,17 +260,15 @@
       'work.emptyFiltered': 'No tasks match this filter.',
       'filter.all': 'All {n}',
       'filter.review': 'To review {n}',
-      'filter.ready': 'Ready to ship {n}',
       'filter.finished': 'Completed {n}',
       'badge.new': 'NEW',
-      'workflow.step.review': 'To review',
-      'workflow.step.accepted': 'Accepted',
-      'workflow.step.shipped': 'Shipped',
-      'workflow.doneBanner': 'Task completed',
-      'workflow.cancelledBanner': 'Task cancelled',
+      'status.running': 'In progress',
+      'status.review': 'To review',
+      'status.shipped': 'Shipped',
+      'status.done': 'Completed',
+      'status.cancelled': 'Cancelled',
       'action.interrupt': 'Stop the agent',
-      'action.accept': 'Accept the diff and deliverables',
-      'action.ship': 'Push and ship',
+      'action.ship': 'Ship',
       'action.shipConfirm': 'Confirm push?',
       'action.reopen': 'Reopen the task',
       'action.pr': 'Open the PR',
@@ -285,10 +282,11 @@
       'chat.you': 'You',
       'chat.placeholder': 'Reply to {name}…',
       'chat.send': 'Send ⏎',
+      'chat.shippedBranch': 'Shipped: branch {branch} pushed',
       'conversation.empty': 'No messages yet.',
       'diff.empty': 'No changes.',
       'detail.diff.pushButton': 'Push',
-      'detail.diff.pushDisabledTooltip': 'Available once ready to ship',
+      'detail.diff.pushDisabledTooltip': 'Available once the task is in review',
       'detail.diff.prDisabledTooltip': 'Available once shipped',
       'deliverables.code': 'Code',
       'deliverables.docs': 'Documents',
@@ -429,7 +427,6 @@
   var STATUS_GLYPH = {
     running: { icon: '◐', color: '#8b8982' },
     review: { icon: '◍', color: '#9a6b0d' },
-    ready: { icon: '⬆', color: '#2f5fb0' },
     shipped: { icon: '✓', color: '#2f7d54' },
     done: { icon: '✓', color: '#2f7d54' },
     cancelled: { icon: '⊘', color: '#8b8982' }
@@ -451,6 +448,7 @@
     messagesByTask: {}, diffByTask: {}, deliverablesByTask: {},
     activeDiffFile: {},
     detailErrorByTask: {},
+    shipBranchUrlByTask: {}, // conservé côté client depuis la réponse du ship (non persisté serveur)
     loading: {},
     screen: 'inbox', // 'inbox' | 'projects' | 'kanban' | 'work'
     projectId: null, cardId: null, taskId: null,
@@ -1091,13 +1089,12 @@
     return t.status === filter;
   }
 
-  function buildTaskListShell(tasksAll, opts) {
+  function buildTaskListPaneInnerHTML(tasksAll, opts) {
     var counts = tasksAll.reduce(function (acc, t) { acc[t.status] = (acc[t.status] || 0) + 1; return acc; }, {});
     var finishedCount = (counts.shipped || 0) + (counts.done || 0) + (counts.cancelled || 0);
     var filters = [
       { key: 'all', label: t('filter.all', { n: tasksAll.length }) },
       { key: 'review', label: t('filter.review', { n: counts.review || 0 }) },
-      { key: 'ready', label: t('filter.ready', { n: counts.ready || 0 }) },
       { key: 'finished', label: t('filter.finished', { n: finishedCount }) }
     ];
     var filterHTML = filters.map(function (f) {
@@ -1118,27 +1115,61 @@
     } else {
       rowsHTML = '<div class="empty-state">' + escapeHtml(t('work.emptyFiltered')) + '</div>';
     }
+    return '<div class="filter-pills">' + filterHTML + '</div>' + '<div class="task-list">' + rowsHTML + '</div>';
+  }
+
+  function buildTaskListShell(tasksAll, opts) {
+    var paneInnerHTML = buildTaskListPaneInnerHTML(tasksAll, opts);
     var task = state.taskId ? state.tasksById[state.taskId] : null;
     var panelHTML = task ? buildDetailPanelHTML(task) : '';
     return buildHeaderHTML() + '<div class="view-body work-body ' + (task ? 'has-panel' : '') + '" style="padding:0;">' +
-      '<div class="task-list-pane"><div class="filter-pills">' + filterHTML + '</div>' +
-      '<div class="task-list">' + rowsHTML + '</div></div>' +
+      '<div class="task-list-pane">' + paneInnerHTML + '</div>' +
       panelHTML +
       '</div>';
   }
 
+  // Contexte de liste courant (carte ou boîte de réception), utilisé à la fois
+  // par le rendu complet et par le rafraîchissement ciblé sur événement SSE.
+  function currentTaskListContext() {
+    if (state.cardId) {
+      return {
+        tasksAll: state.tasks.filter(function (t) { return t.cardId === state.cardId; }),
+        opts: {
+          showProject: false,
+          emptyMsg: t('work.emptyCard'),
+          emptyCta: { action: 'open-new-task', label: t('work.emptyCardAction') }
+        }
+      };
+    }
+    if (state.screen === 'inbox') {
+      return {
+        tasksAll: state.tasks.filter(function (t) { return t.unread || t.status === 'review'; }),
+        opts: { showProject: true, emptyMsg: t('inbox.empty') }
+      };
+    }
+    return null;
+  }
+
   function buildWorkHTML() {
-    var tasksAll = state.tasks.filter(function (t) { return t.cardId === state.cardId; });
-    return buildTaskListShell(tasksAll, {
-      showProject: false,
-      emptyMsg: t('work.emptyCard'),
-      emptyCta: { action: 'open-new-task', label: t('work.emptyCardAction') }
-    });
+    var ctx = currentTaskListContext();
+    return buildTaskListShell(ctx.tasksAll, ctx.opts);
   }
 
   function buildInboxHTML() {
-    var tasksAll = state.tasks.filter(function (t) { return t.unread || t.status === 'review'; });
-    return buildTaskListShell(tasksAll, { showProject: true, emptyMsg: t('inbox.empty') });
+    var ctx = currentTaskListContext();
+    return buildTaskListShell(ctx.tasksAll, ctx.opts);
+  }
+
+  // Rafraîchit uniquement les pilules de filtre + la liste de tâches (pas le
+  // panneau de détail, jamais le conteneur des messages) : utilisé par les
+  // gestionnaires SSE task pour éviter un rendu complet.
+  function refreshTaskListAndFilters() {
+    var ctx = currentTaskListContext();
+    if (!ctx) return false;
+    var pane = document.querySelector('.task-list-pane');
+    if (!pane) return false;
+    pane.innerHTML = buildTaskListPaneInnerHTML(ctx.tasksAll, ctx.opts);
+    return true;
   }
 
   // ---------------------------------------------------------------------
@@ -1149,9 +1180,7 @@
     switch (task.status) {
       case 'running':
         return { label: t('action.interrupt'), cls: 'btn-neutral', action: 'interrupt', kind: 'plain' };
-      case 'review':
-        return { label: t('action.accept'), cls: 'btn-green', action: 'accept', kind: 'plain' };
-      case 'ready': {
+      case 'review': {
         var key = 'ship:' + task.id;
         var pending = isPendingConfirm(key);
         return {
@@ -1161,7 +1190,6 @@
         };
       }
       case 'shipped':
-        return { label: t('action.reopen'), cls: 'btn-neutral', action: 'reopen', kind: 'plain' };
       case 'done':
       case 'cancelled':
         return { label: t('action.reopen'), cls: 'btn-neutral', action: 'reopen', kind: 'plain' };
@@ -1170,29 +1198,11 @@
     }
   }
 
-  function buildWorkflowHTML(status) {
-    if (status === 'done' || status === 'cancelled') {
-      var bannerLabel = status === 'done' ? t('workflow.doneBanner') : t('workflow.cancelledBanner');
-      return '<div class="workflow-banner">' + escapeHtml(bannerLabel) + '</div>';
-    }
-    var order = { running: 0, review: 0, ready: 1, shipped: 2 };
-    var steps = [
-      { label: t('workflow.step.review') },
-      { label: t('workflow.step.accepted') },
-      { label: t('workflow.step.shipped') }
-    ];
-    var cur = order[status] !== undefined ? order[status] : 0;
-    var html = '<div class="workflow">';
-    steps.forEach(function (s, i) {
-      var done = i <= cur;
-      var isCur = i === cur;
-      var barClass = !done ? 'wf-bar-todo' : (isCur ? 'wf-bar-current' : 'wf-bar-done');
-      var lblClass = done ? 'wf-label-done' : '';
-      html += '<div class="wf-step"><span class="wf-bar ' + barClass + '"></span>' +
-        '<span class="wf-label ' + lblClass + ' ' + (isCur ? 'wf-current' : '') + '">' + escapeHtml(s.label) + '</span></div>';
-    });
-    html += '</div>';
-    return html;
+  function buildStatusBadgeHTML(status) {
+    var glyph = STATUS_GLYPH[status] || STATUS_GLYPH.running;
+    var label = t('status.' + status);
+    return '<div class="status-badge"><span class="status-badge-icon" style="color:' + glyph.color + '">' + glyph.icon + '</span>' +
+      '<span class="status-badge-label">' + escapeHtml(label) + '</span></div>';
   }
 
   function renderChecks(checks) {
@@ -1260,11 +1270,10 @@
     });
   }
 
-  function buildDetailPanelHTML(task) {
+  function buildDetailHeadHTML(task) {
     var agent = state.agentsById[task.agentId] || { emoji: '?', name: '?', model: '?', color: '#ccc' };
     var glyph = STATUS_GLYPH[task.status] || STATUS_GLYPH.running;
     var soft = softColor(agent.color);
-    var err = state.detailErrorByTask[task.id];
     var taskProject = state.projectsById[task.projectId];
     var multiRepo = !!(taskProject && taskProject.repos && taskProject.repos.length > 1);
     var action = primaryActionInfo(task);
@@ -1281,11 +1290,6 @@
         (isNew ? '<span class="tab-dot"></span>' : '') + '</button>';
     }).join('');
 
-    var bodyHTML = '';
-    if (state.panelTab === 'chat') bodyHTML = buildConversationHTML(task, agent);
-    else if (state.panelTab === 'diff') bodyHTML = buildDiffHTML(task);
-    else if (state.panelTab === 'files') bodyHTML = buildDeliverablesHTML(task);
-
     var primaryBtnHTML;
     if (action.kind === 'confirm') {
       primaryBtnHTML = '<button id="task-primary-action" class="btn-action ' + action.cls + '" data-action="confirm-click" data-confirm-key="' + action.confirmKey + '" data-confirm-action="' + action.confirmAction + '" data-confirm-id="' + task.id + '" data-default-label="' + escapeHtml(action.defaultLabel) + '" data-confirm-label="' + escapeHtml(action.confirmLabel) + '">' + escapeHtml(action.label) + '</button>';
@@ -1293,8 +1297,8 @@
       primaryBtnHTML = '<button id="task-primary-action" class="btn-action ' + action.cls + '" data-action="' + action.action + '" data-task-id="' + task.id + '">' + escapeHtml(action.label) + '</button>';
     }
 
-    var showFinishLink = task.status === 'review' || task.status === 'ready' || task.status === 'shipped';
-    var showCancelLink = task.status === 'running' || task.status === 'review' || task.status === 'ready';
+    var showFinishLink = task.status === 'review' || task.status === 'shipped';
+    var showCancelLink = task.status === 'running' || task.status === 'review';
     var linksRow = '';
     if (showFinishLink || showCancelLink) {
       var cancelKey = 'task-cancel:' + task.id;
@@ -1316,9 +1320,7 @@
         '</div>';
     }
 
-    return '<aside class="detail-panel">' +
-      (err ? '<div class="detail-error">' + escapeHtml(err) + '</div>' : '') +
-      '<div class="detail-head">' +
+    return '<div class="detail-head">' +
         '<div class="detail-head-row">' +
           '<span class="task-glyph" style="color:' + glyph.color + '">' + glyph.icon + '</span>' +
           '<div class="detail-head-main">' +
@@ -1333,16 +1335,62 @@
           '<button class="icon-btn" data-action="close-panel" aria-label="' + escapeHtml(t('common.close')) + '">✕</button>' +
         '</div>' +
         '<div class="detail-tokens" id="detail-token-line">' + tokenSummary(task.tokens) + '</div>' +
-        buildWorkflowHTML(task.status) +
+        buildStatusBadgeHTML(task.status) +
         '<div class="action-row">' + primaryBtnHTML +
           '<span class="checks">' + renderChecks(task.checks) + '</span>' +
         '</div>' +
         linksRow +
         prRow +
         '<div class="tabs">' + tabsHTML + '</div>' +
-      '</div>' +
+      '</div>';
+  }
+
+  function buildDetailPanelHTML(task) {
+    var agent = state.agentsById[task.agentId] || { emoji: '?', name: '?', model: '?', color: '#ccc' };
+    var err = state.detailErrorByTask[task.id];
+    var bodyHTML = '';
+    if (state.panelTab === 'chat') bodyHTML = buildConversationHTML(task, agent);
+    else if (state.panelTab === 'diff') bodyHTML = buildDiffHTML(task);
+    else if (state.panelTab === 'files') bodyHTML = buildDeliverablesHTML(task);
+
+    return '<aside class="detail-panel">' +
+      (err ? '<div class="detail-error">' + escapeHtml(err) + '</div>' : '') +
+      buildDetailHeadHTML(task) +
       '<div class="tab-body">' + bodyHTML + '</div>' +
       '</aside>';
+  }
+
+  // Rafraîchit uniquement l'en-tête du détail (glyphe, badge de statut,
+  // bouton d'action, compteurs d'onglets...) sans toucher à .tab-body ni au
+  // conteneur des messages, qui restent des frères du même parent.
+  function patchDetailHead(taskId) {
+    var task = state.tasksById[taskId];
+    var headEl = document.querySelector('.detail-panel .detail-head');
+    if (!task || !headEl) return false;
+    var wrapper = document.createElement('div');
+    wrapper.innerHTML = buildDetailHeadHTML(task);
+    var newHead = wrapper.firstElementChild;
+    if (newHead) headEl.replaceWith(newHead);
+    return true;
+  }
+
+  // Rafraîchit la ligne d'activité live d'une seule ligne de la liste de
+  // tâches, sans reconstruire la liste ni toucher au panneau de détail.
+  function patchTaskRowLiveLine(taskId, line, task) {
+    var row = document.querySelector('.task-row[data-task-id="' + taskId + '"]');
+    if (!row) return false;
+    var metaLine = row.querySelector('.task-meta-line');
+    if (!metaLine) return false;
+    var existing = metaLine.querySelector('.live-line');
+    var showLive = !!(task && task.status === 'running' && line);
+    if (showLive) {
+      var html = '<span class="live-line mono"><span class="live-dot"></span>' + escapeHtml(line) + '</span>';
+      if (existing) existing.outerHTML = html;
+      else metaLine.insertAdjacentHTML('beforeend', html);
+    } else if (existing) {
+      existing.remove();
+    }
+    return true;
   }
 
   // ---------------------------------------------------------------------
@@ -1354,12 +1402,26 @@
     return m ? m[1] : null;
   }
 
+  function parseShipMarker(text) {
+    var m = /^\[shipped:([^\]]+)\]$/.exec(String(text || '').trim());
+    return m ? m[1] : null;
+  }
+
   function buildMessageHTML(m, agent) {
     var reassignedAgentId = parseReassignMarker(m.text);
     if (reassignedAgentId) {
       var targetAgent = state.agentsById[reassignedAgentId];
       var targetName = targetAgent ? targetAgent.name : reassignedAgentId;
       return '<div class="msg-system">' + escapeHtml(t('chat.reassignedTo', { name: targetName })) + '</div>';
+    }
+    var shippedBranch = parseShipMarker(m.text);
+    if (shippedBranch) {
+      var branchUrl = state.shipBranchUrlByTask[m.taskId];
+      var shippedLabel = t('chat.shippedBranch', { branch: shippedBranch });
+      if (branchUrl) {
+        return '<div class="msg-system"><a href="' + escapeHtml(branchUrl) + '" target="_blank" rel="noopener">' + escapeHtml(shippedLabel) + '</a></div>';
+      }
+      return '<div class="msg-system">' + escapeHtml(shippedLabel) + '</div>';
     }
     var isUser = m.author === 'user';
     var emoji = isUser ? '🙂' : (agent.emoji || '');
@@ -1410,6 +1472,47 @@
     if (el) el.scrollTop = el.scrollHeight;
   }
 
+  // ---------------------------------------------------------------------
+  // Confort de conversation : rendu incrémental (jamais de reconstruction
+  // du fil pour un simple événement SSE ; voir onMessageEvent/onTaskEvent/
+  // onActivityEvent plus bas).
+  // ---------------------------------------------------------------------
+
+  function isScrolledToBottom(el) {
+    return (el.scrollHeight - el.scrollTop - el.clientHeight) < 32;
+  }
+
+  function isSelectionActiveIn(container) {
+    var sel = window.getSelection();
+    if (!sel || sel.isCollapsed || sel.rangeCount === 0) return false;
+    try {
+      var range = sel.getRangeAt(0);
+      return container.contains(range.commonAncestorContainer);
+    } catch (e) {
+      return false;
+    }
+  }
+
+  // Ajoute un seul message au fil sans jamais reconstruire le conteneur :
+  // le seul cas où le fil est touché pour un événement SSE. L'auto-scroll
+  // (mutation non essentielle) est sauté si l'utilisateur est en train de
+  // sélectionner du texte dans le fil, ou s'il n'était pas déjà en bas.
+  function appendMessageToConversationDOM(m) {
+    var container = document.getElementById('conversation-list');
+    if (!container) return;
+    var emptyNote = container.querySelector('.empty-note');
+    if (emptyNote) emptyNote.remove();
+    var selecting = isSelectionActiveIn(container);
+    var wasAtBottom = !selecting && isScrolledToBottom(container);
+    var task = state.tasksById[m.taskId];
+    var agent = (task && state.agentsById[task.agentId]) || { emoji: '', name: '', model: '', color: '#ccc' };
+    var wrapper = document.createElement('div');
+    wrapper.innerHTML = buildMessageHTML(m, agent);
+    var node = wrapper.firstElementChild;
+    if (node) container.appendChild(node);
+    if (wasAtBottom) container.scrollTop = container.scrollHeight;
+  }
+
   function sendMessage(taskId) {
     var el = document.getElementById('composer-input');
     if (!el) return;
@@ -1443,6 +1546,28 @@
     });
   }
 
+  function buildDiffFooterHTML(task, diff) {
+    var shipKey = 'ship:' + task.id;
+    var canShip = task.status === 'review';
+    var shipPending = isPendingConfirm(shipKey);
+    var pushDefaultLabel = t('detail.diff.pushButton');
+    var pushLabel = (shipPending && canShip) ? t('action.shipConfirm') : pushDefaultLabel;
+
+    var prKey = 'pr:' + task.id;
+    var canPr = task.status === 'shipped';
+    var prPending = isPendingConfirm(prKey);
+    var prDefaultLabel = t('action.pr');
+    var prLabel = (prPending && canPr) ? t('action.prConfirm') : prDefaultLabel;
+
+    return '<div class="diff-footer">' +
+        '<span class="mono diff-branch">' + escapeHtml(diff.branch || '') + ' → ' + escapeHtml(diff.base || '') + '</span>' +
+        '<button class="btn-outline" ' + (canPr ? '' : ('disabled title="' + escapeHtml(t('detail.diff.prDisabledTooltip')) + '"')) +
+        ' data-action="confirm-click" data-confirm-key="' + prKey + '" data-confirm-action="pr" data-confirm-id="' + task.id + '" data-default-label="' + escapeHtml(prDefaultLabel) + '" data-confirm-label="' + escapeHtml(t('action.prConfirm')) + '">' + escapeHtml(prLabel) + '</button>' +
+        '<button class="btn-green" ' + (canShip ? '' : ('disabled title="' + escapeHtml(t('detail.diff.pushDisabledTooltip')) + '"')) +
+        ' data-action="confirm-click" data-confirm-key="' + shipKey + '" data-confirm-action="ship" data-confirm-id="' + task.id + '" data-default-label="' + escapeHtml(pushDefaultLabel) + '" data-confirm-label="' + escapeHtml(t('action.shipConfirm')) + '">' + escapeHtml(pushLabel) + '</button>' +
+      '</div>';
+  }
+
   function buildDiffHTML(task) {
     var diff = state.diffByTask[task.id];
     if (!diff) {
@@ -1466,27 +1591,22 @@
       return '<div><div class="diff-hunk-header mono">' + escapeHtml(h.header) + '</div>' + lines + '</div>';
     }).join('');
 
-    var shipKey = 'ship:' + task.id;
-    var canShip = task.status === 'ready';
-    var shipPending = isPendingConfirm(shipKey);
-    var pushDefaultLabel = t('detail.diff.pushButton');
-    var pushLabel = (shipPending && canShip) ? t('action.shipConfirm') : pushDefaultLabel;
-
-    var prKey = 'pr:' + task.id;
-    var canPr = task.status === 'shipped';
-    var prPending = isPendingConfirm(prKey);
-    var prDefaultLabel = t('action.pr');
-    var prLabel = (prPending && canPr) ? t('action.prConfirm') : prDefaultLabel;
-
     return '<div class="diff-subtabs">' + fileTabs + '</div>' +
       '<div class="diff-hunks">' + hunks + '</div>' +
-      '<div class="diff-footer">' +
-        '<span class="mono diff-branch">' + escapeHtml(diff.branch || '') + ' → ' + escapeHtml(diff.base || '') + '</span>' +
-        '<button class="btn-outline" ' + (canPr ? '' : ('disabled title="' + escapeHtml(t('detail.diff.prDisabledTooltip')) + '"')) +
-        ' data-action="confirm-click" data-confirm-key="' + prKey + '" data-confirm-action="pr" data-confirm-id="' + task.id + '" data-default-label="' + escapeHtml(prDefaultLabel) + '" data-confirm-label="' + escapeHtml(t('action.prConfirm')) + '">' + escapeHtml(prLabel) + '</button>' +
-        '<button class="btn-green" ' + (canShip ? '' : ('disabled title="' + escapeHtml(t('detail.diff.pushDisabledTooltip')) + '"')) +
-        ' data-action="confirm-click" data-confirm-key="' + shipKey + '" data-confirm-action="ship" data-confirm-id="' + task.id + '" data-default-label="' + escapeHtml(pushDefaultLabel) + '" data-confirm-label="' + escapeHtml(t('action.shipConfirm')) + '">' + escapeHtml(pushLabel) + '</button>' +
-      '</div>';
+      buildDiffFooterHTML(task, diff);
+  }
+
+  function patchDiffFooter(taskId) {
+    var task = state.tasksById[taskId];
+    var diff = state.diffByTask[taskId];
+    if (!task || !diff || !diff.files || diff.files.length === 0) return false;
+    var footerEl = document.querySelector('.diff-footer');
+    if (!footerEl) return false;
+    var wrapper = document.createElement('div');
+    wrapper.innerHTML = buildDiffFooterHTML(task, diff);
+    var newFooter = wrapper.firstElementChild;
+    if (newFooter) footerEl.replaceWith(newFooter);
+    return true;
   }
 
   function selectDiffFile(taskId, path) {
@@ -1554,11 +1674,6 @@
       upsertTask(task); renderMain();
     }).catch(function (e) { if (e instanceof ApiError) showDetailError(taskId, e.message || t('errors.interruptFailed')); });
   }
-  function doAccept(taskId) {
-    api('/api/tasks/' + taskId + '/accept', { method: 'POST' }).then(function (task) {
-      upsertTask(task); renderMain();
-    }).catch(function (e) { if (e instanceof ApiError) showDetailError(taskId, e.message || t('errors.genericFailed')); });
-  }
   function doReopen(taskId) {
     api('/api/tasks/' + taskId + '/reopen', { method: 'POST' }).then(function (task) {
       upsertTask(task); renderMain();
@@ -1567,6 +1682,7 @@
   function doShip(taskId) {
     api('/api/tasks/' + taskId + '/ship', { method: 'POST', body: { confirm: true } }).then(function (res) {
       if (res && res.task) upsertTask(res.task);
+      if (res && res.branchUrl) state.shipBranchUrlByTask[taskId] = res.branchUrl;
       renderMain();
     }).catch(function (e) { if (e instanceof ApiError) showDetailError(taskId, e.message || t('errors.shipFailed')); });
   }
@@ -2372,7 +2488,21 @@
   // Temps réel (SSE)
   // ---------------------------------------------------------------------
 
-  function onTaskEvent(task) { upsertTask(task); render(); }
+  // Ces trois gestionnaires sont le coeur du rendu incrémental (confort de
+  // conversation) : ils ne rappellent JAMAIS renderMain()/render() pour une
+  // tâche déjà ouverte, afin de ne jamais reconstruire le conteneur des
+  // messages. Seuls les éléments concernés sont mis à jour (liste de tâches,
+  // en-tête du détail, pied du diff) ; le fil lui-même ne reçoit qu'un append
+  // de nœud (onMessageEvent) et n'est donc jamais recréé.
+  function onTaskEvent(task) {
+    upsertTask(task);
+    refreshTaskListAndFilters();
+    if (state.taskId === task.id) {
+      patchDetailHead(task.id);
+      if (state.panelTab === 'diff') patchDiffFooter(task.id);
+    }
+    renderSidebar();
+  }
 
   function onMessageEvent(m) {
     if (state.messagesByTask[m.taskId]) {
@@ -2380,17 +2510,14 @@
       if (!exists) state.messagesByTask[m.taskId].push(m);
     }
     if (state.taskId === m.taskId && state.panelTab === 'chat') {
-      renderMain();
-      scrollConversationToBottom();
+      appendMessageToConversationDOM(m);
     }
   }
 
   function onActivityEvent(payload) {
-    var t = state.tasksById[payload.taskId];
-    if (t) t.liveActivity = payload.line;
-    var visibleInList = t && ((state.cardId && t.cardId === state.cardId) || (state.screen === 'inbox' && (t.unread || t.status === 'review')));
-    var visibleInPanel = state.taskId === payload.taskId;
-    if (visibleInList || visibleInPanel) renderMain();
+    var task = state.tasksById[payload.taskId];
+    if (task) task.liveActivity = payload.line;
+    patchTaskRowLiveLine(payload.taskId, payload.line, task);
   }
 
   function onTokensEvent(payload) {
@@ -2529,7 +2656,6 @@
       case 'submit-new-project': submitNewProject(); break;
       case 'submit-new-card': submitNewCard(); break;
       case 'interrupt': doInterrupt(el.getAttribute('data-task-id')); break;
-      case 'accept': doAccept(el.getAttribute('data-task-id')); break;
       case 'reopen': doReopen(el.getAttribute('data-task-id')); break;
       case 'finish-task': doFinish(el.getAttribute('data-task-id')); break;
       case 'confirm-click': handleConfirmClickDispatch(el); break;

@@ -482,7 +482,7 @@ func TestTaskFinishTransitions(t *testing.T) {
 		t.Fatalf("AddCard: %v", err)
 	}
 
-	for _, status := range []string{"review", "ready", "shipped"} {
+	for _, status := range []string{"review", "shipped"} {
 		id := mkTaskWithStatus(t, s, card.ID, project.ID, status)
 		task, err := s.FinishTask(id)
 		if err != nil {
@@ -527,7 +527,7 @@ func TestTaskCancelTransitions(t *testing.T) {
 		t.Fatalf("AddCard: %v", err)
 	}
 
-	for _, status := range []string{"running", "review", "ready"} {
+	for _, status := range []string{"running", "review"} {
 		id := mkTaskWithStatus(t, s, card.ID, project.ID, status)
 		task, err := s.CancelTask(id)
 		if err != nil {
@@ -572,7 +572,7 @@ func TestTaskReopenTransitions(t *testing.T) {
 		}
 	}
 
-	for _, status := range []string{"running", "review", "ready"} {
+	for _, status := range []string{"running", "review"} {
 		id := mkTaskWithStatus(t, s, card.ID, project.ID, status)
 		if _, err := s.ReopenTask(id); err == nil {
 			t.Fatalf("reopen depuis %s devrait être refusé", status)

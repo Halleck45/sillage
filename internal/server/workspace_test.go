@@ -37,6 +37,42 @@ func TestMigrateProjectPathToRepos(t *testing.T) {
 	}
 }
 
+// --- Migration du statut "ready" (supprimé en v0.3.4) vers "review" ---
+
+func TestMigrateReadyStatusToReview(t *testing.T) {
+	dir := t.TempDir()
+	legacy := `{
+  "Projects": {"p1": {"id":"p1","name":"p","repos":[{"name":"p","path":"/tmp/p"}],"unread":0,"tokens":{"input":0,"output":0,"costUsd":0},"checkCmd":""}},
+  "Cards": {"c1": {"id":"c1","projectId":"p1","column":"doing","title":"Carte"}},
+  "Tasks": {
+    "t1": {"id":"t1","cardId":"c1","projectId":"p1","ref":100,"title":"T","agentId":"echo","branch":"sillage/100-t","status":"ready","base":"main","worktreeDir":"/tmp/wt"},
+    "t2": {"id":"t2","cardId":"c1","projectId":"p1","ref":101,"title":"T2","agentId":"echo","branch":"sillage/101-t2","status":"shipped","base":"main","worktreeDir":"/tmp/wt2"}
+  },
+  "Messages": {}, "Agents": {},
+  "NextProjectN": 1, "NextCardN": 1, "NextTaskN": 2, "NextMessageN": 0, "NextRef": 102
+}`
+	if err := os.WriteFile(filepath.Join(dir, "state.json"), []byte(legacy), 0o644); err != nil {
+		t.Fatalf("écriture state.json legacy impossible : %v", err)
+	}
+
+	s, err := NewStore(dir)
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+	t1, ok := s.GetTask("t1")
+	if !ok {
+		t.Fatalf("tâche t1 introuvable après migration")
+	}
+	if t1.Status != "review" {
+		t.Fatalf("statut migré attendu 'review', reçu %q", t1.Status)
+	}
+	// Les autres statuts ne sont pas affectés par la migration.
+	t2, ok := s.GetTask("t2")
+	if !ok || t2.Status != "shipped" {
+		t.Fatalf("le statut 'shipped' ne devrait pas être modifié par la migration, reçu %+v (ok=%v)", t2, ok)
+	}
+}
+
 // --- Migration de l'espace de travail (workspace absent -> setupDone=true local) ---
 
 func TestMigrateLegacyWorkspaceSetupDoneLocal(t *testing.T) {

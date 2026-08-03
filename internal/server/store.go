@@ -77,7 +77,20 @@ func loadStoreFile(dataDir string) (*Store, error) {
 	s.ensureMaps()
 	migrateLegacyRepos(data, s)
 	migrateLegacyWorkspace(data, s)
+	migrateReadyStatus(s)
 	return s, nil
+}
+
+// migrateReadyStatus migre les tâches antérieures à la v0.3.4 : le statut
+// "ready" a disparu (ship est désormais accepté directement depuis review),
+// toute tâche encore "ready" devient "review".
+func migrateReadyStatus(s *Store) {
+	for id, t := range s.Tasks {
+		if t.Status == "ready" {
+			t.Status = "review"
+			s.Tasks[id] = t
+		}
+	}
 }
 
 // migrateLegacyRepos migre les projets antérieurs à la v0.3 (champ "path"
@@ -881,15 +894,16 @@ func (s *Store) UpdateTask(id string, fn func(t *Task)) (Task, error) {
 	return s.Tasks[id], nil
 }
 
-// FinishTask marque une tâche "done". Autorisé depuis review/ready/shipped ;
-// message dédié depuis "running" (l'agent tourne encore).
+// FinishTask marque une tâche "done". Autorisé depuis review/shipped ;
+// message dédié depuis "running" (l'agent tourne encore). Le statut "ready"
+// a disparu (v0.3.4) : ship est désormais accepté directement depuis review.
 func (s *Store) FinishTask(id string) (Task, error) {
 	t, ok := s.GetTask(id)
 	if !ok {
 		return Task{}, fmt.Errorf("task not found")
 	}
 	switch t.Status {
-	case "review", "ready", "shipped":
+	case "review", "shipped":
 	case "running":
 		return Task{}, fmt.Errorf("task must be reviewed before finishing")
 	default:
@@ -898,7 +912,7 @@ func (s *Store) FinishTask(id string) (Task, error) {
 	return s.UpdateTask(id, func(t *Task) { t.Status = "done" })
 }
 
-// CancelTask marque une tâche "cancelled". Autorisé depuis running/review/ready.
+// CancelTask marque une tâche "cancelled". Autorisé depuis running/review.
 // N'interrompt PAS l'agent : c'est la responsabilité de l'appelant pour une
 // tâche "running" (voir Runner.Cancel, qui interrompt le process puis appelle
 // CancelTask).
@@ -908,7 +922,7 @@ func (s *Store) CancelTask(id string) (Task, error) {
 		return Task{}, fmt.Errorf("task not found")
 	}
 	switch t.Status {
-	case "running", "review", "ready":
+	case "running", "review":
 	default:
 		return Task{}, fmt.Errorf("task cannot be cancelled from its current status")
 	}
