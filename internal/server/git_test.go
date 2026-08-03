@@ -847,6 +847,10 @@ func TestMergeAndPushRefusesWhenRemoteDiverged(t *testing.T) {
 	other := t.TempDir()
 	runTestGit(t, other, "clone", f.repo, other)
 	runTestGit(t, other, "remote", "set-url", "origin", f.bare)
+	// Un clone n'hérite pas de l'identité git : sans elle, commit échoue sur une
+	// machine sans configuration globale (la CI, typiquement).
+	runTestGit(t, other, "config", "user.email", "test@example.com")
+	runTestGit(t, other, "config", "user.name", "Test")
 	if err := os.WriteFile(filepath.Join(other, "ailleurs.txt"), []byte("remote\n"), 0o644); err != nil {
 		t.Fatalf("écriture ailleurs.txt impossible : %v", err)
 	}
