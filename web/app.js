@@ -53,25 +53,32 @@
       'column.done': 'Terminé',
       'cardMenu.moveTo': 'Déplacer vers {column}',
       'project.editTooltip': 'Modifier le projet',
-      'project.editTitle': 'Projet',
-      'project.sectionGeneral': 'Général',
-      'project.sectionDelivery': 'Livraison',
-      'project.sectionAgent': 'Agent',
+      'project.editTitle': 'Réglages du projet',
+      'project.tabGeneral': 'Général',
+      'project.tabRepos': 'Dépôts',
+      'project.tabInstructions': 'Instructions',
+      'project.tabDelivery': 'Livraison',
+      'project.tabLinks': 'Liens',
+      'project.tabDanger': 'Supprimer',
       'project.name': 'Nom',
+      'project.baseBranch': 'Branche de base',
+      'project.baseBranchHint': 'Les chantiers partent de cette branche et y retournent à la livraison. Vide : branche par défaut du dépôt.',
       'project.checkCmd': 'Commande de vérification',
-      'project.reposLabel': 'Dépôts',
       'project.reposHint': 'Chemins locaux des dépôts git de ce projet.',
       'project.repoNamePlaceholder': 'Nom du dépôt',
+      'project.repoName': 'Nom',
+      'project.repoPath': 'Chemin',
       'project.addRepo': '+ dépôt',
       'project.removeRepo': 'Retirer',
       'project.errorNameRequired': 'Le nom est requis.',
       'project.errorReposRequired': 'Au moins un dépôt est requis.',
       'project.errorSaveFailed': 'Erreur lors de l\'enregistrement.',
-      'project.dangerZone': 'Zone dangereuse',
       'project.delete': 'Supprimer le projet',
       'project.deleteConfirm': 'Confirmer la suppression ?',
       'project.deleteSubtext': 'Supprime aussi {cards} chantiers et {tasks} tâches.',
-      'project.linksLabel': 'Liens épinglés',
+      'project.deleteWarning': 'Les worktrees et les branches déjà créés ne sont pas touchés, mais le projet disparaît de Sillage. Sans retour possible.',
+      'project.unsaved': 'Modifications non enregistrées',
+      'project.linksHint': 'Raccourcis affichés sur la page du projet, 12 au plus.',
       'project.addLink': '+ lien',
       'project.linksEmpty': 'Aucun lien épinglé.',
       'project.linksInvalidUrl': 'Utilisez une URL http(s).',
@@ -80,6 +87,7 @@
       'project.descriptionPlaceholder': 'Une phrase pour situer le projet',
       'project.contextPrompt': 'Contexte pour les agents',
       'project.contextPromptPlaceholder': 'Conventions, architecture, contraintes à connaître…',
+      'project.instructionsHint': 'Transmis à chaque agent du projet, en plus du contexte du chantier.',
       'work.emptyCard': 'Aucune tâche pour l\'instant.',
       'work.emptyCardAction': 'Créer la première tâche',
       'work.emptyFiltered': 'Aucune tâche ne correspond à ce filtre.',
@@ -154,18 +162,15 @@
       'ship.pushedBranch': 'Branche {branch} poussée',
       'ship.errorFailed': 'Échec de la livraison.',
       'delivery.label': 'Livrer veut dire',
-      'delivery.modeAuto': 'Détecter d\'après le dépôt',
-      'delivery.modePr': 'Ouvrir une pull request (GitHub ou GitLab)',
-      'delivery.modePush': 'Pousser la branche du chantier, sans pull request',
-      'delivery.modeMerge': 'Fusionner dans la branche cible, en local',
-      'delivery.modeMergePush': 'Fusionner dans la branche cible et la pousser',
-      'delivery.targetLabel': 'Branche de destination',
+      'delivery.modePr': 'Ouvrir une pull request',
+      'delivery.modePush': 'Pousser la branche',
+      'delivery.modeMerge': 'Fusionner en local',
+      'delivery.modeMergePush': 'Fusionner puis pousser',
       'delivery.targetPlaceholder': 'branche par défaut du dépôt',
       'delivery.mergeNote': 'Fusion locale en fast-forward uniquement : Sillage ne pousse jamais cette branche.',
       'delivery.mergePushNote': 'La branche cible est d\'abord rattrapée depuis origin, fusionnée en fast-forward, puis poussée. Jamais de force.',
       'delivery.prNote': 'La branche du chantier est poussée, puis la pull request (ou merge request) est ouverte.',
       'delivery.pushNote': 'La branche du chantier est poussée sur origin. Rien n\'est ouvert, rien n\'est fusionné.',
-      'delivery.autoNote': 'Sillage choisira d\'après le remote des dépôts, à la création du projet.',
       'delivery.warning.ghMissing': 'gh introuvable dans le PATH : repli sur une URL de pull request pré-remplie.',
       'delivery.warning.glabMissing': 'glab introuvable dans le PATH : repli sur une URL de merge request pré-remplie.',
       'delivery.warning.noRemote': 'Un dépôt du projet n\'a pas de remote « origin » : rien ne peut être poussé.',
@@ -221,10 +226,10 @@
       'shortcuts.searchOpen': 'Ouvrir le résultat',
       'shortcuts.sendMessage': 'Envoyer le message',
       'newProject.title': 'Nouveau projet',
-      'newProject.nameLabel': 'Nom',
-      'newProject.namePlaceholder': 'mon-projet',
+      'newProject.pathLabel': 'Chemin d\'un dépôt git',
       'newProject.pathPlaceholder': '/home/utilisateur/projets/mon-projet',
-      'newProject.errorRequired': 'Nom et au moins un dépôt sont requis.',
+      'newProject.hint': 'Le nom du projet et le mode de livraison en sont déduits. Tout le reste s\'ajuste ensuite dans les réglages.',
+      'newProject.errorPathRequired': 'Le chemin d\'un dépôt git est requis.',
       'newProject.errorCreateFailed': 'Erreur lors de la création du projet.',
       'newCard.title': 'Nouveau chantier',
       'newCard.titleLabel': 'Titre du chantier',
@@ -365,25 +370,32 @@
       'column.done': 'Done',
       'cardMenu.moveTo': 'Move to {column}',
       'project.editTooltip': 'Edit project',
-      'project.editTitle': 'Project',
-      'project.sectionGeneral': 'General',
-      'project.sectionDelivery': 'Delivery',
-      'project.sectionAgent': 'Agent',
+      'project.editTitle': 'Project settings',
+      'project.tabGeneral': 'General',
+      'project.tabRepos': 'Repositories',
+      'project.tabInstructions': 'Instructions',
+      'project.tabDelivery': 'Delivery',
+      'project.tabLinks': 'Links',
+      'project.tabDanger': 'Delete',
       'project.name': 'Name',
+      'project.baseBranch': 'Base branch',
+      'project.baseBranchHint': 'Workstreams branch off this branch and ship back into it. Empty: the repository default branch.',
       'project.checkCmd': 'Check command',
-      'project.reposLabel': 'Repositories',
       'project.reposHint': 'Local paths of this project\'s git repositories.',
       'project.repoNamePlaceholder': 'Repository name',
+      'project.repoName': 'Name',
+      'project.repoPath': 'Path',
       'project.addRepo': '+ repo',
       'project.removeRepo': 'Remove',
       'project.errorNameRequired': 'Name is required.',
       'project.errorReposRequired': 'At least one repository is required.',
       'project.errorSaveFailed': 'Failed to save.',
-      'project.dangerZone': 'Danger zone',
       'project.delete': 'Delete the project',
       'project.deleteConfirm': 'Confirm deletion?',
       'project.deleteSubtext': 'Also deletes {cards} workstreams and {tasks} tasks.',
-      'project.linksLabel': 'Pinned links',
+      'project.deleteWarning': 'Existing worktrees and branches are left untouched, but the project disappears from Sillage. This cannot be undone.',
+      'project.unsaved': 'Unsaved changes',
+      'project.linksHint': 'Shortcuts shown on the project page, 12 at most.',
       'project.addLink': '+ link',
       'project.linksEmpty': 'No pinned links.',
       'project.linksInvalidUrl': 'Use an http(s) URL.',
@@ -392,6 +404,7 @@
       'project.descriptionPlaceholder': 'A sentence describing the project',
       'project.contextPrompt': 'Context for agents',
       'project.contextPromptPlaceholder': 'Conventions, architecture, constraints to know…',
+      'project.instructionsHint': 'Passed to every agent of the project, on top of the workstream context.',
       'work.emptyCard': 'No tasks yet.',
       'work.emptyCardAction': 'Create the first task',
       'work.emptyFiltered': 'No tasks match this filter.',
@@ -466,18 +479,15 @@
       'ship.pushedBranch': 'Branch {branch} pushed',
       'ship.errorFailed': 'Failed to ship.',
       'delivery.label': 'Shipping means',
-      'delivery.modeAuto': 'Detect from the repository',
-      'delivery.modePr': 'Open a pull request (GitHub or GitLab)',
-      'delivery.modePush': 'Push the workstream branch, without a pull request',
-      'delivery.modeMerge': 'Merge into the target branch, locally',
-      'delivery.modeMergePush': 'Merge into the target branch and push it',
-      'delivery.targetLabel': 'Target branch',
+      'delivery.modePr': 'Open a pull request',
+      'delivery.modePush': 'Push the branch',
+      'delivery.modeMerge': 'Merge locally',
+      'delivery.modeMergePush': 'Merge, then push',
       'delivery.targetPlaceholder': 'repository default branch',
       'delivery.mergeNote': 'Local fast-forward merge only: Sillage never pushes that branch.',
       'delivery.mergePushNote': 'The target branch is first caught up from origin, fast-forwarded, then pushed. Never forced.',
       'delivery.prNote': 'The workstream branch is pushed, then the pull request (or merge request) is opened.',
       'delivery.pushNote': 'The workstream branch is pushed to origin. Nothing is opened, nothing is merged.',
-      'delivery.autoNote': 'Sillage will pick from the repository remotes, when the project is created.',
       'delivery.warning.ghMissing': 'gh not found in PATH: falling back to a prefilled pull request URL.',
       'delivery.warning.glabMissing': 'glab not found in PATH: falling back to a prefilled merge request URL.',
       'delivery.warning.noRemote': 'One repository has no "origin" remote: nothing can be pushed.',
@@ -533,10 +543,10 @@
       'shortcuts.searchOpen': 'Open the result',
       'shortcuts.sendMessage': 'Send the message',
       'newProject.title': 'New project',
-      'newProject.nameLabel': 'Name',
-      'newProject.namePlaceholder': 'my-project',
+      'newProject.pathLabel': 'Path to a git repository',
       'newProject.pathPlaceholder': '/home/user/projects/my-project',
-      'newProject.errorRequired': 'Name and at least one repository are required.',
+      'newProject.hint': 'The project name and delivery mode are derived from it. Everything else is adjusted later, in the settings.',
+      'newProject.errorPathRequired': 'The path to a git repository is required.',
       'newProject.errorCreateFailed': 'Failed to create the project.',
       'newCard.title': 'New workstream',
       'newCard.titleLabel': 'Workstream title',
@@ -704,9 +714,14 @@
   };
 
   var modalAgentId = null;
-  var modalRepos = []; // [{name, path}] pour la modale projet (création/édition)
-  var modalLinks = []; // [{url, title}] liens épinglés, modale d'édition de projet
-  var modalRepoCreateMode = true;
+  var modalRepos = []; // [{name, path}] pour les onglets de la modale de projet
+  var modalLinks = []; // [{url, title}] liens épinglés, modale de projet
+  // Onglet actif et brouillon des champs simples de la modale de projet. Les
+  // panneaux se rendent un par un : sans ce brouillon, changer d'onglet
+  // perdrait ce qui vient d'être saisi dans le panneau qu'on quitte.
+  var projectModalTab = 'general';
+  var projectDraft = null; // {name, description, target, contextPrompt, checkCmd, mode} ou null
+  var projectDraftDirty = false;
   var searchIndex = 0; // résultat de recherche actif (navigation aux flèches)
   var onboardingExpanded = null;
   var settingsModalTab = 'general'; // 'general' | 'stats'
@@ -938,6 +953,10 @@
     return Object.keys(ids).map(function (id) { return state.agentsById[id]; }).filter(Boolean);
   }
 
+  function projectHasRunningTask(pid) {
+    return state.tasks.some(function (t) { return t.projectId === pid && t.status === 'running'; });
+  }
+
   // ---------------------------------------------------------------------
   // Confirmation en deux temps (générique : ship, PR, suppressions)
   // ---------------------------------------------------------------------
@@ -1159,8 +1178,13 @@
     var projectsHTML = state.projects.map(function (p) {
       var active = (state.screen === 'kanban' || state.screen === 'work') && state.projectId === p.id;
       var unread = projectUnread(p.id);
+      // Le fuseau remplace le dièse quand un agent travaille dans le projet :
+      // même repère visuel qu'une tâche en cours, vu de la sidebar.
+      var hashHTML = projectHasRunningTask(p.id)
+        ? '<span class="task-spinner project-item-spinner" title="' + escapeHtml(t('status.running')) + '"></span>'
+        : '<span class="hash">#</span>';
       return '<button class="project-item ' + (active ? 'active' : '') + '" data-action="nav-project" data-project-id="' + p.id + '">' +
-        '<span class="hash">#</span><span class="project-name">' + escapeHtml(p.name) + '</span>' +
+        hashHTML + '<span class="project-name">' + escapeHtml(p.name) + '</span>' +
         (unread ? '<span class="badge-unread">' + unread + '</span>' : '') +
         '</button>';
     }).join('');
@@ -1276,6 +1300,11 @@
     var avatarsHTML = agents.map(function (a) {
       return '<span class="card-avatar" style="background:' + softColor(a.color) + '">' + a.emoji + '</span>';
     }).join('');
+    // Même pastille animée que sur une tâche en cours (task-glyph-running) :
+    // un agent qui tourne dans le chantier se repère sans lire chaque tâche.
+    var runningGlyph = agents.length
+      ? '<span class="task-glyph task-glyph-running" title="' + escapeHtml(t('status.running')) + '"><span class="task-spinner"></span></span>'
+      : '';
     var barColor = colKey === 'done' ? 'var(--green-live)' : 'var(--accent)';
     var liveHTML = c.liveActivity ? '<div class="card-live"><span class="live-dot"></span><span class="live-text mono">' +
       escapeHtml(c.liveActivity) + '</span></div>' : '';
@@ -1287,6 +1316,7 @@
     }).join('');
     return '<article class="kanban-card" data-action="open-card" data-card-id="' + c.id + '">' +
       '<div class="card-top">' +
+        runningGlyph +
         '<h3 class="card-title ' + (colKey === 'done' ? 'card-title-done' : '') + '">' + escapeHtml(c.title) + '</h3>' +
         '<div class="card-avatars">' + avatarsHTML + '</div>' +
         '<button class="card-menu-btn" data-action="toggle-card-menu" data-card-id="' + c.id + '">⋯</button>' +
@@ -1838,7 +1868,8 @@
     }).join('');
     // La règle du mode choisi est répétée dans le récapitulatif : ce panneau
     // est la confirmation, il doit dire ce qui va sortir de la machine.
-    var mergeNote = '<div class="modal-note">' + escapeHtml(deliveryModeNote(prev.mode)) + '</div>';
+    var modeNote = deliveryModeNote(prev.mode);
+    var mergeNote = modeNote ? '<div class="modal-note">' + escapeHtml(modeNote) + '</div>' : '';
     return '<div class="modal modal-sm">' +
       '<div class="modal-head"><span class="modal-title">' + escapeHtml(t('ship.modalTitle')) + '</span>' +
       '<button class="icon-btn" data-action="close-modal" aria-label="' + escapeHtml(t('common.close')) + '">✕</button></div>' +
@@ -2915,18 +2946,11 @@
     });
   }
 
-  // Dépôts de projet (lignes éditables, réutilisées par les modales
-  // Nouveau projet et Projet). En création avec un seul dépôt, seul le champ
-  // chemin est visible (le nom est déduit du basename côté serveur) ; dès
-  // qu'il y a plusieurs dépôts (ou en édition), chaque ligne affiche nom + chemin.
+  // Dépôts de projet (lignes éditables de l'onglet Dépôts). La création de
+  // projet ne passe pas par ici : elle ne demande qu'un chemin (voir
+  // buildNewProjectModalHTML), le nom du dépôt étant déduit côté serveur.
 
   function buildRepoRowsHTML() {
-    var simple = modalRepoCreateMode && modalRepos.length === 1;
-    if (simple) {
-      return '<div class="repo-row repo-row-simple">' +
-        '<input class="modal-input mono repo-row-path" placeholder="' + escapeHtml(t('newProject.pathPlaceholder')) + '" value="' + escapeHtml(modalRepos[0].path) + '">' +
-        '</div>';
-    }
     return modalRepos.map(function (r, i) {
       var canRemove = modalRepos.length > 1;
       return '<div class="repo-row">' +
@@ -2963,9 +2987,19 @@
     modalRepos.splice(index, 1);
     refreshRepoRowsUI();
   }
+  // L'aide ne s'affiche que quand la liste est vide : une fois les chemins
+  // saisis, ils se lisent seuls et la phrase n'est plus que du bruit. Les deux
+  // colonnes portent alors un en-tête, sans quoi une ligne remplie ne dit plus
+  // lequel des deux champs est le nom (les placeholders sont masqués).
   function buildRepoSectionHTML() {
-    return '<div class="modal-section-title">' + escapeHtml(t('project.reposLabel')) + '</div>' +
-      '<div class="modal-section-hint">' + escapeHtml(t('project.reposHint')) + '</div>' +
+    var hasPath = modalRepos.some(function (r) { return (r.path || '').trim(); });
+    var head = hasPath
+      ? '<div class="repo-row repo-row-head">' +
+          '<span class="repo-row-name">' + escapeHtml(t('project.repoName')) + '</span>' +
+          '<span class="repo-row-path">' + escapeHtml(t('project.repoPath')) + '</span>' +
+        '</div>'
+      : '<div class="modal-section-hint">' + escapeHtml(t('project.reposHint')) + '</div>';
+    return head +
       '<div id="repo-rows">' + buildRepoRowsHTML() + '</div>' +
       '<button class="add-repo-link" data-action="add-repo-row">' + escapeHtml(t('project.addRepo')) + '</button>';
   }
@@ -2982,65 +3016,54 @@
       return o;
     });
   }
-  // Réglage de livraison (« ce que Ship veut dire dans ce projet »). À la
-  // création, l'option « détecter » laisse le serveur déduire le mode des
-  // remotes des dépôts : le réglage n'est jamais une question posée à froid.
-  function buildDeliverySectionHTML(project) {
-    var mode = project ? ((project.delivery && project.delivery.mode) || 'pr') : 'auto';
-    var target = project && project.delivery ? (project.delivery.target || '') : '';
-    var options = [];
-    if (!project) options.push({ value: 'auto', label: t('delivery.modeAuto') });
-    options.push({ value: 'pr', label: t('delivery.modePr') });
-    options.push({ value: 'push', label: t('delivery.modePush') });
-    options.push({ value: 'merge', label: t('delivery.modeMerge') });
-    options.push({ value: 'merge-push', label: t('delivery.modeMergePush') });
-    var optionsHTML = options.map(function (o) {
-      return '<option value="' + o.value + '"' + (o.value === mode ? ' selected' : '') + '>' + escapeHtml(o.label) + '</option>';
+  // Réglage de livraison (« ce que Ship veut dire dans ce projet »), présenté en
+  // quatre cartes à cocher : chaque mode porte sa propre phrase de conséquence,
+  // toutes lisibles d'un coup. Un menu déroulant obligeait à changer la
+  // sélection pour découvrir ce que chaque option ferait. La création de projet
+  // ne pose pas la question : le serveur déduit le mode des remotes des dépôts.
+  var DELIVERY_MODES = [
+    { value: 'pr', labelKey: 'delivery.modePr', noteKey: 'delivery.prNote' },
+    { value: 'push', labelKey: 'delivery.modePush', noteKey: 'delivery.pushNote' },
+    { value: 'merge', labelKey: 'delivery.modeMerge', noteKey: 'delivery.mergeNote' },
+    { value: 'merge-push', labelKey: 'delivery.modeMergePush', noteKey: 'delivery.mergePushNote' }
+  ];
+
+  // La phrase de conséquence d'un mode, partagée par les cartes et par le
+  // récapitulatif de livraison (qui est la confirmation de la seule action
+  // sortante du produit).
+  function deliveryModeNote(mode) {
+    for (var i = 0; i < DELIVERY_MODES.length; i++) {
+      if (DELIVERY_MODES[i].value === mode) return t(DELIVERY_MODES[i].noteKey);
+    }
+    return '';
+  }
+
+  function buildDeliveryPanelHTML(project) {
+    var mode = projectDraft ? projectDraft.mode : ((project.delivery && project.delivery.mode) || 'pr');
+    var cards = DELIVERY_MODES.map(function (m) {
+      var checked = m.value === mode;
+      return '<label class="choice-card' + (checked ? ' choice-card-active' : '') + '">' +
+        '<input type="radio" name="project-delivery-mode" value="' + m.value + '"' + (checked ? ' checked' : '') + '>' +
+        '<span class="choice-card-text">' +
+          '<span class="choice-card-title">' + escapeHtml(t(m.labelKey)) + '</span>' +
+          '<span class="choice-card-desc">' + escapeHtml(t(m.noteKey)) + '</span>' +
+        '</span>' +
+        '</label>';
     }).join('');
-    var warning = project && project.deliveryWarning
+    var warning = project.deliveryWarning
       ? '<div class="modal-note modal-note-warning">⚠ ' + escapeHtml(deliveryWarningText(project.deliveryWarning)) + '</div>'
       : '';
-    return '<div class="modal-section-title">' + escapeHtml(t('project.sectionDelivery')) + '</div>' +
-      '<div class="delivery-grid">' +
-        '<div><div class="modal-label">' + escapeHtml(t('delivery.label')) + '</div>' +
-        '<select id="project-delivery-mode" class="modal-input" data-action="delivery-mode-change">' + optionsHTML + '</select></div>' +
-        '<div><div class="modal-label">' + escapeHtml(t('delivery.targetLabel')) + '</div>' +
-        '<input id="project-delivery-target" class="modal-input mono" placeholder="' + escapeHtml(t('delivery.targetPlaceholder')) + '" value="' + escapeHtml(target) + '"></div>' +
-      '</div>' +
-      '<div id="delivery-mode-note" class="modal-note">' + escapeHtml(deliveryModeNote(mode)) + '</div>' +
+    return '<div class="modal-section-hint">' + escapeHtml(t('delivery.label')) + '</div>' +
+      '<div class="choice-cards" role="radiogroup">' + cards + '</div>' +
       warning;
   }
 
-  // La note sous le sélecteur dit ce que fera le mode choisi : elle suit donc
-  // la sélection, sans attendre l'enregistrement.
-  function deliveryModeNote(mode) {
-    if (mode === 'merge') return t('delivery.mergeNote');
-    if (mode === 'merge-push') return t('delivery.mergePushNote');
-    if (mode === 'pr') return t('delivery.prNote');
-    if (mode === 'push') return t('delivery.pushNote');
-    return t('delivery.autoNote');
-  }
-
-  function refreshDeliveryModeNote() {
-    var modeEl = document.getElementById('project-delivery-mode');
-    var noteEl = document.getElementById('delivery-mode-note');
-    if (modeEl && noteEl) noteEl.textContent = deliveryModeNote(modeEl.value);
-  }
-
-  // collectDeliveryForSubmit retourne null quand la détection automatique est
-  // demandée (le champ delivery est alors absent du corps de la requête).
-  function collectDeliveryForSubmit() {
-    var modeEl = document.getElementById('project-delivery-mode');
-    var targetEl = document.getElementById('project-delivery-target');
-    if (!modeEl || modeEl.value === 'auto') return null;
-    return { mode: modeEl.value, target: targetEl ? targetEl.value.trim() : '' };
-  }
-
-  function buildProjectExtraFieldsHTML(project) {
-    return '<div class="modal-label">' + escapeHtml(t('project.description')) + '</div>' +
-      '<input id="project-description" class="modal-input" placeholder="' + escapeHtml(t('project.descriptionPlaceholder')) + '" value="' + escapeHtml(project ? (project.description || '') : '') + '">' +
-      '<div class="modal-label">' + escapeHtml(t('project.contextPrompt')) + '</div>' +
-      '<textarea id="project-context-prompt" class="modal-textarea" rows="3" placeholder="' + escapeHtml(t('project.contextPromptPlaceholder')) + '">' + (project ? escapeHtml(project.contextPrompt || '') : '') + '</textarea>';
+  function refreshDeliveryCards() {
+    var cards = document.querySelectorAll('.choice-cards .choice-card');
+    Array.prototype.forEach.call(cards, function (card) {
+      var input = card.querySelector('input[type="radio"]');
+      card.classList.toggle('choice-card-active', !!(input && input.checked));
+    });
   }
 
   // Liens épinglés (modale d'édition de projet uniquement)
@@ -3092,7 +3115,7 @@
     refreshLinkRowsUI();
   }
   function buildLinksSectionHTML() {
-    return '<div class="modal-section-title">' + escapeHtml(t('project.linksLabel')) + '</div>' +
+    return '<div class="modal-section-hint">' + escapeHtml(t('project.linksHint')) + '</div>' +
       '<div id="link-rows">' + buildLinkRowsHTML() + '</div>' +
       '<div class="link-add-row">' +
         '<input id="new-link-url" class="modal-input mono" placeholder="https://…">' +
@@ -3113,40 +3136,31 @@
     });
   }
 
-  // Nouveau projet
+  // Nouveau projet : une seule question, le chemin d'un dépôt git. Le nom du
+  // projet vient du basename (voir AddProject) et le mode de livraison des
+  // remotes (voir detectDelivery) : rien d'autre n'est demandé à froid, tout se
+  // règle ensuite dans la modale de réglages.
 
   function buildNewProjectModalHTML() {
     return '<div class="modal modal-sm">' +
       '<div class="modal-head"><span class="modal-title">' + escapeHtml(t('newProject.title')) + '</span><button class="icon-btn" data-action="close-modal" aria-label="' + escapeHtml(t('common.close')) + '">✕</button></div>' +
-      '<div class="modal-section">' +
-        '<div class="modal-label">' + escapeHtml(t('newProject.nameLabel')) + '</div><input id="new-project-name" class="modal-input" placeholder="' + escapeHtml(t('newProject.namePlaceholder')) + '">' +
-      '</div>' +
-      '<div class="modal-section">' + buildRepoSectionHTML() + '</div>' +
-      '<div class="modal-section">' + buildDeliverySectionHTML(null) + '</div>' +
-      '<div class="modal-section">' + buildProjectExtraFieldsHTML(null) + '</div>' +
+      '<label class="modal-label" for="new-project-path">' + escapeHtml(t('newProject.pathLabel')) + '</label>' +
+      '<input id="new-project-path" class="modal-input mono" placeholder="' + escapeHtml(t('newProject.pathPlaceholder')) + '">' +
+      '<div class="modal-note">' + escapeHtml(t('newProject.hint')) + '</div>' +
       '<div id="new-project-error" class="modal-error hidden"></div>' +
       '<div class="modal-foot"><button class="btn-outline" data-action="close-modal">' + escapeHtml(t('common.cancel')) + '</button>' +
       '<button class="btn-green" data-action="submit-new-project">' + escapeHtml(t('common.create')) + '</button></div>' +
       '</div>';
   }
   function openNewProjectModal() {
-    modalRepoCreateMode = true;
-    modalRepos = [{ name: '', path: '' }];
     openModal(buildNewProjectModalHTML());
-    setTimeout(function () { var el = document.getElementById('new-project-name'); if (el) el.focus(); }, 0);
+    setTimeout(function () { var el = document.getElementById('new-project-path'); if (el) el.focus(); }, 0);
   }
   function submitNewProject() {
-    var nameEl = document.getElementById('new-project-name');
     var errEl = document.getElementById('new-project-error');
-    var name = nameEl.value.trim();
-    var description = document.getElementById('project-description').value.trim();
-    var contextPrompt = document.getElementById('project-context-prompt').value.trim();
-    var repos = collectReposForSubmit();
-    if (!name || repos.length === 0) { errEl.textContent = t('newProject.errorRequired'); errEl.classList.remove('hidden'); return; }
-    var body = { name: name, repos: reposToBody(repos), description: description, contextPrompt: contextPrompt };
-    var delivery = collectDeliveryForSubmit();
-    if (delivery) body.delivery = delivery;
-    api('/api/projects', { method: 'POST', body: body }).then(function (project) {
+    var path = document.getElementById('new-project-path').value.trim();
+    if (!path) { errEl.textContent = t('newProject.errorPathRequired'); errEl.classList.remove('hidden'); return; }
+    api('/api/projects', { method: 'POST', body: { repos: [{ path: path }] } }).then(function (project) {
       upsertProject(project);
       closeModal();
       goProject(project.id);
@@ -3343,68 +3357,182 @@
     });
   }
 
-  // Édition de projet
+  // Réglages de projet : une modale à panneaux, pas un formulaire de onze
+  // champs empilés. La colonne de gauche EST le découpage (aucun filet
+  // horizontal), chaque panneau ne montre que deux ou trois choses, et ce qui ne
+  // se règle qu'une fois (dépôts, livraison, suppression) ne pèse plus sur ce
+  // qu'on change souvent (nom, description, instructions).
 
-  function buildProjectModalHTML(project) {
+  var PROJECT_TABS = [
+    { key: 'general', labelKey: 'project.tabGeneral' },
+    { key: 'repos', labelKey: 'project.tabRepos' },
+    { key: 'instructions', labelKey: 'project.tabInstructions' },
+    { key: 'delivery', labelKey: 'project.tabDelivery' },
+    { key: 'links', labelKey: 'project.tabLinks' },
+    { key: 'danger', labelKey: 'project.tabDanger', danger: true }
+  ];
+
+  // Un champ court : libellé à gauche, saisie à droite, tous alignés sur la même
+  // verticale. Deux fois moins haut qu'un libellé empilé, et l'alignement se lit
+  // comme de l'ordre.
+  function fieldRowHTML(labelKey, inputId, inputHTML) {
+    return '<div class="field-row"><label class="modal-label" for="' + inputId + '">' + escapeHtml(t(labelKey)) + '</label>' +
+      '<div class="field-row-input">' + inputHTML + '</div></div>';
+  }
+
+  // La branche de base est ici et non dans Livraison : le serveur s'en sert aussi
+  // comme point de départ des branches de chantier (voir CreateCardWorktree),
+  // c'est donc la branche de référence du projet, pas un sous-réglage de la
+  // livraison.
+  function buildProjectGeneralPanelHTML() {
+    return fieldRowHTML('project.name', 'project-edit-name',
+        '<input id="project-edit-name" class="modal-input" value="' + escapeHtml(projectDraft.name) + '">') +
+      fieldRowHTML('project.description', 'project-description',
+        '<input id="project-description" class="modal-input" placeholder="' + escapeHtml(t('project.descriptionPlaceholder')) + '" value="' + escapeHtml(projectDraft.description) + '">') +
+      fieldRowHTML('project.baseBranch', 'project-delivery-target',
+        '<input id="project-delivery-target" class="modal-input mono" placeholder="' + escapeHtml(t('delivery.targetPlaceholder')) + '" value="' + escapeHtml(projectDraft.target) + '">') +
+      '<div class="modal-note">' + escapeHtml(t('project.baseBranchHint')) + '</div>';
+  }
+
+  function buildProjectInstructionsPanelHTML() {
+    return '<div class="modal-section-hint">' + escapeHtml(t('project.instructionsHint')) + '</div>' +
+      '<textarea id="project-context-prompt" class="modal-textarea modal-textarea-tall" rows="12" placeholder="' + escapeHtml(t('project.contextPromptPlaceholder')) + '">' + escapeHtml(projectDraft.contextPrompt) + '</textarea>' +
+      '<label class="modal-label" for="project-edit-checkcmd">' + escapeHtml(t('project.checkCmd')) + '</label>' +
+      '<input id="project-edit-checkcmd" class="modal-input mono" placeholder="go test ./..." value="' + escapeHtml(projectDraft.checkCmd) + '">';
+  }
+
+  function buildProjectDangerPanelHTML(project) {
     var deleteKey = 'project-delete:' + project.id;
-    var deletePending = isPendingConfirm(deleteKey);
-    var deleteLabel = deletePending ? t('project.deleteConfirm') : t('project.delete');
+    var deleteLabel = isPendingConfirm(deleteKey) ? t('project.deleteConfirm') : t('project.delete');
     var cardCount = state.cards.filter(function (c) { return c.projectId === project.id; }).length;
     var taskCount = state.tasks.filter(function (tk) { return tk.projectId === project.id; }).length;
-    return '<div class="modal modal-lg">' +
-      '<div class="modal-head"><span class="modal-title">' + escapeHtml(t('project.editTitle')) + '</span><button class="icon-btn" data-action="close-modal" aria-label="' + escapeHtml(t('common.close')) + '">✕</button></div>' +
-      '<div class="modal-section">' +
-        '<div class="modal-section-title">' + escapeHtml(t('project.sectionGeneral')) + '</div>' +
-        '<div class="modal-label">' + escapeHtml(t('project.name')) + '</div><input id="project-edit-name" class="modal-input" value="' + escapeHtml(project.name) + '">' +
-        '<div class="modal-label">' + escapeHtml(t('project.description')) + '</div><input id="project-description" class="modal-input" placeholder="' + escapeHtml(t('project.descriptionPlaceholder')) + '" value="' + escapeHtml(project.description || '') + '">' +
-      '</div>' +
-      '<div class="modal-section">' + buildRepoSectionHTML() + '</div>' +
-      '<div class="modal-section">' + buildDeliverySectionHTML(project) + '</div>' +
-      '<div class="modal-section">' +
-        '<div class="modal-section-title">' + escapeHtml(t('project.sectionAgent')) + '</div>' +
-        '<div class="modal-label">' + escapeHtml(t('project.contextPrompt')) + '</div>' +
-        '<textarea id="project-context-prompt" class="modal-textarea" rows="3" placeholder="' + escapeHtml(t('project.contextPromptPlaceholder')) + '">' + escapeHtml(project.contextPrompt || '') + '</textarea>' +
-        '<div class="modal-label">' + escapeHtml(t('project.checkCmd')) + '</div><input id="project-edit-checkcmd" class="modal-input mono" placeholder="go test ./..." value="' + escapeHtml(project.checkCmd || '') + '">' +
-      '</div>' +
-      '<div class="modal-section">' + buildLinksSectionHTML() + '</div>' +
-      '<div id="project-modal-error" class="modal-error hidden"></div>' +
-      '<div class="modal-danger-zone">' +
-        '<div class="modal-danger-text">' +
-          '<div class="modal-danger-title">' + escapeHtml(t('project.dangerZone')) + '</div>' +
-          '<div class="modal-delete-subtext">' + escapeHtml(t('project.deleteSubtext', { cards: cardCount, tasks: taskCount })) + '</div>' +
-        '</div>' +
-        '<button class="delete-link" data-action="confirm-click" data-confirm-key="' + deleteKey + '" data-confirm-action="project-delete" data-confirm-id="' + project.id + '" data-default-label="' + escapeHtml(t('project.delete')) + '" data-confirm-label="' + escapeHtml(t('project.deleteConfirm')) + '">' + escapeHtml(deleteLabel) + '</button>' +
-      '</div>' +
-      '<div class="modal-foot"><button class="btn-outline" data-action="close-modal">' + escapeHtml(t('common.cancel')) + '</button>' +
-      '<button class="btn-green" data-action="submit-project-edit" data-project-id="' + project.id + '">' + escapeHtml(t('common.save')) + '</button></div>' +
+    return '<div class="modal-section-hint">' + escapeHtml(t('project.deleteSubtext', { cards: cardCount, tasks: taskCount })) + '</div>' +
+      '<div class="modal-note">' + escapeHtml(t('project.deleteWarning')) + '</div>' +
+      '<div class="danger-panel-action">' +
+        '<button class="btn-danger" data-action="confirm-click" data-confirm-key="' + deleteKey + '" data-confirm-action="project-delete" data-confirm-id="' + project.id + '" data-default-label="' + escapeHtml(t('project.delete')) + '" data-confirm-label="' + escapeHtml(t('project.deleteConfirm')) + '">' + escapeHtml(deleteLabel) + '</button>' +
       '</div>';
   }
+
+  function buildProjectPanelHTML(project) {
+    if (projectModalTab === 'repos') return buildRepoSectionHTML();
+    if (projectModalTab === 'instructions') return buildProjectInstructionsPanelHTML();
+    if (projectModalTab === 'delivery') return buildDeliveryPanelHTML(project);
+    if (projectModalTab === 'links') return buildLinksSectionHTML();
+    if (projectModalTab === 'danger') return buildProjectDangerPanelHTML(project);
+    return buildProjectGeneralPanelHTML();
+  }
+
+  function buildProjectTabsHTML() {
+    return PROJECT_TABS.map(function (tb) {
+      var active = projectModalTab === tb.key;
+      return '<button class="ptab' + (active ? ' ptab-active' : '') + (tb.danger ? ' ptab-danger' : '') + '"' +
+        ' role="tab" aria-selected="' + (active ? 'true' : 'false') + '"' +
+        ' data-action="set-project-tab" data-project-tab="' + tb.key + '">' + escapeHtml(t(tb.labelKey)) + '</button>';
+    }).join('');
+  }
+
+  function buildProjectModalBodyHTML(project) {
+    return '<nav class="ptabs-nav" role="tablist">' + buildProjectTabsHTML() + '</nav>' +
+      '<div class="ptabs-panel" role="tabpanel">' + buildProjectPanelHTML(project) + '</div>';
+  }
+
+  function buildProjectModalHTML(project) {
+    return '<div class="modal modal-tabbed">' +
+      '<div class="modal-head"><span class="modal-title">' + escapeHtml(t('project.editTitle')) + '</span><button class="icon-btn" data-action="close-modal" aria-label="' + escapeHtml(t('common.close')) + '">✕</button></div>' +
+      '<div class="ptabs" id="project-modal-body">' + buildProjectModalBodyHTML(project) + '</div>' +
+      '<div id="project-modal-error" class="modal-error hidden"></div>' +
+      '<div class="modal-foot">' +
+        '<span id="project-unsaved" class="modal-hint' + (projectDraftDirty ? '' : ' hidden') + '">' + escapeHtml(t('project.unsaved')) + '</span>' +
+        '<button class="btn-outline" data-action="close-modal">' + escapeHtml(t('common.cancel')) + '</button>' +
+        '<button class="btn-green" data-action="submit-project-edit" data-project-id="' + project.id + '">' + escapeHtml(t('common.save')) + '</button>' +
+      '</div>' +
+      '</div>';
+  }
+
+  // Le brouillon retient les champs simples pendant qu'on navigue d'un panneau à
+  // l'autre : seul le panneau visible existe dans le DOM.
+  function captureProjectDraftFromDOM() {
+    if (!projectDraft) return;
+    var fields = {
+      'project-edit-name': 'name',
+      'project-description': 'description',
+      'project-delivery-target': 'target',
+      'project-context-prompt': 'contextPrompt',
+      'project-edit-checkcmd': 'checkCmd'
+    };
+    Object.keys(fields).forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el) projectDraft[fields[id]] = el.value;
+    });
+    var mode = document.querySelector('input[name="project-delivery-mode"]:checked');
+    if (mode) projectDraft.mode = mode.value;
+    captureRepoRowsFromDOM();
+    captureLinksFromDOM();
+  }
+
+  function setProjectTab(tabKey) {
+    var project = state.projectsById[state.projectId];
+    if (!project) return;
+    captureProjectDraftFromDOM();
+    projectModalTab = tabKey;
+    var body = document.getElementById('project-modal-body');
+    if (body) body.innerHTML = buildProjectModalBodyHTML(project);
+  }
+
   function openEditProjectModal() {
     var project = state.projectsById[state.projectId];
     if (!project) return;
-    modalRepoCreateMode = false;
+    projectModalTab = 'general';
+    projectDraftDirty = false;
+    projectDraft = {
+      name: project.name || '',
+      description: project.description || '',
+      target: (project.delivery && project.delivery.target) || '',
+      contextPrompt: project.contextPrompt || '',
+      checkCmd: project.checkCmd || '',
+      mode: (project.delivery && project.delivery.mode) || 'pr'
+    };
     var repos = (project.repos && project.repos.length) ? project.repos : [{ name: '', path: '' }];
     modalRepos = repos.map(function (r) { return { name: r.name || '', path: r.path || '' }; });
     modalLinks = (project.links || []).map(function (l) { return { url: l.url || '', title: l.title || '' }; });
     openModal(buildProjectModalHTML(project));
     setTimeout(function () { var el = document.getElementById('project-edit-name'); if (el) el.focus(); }, 0);
   }
+
+  // Une saisie quelque part dans la modale allume la mention « modifications non
+  // enregistrées » : changer d'onglet ne doit pas donner l'impression d'avoir
+  // perdu ce qu'on venait d'écrire.
+  function markProjectDraftDirty() {
+    if (!projectDraft || projectDraftDirty) return;
+    projectDraftDirty = true;
+    var el = document.getElementById('project-unsaved');
+    if (el) el.classList.remove('hidden');
+  }
+
   function submitProjectEdit(projectId) {
-    var name = document.getElementById('project-edit-name').value.trim();
-    var checkCmd = document.getElementById('project-edit-checkcmd').value.trim();
-    var description = document.getElementById('project-description').value.trim();
-    var contextPrompt = document.getElementById('project-context-prompt').value.trim();
     var errEl = document.getElementById('project-modal-error');
-    if (!name) { errEl.textContent = t('project.errorNameRequired'); errEl.classList.remove('hidden'); return; }
+    captureProjectDraftFromDOM();
+    var name = projectDraft.name.trim();
+    if (!name) {
+      errEl.textContent = t('project.errorNameRequired');
+      errEl.classList.remove('hidden');
+      setProjectTab('general');
+      return;
+    }
     var repos = collectReposForSubmit();
-    if (repos.length === 0) { errEl.textContent = t('project.errorReposRequired'); errEl.classList.remove('hidden'); return; }
+    if (repos.length === 0) {
+      errEl.textContent = t('project.errorReposRequired');
+      errEl.classList.remove('hidden');
+      setProjectTab('repos');
+      return;
+    }
     var links = collectLinksForSubmit();
     var body = {
-      name: name, checkCmd: checkCmd, repos: reposToBody(repos), description: description,
-      contextPrompt: contextPrompt, links: linksToBody(links)
+      name: name, checkCmd: projectDraft.checkCmd.trim(), repos: reposToBody(repos),
+      description: projectDraft.description.trim(), contextPrompt: projectDraft.contextPrompt.trim(),
+      links: linksToBody(links),
+      delivery: { mode: projectDraft.mode, target: projectDraft.target.trim() }
     };
-    var delivery = collectDeliveryForSubmit();
-    if (delivery) body.delivery = delivery;
     api('/api/projects/' + projectId, { method: 'PATCH', body: body }).then(function (project) {
       upsertProject(project);
       invalidateDeliveryForProject(project.id);
@@ -3964,6 +4092,7 @@
       case 'open-new-task': if (state.cardId) openNewTaskModal(state.cardId); break;
       case 'open-new-project': openNewProjectModal(); break;
       case 'open-edit-project': openEditProjectModal(); break;
+      case 'set-project-tab': setProjectTab(el.getAttribute('data-project-tab')); break;
       case 'submit-project-edit': submitProjectEdit(el.getAttribute('data-project-id')); break;
       case 'open-edit-card': openEditCardModal(); break;
       case 'submit-card-edit': submitCardEdit(el.getAttribute('data-card-id')); break;
@@ -4074,6 +4203,9 @@
     }
     // Entrée dans un champ d'une ligne (jamais dans un textarea) : valider.
     if (e.key === 'Enter' && !e.shiftKey && e.target && e.target.tagName === 'INPUT' && modal.contains(e.target)) {
+      // Sauf dans le champ d'ajout d'un lien, dont la validation est l'ajout :
+      // enregistrer le projet y perdrait l'URL qu'on vient de taper.
+      if (e.target.id === 'new-link-url') { e.preventDefault(); addLinkRow(); return; }
       var primary = primarySubmitButton(modal);
       if (primary) { e.preventDefault(); primary.click(); }
       return;
@@ -4091,11 +4223,22 @@
   }
 
   // Même principe de délégation que onGlobalClick, pour les champs dont la
-  // valeur pilote un affichage (aujourd'hui : le mode de livraison d'un projet).
+  // valeur pilote un affichage : cocher un mode de livraison déplace la carte
+  // active. On repeint les classes plutôt que le panneau, pour ne pas voler le
+  // focus au bouton radio qu'on vient d'atteindre aux flèches.
   function onGlobalChange(e) {
-    var el = e.target.closest ? e.target.closest('[data-action]') : null;
-    if (!el) return;
-    if (el.getAttribute('data-action') === 'delivery-mode-change') refreshDeliveryModeNote();
+    if (e.target && e.target.name === 'project-delivery-mode') {
+      markProjectDraftDirty();
+      captureProjectDraftFromDOM();
+      refreshDeliveryCards();
+    }
+  }
+
+  // Toute saisie dans la modale de réglages d'un projet allume la mention
+  // « modifications non enregistrées » du pied.
+  function onGlobalInput(e) {
+    var body = document.getElementById('project-modal-body');
+    if (body && e.target && body.contains(e.target)) markProjectDraftDirty();
   }
 
   function onGlobalKeydown(e) {
@@ -4143,6 +4286,7 @@
     if (form) form.addEventListener('submit', onLoginSubmit);
     document.addEventListener('click', onGlobalClick);
     document.addEventListener('change', onGlobalChange);
+    document.addEventListener('input', onGlobalInput);
     document.addEventListener('keydown', onGlobalKeydown);
     window.addEventListener('hashchange', applyRoute);
     boot();

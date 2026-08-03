@@ -4,8 +4,6 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
-	"fmt"
-	"math/big"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -27,78 +25,38 @@ func configPath(dataDir string) string {
 	return filepath.Join(dataDir, "config.json")
 }
 
-// GenerateRandomPassword génère un mot de passe alphanumérique de longueur n
-// à l'aide de crypto/rand.
-func GenerateRandomPassword(n int) (string, error) {
-	const charset = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
-	out := make([]byte, n)
-	max := big.NewInt(int64(len(charset)))
-	for i := range out {
-		idx, err := rand.Int(rand.Reader, max)
-		if err != nil {
-			return "", err
-		}
-		out[i] = charset[idx.Int64()]
-	}
-	return string(out), nil
-}
-
-// LoadOrInitPasswordHash détermine le hash bcrypt du mot de passe à utiliser.
+// LoadPasswordHash détermine le hash bcrypt du mot de passe à utiliser, ou
+// une chaîne vide si aucun mot de passe n'est configuré. Dans ce dernier cas,
+// le serveur tourne sans authentification (usage local, réseau non exposé).
 //
 // Priorité :
-//  1. SILLAGE_PASSWORD (si présent au démarrage), pour les tests ; non persisté.
-//  2. config.json existant dans dataDir.
-//  3. Génération d'un mot de passe aléatoire, affiché une seule fois
-//     (valeur non vide de generated), et persistance du hash dans config.json.
-func LoadOrInitPasswordHash(dataDir string) (hash string, generated string, err error) {
+//  1. SILLAGE_PASSWORD (si présent au démarrage) ; non persisté.
+//  2. config.json existant dans dataDir (mot de passe déjà configuré lors
+//     d'un précédent lancement avec SILLAGE_PASSWORD).
+//  3. Aucun mot de passe.
+func LoadPasswordHash(dataDir string) (hash string, err error) {
 	if envPass := os.Getenv("SILLAGE_PASSWORD"); envPass != "" {
 		h, err := bcrypt.GenerateFromPassword([]byte(envPass), bcrypt.DefaultCost)
 		if err != nil {
-			return "", "", err
+			return "", err
 		}
-		return string(h), "", nil
+		return string(h), nil
 	}
 
-	path := configPath(dataDir)
-	data, err := os.ReadFile(path)
-	if err == nil {
-		var cfg Config
-		if err := json.Unmarshal(data, &cfg); err != nil {
-			return "", "", fmt.Errorf("cannot read config.json: %w", err)
-		}
-		if cfg.PasswordHash != "" {
-			return cfg.PasswordHash, "", nil
-		}
-	} else if !os.IsNotExist(err) {
-		return "", "", err
-	}
-
-	pass, err := GenerateRandomPassword(16)
+	hash, ok, err := ReadPasswordHash(dataDir)
 	if err != nil {
-		return "", "", err
+		return "", err
 	}
-	h, err := bcrypt.GenerateFromPassword([]byte(pass), bcrypt.DefaultCost)
-	if err != nil {
-		return "", "", err
+	if ok {
+		return hash, nil
 	}
-	if err := os.MkdirAll(dataDir, 0o700); err != nil {
-		return "", "", err
-	}
-	cfg := Config{PasswordHash: string(h)}
-	out, err := json.MarshalIndent(cfg, "", "  ")
-	if err != nil {
-		return "", "", err
-	}
-	if err := os.WriteFile(path, out, 0o600); err != nil {
-		return "", "", err
-	}
-	return string(h), pass, nil
+	return "", nil
 }
 
 // ReadPasswordHash lit le hash de mot de passe depuis config.json dans
-// dataDir, sans jamais en générer un nouveau si absent (contrairement à
-// LoadOrInitPasswordHash). Utilisé après le rapatriement (clone) d'un espace
-// de travail pour recharger immédiatement le mot de passe en mémoire.
+// dataDir, sans jamais en générer un nouveau si absent. Utilisé après le
+// rapatriement (clone) d'un espace de travail pour recharger immédiatement le
+// mot de passe en mémoire, et par LoadPasswordHash au démarrage.
 func ReadPasswordHash(dataDir string) (hash string, ok bool, err error) {
 	data, err := os.ReadFile(configPath(dataDir))
 	if err != nil {

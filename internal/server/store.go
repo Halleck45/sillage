@@ -897,11 +897,16 @@ func ValidateRepoPath(path string) error {
 
 // AddProject crée un projet avec un ou plusieurs dépôts git (repos).
 // description et contextPrompt peuvent être vides ; delivery nil vaut le mode
-// par défaut ("pr").
+// par défaut ("pr"). Un nom vide est déduit du premier dépôt : créer un projet
+// ne demande donc qu'un chemin, tout le reste se règle ensuite.
 func (s *Store) AddProject(name, description, contextPrompt string, repos []Repo, links []Link, delivery *Delivery) (Project, error) {
 	normalized, err := NormalizeRepos(repos)
 	if err != nil {
 		return Project{}, err
+	}
+	name = strings.TrimSpace(name)
+	if name == "" {
+		name = normalized[0].Name
 	}
 	normalizedLinks, err := NormalizeLinks(links)
 	if err != nil {
@@ -1274,7 +1279,7 @@ func (s *Store) AcceptTask(id string) (Task, error) {
 	default:
 		return Task{}, fmt.Errorf("only a task in review can be accepted")
 	}
-	return s.UpdateTask(id, func(t *Task) { t.Status = "accepted" })
+	return s.UpdateTask(id, func(t *Task) { t.Status = "accepted"; t.Unread = false })
 }
 
 // CancelTask marque une tâche "cancelled" (refusée). Autorisé depuis running/review.
@@ -1291,7 +1296,7 @@ func (s *Store) CancelTask(id string) (Task, error) {
 	default:
 		return Task{}, fmt.Errorf("task cannot be cancelled from its current status")
 	}
-	return s.UpdateTask(id, func(t *Task) { t.Status = "cancelled" })
+	return s.UpdateTask(id, func(t *Task) { t.Status = "cancelled"; t.Unread = false })
 }
 
 // ReopenTask remet une tâche en revue ("review"). Autorisé depuis
