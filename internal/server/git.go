@@ -322,6 +322,34 @@ func MergeBranch(dir, branch, message string) (string, []string, error) {
 	return out, nil, fmt.Errorf("git merge failed: %w", err)
 }
 
+// ErrRebaseConflict signale un conflit de rebase (branche de tâche rejouée sur
+// la branche du chantier). Le rebase est alors annulé : l'arbre revient intact.
+var ErrRebaseConflict = errors.New("rebase conflict")
+
+// RebaseOnto rejoue la branche courante du worktree dir au-dessus de onto (la
+// branche du chantier), pour qu'une tâche encore en revue reparte du travail
+// déjà accepté. Aucun réseau.
+//
+// En cas de conflit, `git rebase --abort` remet le worktree exactement dans son
+// état d'avant, et l'erreur enveloppe ErrRebaseConflict avec la liste des
+// fichiers en conflit : rien n'est résolu automatiquement, seul l'agent (ou
+// l'humain) sait le faire.
+//
+// L'appelant doit s'assurer que le worktree est propre et qu'aucun agent n'y
+// travaille : un rebase réécrit l'historique de la branche de la tâche.
+func RebaseOnto(dir, onto string) (string, []string, error) {
+	out, err := runGit(dir, gitDefaultTimeout, "rebase", onto)
+	if err == nil {
+		return out, nil, nil
+	}
+	conflicts := conflictedFiles(dir)
+	_, _ = runGit(dir, gitDefaultTimeout, "rebase", "--abort")
+	if len(conflicts) > 0 {
+		return out, conflicts, fmt.Errorf("%w: %s", ErrRebaseConflict, strings.Join(conflicts, ", "))
+	}
+	return out, nil, fmt.Errorf("git rebase failed: %w", err)
+}
+
 // conflictedFiles liste les fichiers en conflit d'une fusion en cours.
 func conflictedFiles(dir string) []string {
 	out, err := runGit(dir, gitDefaultTimeout, "diff", "--name-only", "--diff-filter=U")
@@ -337,10 +365,30 @@ func conflictedFiles(dir string) []string {
 	return files
 }
 
+// pushBranch pousse une branche vers origin. C'est, avec SyncPush (espace de
+// travail, jamais un dépôt de projet), le SEUL endroit du code qui exécute
+// `git push` sur un dépôt de projet : deux appelants seulement, Ship (branche
+// de chantier) et mergeThenPush (branche de destination du mode "merge-push").
+// Jamais de --force, jamais de refspec construite depuis une entrée utilisateur.
+func pushBranch(dir, branch string, setUpstream bool) (string, error) {
+	args := []string{"push"}
+	if setUpstream {
+		args = append(args, "-u")
+	}
+	args = append(args, "origin", branch)
+
+	out, err := runGit(dir, gitPushTimeout, args...)
+	if err != nil {
+		return out, fmt.Errorf("push failed (remote 'origin' missing or unreachable): %w", err)
+	}
+	return out, nil
+}
+
 // Ship pousse la branche d'un chantier vers origin (les commits ont déjà été
 // faits à l'acceptation des tâches, voir MergeBranch ; un arbre sale est tout
-// de même commité pour ne rien perdre). C'est, avec SyncPush (espace de
-// travail), le SEUL endroit du code qui exécute `git push`.
+// de même commité pour ne rien perdre). Utilisé par les modes de livraison
+// "pr" et "push" (voir Delivery.Mode) : la différence entre les deux est
+// l'ouverture de la pull request, pas le push.
 func Ship(dir, branch, title string) (string, error) {
 	var out strings.Builder
 
@@ -350,15 +398,15 @@ func Ship(dir, branch, title string) (string, error) {
 		return out.String(), err
 	}
 
-	pushOut, err := runGit(dir, gitPushTimeout, "push", "-u", "origin", branch)
+	pushOut, err := pushBranch(dir, branch, true)
 	out.WriteString(pushOut)
 	if err != nil {
-		return out.String(), fmt.Errorf("push failed (remote 'origin' missing or unreachable): %w", err)
+		return out.String(), err
 	}
 	return out.String(), nil
 }
 
-// --- Livraison en fusion locale (mode "merge" : jamais de push) ---
+// --- Livraison en fusion dans la branche de destination ("merge", "merge-push") ---
 
 // ErrTargetDiverged signale que la branche de destination a divergé : la
 // fusion locale n'accepte que le fast-forward, aucune résolution automatique.
@@ -382,13 +430,32 @@ var ErrTargetBusy = errors.New("target branch is busy")
 //     jamais de changement de branche, jamais de stash, jamais de force. Sinon
 //     ErrTargetBusy, avec la commande à jouer à la main.
 func MergeLocal(repoPath, dataDir, cardID, repoName, target, source string) (string, error) {
+	return mergeIntoTarget(repoPath, dataDir, cardID, repoName, target, source, false)
+}
+
+// MergeAndPush est MergeLocal suivie du push de la branche de destination
+// (mode "merge-push") : le projet dont la livraison consiste à faire avancer
+// la branche principale, remote comprise, sans passer par une pull request.
+//
+// Le remote est rattrapé AVANT la fusion (voir fastForwardFromRemote) : sans
+// ça, le push serait rejeté dès que la branche de destination a avancé côté
+// remote, et l'utilisateur se retrouverait avec une fusion locale à moitié
+// livrée. Toujours fast-forward, jamais de --force.
+func MergeAndPush(repoPath, dataDir, cardID, repoName, target, source string) (string, error) {
+	return mergeIntoTarget(repoPath, dataDir, cardID, repoName, target, source, true)
+}
+
+// mergeIntoTarget porte les deux modes de fusion : le choix du répertoire où
+// fusionner (worktree transitoire, ou dépôt de travail en repli) est commun,
+// seul le push final diffère.
+func mergeIntoTarget(repoPath, dataDir, cardID, repoName, target, source string, push bool) (string, error) {
 	dir := filepath.Join(dataDir, "worktrees", ".merge-"+cardID+"-"+Slugify(repoName))
 	_, _ = runGit(repoPath, gitDefaultTimeout, "worktree", "prune")
 	_ = os.RemoveAll(dir)
 
 	if _, err := runGit(repoPath, gitDefaultTimeout, "worktree", "add", dir, target); err == nil {
 		defer RemoveWorktree(repoPath, dir)
-		return mergeFastForward(dir, target, source)
+		return mergeThenPush(dir, target, source, push)
 	}
 
 	cur, err := currentBranch(repoPath)
@@ -405,7 +472,39 @@ func MergeLocal(repoPath, dataDir, cardID, repoName, target, source string) (str
 	if strings.TrimSpace(statusOut) != "" {
 		return "", fmt.Errorf("%w: %s has uncommitted changes in %s", ErrTargetBusy, target, repoPath)
 	}
-	return mergeFastForward(repoPath, target, source)
+	return mergeThenPush(repoPath, target, source, push)
+}
+
+// mergeThenPush enchaîne, dans le répertoire où target est empruntée :
+// rattrapage du remote (si push), fusion fast-forward, push de target (si
+// push). Le rattrapage est fait d'abord : une divergence est un refus avant
+// toute écriture, pas une fusion locale suivie d'un push rejeté.
+func mergeThenPush(dir, target, source string, push bool) (string, error) {
+	var out strings.Builder
+
+	if push {
+		fetchOut, err := fastForwardFromRemote(dir, target)
+		out.WriteString(fetchOut)
+		if err != nil {
+			return out.String(), err
+		}
+	}
+
+	mergeOut, err := mergeFastForward(dir, target, source)
+	out.WriteString(mergeOut)
+	if err != nil {
+		return out.String(), err
+	}
+	if !push {
+		return out.String(), nil
+	}
+
+	pushOut, err := pushBranch(dir, target, false)
+	out.WriteString(pushOut)
+	if err != nil {
+		return out.String(), err
+	}
+	return out.String(), nil
 }
 
 // mergeFastForward exécute la fusion fast-forward proprement dite et traduit
@@ -416,6 +515,45 @@ func mergeFastForward(dir, target, source string) (string, error) {
 		return out, fmt.Errorf("%w: %s cannot fast-forward to %s, merge manually", ErrTargetDiverged, target, source)
 	}
 	return out, nil
+}
+
+// fastForwardFromRemote met la branche de destination locale au niveau de son
+// homologue distante, en fast-forward uniquement. Trois cas :
+//
+//   - la branche n'existe pas encore sur le remote : rien à rattraper, le push
+//     final la créera ;
+//   - le local contient déjà le distant (à jour, ou en avance) : rien à faire ;
+//   - le distant a des commits que le local n'a pas : fast-forward, ou refus
+//     ErrTargetDiverged si les deux ont divergé (aucune résolution automatique).
+func fastForwardFromRemote(dir, target string) (string, error) {
+	var out strings.Builder
+
+	fetchOut, err := runGit(dir, gitPushTimeout, "fetch", "origin", target)
+	out.WriteString(fetchOut)
+	if err != nil {
+		if isMissingRemoteRef(err) {
+			return out.String(), nil
+		}
+		return out.String(), fmt.Errorf("fetch failed (remote 'origin' missing or unreachable): %w", err)
+	}
+	if _, err := runGit(dir, gitDefaultTimeout, "merge-base", "--is-ancestor", "FETCH_HEAD", "HEAD"); err == nil {
+		return out.String(), nil
+	}
+	mergeOut, err := runGit(dir, gitDefaultTimeout, "merge", "--ff-only", "FETCH_HEAD")
+	out.WriteString(mergeOut)
+	if err != nil {
+		return out.String(), fmt.Errorf("%w: %s and origin/%s have diverged, reconcile manually", ErrTargetDiverged, target, target)
+	}
+	return out.String(), nil
+}
+
+// isMissingRemoteRef reconnaît l'échec d'un fetch dont la référence distante
+// n'existe pas (branche jamais poussée, remote vierge). Le message de git est
+// localisé selon la machine, d'où le double test.
+func isMissingRemoteRef(err error) bool {
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "couldn't find remote ref") ||
+		strings.Contains(msg, "impossible de trouver la référence distante")
 }
 
 // --- Ouverture de pull/merge request (lecture seule, jamais de push) ---
@@ -620,12 +758,8 @@ func SyncPush(dataDir string) (string, error) {
 	out.WriteString(pullOut)
 	if pullErr != nil {
 		// Première sync vers un remote vierge : pas de branche main distante,
-		// rien à rebaser, on pousse directement. (Message git localisé selon
-		// la machine, d'où le double test.)
-		errLower := strings.ToLower(pullErr.Error())
-		emptyRemote := strings.Contains(errLower, "couldn't find remote ref") ||
-			strings.Contains(errLower, "impossible de trouver la référence distante")
-		if !emptyRemote {
+		// rien à rebaser, on pousse directement.
+		if !isMissingRemoteRef(pullErr) {
 			conflict := isRebaseInProgress(dataDir)
 			_, _ = runGit(dataDir, gitDefaultTimeout, "rebase", "--abort")
 			if conflict {

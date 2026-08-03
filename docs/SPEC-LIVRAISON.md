@@ -79,11 +79,18 @@ chantiers créés ensuite. Une tâche existante sans branche de chantier ne peut
 Nouveau champ persisté sur `Project` :
 
 ```jsonc
-Delivery { "mode": "pr" | "merge", "target": "", "stackedPrs": false }
+Delivery { "mode": "pr" | "push" | "merge" | "merge-push", "target": "", "stackedPrs": false }
           // target : branche de destination (base de la PR en mode "pr", branche fusionnée
-          //          en mode "merge"). "" = branche par défaut de chaque dépôt.
+          //          dans les modes "merge" et "merge-push"). "" = branche par défaut
+          //          de chaque dépôt.
           // stackedPrs : lot 3, ignoré avant.
 ```
+
+*Étendu après coup (lot 2 bis)* : les deux modes initiaux (`pr`, `merge`) forçaient deux choix à la
+fois, « avec ou sans pull request » et « local ou remote ». Or ces deux questions sont
+indépendantes et se répondent différemment d'un projet à l'autre. Les quatre modes sont donc le
+produit des deux axes : livrer la branche du chantier (`pr` avec pull request, `push` sans) ou
+faire avancer la branche de destination (`merge` en local, `merge-push` en poussant).
 
 **Le réglage n'est jamais une question posée à froid.** À la création du projet il est
 pré-rempli par détection du remote `origin` de chaque dépôt, et modifiable :
@@ -109,6 +116,13 @@ Push de la branche de chantier, puis ouverture de la PR/MR :
 La branche est poussée dans les deux cas : le repli ne dégrade que l'ouverture de la PR, jamais
 la livraison du code.
 
+### Mode `push`
+
+Le mode `pr` sans la PR : la branche de chantier est poussée, et c'est tout. Pour les projets où
+la revue se passe ailleurs (ou pas du tout), et pour les forges que Sillage ne connaît pas. Ce
+comportement existait déjà comme *repli* du mode `pr` sur forge inconnue ; en faire un mode
+explicite évite de devoir mentir au réglage pour obtenir ce qu'on veut.
+
 ### Mode `merge`
 
 Fusion locale de la branche de chantier dans `target`, dans un worktree transitoire dédié
@@ -128,6 +142,25 @@ fermes, à écrire dans l'UI :
    la main (`ErrTargetBusy`).
 3. **Fast-forward uniquement.** Si `target` a divergé, aucune tentative de résolution :
    `409 {"error":"target branch has diverged..."}` avec la commande à copier.
+
+### Mode `merge-push`
+
+Même fusion que `merge`, mais `target` est poussée ensuite : le projet dont livrer veut dire
+« faire avancer la branche principale, remote comprise », sans passer par une pull request.
+
+La règle 1 du mode `merge` (jamais de push) devient donc, pour ce mode, un **choix explicite du
+projet** : c'est un réglage que l'humain est allé poser, pas un défaut. Les deux autres règles
+tiennent telles quelles, et une quatrième s'ajoute :
+
+4. **Rattraper le remote d'abord.** `git fetch origin <target>`, puis fast-forward de `target`
+   locale sur `FETCH_HEAD` si le distant est en avance. Sans ce rattrapage, le push serait rejeté
+   dès que `target` a bougé côté remote, et l'utilisateur se retrouverait avec une fusion locale
+   à moitié livrée. Une divergence réelle (les deux côtés ont avancé) est un refus
+   `ErrTargetDiverged` **avant** toute écriture. Jamais de `--force`, jamais de merge commit de
+   réconciliation : c'est un rattrapage, pas une résolution.
+
+Le push passe par la même primitive que celui de la branche de chantier (`pushBranch`), pour que
+l'invariant « `git push` n'existe qu'à deux endroits » reste vérifiable par un grep.
 
 ### Santé de la livraison
 

@@ -80,7 +80,20 @@ func loadStoreFile(dataDir string) (*Store, error) {
 	migrateTaskStatuses(s)
 	migrateLegacyDelivery(s)
 	migrateCardRefs(s)
+	resetTransientTaskFlags(s)
 	return s, nil
+}
+
+// resetTransientTaskFlags remet à zéro les états de tâche qui ne décrivent
+// qu'une opération en cours dans le processus : un rebase interrompu par un
+// arrêt brutal ne doit pas laisser un fuseau tourner indéfiniment côté UI.
+func resetTransientTaskFlags(s *Store) {
+	for id, t := range s.Tasks {
+		if t.Rebasing {
+			t.Rebasing = false
+			s.Tasks[id] = t
+		}
+	}
 }
 
 // migrateCardRefs donne une référence aux chantiers antérieurs au champ Ref :
@@ -522,19 +535,25 @@ func projectOut(p Project) ProjectOut {
 // origin alors que le mode exige un push. N'empêche jamais rien : le repli est
 // une URL de pull request pré-remplie. Jamais persisté : voir ProjectOut.
 func deliveryWarning(p Project) string {
-	if p.Delivery.Mode == "merge" {
+	if !deliveryModePushes(p.Delivery.Mode) {
 		return "" // fusion locale : aucun binaire externe, aucun remote requis
 	}
 	needsGh, needsGlab := false, false
 	for _, repo := range p.Repos {
 		info := DetectForge(repo.Path)
-		switch {
-		case info.Provider == "github":
-			needsGh = true
-		case info.Provider == "gitlab":
-			needsGlab = true
-		case info.RemoteURL == "":
+		if info.RemoteURL == "" {
 			return "no 'origin' remote on repository " + repo.Name + "; nothing can be pushed"
+		}
+		// Seul le mode "pr" a besoin d'une forge reconnue et de son CLI : les
+		// modes "push" et "merge-push" poussent, point, quelle que soit la forge.
+		if p.Delivery.Mode != "pr" {
+			continue
+		}
+		switch info.Provider {
+		case "github":
+			needsGh = true
+		case "gitlab":
+			needsGlab = true
 		default:
 			return "unknown forge on repository " + repo.Name + "; the branch will be pushed without opening a pull request"
 		}
@@ -834,7 +853,14 @@ func NormalizeRepos(repos []Repo) ([]Repo, error) {
 	return out, nil
 }
 
-var validDeliveryModes = map[string]bool{"pr": true, "merge": true}
+var validDeliveryModes = map[string]bool{"pr": true, "push": true, "merge": true, "merge-push": true}
+
+// deliveryModePushes indique si un mode de livraison exécute un push : les deux
+// modes de branche, plus la fusion suivie du push de la branche de destination.
+// Le mode "merge" est le seul à ne jamais toucher au réseau.
+func deliveryModePushes(mode string) bool {
+	return mode != "merge"
+}
 
 // NormalizeDelivery valide et normalise le réglage de livraison d'un projet.
 // nil (ou un mode vide) vaut le défaut "pr" : pousser la branche du chantier
@@ -849,7 +875,7 @@ func NormalizeDelivery(d *Delivery) (Delivery, error) {
 		out.Mode = "pr"
 	}
 	if !validDeliveryModes[out.Mode] {
-		return Delivery{}, fmt.Errorf("invalid delivery mode: must be pr or merge")
+		return Delivery{}, fmt.Errorf("invalid delivery mode: must be pr, push, merge or merge-push")
 	}
 	return out, nil
 }
@@ -1193,6 +1219,13 @@ func (s *Store) CreateTask(id string, ref int, cardID, projectID, title, agentID
 // tâche dans un tri par updatedAt. Voir MarkTaskRead pour l'exception.
 func (s *Store) UpdateTask(id string, fn func(t *Task)) (Task, error) {
 	return s.updateTask(id, fn, true)
+}
+
+// SetTaskRebasing arme (ou désarme) le témoin de rebase automatique en cours,
+// sans toucher à UpdatedAt : une opération technique ne doit pas réordonner la
+// liste des tâches sous le curseur de l'utilisateur.
+func (s *Store) SetTaskRebasing(id string, rebasing bool) (Task, error) {
+	return s.updateTask(id, func(t *Task) { t.Rebasing = rebasing }, false)
 }
 
 // MarkTaskRead marque une tâche comme lue (Unread=false) sans mettre à jour

@@ -87,33 +87,54 @@
       'status.review': 'À relire',
       'status.accepted': 'Acceptée',
       'status.cancelled': 'Refusée',
+      'status.rebasing': 'Rebase en cours',
+      'status.rebasingNote': 'La tâche est rejouée sur le travail qui vient d\'être accepté.',
       'action.interrupt': 'Interrompre l\'agent',
       'action.accept': 'Accepter',
       'action.acceptTooltip': 'Fusionner dans la branche du chantier',
       'action.refuse': 'Refuser',
       'action.refuseTooltip': 'Écarter cette tâche du chantier',
       'action.reopen': 'Rouvrir la tâche',
+      'behind.taskTooltip.one': '1 commit de retard sur {base} : à rebaser avant acceptation, sinon conflit.',
+      'behind.taskTooltip.other': '{n} commits de retard sur {base} : à rebaser avant acceptation, sinon conflit.',
+      'behind.cardTooltip.one': 'Le chantier a 1 commit de retard sur {base}.',
+      'behind.cardTooltip.other': 'Le chantier a {n} commits de retard sur {base}.',
+      'behind.cardLabel.one': '↓ 1 commit de retard sur {base}',
+      'behind.cardLabel.other': '↓ {n} commits de retard sur {base}',
+      'behind.askRebase': 'Demander le rebase',
+      'behind.askRebaseTooltip': 'Envoyer un message à l\'agent pour qu\'il rebase sa branche sur {base}',
+      'behind.rebasePrompt.one': 'Ta branche a 1 commit de retard sur {base}. Rebase-la dessus, règle les conflits éventuels, puis relance les vérifications du projet.',
+      'behind.rebasePrompt.other': 'Ta branche a {n} commits de retard sur {base}. Rebase-la dessus, règle les conflits éventuels, puis relance les vérifications du projet.',
       'action.cancelTask': 'Annuler la tâche',
       'action.cancelTaskConfirm': 'Confirmer l\'annulation ?',
       'task.delete': 'Supprimer la tâche',
       'task.deleteConfirm': 'Confirmer la suppression ?',
       'ship.button': 'Livrer',
-      'ship.counts.accepted.one': '{n} acceptée',
-      'ship.counts.accepted.other': '{n} acceptées',
-      'ship.counts.refused.one': '{n} refusée',
-      'ship.counts.refused.other': '{n} refusées',
-      'ship.counts.pending.one': '{n} à relire',
-      'ship.counts.pending.other': '{n} à relire',
       'ship.subtext.pr': 'Pousse {branch} et ouvre une pull request vers {base}',
       'ship.subtext.mr': 'Pousse {branch} et ouvre une merge request vers {base}',
-      'ship.subtext.push': 'Pousse {branch} (forge inconnue : pas de pull request)',
+      'ship.subtext.push': 'Pousse {branch} sur origin, sans ouvrir de pull request',
+      'ship.subtext.unknownForge': 'Pousse {branch} (forge inconnue : pas de pull request)',
       'ship.subtext.merge': 'Fusionne {branch} dans {base} en local, sans jamais pousser',
+      'ship.subtext.mergePush': 'Fusionne {branch} dans {base}, puis pousse {base}',
       'ship.subtext.repos': '{n} dépôts concernés',
       'ship.subtext.nothing': 'Rien à livrer pour l\'instant',
       'ship.blocked.noTasks': 'Aucune tâche dans ce chantier',
       'ship.blocked.tasksPending': 'Il reste des tâches à accepter ou refuser',
       'ship.blocked.nothingAccepted': 'Aucune tâche acceptée',
       'ship.blocked.nothingToShip': 'Aucune branche à livrer',
+      'ship.blocked.behindTarget': '{base} a avancé de son côté : rattrapez-la avant de livrer (la fusion se fait en fast-forward uniquement).',
+      'ship.alreadyOnTarget': 'Déjà sur {base}',
+      'ship.alreadyOnTargetSub': 'Tout le travail du chantier est arrivé dans {base} : plus rien à livrer.',
+      'catchUp.button': 'Rattraper {base}',
+      'catchUp.tooltip': 'Fusionne {base} dans la branche du chantier, sans réécrire son historique. C\'est ce qui rend la livraison possible à nouveau.',
+      'catchUp.done': 'Chantier remis à jour depuis {base}.',
+      'catchUp.upToDate': 'Le chantier était déjà à jour.',
+      'catchUp.conflictTitle': 'Conflit avec {base}',
+      'catchUp.conflictBody': 'Fusionner {base} dans le chantier bute sur {files}. Rien n\'a été modifié : le chantier est intact. Un agent peut reprendre la base et régler les conflits dans une tâche dédiée.',
+      'catchUp.askAgent': 'Confier à un agent',
+      'catchUp.errorFailed': 'Le rattrapage a échoué.',
+      'catchUp.taskTitle': 'Rattraper {base}',
+      'catchUp.taskPrompt': 'La branche de ce chantier est en retard sur {base} et ne peut plus être fusionnée : {files} entre en conflit. Fusionne {base} dans la branche du chantier, règle les conflits en gardant les deux intentions, puis relance les vérifications du projet.',
       'ship.modalTitle': 'Livrer le chantier',
       'ship.modalConfirm': 'Livrer',
       'ship.repoNothing': 'Rien à livrer',
@@ -124,16 +145,21 @@
       'ship.files.other': '{n} fichiers',
       'ship.prLink': 'Voir la pull request',
       'ship.mergedInto': 'Fusionné dans {base}',
+      'ship.mergedPushed': 'Fusionné dans {base} et poussé',
       'ship.pushedBranch': 'Branche {branch} poussée',
       'ship.errorFailed': 'Échec de la livraison.',
       'delivery.label': 'Livrer veut dire',
       'delivery.modeAuto': 'Détecter d\'après le dépôt',
       'delivery.modePr': 'Ouvrir une pull request (GitHub ou GitLab)',
-      'delivery.modeMerge': 'Fusionner localement dans une branche',
+      'delivery.modePush': 'Pousser la branche du chantier, sans pull request',
+      'delivery.modeMerge': 'Fusionner dans la branche cible, en local',
+      'delivery.modeMergePush': 'Fusionner dans la branche cible et la pousser',
       'delivery.targetLabel': 'Branche de destination',
       'delivery.targetPlaceholder': 'branche par défaut du dépôt',
       'delivery.mergeNote': 'Fusion locale en fast-forward uniquement : Sillage ne pousse jamais cette branche.',
+      'delivery.mergePushNote': 'La branche cible est d\'abord rattrapée depuis origin, fusionnée en fast-forward, puis poussée. Jamais de force.',
       'delivery.prNote': 'La branche du chantier est poussée, puis la pull request (ou merge request) est ouverte.',
+      'delivery.pushNote': 'La branche du chantier est poussée sur origin. Rien n\'est ouvert, rien n\'est fusionné.',
       'delivery.autoNote': 'Sillage choisira d\'après le remote des dépôts, à la création du projet.',
       'delivery.warning.ghMissing': 'gh introuvable dans le PATH : repli sur une URL de pull request pré-remplie.',
       'delivery.warning.glabMissing': 'glab introuvable dans le PATH : repli sur une URL de merge request pré-remplie.',
@@ -148,6 +174,8 @@
       'chat.accepted': 'Acceptée : fusionnée dans {branch}',
       'chat.autoAccepted': 'Acceptée : son travail était déjà dans {branch}',
       'chat.mergeConflict': 'Conflit avec la branche du chantier sur {files} : demandez à l\'agent de reprendre la base.',
+      'chat.rebased': 'Rebasée automatiquement sur {branch} : cette tâche repart du travail accepté.',
+      'chat.rebaseConflict': 'Rebase automatique impossible sur {files} (rien n\'a été modifié) : demandez à l\'agent de reprendre la base.',
       'conversation.empty': 'Aucun message pour l\'instant.',
       'diff.empty': 'Aucune modification.',
       'deliverables.code': 'Code',
@@ -364,6 +392,8 @@
       'badge.new': 'NEW',
       'status.running': 'In progress',
       'status.review': 'To review',
+      'status.rebasing': 'Rebasing',
+      'status.rebasingNote': 'The task is being replayed on top of the work just accepted.',
       'status.accepted': 'Accepted',
       'status.cancelled': 'Refused',
       'action.interrupt': 'Stop the agent',
@@ -372,27 +402,46 @@
       'action.refuse': 'Refuse',
       'action.refuseTooltip': 'Leave this task out of the workstream',
       'action.reopen': 'Reopen the task',
+      'behind.taskTooltip.one': '1 commit behind {base}: rebase before accepting, or it will conflict.',
+      'behind.taskTooltip.other': '{n} commits behind {base}: rebase before accepting, or it will conflict.',
+      'behind.cardTooltip.one': 'The workstream is 1 commit behind {base}.',
+      'behind.cardTooltip.other': 'The workstream is {n} commits behind {base}.',
+      'behind.cardLabel.one': '↓ 1 commit behind {base}',
+      'behind.cardLabel.other': '↓ {n} commits behind {base}',
+      'behind.askRebase': 'Ask for a rebase',
+      'behind.askRebaseTooltip': 'Send the agent a message asking it to rebase its branch onto {base}',
+      'behind.rebasePrompt.one': 'Your branch is 1 commit behind {base}. Rebase onto it, settle any conflicts, then run the project checks again.',
+      'behind.rebasePrompt.other': 'Your branch is {n} commits behind {base}. Rebase onto it, settle any conflicts, then run the project checks again.',
       'action.cancelTask': 'Cancel the task',
       'action.cancelTaskConfirm': 'Confirm cancellation?',
       'task.delete': 'Delete the task',
       'task.deleteConfirm': 'Confirm deletion?',
       'ship.button': 'Ship',
-      'ship.counts.accepted.one': '{n} accepted',
-      'ship.counts.accepted.other': '{n} accepted',
-      'ship.counts.refused.one': '{n} refused',
-      'ship.counts.refused.other': '{n} refused',
-      'ship.counts.pending.one': '{n} to review',
-      'ship.counts.pending.other': '{n} to review',
       'ship.subtext.pr': 'Pushes {branch} and opens a pull request against {base}',
       'ship.subtext.mr': 'Pushes {branch} and opens a merge request against {base}',
-      'ship.subtext.push': 'Pushes {branch} (unknown forge: no pull request)',
+      'ship.subtext.push': 'Pushes {branch} to origin, without opening a pull request',
+      'ship.subtext.unknownForge': 'Pushes {branch} (unknown forge: no pull request)',
       'ship.subtext.merge': 'Merges {branch} into {base} locally, never pushing',
+      'ship.subtext.mergePush': 'Merges {branch} into {base}, then pushes {base}',
       'ship.subtext.repos': '{n} repositories involved',
       'ship.subtext.nothing': 'Nothing to ship yet',
       'ship.blocked.noTasks': 'No task in this workstream',
       'ship.blocked.tasksPending': 'Some tasks still need to be accepted or refused',
       'ship.blocked.nothingAccepted': 'No accepted task',
       'ship.blocked.nothingToShip': 'No branch to ship',
+      'ship.blocked.behindTarget': '{base} has moved on: catch up with it before shipping (merging is fast-forward only).',
+      'ship.alreadyOnTarget': 'Already on {base}',
+      'ship.alreadyOnTargetSub': 'All of the workstream\'s work has landed in {base}: nothing left to ship.',
+      'catchUp.button': 'Catch up with {base}',
+      'catchUp.tooltip': 'Merges {base} into the workstream branch, without rewriting its history. That is what makes shipping possible again.',
+      'catchUp.done': 'Workstream caught up with {base}.',
+      'catchUp.upToDate': 'The workstream was already up to date.',
+      'catchUp.conflictTitle': 'Conflict with {base}',
+      'catchUp.conflictBody': 'Merging {base} into the workstream clashes on {files}. Nothing was changed: the workstream is intact. An agent can pick up the new base and settle the conflicts in a dedicated task.',
+      'catchUp.askAgent': 'Hand it to an agent',
+      'catchUp.errorFailed': 'Catching up failed.',
+      'catchUp.taskTitle': 'Catch up with {base}',
+      'catchUp.taskPrompt': 'This workstream\'s branch is behind {base} and can no longer be merged: {files} conflicts. Merge {base} into the workstream branch, settle the conflicts keeping both intents, then run the project checks again.',
       'ship.modalTitle': 'Ship the workstream',
       'ship.modalConfirm': 'Ship',
       'ship.repoNothing': 'Nothing to ship',
@@ -403,16 +452,21 @@
       'ship.files.other': '{n} files',
       'ship.prLink': 'View the pull request',
       'ship.mergedInto': 'Merged into {base}',
+      'ship.mergedPushed': 'Merged into {base} and pushed',
       'ship.pushedBranch': 'Branch {branch} pushed',
       'ship.errorFailed': 'Failed to ship.',
       'delivery.label': 'Shipping means',
       'delivery.modeAuto': 'Detect from the repository',
       'delivery.modePr': 'Open a pull request (GitHub or GitLab)',
-      'delivery.modeMerge': 'Merge locally into a branch',
+      'delivery.modePush': 'Push the workstream branch, without a pull request',
+      'delivery.modeMerge': 'Merge into the target branch, locally',
+      'delivery.modeMergePush': 'Merge into the target branch and push it',
       'delivery.targetLabel': 'Target branch',
       'delivery.targetPlaceholder': 'repository default branch',
       'delivery.mergeNote': 'Local fast-forward merge only: Sillage never pushes that branch.',
+      'delivery.mergePushNote': 'The target branch is first caught up from origin, fast-forwarded, then pushed. Never forced.',
       'delivery.prNote': 'The workstream branch is pushed, then the pull request (or merge request) is opened.',
+      'delivery.pushNote': 'The workstream branch is pushed to origin. Nothing is opened, nothing is merged.',
       'delivery.autoNote': 'Sillage will pick from the repository remotes, when the project is created.',
       'delivery.warning.ghMissing': 'gh not found in PATH: falling back to a prefilled pull request URL.',
       'delivery.warning.glabMissing': 'glab not found in PATH: falling back to a prefilled merge request URL.',
@@ -427,6 +481,8 @@
       'chat.accepted': 'Accepted: merged into {branch}',
       'chat.autoAccepted': 'Accepted: its work was already in {branch}',
       'chat.mergeConflict': 'Conflict with the workstream branch on {files}: ask the agent to rebase on it.',
+      'chat.rebased': 'Rebased automatically onto {branch}: this task now starts from the accepted work.',
+      'chat.rebaseConflict': 'Automatic rebase not possible on {files} (nothing was changed): ask the agent to rebase on the workstream branch.',
       'conversation.empty': 'No messages yet.',
       'diff.empty': 'No changes.',
       'deliverables.code': 'Code',
@@ -598,9 +654,12 @@
   // Constantes
   // ---------------------------------------------------------------------
 
+  // Glyphes d'état, posés dans une pastille teintée (voir buildTaskGlyphHTML et
+  // .task-glyph) : un disque plein pour « à relire », qui se repère d'un coup
+  // d'œil sans se confondre avec le losange des compteurs de fichiers.
   var STATUS_GLYPH = {
     running: { icon: '◐', color: '#8b8982' },
-    review: { icon: '◍', color: '#9a6b0d' },
+    review: { icon: '●', color: '#9a6b0d' },
     accepted: { icon: '✓', color: '#2f7d54' },
     cancelled: { icon: '⊘', color: '#8b8982' }
   };
@@ -623,6 +682,7 @@
     detailErrorByTask: {},
     deliveryByCard: {}, // aperçu de livraison (GET /api/cards/{id}/delivery), non persisté
     shipResultByCard: {}, // dernier résultat de livraison, affiché dans la modale
+    catchUpErrorByCard: {}, // échec de rattrapage hors conflit, affiché dans la barre
     loading: {},
     screen: 'inbox', // 'inbox' | 'projects' | 'kanban' | 'work'
     projectId: null, cardId: null, taskId: null,
@@ -850,6 +910,7 @@
     delete state.cardsById[cardId];
     delete state.deliveryByCard[cardId];
     delete state.shipResultByCard[cardId];
+    delete state.catchUpErrorByCard[cardId];
     state.tasks.filter(function (t) { return t.cardId === cardId; }).forEach(function (t) {
       removeTaskLocally(t.id);
     });
@@ -1309,14 +1370,13 @@
     var liveLine = (t.status === 'running' && t.liveActivity)
       ? '<span class="live-line mono"><span class="live-dot"></span>' + escapeHtml(t.liveActivity) + '</span>' : '';
     var titleClass = t.status === 'cancelled' ? 'task-title task-title-cancelled' : 'task-title';
-    var glyphHTML = t.status === 'running'
-      ? '<span class="task-glyph"><span class="task-spinner"></span></span>'
-      : '<span class="task-glyph" style="color:' + glyph.color + '">' + glyph.icon + '</span>';
+    var glyphHTML = buildTaskGlyphHTML(t);
     return '<div class="task-row ' + (selected ? 'selected' : '') + '" data-action="open-task" data-task-id="' + t.id + '">' +
       glyphHTML +
       '<div class="task-main">' +
         '<div class="task-title-line"><span class="' + titleClass + '">' + escapeHtml(t.title) + '</span>' +
-        (isNew ? '<span class="badge-new">' + escapeHtml(t2('badge.new')) + '</span>' : '') + '</div>' +
+        (isNew ? '<span class="badge-new">' + escapeHtml(t2('badge.new')) + '</span>' : '') +
+        buildBehindBadgeHTML(t) + '</div>' +
         '<div class="task-meta-line">' + projectTag +
         '<span class="mono">#' + t.ref + '</span>' +
         '<span class="agent-chip"><span class="agent-avatar-sm" style="background:' + softColor(agent.color) + '">' + agent.emoji + '</span>' + escapeHtml(agent.name) + '</span>' +
@@ -1328,11 +1388,51 @@
       '</div>';
   }
 
+  // Pastille d'état d'une tâche : le repère qu'on cherche des yeux en balayant
+  // une liste. Cercle teinté (une couleur par état) plutôt qu'un caractère nu,
+  // avec l'état en infobulle. Deux états animés : l'agent travaille (fuseau
+  // gris), un rebase automatique est en cours (fuseau ambre).
+  function buildTaskGlyphHTML(task) {
+    var glyph = STATUS_GLYPH[task.status] || STATUS_GLYPH.running;
+    if (task.rebasing) {
+      return '<span class="task-glyph task-glyph-rebasing" title="' + escapeHtml(t2('status.rebasing')) + '">' +
+        '<span class="task-spinner"></span></span>';
+    }
+    if (task.status === 'running') {
+      return '<span class="task-glyph task-glyph-running" title="' + escapeHtml(t2('status.running')) + '">' +
+        '<span class="task-spinner"></span></span>';
+    }
+    return '<span class="task-glyph task-glyph-' + task.status + '" title="' + escapeHtml(t2('status.' + task.status)) + '"' +
+      ' style="color:' + glyph.color + '">' + glyph.icon + '</span>';
+  }
+
+  // Retard d'une tâche sur la branche de son chantier, tel que l'annonce le
+  // dernier aperçu de livraison (state.deliveryByCard, rechargé à l'ouverture
+  // du chantier et toutes les 60 s). Absent de la table = à jour.
+  function taskBehindCount(task) {
+    var prev = state.deliveryByCard[task.cardId];
+    if (!prev || !prev.behind) return 0;
+    return prev.behind[task.id] || 0;
+  }
+
+  // Badge « en retard » : un compteur discret, avec l'explication en infobulle.
+  function buildBehindBadgeHTML(task) {
+    var n = taskBehindCount(task);
+    if (!n) return '';
+    var tip = tCount('behind.taskTooltip', n, { base: task.base || '' });
+    return '<span class="behind-badge" title="' + escapeHtml(tip) + '">↓' + n + '</span>';
+  }
+
   // État d'une tâche dans la liste : lisible sans clic (acceptée, refusée), et
   // pour une tâche à relire, les deux boutons qui apparaissent au survol.
   // Un clic sur ces boutons agit tout de suite : l'acceptation est locale
   // (fusion dans la branche du chantier) et réversible, donc sans confirmation.
   function buildTaskRowStateHTML(t) {
+    // Pendant un rebase, ni Accepter ni Refuser : le worktree de la tâche est en
+    // train d'être rejoué, et le serveur refuserait de toute façon.
+    if (t.rebasing) {
+      return '<div class="task-row-state task-row-state-rebasing">' + escapeHtml(t2('status.rebasing')) + '</div>';
+    }
     if (t.status === 'review') {
       return '<div class="task-row-actions">' +
         '<button class="row-btn row-btn-accept" data-action="accept-task" data-task-id="' + t.id + '" title="' + escapeHtml(t2('action.acceptTooltip')) + '">' + escapeHtml(t2('action.accept')) + '</button>' +
@@ -1429,6 +1529,18 @@
 
   // loadDelivery récupère l'aperçu de livraison d'un chantier (lecture seule
   // côté serveur : mode, dépôts, commits, avertissements, blocage).
+  // Le réglage de livraison d'un projet vient de changer : les aperçus déjà
+  // chargés annoncent l'ancien mode (« pousse la branche et ouvre une pull
+  // request » alors que le projet fusionne désormais en local). On les jette, et
+  // on recharge tout de suite celui du chantier ouvert.
+  function invalidateDeliveryForProject(projectId) {
+    state.cards.forEach(function (c) {
+      if (c.projectId === projectId) delete state.deliveryByCard[c.id];
+    });
+    var current = state.cardId && state.cardsById[state.cardId];
+    if (current && current.projectId === projectId) loadDelivery(state.cardId);
+  }
+
   function loadDelivery(cardId) {
     var key = 'delivery:' + cardId;
     if (state.loading[key]) return;
@@ -1440,6 +1552,11 @@
     }).then(function () {
       delete state.loading[key];
       refreshShipBar(cardId);
+      // Les badges de retard vivent aussi dans les lignes de tâches et dans
+      // l'en-tête du détail : deux rafraîchissements ciblés, jamais un rendu
+      // complet, pour ne pas toucher au fil de conversation ni au composeur.
+      if (state.cardId === cardId) refreshTaskListAndFilters();
+      if (state.taskId) patchDetailHead(state.taskId);
     });
   }
 
@@ -1453,32 +1570,16 @@
     }
   }
 
-  // cardTaskCounts compte les tâches d'un chantier par état, depuis l'état
-  // local (toujours à jour via SSE), sans attendre l'aperçu de livraison.
-  function cardTaskCounts(cardId) {
-    return state.tasks.reduce(function (acc, tk) {
-      if (tk.cardId !== cardId) return acc;
-      if (tk.status === 'accepted') acc.accepted++;
-      else if (tk.status === 'cancelled') acc.refused++;
-      else acc.pending++;
-      return acc;
-    }, { accepted: 0, refused: 0, pending: 0 });
-  }
-
-  // deliveryCountsLabel : « 3 acceptées · 1 refusée · 1 à relire », sans les
-  // zéros (une ligne d'état, pas un tableau de bord).
-  function deliveryCountsLabel(counts) {
-    var parts = [];
-    if (counts.accepted) parts.push(tCount('ship.counts.accepted', counts.accepted));
-    if (counts.refused) parts.push(tCount('ship.counts.refused', counts.refused));
-    if (counts.pending) parts.push(tCount('ship.counts.pending', counts.pending));
-    return parts.join(' · ');
-  }
-
   // Dépôts qui ont réellement quelque chose à livrer (commits non poussés, ou
   // pas encore fusionnés dans la branche de destination).
   function deliverableRepos(prev) {
     return (prev && prev.repos ? prev.repos : []).filter(function (r) { return r.pending > 0; });
+  }
+
+  // Les deux modes qui fusionnent dans la branche de destination, par
+  // opposition aux deux qui livrent la branche du chantier elle-même.
+  function deliveryModeMerges(mode) {
+    return mode === 'merge' || mode === 'merge-push';
   }
 
   // deliveryActionLabel annonce l'action exacte, avant tout clic.
@@ -1489,9 +1590,11 @@
     var r = repos[0];
     var base = prev.target || r.base;
     if (prev.mode === 'merge') return t('ship.subtext.merge', { branch: r.branch, base: base });
+    if (prev.mode === 'merge-push') return t('ship.subtext.mergePush', { branch: r.branch, base: base });
+    if (prev.mode === 'push') return t('ship.subtext.push', { branch: r.branch });
     if (prev.provider === 'gitlab') return t('ship.subtext.mr', { branch: r.branch, base: r.base });
     if (prev.provider === 'github') return t('ship.subtext.pr', { branch: r.branch, base: r.base });
-    return t('ship.subtext.push', { branch: r.branch });
+    return t('ship.subtext.unknownForge', { branch: r.branch });
   }
 
   function deliveryWarningText(warning) {
@@ -1515,19 +1618,58 @@
         return '<a class="ship-link" href="' + escapeHtml(r.prUrl) + '" target="_blank" rel="noopener">' +
           escapeHtml(t('ship.prLink')) + (prev.repos.length > 1 ? ' (' + escapeHtml(r.repoName) + ')' : '') + '</a>';
       }
-      // Pas d'URL : fusion locale, ou branche poussée sur une forge inconnue.
-      var note = prev.mode === 'merge'
-        ? t('ship.mergedInto', { base: prev.target || r.base })
-        : t('ship.pushedBranch', { branch: r.branch });
+      // Pas d'URL : fusion (locale ou poussée), ou branche poussée sans PR.
+      var note;
+      if (prev.mode === 'merge') note = t('ship.mergedInto', { base: prev.target || r.base });
+      else if (prev.mode === 'merge-push') note = t('ship.mergedPushed', { base: prev.target || r.base });
+      else note = t('ship.pushedBranch', { branch: r.branch });
       return '<span class="ship-link-note">' + escapeHtml(note) + '</span>';
     }).join('');
     return '<div class="ship-links">' + items + '</div>';
   }
 
+  // Bateau de la livraison : un SVG inline plutôt qu'un emoji (illisible à cette
+  // taille, et dessiné différemment par chaque système) et plutôt qu'une police
+  // d'icônes (le frontend n'a aucune dépendance et reste embarqué). Grand-voile,
+  // foc et coque, en currentColor : l'icône suit la couleur du bouton.
+  function shipIconHTML() {
+    return '<svg class="btn-icon" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false">' +
+      '<path fill="currentColor" d="M7.6 1.5a.5.5 0 0 1 .95-.2l3.2 6.4a.5.5 0 0 1-.45.72H8.1a.5.5 0 0 1-.5-.5V1.5Z"/>' +
+      '<path fill="currentColor" d="M6.3 8.44H4.1a.5.5 0 0 1-.42-.77l2.2-3.4a.5.5 0 0 1 .92.27v3.4a.5.5 0 0 1-.5.5Z"/>' +
+      '<path fill="currentColor" d="M2 9.9h12a.6.6 0 0 1 .56.82l-1.1 2.7a2.2 2.2 0 0 1-2.04 1.37H4.58A2.2 2.2 0 0 1 2.54 13.4l-1.1-2.7A.6.6 0 0 1 2 9.9Z"/>' +
+      '</svg>';
+  }
+
+  // Ancre : le chantier est arrivé à destination, il n'y a plus rien à livrer.
+  // Remplace le bouton, plutôt qu'un bouton désactivé qui laisserait croire
+  // qu'il reste quelque chose à faire.
+  function anchorIconHTML() {
+    return '<svg class="btn-icon" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false">' +
+      '<path fill="currentColor" d="M8 1a2.1 2.1 0 0 1 .7 4.08V6.7h1.6a.65.65 0 0 1 0 1.3H8.7v5.06a4.3 4.3 0 0 0 3.4-3.36h-.85a.5.5 0 0 1-.37-.84l1.6-1.75a.5.5 0 0 1 .74 0l1.6 1.75a.5.5 0 0 1-.37.84h-.93A5.7 5.7 0 0 1 8 15a5.7 5.7 0 0 1-5.52-5.2H1.55a.5.5 0 0 1-.37-.84l1.6-1.75a.5.5 0 0 1 .74 0l1.6 1.75a.5.5 0 0 1-.37.84H3.9a4.3 4.3 0 0 0 3.4 3.36V8H5.7a.65.65 0 0 1 0-1.3h1.6V5.08A2.1 2.1 0 0 1 8 1Zm0 1.3a.8.8 0 1 0 0 1.6.8.8 0 0 0 0-1.6Z"/>' +
+      '</svg>';
+  }
+
+  // Chantier entièrement arrivé dans sa branche de destination : plus rien à
+  // livrer, ni par Sillage ni à la main (voir mergedIntoTarget côté serveur).
+  function shipAlreadyOnTarget(prev) {
+    var repos = (prev && prev.repos) || [];
+    if (!repos.length) return false;
+    return repos.every(function (r) { return r.mergedIntoTarget; });
+  }
+
+  // Fusion impossible : les deux modes de fusion sont fast-forward uniquement, et
+  // la destination a avancé de son côté. Livrer échouerait à coup sûr ; le badge
+  // de retard du chantier dit déjà quoi faire (rebaser).
+  function shipNeedsRebase(prev) {
+    if (!prev || !deliveryModeMerges(prev.mode)) return false;
+    return deliverableRepos(prev).some(function (r) { return !r.fastForwardable; });
+  }
+
   // buildShipButtonHTML : le bouton lui-même, affiché dans l'en-tête. L'état
   // vient de la carte (shipReady / shipBlocker, toujours à jour via SSE) ;
   // l'aperçu (branche, base, commits) vient de GET /api/cards/{id}/delivery,
-  // chargé à la demande.
+  // chargé à la demande. Le tout dans un emplacement stable (.ship-slot), parce
+  // que ce n'est pas toujours un bouton qui s'y affiche.
   function buildShipButtonHTML(card) {
     var prev = state.deliveryByCard[card.id];
     if (!prev) loadDelivery(card.id);
@@ -1536,9 +1678,44 @@
     if (blocked) sub = shipBlockerLabel(card.shipBlocker);
     else if (prev) sub = deliveryActionLabel(prev);
     else sub = t('common.loading');
-    var ready = !blocked && !!prev && deliverableRepos(prev).length > 0;
-    return '<button class="btn-green ship-btn" ' + (ready ? '' : 'disabled title="' + escapeHtml(sub) + '"') +
-      ' data-action="open-ship-modal" data-card-id="' + card.id + '">' + escapeHtml(t('ship.button')) + '</button>';
+
+    if (prev && shipAlreadyOnTarget(prev)) {
+      var base = prev.target || (prev.repos[0] && prev.repos[0].base) || '';
+      var label = t('ship.alreadyOnTarget', { base: base });
+      return '<span class="ship-slot"><span class="ship-anchored" title="' + escapeHtml(label) + '">' +
+        anchorIconHTML() + escapeHtml(label) + '</span></span>';
+    }
+    if (prev && shipNeedsRebase(prev)) {
+      sub = t('ship.blocked.behindTarget', { base: catchUpTarget(prev) });
+    }
+    var ready = !blocked && !!prev && deliverableRepos(prev).length > 0 && !shipNeedsRebase(prev);
+    // Rattraper la destination est le geste qui débloque la livraison : le
+    // bouton se tient donc à côté de celui qu'il débloque.
+    var catchUp = '';
+    if (prev && cardNeedsCatchUp(prev)) {
+      var target = catchUpTarget(prev);
+      catchUp = '<button class="btn-outline catch-up-btn" data-action="catch-up-card" data-card-id="' + card.id + '"' +
+        ' title="' + escapeHtml(t('catchUp.tooltip', { base: target })) + '">' +
+        escapeHtml(t('catchUp.button', { base: target })) + '</button>';
+    }
+    return '<span class="ship-slot">' + catchUp +
+      '<button class="btn-green ship-btn" ' + (ready ? '' : 'disabled title="' + escapeHtml(sub) + '"') +
+      ' data-action="open-ship-modal" data-card-id="' + card.id + '">' +
+      shipIconHTML() + escapeHtml(t('ship.button')) + '</button></span>';
+  }
+
+  // Un chantier a besoin d'être rattrapé dès que sa destination a avancé sans
+  // lui, quel que soit le mode : en fusion la livraison est bloquée, en pull
+  // request elle partirait sur une base périmée.
+  function cardNeedsCatchUp(prev) {
+    var repos = (prev && prev.repos) || [];
+    if (!repos.length || shipAlreadyOnTarget(prev)) return false;
+    return repos.some(function (r) { return r.behind > 0 || !r.fastForwardable; });
+  }
+
+  function catchUpTarget(prev) {
+    var repos = (prev && prev.repos) || [];
+    return prev.target || (repos[0] && repos[0].base) || '';
   }
 
   // buildShipBarHTML : l'aperçu de livraison (compteurs, état, avertissements,
@@ -1548,20 +1725,40 @@
     var prev = state.deliveryByCard[card.id];
     var blocked = !card.shipReady;
     var sub;
-    if (blocked) sub = shipBlockerLabel(card.shipBlocker);
-    else if (prev) sub = deliveryActionLabel(prev);
+    if (prev && shipAlreadyOnTarget(prev)) {
+      sub = t('ship.alreadyOnTargetSub', { base: prev.target || (prev.repos[0] && prev.repos[0].base) || '' });
+    } else if (blocked) sub = shipBlockerLabel(card.shipBlocker);
+    else if (prev && shipNeedsRebase(prev)) {
+      sub = t('ship.blocked.behindTarget', { base: prev.target || (deliverableRepos(prev)[0] || {}).base || '' });
+    } else if (prev) sub = deliveryActionLabel(prev);
     else sub = t('common.loading');
     var warnings = (prev && prev.warnings ? prev.warnings : []).map(function (w) {
       return '<div class="ship-bar-warning">⚠ ' + escapeHtml(deliveryWarningText(w)) + '</div>';
     }).join('');
+    var catchUpError = state.catchUpErrorByCard[card.id];
+    if (catchUpError) warnings += '<div class="ship-bar-warning">⚠ ' + escapeHtml(catchUpError) + '</div>';
+    // Pas de compteurs de tâches ici : les filtres de la liste juste en dessous
+    // les portent déjà (« Toutes 7 · À relire 0 · Traitées 7 »).
     return '<div class="ship-bar">' +
         '<div class="ship-bar-state">' +
-          '<span class="ship-bar-counts">' + escapeHtml(deliveryCountsLabel(cardTaskCounts(card.id))) + '</span>' +
           '<span class="ship-bar-sub">' + escapeHtml(sub) + '</span>' +
           warnings +
+          buildCardBehindHTML(prev) +
           (prev ? buildShipLinksHTML(prev) : '') +
         '</div>' +
       '</div>';
+  }
+
+  // Retard du chantier lui-même sur sa base (la release) : une ligne par dépôt
+  // concerné, seulement quand il y en a. Ce retard ne bloque pas la livraison,
+  // il annonce le rebase à faire pour livrer proprement.
+  function buildCardBehindHTML(prev) {
+    if (!prev || !prev.repos) return '';
+    return prev.repos.filter(function (r) { return r.behind > 0; }).map(function (r) {
+      var label = tCount('behind.cardLabel', r.behind, { base: r.base || '' });
+      var tip = tCount('behind.cardTooltip', r.behind, { base: r.base || '' });
+      return '<span class="ship-bar-behind" title="' + escapeHtml(tip) + '">' + escapeHtml(label) + '</span>';
+    }).join('');
   }
 
   // Rafraîchit la barre de livraison et le bouton Ship de l'en-tête (pas la
@@ -1577,14 +1774,16 @@
       var freshBar = barWrapper.firstElementChild;
       if (freshBar) bar.replaceWith(freshBar);
     }
-    var btn = document.querySelector('.ship-btn');
-    if (btn) {
-      var btnWrapper = document.createElement('div');
-      btnWrapper.innerHTML = buildShipButtonHTML(card);
-      var freshBtn = btnWrapper.firstElementChild;
-      if (freshBtn) btn.replaceWith(freshBtn);
+    // Emplacement, pas bouton : selon l'état du chantier on y met le bouton de
+    // livraison ou l'ancre « déjà arrivé ».
+    var slot = document.querySelector('.ship-slot');
+    if (slot) {
+      var slotWrapper = document.createElement('div');
+      slotWrapper.innerHTML = buildShipButtonHTML(card);
+      var freshSlot = slotWrapper.firstElementChild;
+      if (freshSlot) slot.replaceWith(freshSlot);
     }
-    return !!(bar || btn);
+    return !!(bar || slot);
   }
 
   function buildShipRepoRowHTML(prev, r) {
@@ -1596,7 +1795,7 @@
     } else {
       meta = r.shippedAt ? t('ship.repoShipped') : t('ship.repoNothing');
     }
-    var target = prev.mode === 'merge' ? (prev.target || r.base) : r.base;
+    var target = deliveryModeMerges(prev.mode) ? (prev.target || r.base) : r.base;
     return '<div class="ship-repo">' +
       '<div class="ship-repo-head"><span class="repo-chip">' + escapeHtml(r.repoName) + '</span>' +
       '<span class="mono ship-repo-branch">' + escapeHtml(r.branch) + ' → ' + escapeHtml(target) + '</span></div>' +
@@ -1607,11 +1806,14 @@
   function buildShipResultsHTML(cardId) {
     var result = state.shipResultByCard[cardId];
     if (!result) return '';
+    // La cible réelle d'une fusion vient du réglage du projet ; la réponse de
+    // livraison ne porte que la base de la branche de chantier.
+    var target = (state.deliveryByCard[cardId] || {}).target || '';
     var rows = (result.repos || []).map(function (r) {
       var label;
       if (r.error) label = '✕ ' + r.error;
       else if (r.skipped) label = '· ' + t('ship.repoNothing');
-      else if (r.merged) label = '✓ ' + t('ship.mergedInto', { base: r.base });
+      else if (r.merged) label = '✓ ' + t(r.pushed ? 'ship.mergedPushed' : 'ship.mergedInto', { base: target || r.base });
       else label = '✓ ' + (r.prUrl || r.branch);
       return '<div class="ship-result-row ' + (r.error ? 'ship-result-error' : '') + '">' +
         '<span class="repo-chip">' + escapeHtml(r.repoName) + '</span> ' + escapeHtml(label) + '</div>';
@@ -1624,7 +1826,9 @@
     var warnings = (prev.warnings || []).map(function (w) {
       return '<div class="modal-note modal-note-warning">⚠ ' + escapeHtml(deliveryWarningText(w)) + '</div>';
     }).join('');
-    var mergeNote = prev.mode === 'merge' ? '<div class="modal-note">' + escapeHtml(t('delivery.mergeNote')) + '</div>' : '';
+    // La règle du mode choisi est répétée dans le récapitulatif : ce panneau
+    // est la confirmation, il doit dire ce qui va sortir de la machine.
+    var mergeNote = '<div class="modal-note">' + escapeHtml(deliveryModeNote(prev.mode)) + '</div>';
     return '<div class="modal modal-sm">' +
       '<div class="modal-head"><span class="modal-title">' + escapeHtml(t('ship.modalTitle')) + '</span>' +
       '<button class="icon-btn" data-action="close-modal" aria-label="' + escapeHtml(t('common.close')) + '">✕</button></div>' +
@@ -1633,7 +1837,8 @@
       buildShipResultsHTML(card.id) +
       '<div id="ship-modal-error" class="modal-error hidden"></div>' +
       '<div class="modal-foot"><button class="btn-outline" data-action="close-modal">' + escapeHtml(t('common.cancel')) + '</button>' +
-      '<button class="btn-green" data-action="submit-ship" data-card-id="' + card.id + '">' + escapeHtml(t('ship.modalConfirm')) + '</button></div>' +
+      '<button class="btn-green" data-action="submit-ship" data-card-id="' + card.id + '">' +
+      shipIconHTML() + escapeHtml(t('ship.modalConfirm')) + '</button></div>' +
       '</div>';
   }
 
@@ -1668,6 +1873,56 @@
       errEl.textContent = (e instanceof ApiError && e.message) || t('ship.errorFailed');
       errEl.classList.remove('hidden');
     });
+  }
+
+  // Rattrapage de la destination : le geste mécanique d'abord (fusion de la
+  // destination dans la branche du chantier, côté serveur). Il passe tout seul
+  // dans le cas courant ; quand il conflicte, rien n'est modifié et c'est là
+  // qu'un agent est utile, pas avant.
+  function catchUpCard(cardId) {
+    var target = catchUpTarget(state.deliveryByCard[cardId] || {});
+    delete state.catchUpErrorByCard[cardId];
+    api('/api/cards/' + cardId + '/catch-up', { method: 'POST', body: {} }).then(function (res) {
+      if (res && res.card) upsertCard(res.card);
+      var conflicted = (res.repos || []).filter(function (r) { return r.conflictFilePaths; });
+      var failed = (res.repos || []).filter(function (r) { return r.error && !r.conflictFilePaths; });
+      if (failed.length) state.catchUpErrorByCard[cardId] = failed[0].error;
+      // Succès : rien à annoncer, l'écran le dit déjà (le bouton disparaît, le
+      // retard tombe, la livraison s'active). loadDelivery redessine la barre.
+      loadDelivery(cardId);
+      if (conflicted.length) openModal(buildCatchUpConflictHTML(cardId, target, conflicted));
+    }).catch(function (e) {
+      state.catchUpErrorByCard[cardId] = (e instanceof ApiError && e.message) || t('catchUp.errorFailed');
+      refreshShipBar(cardId);
+    });
+  }
+
+  // Conflit de rattrapage : dire quels fichiers, rappeler que rien n'a bougé, et
+  // proposer le seul chemin qui reste (une tâche d'agent sur ce conflit).
+  function buildCatchUpConflictHTML(cardId, target, conflicted) {
+    var files = conflicted.map(function (r) { return r.conflictFilePaths.split(' ').join(', '); }).join(', ');
+    return '<div class="modal modal-sm">' +
+      '<div class="modal-head"><span class="modal-title">' + escapeHtml(t('catchUp.conflictTitle', { base: target })) + '</span>' +
+      '<button class="icon-btn" data-action="close-modal" aria-label="' + escapeHtml(t('common.close')) + '">✕</button></div>' +
+      '<div class="modal-note">' + escapeHtml(t('catchUp.conflictBody', { base: target, files: files })) + '</div>' +
+      '<div class="modal-foot"><button class="btn-outline" data-action="close-modal">' + escapeHtml(t('common.cancel')) + '</button>' +
+      '<button class="btn-green" data-action="catch-up-ask-agent" data-card-id="' + cardId + '"' +
+      ' data-target="' + escapeHtml(target) + '" data-files="' + escapeHtml(files) + '">' +
+      escapeHtml(t('catchUp.askAgent')) + '</button></div>' +
+      '</div>';
+  }
+
+  // Confier le conflit à un agent : la modale de création de tâche, pré-remplie.
+  // L'humain garde la main sur l'agent choisi et sur le texte avant d'envoyer.
+  function askAgentToCatchUp(cardId, target, files) {
+    openNewTaskModal(cardId);
+    setTimeout(function () {
+      var titleEl = document.getElementById('new-task-title');
+      var promptEl = document.getElementById('new-task-prompt');
+      if (titleEl) titleEl.value = t('catchUp.taskTitle', { base: target });
+      if (promptEl) promptEl.value = t('catchUp.taskPrompt', { base: target, files: files });
+      if (promptEl) promptEl.focus();
+    }, 0);
   }
 
   // Contexte de liste courant (carte ou boîte de réception), utilisé à la fois
@@ -1735,9 +1990,18 @@
     }
   }
 
-  function buildStatusBadgeHTML(status) {
-    var glyph = STATUS_GLYPH[status] || STATUS_GLYPH.running;
-    var label = t('status.' + status);
+  // Bandeau d'état du panneau de détail. Un rebase automatique en cours prend le
+  // dessus sur le statut : c'est l'information du moment, et elle explique
+  // pourquoi la tâche n'accepte rien pendant ce temps.
+  function buildStatusBadgeHTML(task) {
+    if (task.rebasing) {
+      return '<div class="status-badge status-badge-rebasing">' +
+        '<span class="status-badge-icon"><span class="task-spinner"></span></span>' +
+        '<span class="status-badge-label">' + escapeHtml(t('status.rebasing')) + '</span>' +
+        '<span class="status-badge-note">' + escapeHtml(t('status.rebasingNote')) + '</span></div>';
+    }
+    var glyph = STATUS_GLYPH[task.status] || STATUS_GLYPH.running;
+    var label = t('status.' + task.status);
     return '<div class="status-badge"><span class="status-badge-icon" style="color:' + glyph.color + '">' + glyph.icon + '</span>' +
       '<span class="status-badge-label">' + escapeHtml(label) + '</span></div>';
   }
@@ -1809,7 +2073,6 @@
 
   function buildDetailHeadHTML(task) {
     var agent = state.agentsById[task.agentId] || { emoji: '?', name: '?', model: '?', color: '#ccc' };
-    var glyph = STATUS_GLYPH[task.status] || STATUS_GLYPH.running;
     var soft = softColor(agent.color);
     var taskProject = state.projectsById[task.projectId];
     var multiRepo = !!(taskProject && taskProject.repos && taskProject.repos.length > 1);
@@ -1831,6 +2094,19 @@
 
     // Refuser une tâche en revue, ou annuler une tâche en cours : même action
     // côté API (/cancel), seul le libellé change selon le contexte.
+    // Le retard se règle par l'agent, pas par le serveur : le bouton envoie un
+    // message dans le fil (mis en file si l'agent tourne encore), lui seul sait
+    // résoudre un conflit de rebase.
+    var behind = taskBehindCount(task);
+    var behindRow = '';
+    if (behind > 0) {
+      behindRow = '<div class="behind-row">' +
+        '<span class="behind-badge" title="' + escapeHtml(tCount('behind.taskTooltip', behind, { base: task.base || '' })) + '">↓' + behind + '</span>' +
+        '<span class="behind-text">' + escapeHtml(tCount('behind.taskTooltip', behind, { base: task.base || '' })) + '</span>' +
+        '<button class="detail-link" data-action="ask-rebase" data-task-id="' + task.id + '" title="' + escapeHtml(t('behind.askRebaseTooltip', { base: task.base || '' })) + '">' + escapeHtml(t('behind.askRebase')) + '</button>' +
+        '</div>';
+    }
+
     var linksRow = '';
     if (task.status === 'running' || task.status === 'review') {
       var refusing = task.status === 'review';
@@ -1851,7 +2127,7 @@
 
     return '<div class="detail-head">' +
         '<div class="detail-head-row">' +
-          '<span class="task-glyph" style="color:' + glyph.color + '">' + glyph.icon + '</span>' +
+          buildTaskGlyphHTML(task) +
           '<div class="detail-head-main">' +
             '<div class="detail-title">' + escapeHtml(task.title) + '</div>' +
             '<div class="detail-meta">' +
@@ -1864,7 +2140,8 @@
           '<button class="icon-btn" data-action="toggle-panel-expand" aria-label="' + escapeHtml(state.panelExpanded ? t('panel.collapse') : t('panel.expand')) + '" title="' + escapeHtml(state.panelExpanded ? t('panel.collapse') : t('panel.expand')) + '">' + (state.panelExpanded ? '⤡' : '⤢') + '</button>' +
           '<button class="icon-btn" data-action="close-panel" aria-label="' + escapeHtml(t('common.close')) + '">✕</button>' +
         '</div>' +
-        buildStatusBadgeHTML(task.status) +
+        buildStatusBadgeHTML(task) +
+        behindRow +
         '<div class="action-row">' + primaryBtnHTML +
           '<span class="checks">' + renderChecks(task.checks) + '</span>' +
         '</div>' +
@@ -1959,6 +2236,16 @@
     if (conflictFiles) {
       return '<div class="msg-system msg-system-warning">' + escapeHtml(t('chat.mergeConflict', { files: conflictFiles.split(' ').join(', ') })) + '</div>';
     }
+    // Rebase automatique après l'acceptation d'une autre tâche du chantier
+    // (voir rebaseSiblingTasks côté serveur) : réussi, ou abandonné sur conflit.
+    var rebasedBranch = parseMarker('rebased', m.text);
+    if (rebasedBranch) {
+      return '<div class="msg-system">' + escapeHtml(t('chat.rebased', { branch: rebasedBranch })) + '</div>';
+    }
+    var rebaseConflictFiles = parseMarker('rebase-conflict', m.text);
+    if (rebaseConflictFiles) {
+      return '<div class="msg-system msg-system-warning">' + escapeHtml(t('chat.rebaseConflict', { files: rebaseConflictFiles.split(' ').join(', ') })) + '</div>';
+    }
     var isUser = m.author === 'user';
     var emoji = isUser ? '🙂' : (agent.emoji || '');
     var bg = isUser ? '#eeece6' : softColor(agent.color);
@@ -2047,6 +2334,20 @@
     var node = wrapper.firstElementChild;
     if (node) container.appendChild(node);
     if (wasAtBottom) container.scrollTop = container.scrollHeight;
+  }
+
+  // askRebase demande le rebase à l'agent au lieu de le faire côté serveur :
+  // un rebase serveur échouerait sur le premier conflit, alors que l'agent sait
+  // le résoudre. Le message part par le chemin normal, donc il se met en file
+  // tout seul si l'agent tourne encore (voir la mécanique pending du runner).
+  function askRebase(taskId) {
+    var task = state.tasksById[taskId];
+    if (!task) return;
+    var behind = taskBehindCount(task);
+    if (!behind) return;
+    var text = tCount('behind.rebasePrompt', behind, { base: task.base || '' });
+    api('/api/tasks/' + taskId + '/messages', { method: 'POST', body: { text: text } })
+      .catch(function () {});
   }
 
   function sendMessage(taskId) {
@@ -2666,7 +2967,9 @@
     var options = [];
     if (!project) options.push({ value: 'auto', label: t('delivery.modeAuto') });
     options.push({ value: 'pr', label: t('delivery.modePr') });
+    options.push({ value: 'push', label: t('delivery.modePush') });
     options.push({ value: 'merge', label: t('delivery.modeMerge') });
+    options.push({ value: 'merge-push', label: t('delivery.modeMergePush') });
     var optionsHTML = options.map(function (o) {
       return '<option value="' + o.value + '"' + (o.value === mode ? ' selected' : '') + '>' + escapeHtml(o.label) + '</option>';
     }).join('');
@@ -2685,7 +2988,9 @@
   // la sélection, sans attendre l'enregistrement.
   function deliveryModeNote(mode) {
     if (mode === 'merge') return t('delivery.mergeNote');
+    if (mode === 'merge-push') return t('delivery.mergePushNote');
     if (mode === 'pr') return t('delivery.prNote');
+    if (mode === 'push') return t('delivery.pushNote');
     return t('delivery.autoNote');
   }
 
@@ -3062,6 +3367,7 @@
     if (delivery) body.delivery = delivery;
     api('/api/projects/' + projectId, { method: 'PATCH', body: body }).then(function (project) {
       upsertProject(project);
+      invalidateDeliveryForProject(project.id);
       closeModal();
       renderSidebar(); renderMain();
     }).catch(function (e) {
@@ -3432,13 +3738,16 @@
     // statut a réellement changé.
     var previous = state.tasksById[task.id];
     var statusChanged = !previous || previous.status !== task.status;
+    // Un rebase automatique qui vient de finir a effacé le retard de la tâche :
+    // l'aperçu (qui porte les compteurs de retard) n'est plus à jour.
+    var rebaseFinished = !!(previous && previous.rebasing && !task.rebasing);
     upsertTask(task);
     refreshTaskListAndFilters();
     if (state.taskId === task.id) {
       patchDetailHead(task.id);
       if (state.panelTab === 'diff') patchDiffFooter(task.id);
     }
-    if (statusChanged && state.cardId && task.cardId === state.cardId) {
+    if ((statusChanged || rebaseFinished) && state.cardId && task.cardId === state.cardId) {
       loadDelivery(state.cardId);
     }
     renderSidebar();
@@ -3636,8 +3945,13 @@
       case 'reopen': doReopen(el.getAttribute('data-task-id')); break;
       case 'accept-task': doAcceptTask(el.getAttribute('data-task-id')); break;
       case 'refuse-task': doCancelTask(el.getAttribute('data-task-id')); break;
+      case 'ask-rebase': askRebase(el.getAttribute('data-task-id')); break;
       case 'open-ship-modal': openShipModal(el.getAttribute('data-card-id')); break;
       case 'submit-ship': submitShip(el.getAttribute('data-card-id')); break;
+      case 'catch-up-card': catchUpCard(el.getAttribute('data-card-id')); break;
+      case 'catch-up-ask-agent':
+        askAgentToCatchUp(el.getAttribute('data-card-id'), el.getAttribute('data-target'), el.getAttribute('data-files'));
+        break;
       case 'confirm-click': handleConfirmClickDispatch(el); break;
       case 'select-diff-file': selectDiffFile(el.getAttribute('data-task-id'), el.getAttribute('data-path')); break;
       case 'send-message': sendMessage(el.getAttribute('data-task-id')); break;

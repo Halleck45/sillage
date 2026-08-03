@@ -295,12 +295,17 @@ func (f *deliveryFixture) addTask(t *testing.T, title, file, content string) (st
 	return id, cb
 }
 
+// accept accepte une tâche et attend les rebases automatiques que l'acceptation
+// déclenche en tâche de fond (voir rebaseSiblingTasks) : sans cette attente, un
+// test verrait un état intermédiaire, ou courrait contre le nettoyage de
+// t.TempDir pendant qu'un git tourne encore.
 func (f *deliveryFixture) accept(t *testing.T, taskID string) *httptest.ResponseRecorder {
 	t.Helper()
 	req := httptest.NewRequest(http.MethodPost, "/", nil)
 	req.SetPathValue("id", taskID)
 	w := httptest.NewRecorder()
 	f.srv.handleAccept(w, req)
+	f.srv.waitRebases()
 	return w
 }
 
@@ -311,6 +316,24 @@ func (f *deliveryFixture) ship(t *testing.T, body string) *httptest.ResponseReco
 	w := httptest.NewRecorder()
 	f.srv.handleCardShip(w, req)
 	return w
+}
+
+// catchUp rattrape la branche de destination dans celle du chantier et retourne
+// la réponse décodée.
+func (f *deliveryFixture) catchUp(t *testing.T) CatchUpResponse {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader("{}"))
+	req.SetPathValue("id", f.card.ID)
+	w := httptest.NewRecorder()
+	f.srv.handleCardCatchUp(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("rattrapage : attendu 200, reçu %d (%s)", w.Code, w.Body.String())
+	}
+	var resp CatchUpResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("réponse de rattrapage illisible : %v", err)
+	}
+	return resp
 }
 
 // delivery appelle l'aperçu de livraison (qui constate au passage les branches
@@ -438,6 +461,72 @@ func TestAcceptConflictKeepsTaskInReview(t *testing.T) {
 	}
 }
 
+// TestDeliveryPreviewReportsBehind couvre le retard annoncé par l'aperçu de
+// livraison, celui qui provoque les conflits : une tâche dont la branche de
+// chantier a avancé sous elle (parce qu'une autre tâche a été acceptée), et le
+// chantier lui-même quand sa base a avancé. Un rebase remet les compteurs à
+// zéro, et une tâche acceptée n'y figure jamais (rien à rebaser).
+func TestDeliveryPreviewReportsBehind(t *testing.T) {
+	f := newDeliveryFixture(t, Delivery{Mode: "pr"})
+
+	first, cb := f.addTask(t, "Première", "a.txt", "contenu a\n")
+	second, _ := f.addTask(t, "Seconde", "b.txt", "contenu b\n")
+
+	if prev := f.delivery(t); len(prev.Behind) != 0 {
+		t.Fatalf("deux tâches parties de la même branche ne sont pas en retard, reçu %v", prev.Behind)
+	}
+
+	// La seconde tâche a son agent au travail : le rebase automatique la laisse
+	// tranquille (voir rebaseSiblingTasks), et c'est justement le cas où le
+	// badge de retard doit s'afficher.
+	if _, err := f.srv.store.UpdateTask(second, func(tk *Task) { tk.Status = "running" }); err != nil {
+		t.Fatalf("UpdateTask: %v", err)
+	}
+
+	// Accepter la première fait avancer la branche du chantier d'un commit :
+	// la seconde tâche est désormais en retard de ce commit.
+	if w := f.accept(t, first); w.Code != http.StatusOK {
+		t.Fatalf("accept: attendu 200, reçu %d (%s)", w.Code, w.Body.String())
+	}
+	// Deux commits, pas un : celui de la tâche acceptée, puis le commit de
+	// fusion (MergeBranch fusionne en --no-ff). On compte des commits absents,
+	// comme le fait une forge, pas des acceptations.
+	prev := f.delivery(t)
+	if prev.Behind[second] != 2 {
+		t.Fatalf("la seconde tâche devrait être en retard de deux commits, reçu %d (%v)", prev.Behind[second], prev.Behind)
+	}
+	if _, ok := prev.Behind[first]; ok {
+		t.Fatalf("une tâche acceptée n'a rien à rebaser, elle ne doit pas figurer dans behind : %v", prev.Behind)
+	}
+
+	// Le rebase (celui que l'agent finit par faire, ou celui du bouton) : le
+	// retard disparaît. Le travail en attente est commité d'abord, comme le fait
+	// le rebase automatique.
+	task, _ := f.srv.store.GetTask(second)
+	if _, err := CommitAll(task.WorktreeDir, "Sillage: Seconde"); err != nil {
+		t.Fatalf("CommitAll: %v", err)
+	}
+	runTestGit(t, task.WorktreeDir, "-c", "user.email=test@example.com", "-c", "user.name=Test", "rebase", cb.Branch)
+	if prev := f.delivery(t); len(prev.Behind) != 0 {
+		t.Fatalf("après rebase, plus aucun retard attendu, reçu %v", prev.Behind)
+	}
+
+	// Retard du chantier sur sa base : un commit arrive sur main.
+	if err := os.WriteFile(filepath.Join(f.repo, "release.txt"), []byte("livré\n"), 0o644); err != nil {
+		t.Fatalf("écriture impossible : %v", err)
+	}
+	runTestGit(t, f.repo, "add", "-A")
+	runTestGit(t, f.repo, "commit", "-m", "avance sur main")
+
+	prev = f.delivery(t)
+	if len(prev.Repos) != 1 {
+		t.Fatalf("un seul dépôt attendu, reçu %d", len(prev.Repos))
+	}
+	if prev.Repos[0].Behind != 1 {
+		t.Fatalf("le chantier devrait être en retard d'un commit sur %q, reçu %d", prev.Repos[0].Base, prev.Repos[0].Behind)
+	}
+}
+
 // TestShipMergeModeNeverPushes couvre le mode "merge" : la branche du chantier
 // est fusionnée en fast-forward dans la branche de destination du dépôt de
 // travail, et RIEN n'est poussé (le remote reste vide).
@@ -489,6 +578,328 @@ func TestMergeLocalRefusesWhenTargetDiverged(t *testing.T) {
 	_, err := MergeLocal(f.repo, f.dataDir, f.card.ID, "demo", "main", cb.Branch)
 	if !errors.Is(err, ErrTargetDiverged) {
 		t.Fatalf("erreur attendue ErrTargetDiverged, reçue %v", err)
+	}
+}
+
+// TestDeliveryPreviewTargetPosition couvre les deux positions du chantier par
+// rapport à sa destination, celles dont l'UI se sert pour ne pas proposer une
+// livraison qui échouerait (ou qui n'apporterait rien) :
+//
+//   - fusionnable en fast-forward tant que la destination n'a pas bougé ;
+//   - plus rien à livrer quand la branche est arrivée dans la destination ;
+//   - ni l'un ni l'autre quand les deux ont divergé.
+func TestDeliveryPreviewTargetPosition(t *testing.T) {
+	f := newDeliveryFixture(t, Delivery{Mode: "merge", Target: "main"})
+
+	taskID, cb := f.addTask(t, "Ajoute une feature", "feature.txt", "contenu\n")
+	if w := f.accept(t, taskID); w.Code != http.StatusOK {
+		t.Fatalf("accept: attendu 200, reçu %d (%s)", w.Code, w.Body.String())
+	}
+
+	prev := f.delivery(t)
+	if len(prev.Repos) != 1 {
+		t.Fatalf("un seul dépôt attendu, reçu %d", len(prev.Repos))
+	}
+	if !prev.Repos[0].FastForwardable || prev.Repos[0].MergedIntoTarget {
+		t.Fatalf("chantier attendu fusionnable et pas encore arrivé, reçu %+v", prev.Repos[0])
+	}
+
+	// main avance de son côté : plus de fast-forward possible, et le chantier
+	// n'est toujours pas arrivé. C'est le cas où livrer échouerait.
+	if err := os.WriteFile(filepath.Join(f.repo, "ailleurs.txt"), []byte("autre\n"), 0o644); err != nil {
+		t.Fatalf("écriture impossible : %v", err)
+	}
+	runTestGit(t, f.repo, "add", "-A")
+	runTestGit(t, f.repo, "commit", "-m", "avance sur main")
+
+	prev = f.delivery(t)
+	if prev.Repos[0].FastForwardable || prev.Repos[0].MergedIntoTarget {
+		t.Fatalf("après divergence : ni fusionnable ni arrivé, reçu %+v", prev.Repos[0])
+	}
+
+	// La branche du chantier est fusionnée à la main dans main : tout est
+	// arrivé, il n'y a plus rien à livrer.
+	runTestGit(t, f.repo, "-c", "user.email=test@example.com", "-c", "user.name=Test", "merge", "--no-edit", cb.Branch)
+	prev = f.delivery(t)
+	if !prev.Repos[0].MergedIntoTarget {
+		t.Fatalf("branche fusionnée à la main : arrivée attendue, reçu %+v", prev.Repos[0])
+	}
+	if prev.Repos[0].Pending != 0 {
+		t.Fatalf("plus rien à livrer attendu, reçu pending=%d", prev.Repos[0].Pending)
+	}
+}
+
+// TestCatchUpUnblocksShip : quand la destination a avancé, le rattrapage la
+// fusionne dans la branche du chantier, ce qui rend la fusion fast-forward (donc
+// la livraison) possible à nouveau. L'historique du chantier n'est pas réécrit :
+// le commit de la tâche acceptée est toujours là.
+func TestCatchUpUnblocksShip(t *testing.T) {
+	f := newDeliveryFixture(t, Delivery{Mode: "merge", Target: "main"})
+
+	taskID, cb := f.addTask(t, "Ajoute une feature", "feature.txt", "contenu\n")
+	if w := f.accept(t, taskID); w.Code != http.StatusOK {
+		t.Fatalf("accept: attendu 200, reçu %d (%s)", w.Code, w.Body.String())
+	}
+	shaBefore := HeadSha(cb.WorktreeDir)
+
+	// main avance de son côté, sur un autre fichier : plus de fast-forward.
+	if err := os.WriteFile(filepath.Join(f.repo, "release.txt"), []byte("livré\n"), 0o644); err != nil {
+		t.Fatalf("écriture impossible : %v", err)
+	}
+	runTestGit(t, f.repo, "add", "-A")
+	runTestGit(t, f.repo, "commit", "-m", "avance sur main")
+	if prev := f.delivery(t); prev.Repos[0].FastForwardable {
+		t.Fatal("la destination a avancé : le fast-forward ne devrait plus être possible")
+	}
+
+	resp := f.catchUp(t)
+	if len(resp.Repos) != 1 || !resp.Repos[0].Merged || resp.Repos[0].Error != "" {
+		t.Fatalf("rattrapage inattendu : %+v", resp.Repos)
+	}
+	// Le travail du chantier est intact, et il a en plus le contenu de main.
+	if _, err := os.Stat(filepath.Join(cb.WorktreeDir, "feature.txt")); err != nil {
+		t.Fatalf("le travail du chantier doit rester : %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(cb.WorktreeDir, "release.txt")); err != nil {
+		t.Fatalf("le chantier devrait avoir rattrapé main : %v", err)
+	}
+	if HeadSha(cb.WorktreeDir) == shaBefore {
+		t.Fatal("le rattrapage devrait avoir ajouté un commit de fusion")
+	}
+
+	prev := f.delivery(t)
+	if !prev.Repos[0].FastForwardable || prev.Repos[0].Behind != 0 {
+		t.Fatalf("après rattrapage : fusion attendue possible et aucun retard, reçu %+v", prev.Repos[0])
+	}
+	if w := f.ship(t, `{"confirm":true}`); w.Code != http.StatusOK {
+		t.Fatalf("ship après rattrapage : attendu 200, reçu %d (%s)", w.Code, w.Body.String())
+	}
+	// Un second rattrapage n'a plus rien à faire.
+	if resp2 := f.catchUp(t); !resp2.Repos[0].UpToDate {
+		t.Fatalf("second rattrapage : « déjà à jour » attendu, reçu %+v", resp2.Repos[0])
+	}
+}
+
+// TestCatchUpConflictLeavesWorkstreamIntact : un rattrapage qui conflicte est
+// annulé. Le chantier reste exactement dans l'état où il était : c'est la
+// condition pour pouvoir le proposer d'un simple clic.
+func TestCatchUpConflictLeavesWorkstreamIntact(t *testing.T) {
+	f := newDeliveryFixture(t, Delivery{Mode: "merge", Target: "main"})
+
+	taskID, cb := f.addTask(t, "Ajoute une feature", "partage.txt", "version chantier\n")
+	if w := f.accept(t, taskID); w.Code != http.StatusOK {
+		t.Fatalf("accept: attendu 200, reçu %d (%s)", w.Code, w.Body.String())
+	}
+	shaBefore := HeadSha(cb.WorktreeDir)
+
+	// main touche le même fichier, autrement : le rattrapage ne peut pas trancher.
+	if err := os.WriteFile(filepath.Join(f.repo, "partage.txt"), []byte("version main\n"), 0o644); err != nil {
+		t.Fatalf("écriture impossible : %v", err)
+	}
+	runTestGit(t, f.repo, "add", "-A")
+	runTestGit(t, f.repo, "commit", "-m", "main touche le même fichier")
+
+	resp := f.catchUp(t)
+	if resp.Repos[0].ConflictFilePaths != "partage.txt" {
+		t.Fatalf("conflit attendu sur partage.txt, reçu %+v", resp.Repos[0])
+	}
+	if resp.Repos[0].Merged {
+		t.Fatal("aucune fusion ne doit être enregistrée en cas de conflit")
+	}
+	if HeadSha(cb.WorktreeDir) != shaBefore {
+		t.Fatal("le chantier doit rester intact après un conflit de rattrapage")
+	}
+	if !IsWorktreeClean(cb.WorktreeDir) {
+		t.Fatal("le worktree du chantier doit être propre (fusion annulée)")
+	}
+	if content, err := os.ReadFile(filepath.Join(cb.WorktreeDir, "partage.txt")); err != nil || string(content) != "version chantier\n" {
+		t.Fatalf("le contenu du chantier doit être intact, reçu %q (err %v)", content, err)
+	}
+}
+
+// TestAcceptRebasesSiblingTasks : accepter une tâche rejoue automatiquement les
+// autres tâches en revue du chantier sur la branche du chantier, avec un
+// marqueur dans leur fil. Le travail non commité de ces tâches est commité
+// avant (les agents ne commitent pas toujours) et n'est donc jamais perdu.
+func TestAcceptRebasesSiblingTasks(t *testing.T) {
+	f := newDeliveryFixture(t, Delivery{Mode: "pr"})
+
+	firstID, cb := f.addTask(t, "Première tâche", "premier.txt", "un\n")
+	secondID, _ := f.addTask(t, "Deuxième tâche", "second.txt", "deux\n")
+	second, _ := f.srv.store.GetTask(secondID)
+
+	if w := f.accept(t, firstID); w.Code != http.StatusOK {
+		t.Fatalf("accept: attendu 200, reçu %d (%s)", w.Code, w.Body.String())
+	}
+	f.srv.waitRebases()
+
+	// La branche du chantier est désormais contenue dans celle de la deuxième
+	// tâche : elle repart du travail accepté.
+	if !IsBranchMergedInto(second.WorktreeDir, cb.Branch, second.Branch) {
+		t.Fatal("la deuxième tâche devrait avoir été rebasée sur la branche du chantier")
+	}
+	// Son propre travail est toujours là, et le fil l'annonce.
+	if _, err := os.Stat(filepath.Join(second.WorktreeDir, "second.txt")); err != nil {
+		t.Fatalf("le travail de la deuxième tâche ne doit pas être perdu : %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(second.WorktreeDir, "premier.txt")); err != nil {
+		t.Fatalf("la deuxième tâche devrait voir le travail accepté : %v", err)
+	}
+	msgs := f.srv.store.GetMessages(secondID)
+	last := msgs[len(msgs)-1]
+	if last.Text != "[rebased:"+cb.Branch+"]" {
+		t.Fatalf("marqueur de rebase attendu, reçu %q", last.Text)
+	}
+	if task, _ := f.srv.store.GetTask(secondID); task.Rebasing || task.Status != "review" {
+		t.Fatalf("tâche attendue en revue sans rebase en cours, reçu status=%q rebasing=%v", task.Status, task.Rebasing)
+	}
+}
+
+// TestAcceptRebaseConflictLeavesTaskIntact : un rebase automatique qui
+// conflicte est annulé (worktree intact, branche inchangée) et posé au fil comme
+// tel. La reprise reste du ressort de l'agent.
+func TestAcceptRebaseConflictLeavesTaskIntact(t *testing.T) {
+	f := newDeliveryFixture(t, Delivery{Mode: "pr"})
+
+	// Les deux tâches touchent le même fichier, avec un contenu différent.
+	firstID, cb := f.addTask(t, "Première tâche", "partage.txt", "version un\n")
+	secondID, _ := f.addTask(t, "Deuxième tâche", "partage.txt", "version deux\n")
+	second, _ := f.srv.store.GetTask(secondID)
+
+	if w := f.accept(t, firstID); w.Code != http.StatusOK {
+		t.Fatalf("accept: attendu 200, reçu %d (%s)", w.Code, w.Body.String())
+	}
+	f.srv.waitRebases()
+
+	if IsBranchMergedInto(second.WorktreeDir, cb.Branch, second.Branch) {
+		t.Fatal("un rebase en conflit ne doit rien changer à la branche de la tâche")
+	}
+	// Le rebase est annulé, pas laissé en plan : le worktree est utilisable.
+	if !IsWorktreeClean(second.WorktreeDir) {
+		t.Fatal("le worktree devrait être propre après l'annulation du rebase")
+	}
+	if content, err := os.ReadFile(filepath.Join(second.WorktreeDir, "partage.txt")); err != nil || string(content) != "version deux\n" {
+		t.Fatalf("le travail de la tâche doit être intact, reçu %q (err %v)", content, err)
+	}
+	msgs := f.srv.store.GetMessages(secondID)
+	last := msgs[len(msgs)-1]
+	if last.Text != "[rebase-conflict:partage.txt]" {
+		t.Fatalf("marqueur de conflit de rebase attendu, reçu %q", last.Text)
+	}
+	if task, _ := f.srv.store.GetTask(secondID); task.Rebasing || task.Status != "review" {
+		t.Fatalf("tâche attendue en revue sans rebase en cours, reçu status=%q rebasing=%v", task.Status, task.Rebasing)
+	}
+}
+
+// TestShipMergePushModeUpdatesRemoteTarget couvre le mode "merge-push" : la
+// branche du chantier est fusionnée dans la branche de destination, ET cette
+// branche de destination est poussée (c'est toute la différence avec "merge").
+func TestShipMergePushModeUpdatesRemoteTarget(t *testing.T) {
+	f := newDeliveryFixture(t, Delivery{Mode: "merge-push", Target: "main"})
+
+	taskID, _ := f.addTask(t, "Ajoute une feature", "feature.txt", "contenu\n")
+	if w := f.accept(t, taskID); w.Code != http.StatusOK {
+		t.Fatalf("accept: attendu 200, reçu %d (%s)", w.Code, w.Body.String())
+	}
+
+	w := f.ship(t, `{"confirm":true}`)
+	if w.Code != http.StatusOK {
+		t.Fatalf("ship: attendu 200, reçu %d (%s)", w.Code, w.Body.String())
+	}
+	var resp ShipResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("réponse de livraison illisible : %v", err)
+	}
+	if len(resp.Repos) != 1 || !resp.Repos[0].Merged || !resp.Repos[0].Pushed || resp.Repos[0].Error != "" {
+		t.Fatalf("résultat de livraison inattendu : %+v", resp.Repos)
+	}
+	// La fusion a eu lieu localement...
+	if _, err := os.Stat(filepath.Join(f.repo, "feature.txt")); err != nil {
+		t.Fatalf("feature.txt devrait être fusionné dans main : %v", err)
+	}
+	// ...et main est poussée, avec le travail dedans. La branche du chantier,
+	// elle, n'a aucune raison d'être poussée dans ce mode.
+	branches := runTestGit(t, f.bare, "branch", "--list")
+	if !strings.Contains(branches, "main") {
+		t.Fatalf("main devrait être poussée, branches distantes : %q", branches)
+	}
+	if strings.Contains(branches, "sillage/ws-") {
+		t.Fatalf("le mode merge-push ne pousse que la branche de destination, reçu : %q", branches)
+	}
+	if files := runTestGit(t, f.bare, "ls-tree", "--name-only", "main"); !strings.Contains(files, "feature.txt") {
+		t.Fatalf("feature.txt devrait être dans main côté remote, reçu : %q", files)
+	}
+}
+
+// TestMergeAndPushRefusesWhenRemoteDiverged : le mode "merge-push" rattrape le
+// remote avant de fusionner, et refuse net si la branche de destination a
+// vraiment divergé. Rien n'est poussé, rien n'est fusionné : un refus avant
+// écriture vaut mieux qu'une fusion locale suivie d'un push rejeté.
+func TestMergeAndPushRefusesWhenRemoteDiverged(t *testing.T) {
+	f := newDeliveryFixture(t, Delivery{Mode: "merge-push", Target: "main"})
+
+	taskID, cb := f.addTask(t, "Ajoute une feature", "feature.txt", "contenu\n")
+	if w := f.accept(t, taskID); w.Code != http.StatusOK {
+		t.Fatalf("accept: attendu 200, reçu %d (%s)", w.Code, w.Body.String())
+	}
+	// Un autre clone pousse un commit sur main : le local a divergé du remote
+	// (il a le travail du chantier, le remote a ce commit-ci).
+	other := t.TempDir()
+	runTestGit(t, other, "clone", f.repo, other)
+	runTestGit(t, other, "remote", "set-url", "origin", f.bare)
+	if err := os.WriteFile(filepath.Join(other, "ailleurs.txt"), []byte("remote\n"), 0o644); err != nil {
+		t.Fatalf("écriture ailleurs.txt impossible : %v", err)
+	}
+	runTestGit(t, other, "add", "-A")
+	runTestGit(t, other, "commit", "-m", "travail venu d'ailleurs")
+	runTestGit(t, other, "push", "origin", "main")
+	// main local avance aussi, sur un autre commit : divergence réelle.
+	if err := os.WriteFile(filepath.Join(f.repo, "ici.txt"), []byte("local\n"), 0o644); err != nil {
+		t.Fatalf("écriture ici.txt impossible : %v", err)
+	}
+	runTestGit(t, f.repo, "add", "-A")
+	runTestGit(t, f.repo, "commit", "-m", "travail local")
+
+	_, err := MergeAndPush(f.repo, f.dataDir, f.card.ID, "demo", "main", cb.Branch)
+	if !errors.Is(err, ErrTargetDiverged) {
+		t.Fatalf("erreur attendue ErrTargetDiverged, reçue %v", err)
+	}
+	if _, statErr := os.Stat(filepath.Join(f.repo, "feature.txt")); statErr == nil {
+		t.Fatal("aucune fusion ne doit avoir lieu quand la destination a divergé")
+	}
+}
+
+// TestShipPushModeDoesNotOpenPR couvre le mode "push" : la branche du chantier
+// est poussée, et aucune pull request n'est ouverte (prUrl vide).
+func TestShipPushModeDoesNotOpenPR(t *testing.T) {
+	f := newDeliveryFixture(t, Delivery{Mode: "push"})
+
+	taskID, cb := f.addTask(t, "Ajoute une feature", "feature.txt", "contenu\n")
+	if w := f.accept(t, taskID); w.Code != http.StatusOK {
+		t.Fatalf("accept: attendu 200, reçu %d (%s)", w.Code, w.Body.String())
+	}
+
+	w := f.ship(t, `{"confirm":true}`)
+	if w.Code != http.StatusOK {
+		t.Fatalf("ship: attendu 200, reçu %d (%s)", w.Code, w.Body.String())
+	}
+	var resp ShipResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("réponse de livraison illisible : %v", err)
+	}
+	if len(resp.Repos) != 1 || !resp.Repos[0].Pushed || resp.Repos[0].Merged || resp.Repos[0].Error != "" {
+		t.Fatalf("résultat de livraison inattendu : %+v", resp.Repos)
+	}
+	if resp.Repos[0].PrURL != "" {
+		t.Fatalf("le mode push n'ouvre aucune pull request, reçu %q", resp.Repos[0].PrURL)
+	}
+	// La branche du chantier est poussée, main n'est pas touchée.
+	branches := runTestGit(t, f.bare, "branch", "--list")
+	if !strings.Contains(branches, cb.Branch) {
+		t.Fatalf("la branche du chantier devrait être poussée, reçu : %q", branches)
+	}
+	if strings.Contains(branches, "main") {
+		t.Fatalf("le mode push ne touche pas la branche de destination, reçu : %q", branches)
 	}
 }
 
