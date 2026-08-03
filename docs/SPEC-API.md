@@ -1,4 +1,4 @@
-# Sillage : contrat d'API (v0.3.5)
+# Sillage : contrat d'API (v0.3.6)
 
 Serveur Go sur `:8787`. Frontend statique servi sur `/`. Tout le JSON est en camelCase.
 Auth par cookie de session (`sillage_session`, HttpOnly). Toute route `/api/*` (sauf `/api/login`) renvoie `401` sans session valide : le frontend affiche alors l'écran de connexion.
@@ -80,10 +80,13 @@ Settings { "displayName": "Ada", "lang": "fr" }   // lang : ""|"fr"|"en"
 | DELETE | `/api/agents/{id}` | | 204 (400 si une tâche référence encore l'agent) |
 | POST | `/api/projects` | `{name, path}` ou `{name, repos:[{name?,path}, ...], description?, contextPrompt?, links?:[{url,title?}, ...]}` | Project (400 si un path est invalide/pas un dépôt git, noms de repo dupliqués, ou lien invalide/en trop grand nombre : voir « Liens épinglés » ci-dessous) |
 | PATCH | `/api/projects/{id}` | `{name?, description?, checkCmd?, contextPrompt?, repos?, links?}` | Project (repos/links, si fournis, remplacent la liste entière ; retirer un repo ne casse pas les tâches existantes) |
+| DELETE | `/api/projects/{id}` | `{confirm:true}` | 204 (voir « Suppressions » ci-dessous). **Validation humaine obligatoire** : refus 400 sans `confirm` |
 | POST | `/api/cards` | `{projectId, title, column?, contextPrompt?}` | Card. `column`, si fourni, doit valoir `"soon"` (400 `"cards are created in the soon column"` sinon) : les cartes se créent toujours dans "Bientôt" |
 | PATCH | `/api/cards/{id}` | `{column?, title?, contextPrompt?}` | Card. `title`, si fourni, doit être non vide. Le déplacement manuel de colonne (toutes colonnes acceptées) reste indépendant de l'auto-déplacement (voir plus bas) |
+| DELETE | `/api/cards/{id}` | `{confirm:true}` | 204 (voir « Suppressions » ci-dessous). **Validation humaine obligatoire** : refus 400 sans `confirm` |
 | POST | `/api/tasks` | `{cardId, title, agentId, prompt?, repoName?}` | Task (créée `running`, agent lancé avec title+prompt). `repoName` optionnel si le projet n'a qu'un repo ; sinon 400 `"repoName required (project has several repositories)"` ou 400 si inconnu |
 | PATCH | `/api/tasks/{id}` | `{agentId}` | Task : réassigne l'agent (voir « Réassignation » ci-dessous). 400 si `status=running` (`"interrupt the agent before reassigning"`) ou si l'agent est inconnu |
+| DELETE | `/api/tasks/{id}` | `{confirm:true}` | 204 (voir « Suppressions » ci-dessous). **Validation humaine obligatoire** : refus 400 sans `confirm` |
 | GET | `/api/tasks/{id}` | | `{task, messages}` |
 | POST | `/api/tasks/{id}/messages` | `{text}` | 202 ; relance l'agent (statut → running) |
 | POST | `/api/tasks/{id}/interrupt` | | Task (running → review) |
@@ -118,6 +121,15 @@ Après chaque changement de statut de tâche, la carte est automatiquement repla
 `PATCH /api/tasks/{id} {agentId}` : refusé si la tâche est `running` (l'interrompre d'abord via `/interrupt`) ou si l'agent est inconnu. Effets : `task.agentId` change, `task.sessionId` est vidé (le nouvel agent ne peut pas reprendre la session CLI de l'ancien), et un Message est ajouté au fil avec `author="agent"`, `authorName=""` et un texte figé `"[reassigned:<agentId>]"` : le frontend détecte ce marqueur et affiche une ligne système localisée (`author`/`authorName` volontairement neutres pour rester i18n-propre côté backend). SSE `task` + `message` + `agents`.
 
 Départ frais : quand la session CLI est vide (lancement initial, ou premier message après une réassignation), le texte envoyé au CLI est préfixé par un rappel minimal : `Task: <title>\n\n<texte>` (pas de préfixe si le texte est vide).
+
+### Suppressions (tâches, chantiers, projets)
+
+Actions destructives, jamais déclenchées depuis les listes : confirmation double clic côté UI ET `{"confirm":true}` côté API (400 `"confirmation required"` sinon, pour les trois routes).
+
+- `DELETE /api/tasks/{id}` : si la tâche est `running`, l'agent est d'abord interrompu (même mécanique que `/interrupt`/`/cancel` : SIGINT puis SIGKILL après 5 s). La tâche et ses messages sont ensuite supprimés du store. Le worktree est retiré du dépôt d'origine (`git worktree remove --force` puis `worktree prune`), **best-effort** : un échec de ce nettoyage n'empêche jamais la suppression de la tâche. La branche git n'est **jamais** supprimée (elle peut avoir été poussée). SSE : `cards` (compteurs recalculés), `agents`, `tokens`, et un événement dédié `taskDeleted`.
+- `DELETE /api/cards/{id}` : cascade sur toutes les tâches du chantier (même traitement individuel que ci-dessus). SSE : `taskDeleted` par tâche supprimée, puis `cards`, `agents`, `tokens`, puis `cardDeleted`.
+- `DELETE /api/projects/{id}` : cascade sur tous les chantiers du projet, puis leurs tâches (même traitement individuel). Ne publie que `projectDeleted` : le frontend recharge l'état complet (`GET /api/state`) à réception de cet événement, plus simple et plus sûr qu'une longue série d'événements de cascade.
+- Les tokens déjà consommés par les tâches supprimées disparaissent des agrégats (`tokens.global`, `tokens.projects`, `tokens.tasks`) : les compteurs reflètent uniquement l'existant. L'événement `tokens` est republié après toute suppression de tâche (isolée ou en cascade).
 
 ### Santé des agents
 
@@ -170,6 +182,9 @@ Le répertoire de données (dataDir) peut devenir un dépôt git optionnel, pour
 - `project` : Project complet (après PATCH `/api/projects/{id}`).
 - `workspace` : WorkspaceStatus (après setup, changement de remote ou sync).
 - `settings` : Settings (après PATCH `/api/settings`).
+- `taskDeleted` : `{taskId, cardId, projectId}` (après `DELETE /api/tasks/{id}`, une fois par tâche supprimée y compris en cascade).
+- `cardDeleted` : `{cardId, projectId}` (après `DELETE /api/cards/{id}`).
+- `projectDeleted` : `{projectId}` (après `DELETE /api/projects/{id}` ; le frontend recharge l'état complet plutôt que de rejouer la cascade).
 
 Le frontend maintient son état en mémoire à partir de `/api/state` + SSE ; reconnexion SSE automatique (EventSource natif) et re-fetch de `/api/state` à la reconnexion.
 

@@ -986,3 +986,106 @@ func TestCardAutoMovesFromSoonToDoingWhenTaskStarts(t *testing.T) {
 		t.Fatalf("la carte devrait passer en doing quand une tâche démarre, reçue %q", got.Column)
 	}
 }
+
+// --- Suppressions (Store, hors orchestration Runner) ---
+
+func TestDeleteTaskRemovesTaskAndMessages(t *testing.T) {
+	s, err := NewStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+	p, _ := s.AddProject("p", "", "", []Repo{{Name: "r", Path: "/tmp/x"}}, nil)
+	card, _ := s.AddCard(p.ID, "Carte", "", "")
+	id := mkTaskWithStatus(t, s, card.ID, p.ID, "done")
+	if _, _, err := s.AddMessage(id, "user", "", "bonjour"); err != nil {
+		t.Fatalf("AddMessage: %v", err)
+	}
+
+	deleted, err := s.DeleteTask(id)
+	if err != nil {
+		t.Fatalf("DeleteTask: %v", err)
+	}
+	if deleted.ID != id {
+		t.Fatalf("la tâche retournée devrait être celle supprimée, reçu %q", deleted.ID)
+	}
+	if _, ok := s.GetTask(id); ok {
+		t.Fatalf("la tâche ne devrait plus exister après suppression")
+	}
+	if msgs := s.GetMessages(id); len(msgs) != 0 {
+		t.Fatalf("les messages de la tâche devraient avoir disparu, reçu %d", len(msgs))
+	}
+	got, _ := s.GetCard(card.ID)
+	if got.TasksTotal != 0 {
+		t.Fatalf("le compteur de tâches de la carte devrait être à 0, reçu %d", got.TasksTotal)
+	}
+}
+
+func TestDeleteTaskRefusesUnknownID(t *testing.T) {
+	s, err := NewStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+	if _, err := s.DeleteTask("t-inconnu"); err == nil {
+		t.Fatalf("la suppression d'une tâche inconnue devrait échouer")
+	}
+}
+
+func TestCardCascadeDeletesAllTasks(t *testing.T) {
+	s, err := NewStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+	p, _ := s.AddProject("p", "", "", []Repo{{Name: "r", Path: "/tmp/x"}}, nil)
+	card, _ := s.AddCard(p.ID, "Carte", "", "")
+	var taskIDs []string
+	for i := 0; i < 3; i++ {
+		taskIDs = append(taskIDs, mkTaskWithStatus(t, s, card.ID, p.ID, "done"))
+	}
+
+	runner := NewRunner(s, NewHub())
+	if err := runner.DeleteCard(card.ID); err != nil {
+		t.Fatalf("DeleteCard: %v", err)
+	}
+
+	for _, id := range taskIDs {
+		if _, ok := s.GetTask(id); ok {
+			t.Fatalf("la tâche %s devrait avoir été supprimée par la cascade de la carte", id)
+		}
+	}
+	if _, ok := s.GetCard(card.ID); ok {
+		t.Fatalf("la carte devrait avoir été supprimée")
+	}
+}
+
+func TestProjectCascadeDeletesCardsAndTasks(t *testing.T) {
+	s, err := NewStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+	p, _ := s.AddProject("p", "", "", []Repo{{Name: "r", Path: "/tmp/x"}}, nil)
+	card1, _ := s.AddCard(p.ID, "Carte 1", "", "")
+	card2, _ := s.AddCard(p.ID, "Carte 2", "", "")
+	t1 := mkTaskWithStatus(t, s, card1.ID, p.ID, "done")
+	t2 := mkTaskWithStatus(t, s, card2.ID, p.ID, "review")
+
+	runner := NewRunner(s, NewHub())
+	if err := runner.DeleteProject(p.ID); err != nil {
+		t.Fatalf("DeleteProject: %v", err)
+	}
+
+	if _, ok := s.GetProject(p.ID); ok {
+		t.Fatalf("le projet devrait avoir été supprimé")
+	}
+	if _, ok := s.GetCard(card1.ID); ok {
+		t.Fatalf("la carte 1 devrait avoir été supprimée")
+	}
+	if _, ok := s.GetCard(card2.ID); ok {
+		t.Fatalf("la carte 2 devrait avoir été supprimée")
+	}
+	if _, ok := s.GetTask(t1); ok {
+		t.Fatalf("la tâche %s devrait avoir été supprimée par la cascade du projet", t1)
+	}
+	if _, ok := s.GetTask(t2); ok {
+		t.Fatalf("la tâche %s devrait avoir été supprimée par la cascade du projet", t2)
+	}
+}

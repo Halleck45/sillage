@@ -183,6 +183,24 @@ type TokensEvent struct {
 	Tasks    map[string]Tokens `json:"tasks"`
 }
 
+// TaskDeletedEvent est le contenu de l'événement SSE "taskDeleted".
+type TaskDeletedEvent struct {
+	TaskID    string `json:"taskId"`
+	CardID    string `json:"cardId"`
+	ProjectID string `json:"projectId"`
+}
+
+// CardDeletedEvent est le contenu de l'événement SSE "cardDeleted".
+type CardDeletedEvent struct {
+	CardID    string `json:"cardId"`
+	ProjectID string `json:"projectId"`
+}
+
+// ProjectDeletedEvent est le contenu de l'événement SSE "projectDeleted".
+type ProjectDeletedEvent struct {
+	ProjectID string `json:"projectId"`
+}
+
 // DiffLine est une ligne d'un hunk de diff unifié.
 type DiffLine struct {
 	Type string `json:"type"` // ctx|add|del

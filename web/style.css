@@ -470,6 +470,9 @@ button, input, textarea { font-family: inherit; }
 .detail-link-row { display: flex; gap: 16px; margin-top: 8px; }
 .detail-link { border: 0; background: transparent; color: var(--muted-3); font-size: 12px; cursor: pointer; padding: 2px 2px; }
 .detail-link:hover { color: var(--text-2); text-decoration: underline; }
+.detail-delete-row { margin-top: 8px; }
+.detail-link-danger { color: var(--red); opacity: 0.8; }
+.detail-link-danger:hover { color: var(--red); opacity: 1; }
 .checks { flex: none; font-size: 12px; font-weight: 600; white-space: nowrap; display: flex; gap: 8px; }
 .check { display: inline-flex; align-items: center; gap: 3px; }
 .check-ok { color: var(--green-live); }
@@ -622,6 +625,7 @@ button, input, textarea { font-family: inherit; }
 .modal-delete-row { margin-top: 14px; text-align: left; }
 .delete-link { border: 0; background: transparent; color: var(--red); opacity: 0.8; font-size: 12px; cursor: pointer; padding: 4px 2px; }
 .delete-link:hover { opacity: 1; text-decoration: underline; }
+.modal-delete-subtext { margin-top: 2px; font-size: 11px; color: var(--muted-3); }
 
 /* ---------- New surfaces (v0.3) ---------- */
 

@@ -75,10 +75,13 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("DELETE /api/agents/{id}", s.handleDeleteAgent)
 	mux.HandleFunc("POST /api/projects", s.handleCreateProject)
 	mux.HandleFunc("PATCH /api/projects/{id}", s.handleUpdateProject)
+	mux.HandleFunc("DELETE /api/projects/{id}", s.handleDeleteProject)
 	mux.HandleFunc("POST /api/cards", s.handleCreateCard)
 	mux.HandleFunc("PATCH /api/cards/{id}", s.handleUpdateCard)
+	mux.HandleFunc("DELETE /api/cards/{id}", s.handleDeleteCard)
 	mux.HandleFunc("POST /api/tasks", s.handleCreateTask)
 	mux.HandleFunc("PATCH /api/tasks/{id}", s.handleReassignTask)
+	mux.HandleFunc("DELETE /api/tasks/{id}", s.handleDeleteTask)
 	mux.HandleFunc("GET /api/tasks/{id}", s.handleGetTask)
 	mux.HandleFunc("POST /api/tasks/{id}/messages", s.handlePostMessage)
 	mux.HandleFunc("POST /api/tasks/{id}/interrupt", s.handleInterrupt)
@@ -535,6 +538,25 @@ func (s *Server) handleUpdateProject(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, project)
 }
 
+// handleDeleteProject supprime un projet, avec cascade sur ses chantiers et
+// tâches (interruption des agents en cours, retrait best-effort des
+// worktrees). Ne publie que projectDeleted, le front recharge l'état complet.
+func (s *Server) handleDeleteProject(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	var body struct {
+		Confirm bool `json:"confirm"`
+	}
+	if err := decodeJSON(r, &body); err != nil || !body.Confirm {
+		writeError(w, http.StatusBadRequest, "confirmation required")
+		return
+	}
+	if err := s.runner.DeleteProject(id); err != nil {
+		writeError(w, statusForStoreError(err), err.Error())
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // --- Cartes ---
 
 func (s *Server) handleCreateCard(w http.ResponseWriter, r *http.Request) {
@@ -575,6 +597,25 @@ func (s *Server) handleUpdateCard(w http.ResponseWriter, r *http.Request) {
 	}
 	s.runner.publishCards(card.ProjectID)
 	writeJSON(w, http.StatusOK, card)
+}
+
+// handleDeleteCard supprime une carte (chantier), avec cascade sur ses
+// tâches (interruption des agents en cours, retrait best-effort des
+// worktrees).
+func (s *Server) handleDeleteCard(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	var body struct {
+		Confirm bool `json:"confirm"`
+	}
+	if err := decodeJSON(r, &body); err != nil || !body.Confirm {
+		writeError(w, http.StatusBadRequest, "confirmation required")
+		return
+	}
+	if err := s.runner.DeleteCard(id); err != nil {
+		writeError(w, statusForStoreError(err), err.Error())
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // --- Tâches ---
@@ -667,6 +708,25 @@ func (s *Server) handleReassignTask(w http.ResponseWriter, r *http.Request) {
 	s.runner.publishMessage(msg)
 	s.runner.publishAgents()
 	writeJSON(w, http.StatusOK, task)
+}
+
+// handleDeleteTask supprime une tâche : interrompt l'agent au préalable s'il
+// tourne encore (même mécanique que cancel), retire le worktree (best-effort,
+// jamais la branche), supprime la tâche et ses messages.
+func (s *Server) handleDeleteTask(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	var body struct {
+		Confirm bool `json:"confirm"`
+	}
+	if err := decodeJSON(r, &body); err != nil || !body.Confirm {
+		writeError(w, http.StatusBadRequest, "confirmation required")
+		return
+	}
+	if err := s.runner.DeleteTask(id); err != nil {
+		writeError(w, statusForStoreError(err), err.Error())
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (s *Server) handleGetTask(w http.ResponseWriter, r *http.Request) {

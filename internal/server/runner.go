@@ -85,6 +85,15 @@ func (r *Runner) publishSettings(s Settings) { r.hub.Publish(Event{Name: "settin
 func (r *Runner) publishActivity(taskID string, line *string) {
 	r.hub.Publish(Event{Name: "activity", Data: map[string]any{"taskId": taskID, "line": line}})
 }
+func (r *Runner) publishTaskDeleted(taskID, cardID, projectID string) {
+	r.hub.Publish(Event{Name: "taskDeleted", Data: TaskDeletedEvent{TaskID: taskID, CardID: cardID, ProjectID: projectID}})
+}
+func (r *Runner) publishCardDeleted(cardID, projectID string) {
+	r.hub.Publish(Event{Name: "cardDeleted", Data: CardDeletedEvent{CardID: cardID, ProjectID: projectID}})
+}
+func (r *Runner) publishProjectDeleted(projectID string) {
+	r.hub.Publish(Event{Name: "projectDeleted", Data: ProjectDeletedEvent{ProjectID: projectID}})
+}
 
 // Start lance (ou relance) l'agent d'une tâche. initial=true correspond au
 // lancement initial (text = titre + description, aucun Message ajouté) ;
@@ -292,6 +301,100 @@ func (r *Runner) Cancel(taskID string) (Task, error) {
 		go killProcessGroup(handle)
 	}
 	return updated, nil
+}
+
+// deleteTaskQuiet supprime une tâche sans publier aucun événement SSE :
+// interrompt l'agent au préalable s'il tourne encore (même mécanique que
+// Cancel), retire le worktree du dépôt d'origine (best-effort, jamais la
+// branche : elle peut avoir été poussée), puis supprime la tâche et ses
+// messages. Utilisée directement par DeleteTask (qui publie ensuite ses
+// événements) et en cascade par DeleteCard/DeleteProject (qui choisissent
+// eux-mêmes quels événements publier une fois la cascade terminée).
+func (r *Runner) deleteTaskQuiet(taskID string) (Task, error) {
+	task, ok := r.store.GetTask(taskID)
+	if !ok {
+		return Task{}, fmt.Errorf("task not found")
+	}
+
+	r.mu.Lock()
+	handle, hasProc := r.procs[taskID]
+	delete(r.pending, taskID) // supprimer = stopper : on ne relance pas la file
+	r.mu.Unlock()
+	if hasProc {
+		handle.interrupted.Store(true)
+		go killProcessGroup(handle)
+	}
+
+	if project, ok := r.store.GetProject(task.ProjectID); ok {
+		for _, repo := range project.Repos {
+			if repo.Name == task.RepoName {
+				RemoveWorktree(repo.Path, task.WorktreeDir)
+				break
+			}
+		}
+	}
+
+	return r.store.DeleteTask(taskID)
+}
+
+// DeleteTask supprime une tâche isolément et publie les événements SSE requis
+// (taskDeleted, cards, agents, tokens).
+func (r *Runner) DeleteTask(taskID string) error {
+	task, err := r.deleteTaskQuiet(taskID)
+	if err != nil {
+		return err
+	}
+	r.publishTaskDeleted(taskID, task.CardID, task.ProjectID)
+	r.publishCards(task.ProjectID)
+	r.publishAgents()
+	r.publishTokens()
+	return nil
+}
+
+// DeleteCard supprime une carte (chantier) : cascade sur ses tâches (même
+// traitement que deleteTaskQuiet, chacune), puis supprime la carte elle-même.
+// Publie taskDeleted par tâche, cards, agents, tokens, puis cardDeleted.
+func (r *Runner) DeleteCard(cardID string) error {
+	card, ok := r.store.GetCard(cardID)
+	if !ok {
+		return fmt.Errorf("card not found")
+	}
+	tasks := r.store.TasksByCard(cardID)
+	for _, t := range tasks {
+		_, _ = r.deleteTaskQuiet(t.ID) // best-effort : la cascade continue même si une tâche échoue
+	}
+	if _, err := r.store.DeleteCard(cardID); err != nil {
+		return err
+	}
+	for _, t := range tasks {
+		r.publishTaskDeleted(t.ID, cardID, card.ProjectID)
+	}
+	r.publishCards(card.ProjectID)
+	r.publishAgents()
+	r.publishTokens()
+	r.publishCardDeleted(cardID, card.ProjectID)
+	return nil
+}
+
+// DeleteProject supprime un projet : cascade sur ses chantiers puis leurs
+// tâches (même traitement que deleteTaskQuiet), puis supprime le projet.
+// Ne publie que projectDeleted (le front recharge l'état complet à cet
+// événement, plus simple et sûr que de rejouer toute la cascade côté SSE).
+func (r *Runner) DeleteProject(projectID string) error {
+	if _, ok := r.store.GetProject(projectID); !ok {
+		return fmt.Errorf("project not found")
+	}
+	for _, c := range r.store.CardsByProject(projectID) {
+		for _, t := range r.store.TasksByCard(c.ID) {
+			_, _ = r.deleteTaskQuiet(t.ID)
+		}
+		_, _ = r.store.DeleteCard(c.ID)
+	}
+	if _, err := r.store.DeleteProject(projectID); err != nil {
+		return err
+	}
+	r.publishProjectDeleted(projectID)
+	return nil
 }
 
 func killProcessGroup(handle *procHandle) {

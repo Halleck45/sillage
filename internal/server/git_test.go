@@ -283,3 +283,77 @@ func TestShipFromReviewAddsMarkerMessage(t *testing.T) {
 		t.Fatalf("branchUrl attendu vide (remote non-GitHub), reçu %q", branchURL)
 	}
 }
+
+// TestDeleteTaskInterruptsRunningAgentAndRemovesWorktree reproduit le flux de
+// handleDeleteTask sur un dépôt git réel : une tâche "running" avec un agent
+// simulé en cours (procHandle sans process réel, comme l'adaptateur fake) est
+// interrompue puis supprimée ; le worktree est effectivement retiré du dépôt
+// d'origine, mais la branche doit toujours exister (jamais supprimée).
+func TestDeleteTaskInterruptsRunningAgentAndRemovesWorktree(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git non disponible dans cet environnement")
+	}
+
+	repo := t.TempDir()
+	dataDir := t.TempDir()
+	runTestGit(t, repo, "init", "-b", "main")
+	runTestGit(t, repo, "config", "user.email", "test@example.com")
+	runTestGit(t, repo, "config", "user.name", "Test")
+	if err := os.WriteFile(filepath.Join(repo, "README.md"), []byte("# projet\n"), 0o644); err != nil {
+		t.Fatalf("écriture README impossible : %v", err)
+	}
+	runTestGit(t, repo, "add", "-A")
+	runTestGit(t, repo, "commit", "-m", "initial")
+
+	const branch = "sillage/100-demo"
+	dir, base, err := CreateWorktree(repo, dataDir, "t1", branch)
+	if err != nil {
+		t.Fatalf("CreateWorktree: %v", err)
+	}
+
+	s, err := NewStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+	project, err := s.AddProject("demo", "", "", []Repo{{Name: "demo", Path: repo}}, nil)
+	if err != nil {
+		t.Fatalf("AddProject: %v", err)
+	}
+	card, err := s.AddCard(project.ID, "Carte", "", "")
+	if err != nil {
+		t.Fatalf("AddCard: %v", err)
+	}
+	taskID, ref := s.ReserveTaskID()
+	if _, err := s.CreateTask(taskID, ref, card.ID, project.ID, "Demo", "echo", branch, base, dir, "demo"); err != nil {
+		t.Fatalf("CreateTask: %v", err)
+	}
+	if _, err := s.UpdateTask(taskID, func(tk *Task) { tk.Status = "running" }); err != nil {
+		t.Fatalf("UpdateTask: %v", err)
+	}
+
+	runner := NewRunner(s, NewHub())
+	// Simule un agent en cours d'exécution (sans process réel, comme l'adaptateur fake).
+	handle := &procHandle{done: make(chan struct{})}
+	runner.mu.Lock()
+	runner.procs[taskID] = handle
+	runner.mu.Unlock()
+
+	if err := runner.DeleteTask(taskID); err != nil {
+		t.Fatalf("DeleteTask: %v", err)
+	}
+
+	if !handle.interrupted.Load() {
+		t.Fatalf("l'agent en cours aurait dû être marqué interrompu")
+	}
+	if _, ok := s.GetTask(taskID); ok {
+		t.Fatalf("la tâche ne devrait plus exister après suppression")
+	}
+	if _, err := os.Stat(dir); !os.IsNotExist(err) {
+		t.Fatalf("le worktree devrait avoir été retiré, reçu err=%v", err)
+	}
+	// La branche ne doit JAMAIS être supprimée (elle peut avoir été poussée).
+	out := runTestGit(t, repo, "branch", "--list", branch)
+	if !strings.Contains(out, "100-demo") {
+		t.Fatalf("la branche %q devrait toujours exister, reçu : %q", branch, out)
+	}
+}

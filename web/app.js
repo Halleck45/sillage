@@ -59,6 +59,9 @@
       'project.errorNameRequired': 'Le nom est requis.',
       'project.errorReposRequired': 'Au moins un dépôt est requis.',
       'project.errorSaveFailed': 'Erreur lors de l\'enregistrement.',
+      'project.delete': 'Supprimer le projet',
+      'project.deleteConfirm': 'Confirmer la suppression ?',
+      'project.deleteSubtext': 'Supprime aussi {cards} chantiers et {tasks} tâches.',
       'project.linksLabel': 'Liens épinglés',
       'project.addLink': '+ lien',
       'project.linksEmpty': 'Aucun lien épinglé.',
@@ -89,6 +92,8 @@
       'action.finish': 'Marquer comme terminé',
       'action.cancelTask': 'Annuler la tâche',
       'action.cancelTaskConfirm': 'Confirmer l\'annulation ?',
+      'task.delete': 'Supprimer la tâche',
+      'task.deleteConfirm': 'Confirmer la suppression ?',
       'tabs.conversation': 'Conversation',
       'tabs.diff': 'Diff',
       'tabs.deliverables': 'Livrables',
@@ -131,6 +136,10 @@
       'workstream.editTooltip': 'Modifier le chantier',
       'workstream.editTitle': 'Chantier',
       'workstream.errorSaveFailed': 'Erreur lors de l\'enregistrement.',
+      'workstream.delete': 'Supprimer le chantier',
+      'workstream.deleteConfirm': 'Confirmer la suppression ?',
+      'workstream.deleteSubtext.one': 'Supprime aussi sa tâche.',
+      'workstream.deleteSubtext.other': 'Supprime aussi ses {n} tâches.',
       'agent.newTitle': 'Nouvel agent',
       'agent.editTitle': 'Modifier l\'agent',
       'agent.name': 'Nom',
@@ -168,6 +177,9 @@
       'errors.prFailed': 'Échec de l\'ouverture de la PR.',
       'errors.finishFailed': 'Échec.',
       'errors.cancelFailed': 'Échec de l\'annulation.',
+      'errors.deleteTaskFailed': 'Échec de la suppression.',
+      'errors.deleteCardFailed': 'Échec de la suppression.',
+      'errors.deleteProjectFailed': 'Échec de la suppression.',
       'onboarding.title': 'Bienvenue dans Sillage',
       'onboarding.intro': 'Choisissez comment sauvegarder votre espace de travail.',
       'onboarding.local.title': 'Travailler en local',
@@ -256,6 +268,9 @@
       'project.errorNameRequired': 'Name is required.',
       'project.errorReposRequired': 'At least one repository is required.',
       'project.errorSaveFailed': 'Failed to save.',
+      'project.delete': 'Delete the project',
+      'project.deleteConfirm': 'Confirm deletion?',
+      'project.deleteSubtext': 'Also deletes {cards} workstreams and {tasks} tasks.',
       'project.linksLabel': 'Pinned links',
       'project.addLink': '+ link',
       'project.linksEmpty': 'No pinned links.',
@@ -286,6 +301,8 @@
       'action.finish': 'Mark as completed',
       'action.cancelTask': 'Cancel the task',
       'action.cancelTaskConfirm': 'Confirm cancellation?',
+      'task.delete': 'Delete the task',
+      'task.deleteConfirm': 'Confirm deletion?',
       'tabs.conversation': 'Conversation',
       'tabs.diff': 'Diff',
       'tabs.deliverables': 'Deliverables',
@@ -328,6 +345,10 @@
       'workstream.editTooltip': 'Edit workstream',
       'workstream.editTitle': 'Workstream',
       'workstream.errorSaveFailed': 'Failed to save.',
+      'workstream.delete': 'Delete the workstream',
+      'workstream.deleteConfirm': 'Confirm deletion?',
+      'workstream.deleteSubtext.one': 'Also deletes its task.',
+      'workstream.deleteSubtext.other': 'Also deletes its {n} tasks.',
       'agent.newTitle': 'New agent',
       'agent.editTitle': 'Edit agent',
       'agent.name': 'Name',
@@ -365,6 +386,9 @@
       'errors.prFailed': 'Failed to open the PR.',
       'errors.finishFailed': 'Failed.',
       'errors.cancelFailed': 'Failed to cancel.',
+      'errors.deleteTaskFailed': 'Failed to delete.',
+      'errors.deleteCardFailed': 'Failed to delete.',
+      'errors.deleteProjectFailed': 'Failed to delete.',
       'onboarding.title': 'Welcome to Sillage',
       'onboarding.intro': 'Choose how to back up your workspace.',
       'onboarding.local.title': 'Work locally',
@@ -668,6 +692,30 @@
     state.tasksById[t.id] = t;
   }
 
+  // Purge locale d'une tâche supprimée (état + tout le cache associé).
+  function removeTaskLocally(taskId) {
+    var idx = state.tasks.findIndex(function (t) { return t.id === taskId; });
+    if (idx >= 0) state.tasks.splice(idx, 1);
+    delete state.tasksById[taskId];
+    delete state.messagesByTask[taskId];
+    delete state.diffByTask[taskId];
+    delete state.deliverablesByTask[taskId];
+    delete state.detailErrorByTask[taskId];
+    delete state.shipBranchUrlByTask[taskId];
+  }
+
+  // Purge locale d'un chantier supprimé, avec cascade sur ses tâches (le
+  // backend supprime aussi les tâches, mais chaque taskDeleted peut arriver
+  // avant ou après ; cette purge est idempotente et sert de filet).
+  function removeCardLocally(cardId) {
+    var idx = state.cards.findIndex(function (c) { return c.id === cardId; });
+    if (idx >= 0) state.cards.splice(idx, 1);
+    delete state.cardsById[cardId];
+    state.tasks.filter(function (t) { return t.cardId === cardId; }).forEach(function (t) {
+      removeTaskLocally(t.id);
+    });
+  }
+
   function projectUnread(pid) {
     // Project.unread n'a pas d'événement SSE dédié : recalculé en direct
     // à partir des tâches connues pour rester exact en temps réel.
@@ -718,6 +766,9 @@
       else if (kind === 'agent-delete') doDeleteAgent(id);
       else if (kind === 'workspace-sync') doWorkspaceSync();
       else if (kind === 'task-cancel') doCancelTask(id);
+      else if (kind === 'task-delete') doDeleteTask(id);
+      else if (kind === 'card-delete') doDeleteCard(id);
+      else if (kind === 'project-delete') doDeleteProject(id);
     });
   }
 
@@ -1366,6 +1417,13 @@
         '</div>';
     }
 
+    var deleteTaskKey = 'task-delete:' + task.id;
+    var deleteTaskPending = isPendingConfirm(deleteTaskKey);
+    var deleteTaskLabel = deleteTaskPending ? t('task.deleteConfirm') : t('task.delete');
+    var deleteRow = '<div class="detail-delete-row">' +
+      '<button class="detail-link detail-link-danger" data-action="confirm-click" data-confirm-key="' + deleteTaskKey + '" data-confirm-action="task-delete" data-confirm-id="' + task.id + '" data-default-label="' + escapeHtml(t('task.delete')) + '" data-confirm-label="' + escapeHtml(t('task.deleteConfirm')) + '">' + escapeHtml(deleteTaskLabel) + '</button>' +
+      '</div>';
+
     return '<div class="detail-head">' +
         '<div class="detail-head-row">' +
           '<span class="task-glyph" style="color:' + glyph.color + '">' + glyph.icon + '</span>' +
@@ -1387,6 +1445,7 @@
         '</div>' +
         linksRow +
         prRow +
+        deleteRow +
         '<div class="tabs">' + tabsHTML + '</div>' +
       '</div>';
   }
@@ -1748,6 +1807,12 @@
     api('/api/tasks/' + taskId + '/cancel', { method: 'POST' }).then(function (task) {
       upsertTask(task); renderMain();
     }).catch(function (e) { if (e instanceof ApiError) showDetailError(taskId, e.message || t('errors.cancelFailed')); });
+  }
+  function doDeleteTask(taskId) {
+    api('/api/tasks/' + taskId, { method: 'DELETE', body: { confirm: true } }).then(function () {
+      removeTaskLocally(taskId);
+      closePanel();
+    }).catch(function (e) { if (e instanceof ApiError) showDetailError(taskId, e.message || t('errors.deleteTaskFailed')); });
   }
 
   function moveCard(cardId, column) {
@@ -2174,12 +2239,20 @@
   // Édition d'un chantier (titre + contexte)
 
   function buildCardEditModalHTML(card) {
+    var deleteKey = 'card-delete:' + card.id;
+    var deletePending = isPendingConfirm(deleteKey);
+    var deleteLabel = deletePending ? t('workstream.deleteConfirm') : t('workstream.delete');
+    var taskCount = card.tasksTotal || 0;
     return '<div class="modal modal-sm">' +
       '<div class="modal-head"><span class="modal-title">' + escapeHtml(t('workstream.editTitle')) + '</span><button class="icon-btn" data-action="close-modal" aria-label="' + escapeHtml(t('common.close')) + '">✕</button></div>' +
       '<div class="modal-label">' + escapeHtml(t('newCard.titleLabel')) + '</div><input id="card-edit-title" class="modal-input" value="' + escapeHtml(card.title) + '">' +
       '<div class="modal-label">' + escapeHtml(t('project.contextPrompt')) + '</div>' +
       '<textarea id="card-edit-context" class="modal-textarea" rows="3" placeholder="' + escapeHtml(t('project.contextPromptPlaceholder')) + '">' + escapeHtml(card.contextPrompt || '') + '</textarea>' +
       '<div id="card-edit-error" class="modal-error hidden"></div>' +
+      '<div class="modal-delete-row">' +
+        '<button class="delete-link" data-action="confirm-click" data-confirm-key="' + deleteKey + '" data-confirm-action="card-delete" data-confirm-id="' + card.id + '" data-default-label="' + escapeHtml(t('workstream.delete')) + '" data-confirm-label="' + escapeHtml(t('workstream.deleteConfirm')) + '">' + escapeHtml(deleteLabel) + '</button>' +
+        '<div class="modal-delete-subtext">' + escapeHtml(tCount('workstream.deleteSubtext', taskCount)) + '</div>' +
+      '</div>' +
       '<div class="modal-foot"><button class="btn-outline" data-action="close-modal">' + escapeHtml(t('common.cancel')) + '</button>' +
       '<button class="btn-green" data-action="submit-card-edit" data-card-id="' + card.id + '">' + escapeHtml(t('common.save')) + '</button></div>' +
       '</div>';
@@ -2203,6 +2276,21 @@
     }).catch(function (e) {
       errEl.textContent = (e instanceof ApiError && e.message) || t('workstream.errorSaveFailed');
       errEl.classList.remove('hidden');
+    });
+  }
+  function doDeleteCard(cardId) {
+    var card = state.cardsById[cardId];
+    var projectId = card ? card.projectId : state.projectId;
+    api('/api/cards/' + cardId, { method: 'DELETE', body: { confirm: true } }).then(function () {
+      removeCardLocally(cardId);
+      closeModal();
+      goProject(projectId);
+    }).catch(function (e) {
+      var errEl = document.getElementById('card-edit-error');
+      if (errEl) {
+        errEl.textContent = (e instanceof ApiError && e.message) || t('errors.deleteCardFailed');
+        errEl.classList.remove('hidden');
+      }
     });
   }
 
@@ -2295,6 +2383,11 @@
   // Édition de projet
 
   function buildProjectModalHTML(project) {
+    var deleteKey = 'project-delete:' + project.id;
+    var deletePending = isPendingConfirm(deleteKey);
+    var deleteLabel = deletePending ? t('project.deleteConfirm') : t('project.delete');
+    var cardCount = state.cards.filter(function (c) { return c.projectId === project.id; }).length;
+    var taskCount = state.tasks.filter(function (tk) { return tk.projectId === project.id; }).length;
     return '<div class="modal modal-sm">' +
       '<div class="modal-head"><span class="modal-title">' + escapeHtml(t('project.editTitle')) + '</span><button class="icon-btn" data-action="close-modal" aria-label="' + escapeHtml(t('common.close')) + '">✕</button></div>' +
       '<div class="modal-label">' + escapeHtml(t('project.name')) + '</div><input id="project-edit-name" class="modal-input" value="' + escapeHtml(project.name) + '">' +
@@ -2303,6 +2396,10 @@
       '<div class="modal-label">' + escapeHtml(t('project.checkCmd')) + '</div><input id="project-edit-checkcmd" class="modal-input mono" placeholder="go test ./..." value="' + escapeHtml(project.checkCmd || '') + '">' +
       buildLinksSectionHTML() +
       '<div id="project-modal-error" class="modal-error hidden"></div>' +
+      '<div class="modal-delete-row">' +
+        '<button class="delete-link" data-action="confirm-click" data-confirm-key="' + deleteKey + '" data-confirm-action="project-delete" data-confirm-id="' + project.id + '" data-default-label="' + escapeHtml(t('project.delete')) + '" data-confirm-label="' + escapeHtml(t('project.deleteConfirm')) + '">' + escapeHtml(deleteLabel) + '</button>' +
+        '<div class="modal-delete-subtext">' + escapeHtml(t('project.deleteSubtext', { cards: cardCount, tasks: taskCount })) + '</div>' +
+      '</div>' +
       '<div class="modal-foot"><button class="btn-outline" data-action="close-modal">' + escapeHtml(t('common.cancel')) + '</button>' +
       '<button class="btn-green" data-action="submit-project-edit" data-project-id="' + project.id + '">' + escapeHtml(t('common.save')) + '</button></div>' +
       '</div>';
@@ -2334,6 +2431,19 @@
     }).catch(function (e) {
       errEl.textContent = (e instanceof ApiError && e.message) || t('project.errorSaveFailed');
       errEl.classList.remove('hidden');
+    });
+  }
+  function doDeleteProject(projectId) {
+    api('/api/projects/' + projectId, { method: 'DELETE', body: { confirm: true } }).then(function () {
+      closeModal();
+      goAllProjects();
+      fetchStateSilently();
+    }).catch(function (e) {
+      var errEl = document.getElementById('project-modal-error');
+      if (errEl) {
+        errEl.textContent = (e instanceof ApiError && e.message) || t('errors.deleteProjectFailed');
+        errEl.classList.remove('hidden');
+      }
     });
   }
 
@@ -2693,6 +2803,39 @@
     refreshWorkspaceModalBody();
   }
 
+  // Suppressions (tâche/chantier/projet) : purge locale + sortie propre si
+  // l'objet actuellement affiché est celui qui vient de disparaître.
+  function onTaskDeletedEvent(payload) {
+    if (!payload || !payload.taskId) return;
+    var wasOpen = state.taskId === payload.taskId;
+    removeTaskLocally(payload.taskId);
+    if (wasOpen) {
+      closePanel();
+    } else {
+      renderSidebar();
+      refreshTaskListAndFilters();
+    }
+  }
+
+  function onCardDeletedEvent(payload) {
+    if (!payload || !payload.cardId) return;
+    var wasOpen = state.cardId === payload.cardId;
+    removeCardLocally(payload.cardId);
+    if (wasOpen) {
+      goProject(payload.projectId);
+    } else {
+      renderSidebar();
+      if (state.projectId === payload.projectId) renderMain();
+    }
+  }
+
+  function onProjectDeletedEvent(payload) {
+    if (!payload || !payload.projectId) return;
+    var wasCurrent = state.projectId === payload.projectId;
+    if (wasCurrent) goAllProjects();
+    fetchStateSilently();
+  }
+
   function fetchStateSilently() {
     return api('/api/state').then(function (data) {
       if (data) { hydrateState(data); render(); }
@@ -2710,6 +2853,9 @@
     es.addEventListener('project', function (e) { try { onProjectEvent(JSON.parse(e.data)); } catch (er) {} });
     es.addEventListener('workspace', function (e) { try { onWorkspaceEvent(JSON.parse(e.data)); } catch (er) {} });
     es.addEventListener('settings', function (e) { try { onSettingsEvent(JSON.parse(e.data)); } catch (er) {} });
+    es.addEventListener('taskDeleted', function (e) { try { onTaskDeletedEvent(JSON.parse(e.data)); } catch (er) {} });
+    es.addEventListener('cardDeleted', function (e) { try { onCardDeletedEvent(JSON.parse(e.data)); } catch (er) {} });
+    es.addEventListener('projectDeleted', function (e) { try { onProjectDeletedEvent(JSON.parse(e.data)); } catch (er) {} });
     es.onopen = function () {
       if (sseOpenedOnce) fetchStateSilently();
       sseOpenedOnce = true;

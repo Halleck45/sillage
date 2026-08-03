@@ -75,6 +75,19 @@ func CreateWorktree(repoPath, dataDir, taskID, branch string) (dir, base string,
 	return dir, base, nil
 }
 
+// RemoveWorktree retire le worktree d'une tâche du dépôt d'origine :
+// git worktree remove --force puis worktree prune. Best-effort (appelé lors
+// d'une suppression de tâche) : un échec ne doit jamais empêcher la
+// suppression, et la branche n'est JAMAIS supprimée (elle peut avoir été
+// poussée).
+func RemoveWorktree(repoPath, worktreeDir string) {
+	if repoPath == "" || worktreeDir == "" {
+		return
+	}
+	_, _ = runGit(repoPath, gitDefaultTimeout, "worktree", "remove", "--force", worktreeDir)
+	_, _ = runGit(repoPath, gitDefaultTimeout, "worktree", "prune")
+}
+
 // Diff calcule le diff unifié entre base et l'état courant du worktree,
 // y compris les fichiers non suivis (git add -A -N les fait apparaître).
 func Diff(dir, base string) ([]DiffFile, error) {

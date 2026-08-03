@@ -560,6 +560,24 @@ func (s *Store) CardsByProject(projectID string) []Card {
 	return out
 }
 
+// TasksByCard retourne les tâches d'une carte (chantier), recalculées.
+func (s *Store) TasksByCard(cardID string) []Task {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.recomputeAll()
+	var out []Task
+	for _, t := range s.Tasks {
+		if t.CardID == cardID {
+			out = append(out, t)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return idNum(out[i].ID) < idNum(out[j].ID) })
+	if out == nil {
+		out = []Task{}
+	}
+	return out
+}
+
 func (s *Store) GetProject(id string) (Project, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -1124,4 +1142,62 @@ func (s *Store) DeleteAgent(id string) error {
 	}
 	delete(s.Agents, id)
 	return s.save()
+}
+
+// --- Suppressions (tâches, cartes, projets) ---
+
+// DeleteTask supprime une tâche et ses messages du store, puis recalcule les
+// compteurs dérivés (carte, projet, agent). Ne gère ni l'interruption d'un
+// agent en cours, ni le retrait du worktree : voir Runner.DeleteTask pour
+// l'orchestration complète.
+func (s *Store) DeleteTask(id string) (Task, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	t, ok := s.Tasks[id]
+	if !ok {
+		return Task{}, fmt.Errorf("task not found")
+	}
+	delete(s.Tasks, id)
+	delete(s.Messages, id)
+	s.recomputeCard(t.CardID)
+	s.recomputeProject(t.ProjectID)
+	s.recomputeAgent(t.AgentID)
+	if err := s.save(); err != nil {
+		return Task{}, err
+	}
+	return t, nil
+}
+
+// DeleteCard supprime une carte (chantier). L'appelant doit avoir supprimé au
+// préalable les tâches qu'elle contient (voir Runner.DeleteCard : cascade
+// orchestrée tâche par tâche via Runner.DeleteTask).
+func (s *Store) DeleteCard(id string) (Card, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	c, ok := s.Cards[id]
+	if !ok {
+		return Card{}, fmt.Errorf("card not found")
+	}
+	delete(s.Cards, id)
+	if err := s.save(); err != nil {
+		return Card{}, err
+	}
+	return c, nil
+}
+
+// DeleteProject supprime un projet. L'appelant doit avoir supprimé au
+// préalable ses cartes et tâches (voir Runner.DeleteProject : cascade
+// orchestrée chantier par chantier, puis tâche par tâche).
+func (s *Store) DeleteProject(id string) (Project, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	p, ok := s.Projects[id]
+	if !ok {
+		return Project{}, fmt.Errorf("project not found")
+	}
+	delete(s.Projects, id)
+	if err := s.save(); err != nil {
+		return Project{}, err
+	}
+	return p, nil
 }
