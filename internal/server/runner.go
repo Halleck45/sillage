@@ -525,8 +525,8 @@ func (r *Runner) finalize(taskID string) {
 	updated, err := r.store.UpdateTask(taskID, func(t *Task) {
 		if t.Status == "running" {
 			t.Status = "review"
+			t.Unread = true
 		}
-		t.Unread = true
 		t.LiveActivity = nil
 		t.Checks = checks
 		t.FilesCount = filesCount
