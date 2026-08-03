@@ -20,6 +20,80 @@ func newTestServer(t *testing.T) *Server {
 	return NewServer(s, "", t.TempDir(), fstest.MapFS{})
 }
 
+// newTestServerWithWeb construit un Server dont le frontend statique est
+// fourni par files. fstest.MapFS a la même propriété qu'embed.FS pour ce qui
+// nous intéresse : une date de modification nulle, donc pas de Last-Modified.
+func newTestServerWithWeb(t *testing.T, files fstest.MapFS) *Server {
+	t.Helper()
+	s, err := NewStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+	return NewServer(s, "", t.TempDir(), files)
+}
+
+// TestStaticFilesRevalidate couvre la mise en cache du frontend embarqué :
+// chaque fichier statique porte un ETag et Cache-Control: no-cache, répond 304
+// à un If-None-Match qui correspond, et voit son ETag changer quand le contenu
+// change (sinon un rebuild de web/ resterait invisible dans le navigateur).
+func TestStaticFilesRevalidate(t *testing.T) {
+	files := fstest.MapFS{
+		"index.html": {Data: []byte("<!doctype html><title>Sillage</title>")},
+		"app.js":     {Data: []byte("(function(){})();")},
+	}
+	srv := newTestServerWithWeb(t, files)
+	handler := srv.Handler()
+
+	for _, path := range []string{"/", "/app.js"} {
+		t.Run(path, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, path, nil)
+			w := httptest.NewRecorder()
+			handler.ServeHTTP(w, req)
+
+			if w.Code != http.StatusOK {
+				t.Fatalf("attendu 200, reçu %d", w.Code)
+			}
+			etag := w.Header().Get("Etag")
+			if etag == "" {
+				t.Fatalf("ETag absent : le navigateur n'a aucun validateur")
+			}
+			if got := w.Header().Get("Cache-Control"); got != "no-cache" {
+				t.Fatalf("Cache-Control attendu \"no-cache\", reçu %q", got)
+			}
+
+			// Même contenu : le serveur doit répondre 304 sans corps.
+			req = httptest.NewRequest(http.MethodGet, path, nil)
+			req.Header.Set("If-None-Match", etag)
+			w = httptest.NewRecorder()
+			handler.ServeHTTP(w, req)
+
+			if w.Code != http.StatusNotModified {
+				t.Fatalf("attendu 304, reçu %d", w.Code)
+			}
+			if w.Body.Len() != 0 {
+				t.Fatalf("un 304 ne doit pas avoir de corps, reçu %d octets", w.Body.Len())
+			}
+		})
+	}
+
+	// Un contenu différent (l'équivalent d'un rebuild de web/) doit produire un
+	// ETag différent, sans quoi le navigateur garderait son ancienne copie.
+	rebuilt := newTestServerWithWeb(t, fstest.MapFS{
+		"index.html": {Data: []byte("<!doctype html><title>Sillage</title>")},
+		"app.js":     {Data: []byte("(function(){ /* nouvel onglet */ })();")},
+	})
+
+	etagOf := func(h http.Handler) string {
+		req := httptest.NewRequest(http.MethodGet, "/app.js", nil)
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, req)
+		return w.Header().Get("Etag")
+	}
+	if before, after := etagOf(handler), etagOf(rebuilt.Handler()); before == after {
+		t.Fatalf("l'ETag doit changer avec le contenu, inchangé : %s", before)
+	}
+}
+
 // TestDeleteHandlersRequireConfirm couvre le refus (400 "confirmation
 // required") des trois suppressions destructives (tâche, carte, projet)
 // quand le corps ne porte pas {"confirm":true} : corps absent ou

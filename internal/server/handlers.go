@@ -1,6 +1,8 @@
 package server
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -52,12 +54,46 @@ func NewServer(store *Store, passwordHash, dataDir string, webFS fs.FS) *Server 
 		loginLimiter: NewLoginLimiter(),
 		passwordHash: passwordHash,
 		dataDir:      dataDir,
-		static:       http.FileServer(http.FS(webFS)),
+		static:       staticWithRevalidation(webFS, http.FileServer(http.FS(webFS))),
 	}
 	if store.GetWorkspace().AutoSync {
 		s.startAutoSync()
 	}
 	return s
+}
+
+// staticWithRevalidation ajoute un ETag (empreinte du contenu embarqué) et
+// Cache-Control: no-cache aux fichiers statiques. Sans ça, embed.FS ne fournit
+// aucune date de modification : la réponse n'a aucun validateur, le navigateur
+// ne revalide jamais et continue de servir son ancienne copie de app.js après
+// un rebuild. Les empreintes sont calculées une fois au démarrage (le frontend
+// embarqué ne change pas en cours de route) ; http.ServeContent lit l'ETag déjà
+// posé sur la réponse et répond 304 aux requêtes If-None-Match.
+func staticWithRevalidation(webFS fs.FS, next http.Handler) http.Handler {
+	etags := map[string]string{}
+	_ = fs.WalkDir(webFS, ".", func(p string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return err
+		}
+		content, err := fs.ReadFile(webFS, p)
+		if err != nil {
+			return nil
+		}
+		sum := sha256.Sum256(content)
+		etags["/"+p] = `"` + hex.EncodeToString(sum[:8]) + `"`
+		return nil
+	})
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path := r.URL.Path
+		if path == "/" {
+			path = "/index.html"
+		}
+		if etag, ok := etags[path]; ok {
+			w.Header().Set("Etag", etag)
+			w.Header().Set("Cache-Control", "no-cache")
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 func (s *Server) getPasswordHash() string {
