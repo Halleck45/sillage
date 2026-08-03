@@ -57,6 +57,7 @@ description: A calm dashboard for your AI coding agents.
       <p class="install-lede">Sillage is a <strong>single self-contained binary</strong>. Download it, run it. Nothing else to set up.</p>
 
       <div class="install-tabs" role="tablist" aria-label="Platform">
+        <button type="button" class="install-tab" data-target="auto" role="tab">Install script</button>
         <button type="button" class="install-tab" data-target="linux-amd64" role="tab">Linux amd64</button>
         <button type="button" class="install-tab" data-target="linux-arm64" role="tab">Linux arm64</button>
         <button type="button" class="install-tab" data-target="mac-arm64" role="tab">macOS Apple Silicon</button>
@@ -196,6 +197,7 @@ description: A calm dashboard for your AI coding agents.
   "use strict";
 
   var COMMANDS = {
+    "auto": "curl -fsSL https://raw.githubusercontent.com/Halleck45/sillage/main/install.sh | sh\nsillage",
     "linux-amd64": "curl -fsSL https://github.com/Halleck45/sillage/releases/latest/download/sillage_linux_amd64 -o sillage && chmod +x sillage && ./sillage",
     "linux-arm64": "curl -fsSL https://github.com/Halleck45/sillage/releases/latest/download/sillage_linux_arm64 -o sillage && chmod +x sillage && ./sillage",
     "mac-arm64": "curl -fsSL https://github.com/Halleck45/sillage/releases/latest/download/sillage_darwin_arm64 -o sillage && chmod +x sillage && ./sillage",
@@ -204,7 +206,10 @@ description: A calm dashboard for your AI coding agents.
     "go": "go install github.com/Halleck45/sillage@latest"
   };
 
-  function detectDefaultTarget() {
+  /* Le script d'installation se débrouille seul : c'est l'onglet par défaut.
+     La détection ne sert donc plus qu'à signaler le binaire correspondant,
+     pour qui préfère le télécharger à la main. */
+  function detectPlatformTarget() {
     var platform = (navigator.platform || "").toLowerCase();
     var ua = (navigator.userAgent || "").toLowerCase();
 
@@ -212,13 +217,15 @@ description: A calm dashboard for your AI coding agents.
     var isLinux = !isMac && (platform.indexOf("linux") !== -1 || ua.indexOf("linux") !== -1) && ua.indexOf("android") === -1;
     var isArm = ua.indexOf("arm") !== -1 || ua.indexOf("aarch64") !== -1;
 
+    /* Les Mac Apple Silicon s'annoncent "Intel Mac OS X" : impossible de les
+       distinguer côté navigateur, on pointe l'ARM, majoritaire aujourd'hui. */
     if (isMac) {
       return "mac-arm64";
     }
     if (isLinux) {
       return isArm ? "linux-arm64" : "linux-amd64";
     }
-    return "linux-amd64";
+    return null;
   }
 
   var tabs = Array.prototype.slice.call(document.querySelectorAll(".install-tab"));
@@ -232,7 +239,7 @@ description: A calm dashboard for your AI coding agents.
       tab.classList.toggle("active", active);
       tab.setAttribute("aria-selected", active ? "true" : "false");
     });
-    commandEl.textContent = COMMANDS[target] || COMMANDS["linux-amd64"];
+    commandEl.textContent = COMMANDS[target] || COMMANDS["auto"];
   }
 
   tabs.forEach(function (tab) {
@@ -274,7 +281,17 @@ description: A calm dashboard for your AI coding agents.
     done();
   }
 
-  selectTarget(detectDefaultTarget());
+  var detected = detectPlatformTarget();
+  if (detected) {
+    tabs.forEach(function (tab) {
+      if (tab.getAttribute("data-target") === detected) {
+        tab.classList.add("detected");
+        tab.setAttribute("title", "Matches your system");
+      }
+    });
+  }
+
+  selectTarget("auto");
 })();
 </script>
 
