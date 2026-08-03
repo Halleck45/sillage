@@ -3,6 +3,12 @@ name: Release
 on:
   push:
     tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release (format: vX.Y.Z, e.g. v0.5.0)"
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -12,12 +18,37 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Determine and validate version
+        id: version
+        run: |
+          set -eu
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            version="${{ inputs.version }}"
+            if ! echo "$version" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+              echo "::error::Invalid version '$version'. Expected format: vX.Y.Z (e.g. v0.5.0)."
+              exit 1
+            fi
+            if git rev-parse -q --verify "refs/tags/$version" >/dev/null; then
+              echo "::error::Tag $version already exists."
+              exit 1
+            fi
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git tag -a "$version" -m "Release $version"
+            git push origin "$version"
+          else
+            version="$GITHUB_REF_NAME"
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
       - uses: actions/setup-go@v5
         with:
           go-version: "1.24"
       - name: Build binaries
         run: |
           set -eu
+          version="${{ steps.version.outputs.version }}"
           mkdir -p dist
           # Noms sans version : les URLs releases/latest/download/... restent stables.
           for target in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64; do
@@ -30,6 +61,7 @@ jobs:
       - name: Create release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ steps.version.outputs.version }}
           files: |
             dist/sillage_*
             dist/checksums.txt
@@ -37,16 +69,16 @@ jobs:
       - name: Update Homebrew formula
         run: |
           set -eu
-          version="${GITHUB_REF_NAME#v}"
-          sha() { grep "sillage_$1" dist/checksums.txt | cut -d' ' -f1; }
+          tag="${{ steps.version.outputs.version }}"
+          version="${tag#v}"
           git fetch origin main
           git checkout main
           sed -i \
             -e "s|^  version \".*\"|  version \"$version\"|" \
-            -e "s|releases/download/v[0-9.]*/sillage_darwin_arm64\"|releases/download/${GITHUB_REF_NAME}/sillage_darwin_arm64\"|" \
-            -e "s|releases/download/v[0-9.]*/sillage_darwin_amd64\"|releases/download/${GITHUB_REF_NAME}/sillage_darwin_amd64\"|" \
-            -e "s|releases/download/v[0-9.]*/sillage_linux_arm64\"|releases/download/${GITHUB_REF_NAME}/sillage_linux_arm64\"|" \
-            -e "s|releases/download/v[0-9.]*/sillage_linux_amd64\"|releases/download/${GITHUB_REF_NAME}/sillage_linux_amd64\"|" \
+            -e "s|releases/download/v[0-9.]*/sillage_darwin_arm64\"|releases/download/${tag}/sillage_darwin_arm64\"|" \
+            -e "s|releases/download/v[0-9.]*/sillage_darwin_amd64\"|releases/download/${tag}/sillage_darwin_amd64\"|" \
+            -e "s|releases/download/v[0-9.]*/sillage_linux_arm64\"|releases/download/${tag}/sillage_linux_arm64\"|" \
+            -e "s|releases/download/v[0-9.]*/sillage_linux_amd64\"|releases/download/${tag}/sillage_linux_amd64\"|" \
             Formula/sillage.rb
           python3 - <<EOF
           import re
@@ -64,5 +96,5 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add Formula/sillage.rb
-          git diff --cached --quiet || git commit -m "Homebrew formula: ${GITHUB_REF_NAME}"
+          git diff --cached --quiet || git commit -m "Homebrew formula: ${tag}"
           git push origin main
