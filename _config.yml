@@ -1,4 +1,11 @@
 title: Sillage
 description: >-
-  A calm dashboard for your AI coding agents: isolated git worktrees, human
-  validation before anything ships, and clear token accounting.
+  Drive your AI coding agents the way you drive a project: one board, no window
+  switching, nothing to keep in your head. Open source, total control, and a
+  single self-contained binary with nothing to install.
+
+# Ces fichiers documentent la branche, ils n'ont rien à faire sur le site publié.
+exclude:
+  - README.md
+  - Gemfile
+  - Gemfile.lock
