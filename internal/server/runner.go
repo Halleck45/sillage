@@ -28,17 +28,44 @@ type procHandle struct {
 	done        chan struct{}
 }
 
-// Runner exécute au plus un agent par tâche à la fois.
+// Runner exécute au plus un agent par tâche à la fois. Les messages envoyés
+// pendant qu'un agent tourne sont mis en file (pending) et transmis
+// automatiquement à la fin de l'exécution en cours.
 type Runner struct {
-	mu    sync.Mutex
-	procs map[string]*procHandle
-	store *Store
-	hub   *Hub
+	mu      sync.Mutex
+	procs   map[string]*procHandle
+	pending map[string][]string
+	store   *Store
+	hub     *Hub
 }
 
 // NewRunner crée un runner lié à un store et un hub SSE.
 func NewRunner(store *Store, hub *Hub) *Runner {
-	return &Runner{procs: map[string]*procHandle{}, store: store, hub: hub}
+	return &Runner{procs: map[string]*procHandle{}, pending: map[string][]string{}, store: store, hub: hub}
+}
+
+// Message ajoute un message utilisateur à la tâche et le transmet à l'agent :
+// immédiatement s'il est libre, sinon en file d'attente (queued=true), vidée
+// automatiquement dès la fin de l'exécution en cours.
+func (r *Runner) Message(taskID, text string) (queued bool, err error) {
+	r.mu.Lock()
+	_, running := r.procs[taskID]
+	if running {
+		r.pending[taskID] = append(r.pending[taskID], text)
+	}
+	r.mu.Unlock()
+
+	if running {
+		authorName := r.store.GetSettings().DisplayName
+		msg, updated, err := r.store.AddMessage(taskID, "user", authorName, text)
+		if err != nil {
+			return false, err
+		}
+		r.publishMessage(msg)
+		r.publishTask(updated)
+		return true, nil
+	}
+	return false, r.Start(taskID, false, text)
 }
 
 func (r *Runner) publishTask(t Task)       { r.hub.Publish(Event{Name: "task", Data: t}) }
@@ -100,22 +127,7 @@ func (r *Runner) Start(taskID string, initial bool, text string) error {
 		task = updated
 		r.publishTask(task)
 
-		// Session vide = départ frais (codex sans reprise de session, ou message
-		// envoyé après réassignation qui vide sessionId) : le CLI ne connaît rien
-		// de la conversation, on lui rejoue donc l'historique en plus du titre.
-		if task.SessionID == "" {
-			msgs := r.store.GetMessages(taskID)
-			if n := len(msgs); n > 0 {
-				msgs = msgs[:n-1] // sans le message qu'on vient d'ajouter
-			}
-			transcript := buildTranscript(msgs)
-			cliInput = contextualizeCliInput(task.Title, text)
-			if transcript != "" {
-				cliInput = "Task: " + task.Title +
-					"\n\nPrevious conversation (for context):\n" + transcript +
-					"\n\nNew instruction:\n" + text
-			}
-		}
+		cliInput = r.prepareCliInput(task, text)
 	}
 
 	handle := &procHandle{done: make(chan struct{})}
@@ -125,6 +137,59 @@ func (r *Runner) Start(taskID string, initial bool, text string) error {
 
 	go r.run(task, agent, handle, cliInput)
 	return nil
+}
+
+// prepareCliInput construit le texte réellement envoyé au CLI. Avec une
+// session à reprendre, le texte brut suffit. Sans session (codex, tâche
+// réassignée), le CLI ne connaît rien : on rejoue le titre et l'historique de
+// la conversation, en excluant les messages utilisateur en fin de fil (ce sont
+// eux qui forment la nouvelle instruction, déjà portée par text).
+func (r *Runner) prepareCliInput(task Task, text string) string {
+	if task.SessionID != "" {
+		return text
+	}
+	msgs := r.store.GetMessages(task.ID)
+	for len(msgs) > 0 && msgs[len(msgs)-1].Author == "user" {
+		msgs = msgs[:len(msgs)-1]
+	}
+	transcript := buildTranscript(msgs)
+	if transcript == "" {
+		return contextualizeCliInput(task.Title, text)
+	}
+	return "Task: " + task.Title +
+		"\n\nPrevious conversation (for context):\n" + transcript +
+		"\n\nNew instruction:\n" + text
+}
+
+// startQueued relance l'agent avec les messages accumulés pendant l'exécution
+// précédente (déjà présents dans le fil : aucun Message n'est ajouté ici).
+func (r *Runner) startQueued(taskID, text string) {
+	task, ok := r.store.GetTask(taskID)
+	if !ok {
+		return
+	}
+	agent, ok := r.store.GetAgent(task.AgentID)
+	if !ok {
+		return
+	}
+	task, err := r.store.UpdateTask(taskID, func(t *Task) { t.Status = "running"; t.LiveActivity = nil })
+	if err != nil {
+		return
+	}
+	r.publishTask(task)
+	r.publishCards(task.ProjectID)
+	r.publishAgents()
+
+	handle := &procHandle{done: make(chan struct{})}
+	r.mu.Lock()
+	if _, exists := r.procs[taskID]; exists {
+		r.mu.Unlock()
+		return
+	}
+	r.procs[taskID] = handle
+	r.mu.Unlock()
+
+	go r.run(task, agent, handle, r.prepareCliInput(task, text))
 }
 
 // buildTranscript rejoue la conversation pour un agent démarré sans session :
@@ -177,6 +242,9 @@ func (r *Runner) Interrupt(taskID string) (Task, error) {
 		return Task{}, fmt.Errorf("no agent is running for this task")
 	}
 	handle.interrupted.Store(true)
+	r.mu.Lock()
+	delete(r.pending, taskID) // interrompre = stopper : on ne relance pas la file
+	r.mu.Unlock()
 
 	task, err := r.store.UpdateTask(taskID, func(t *Task) { t.Status = "review" })
 	if err != nil {
@@ -204,6 +272,7 @@ func (r *Runner) Cancel(taskID string) (Task, error) {
 	if task.Status == "running" {
 		r.mu.Lock()
 		h, hasProc := r.procs[taskID]
+		delete(r.pending, taskID) // annuler = stopper : on ne relance pas la file
 		r.mu.Unlock()
 		if hasProc {
 			h.interrupted.Store(true)
@@ -243,12 +312,19 @@ func killProcessGroup(handle *procHandle) {
 }
 
 // run exécute l'adaptateur adéquat puis finalise la tâche (checks, compteurs).
+// À la fin, les messages arrivés pendant l'exécution (file pending) relancent
+// automatiquement l'agent.
 func (r *Runner) run(task Task, agent Agent, handle *procHandle, cliInput string) {
 	defer func() {
 		r.mu.Lock()
 		delete(r.procs, task.ID)
+		queued := r.pending[task.ID]
+		delete(r.pending, task.ID)
 		r.mu.Unlock()
 		close(handle.done)
+		if len(queued) > 0 && !handle.interrupted.Load() {
+			go r.startQueued(task.ID, strings.Join(queued, "\n\n"))
+		}
 	}()
 
 	project, _ := r.store.GetProject(task.ProjectID)

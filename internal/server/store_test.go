@@ -535,8 +535,9 @@ func TestCardAutoMoveToDoneAndBack(t *testing.T) {
 		t.Fatalf("CreateTask: %v", err)
 	}
 
-	if c, _ := s.GetCard(card.ID); c.Column != "soon" {
-		t.Fatalf("colonne attendue 'soon' tant que des tâches sont actives, reçue %q", c.Column)
+	// Dès qu'une tâche active existe, la carte quitte "soon" pour "doing".
+	if c, _ := s.GetCard(card.ID); c.Column != "doing" {
+		t.Fatalf("colonne attendue 'doing' dès qu'une tâche est active, reçue %q", c.Column)
 	}
 
 	// T1 termine (running -> review -> done).
@@ -546,8 +547,8 @@ func TestCardAutoMoveToDoneAndBack(t *testing.T) {
 	if _, err := s.FinishTask(id1); err != nil {
 		t.Fatalf("FinishTask: %v", err)
 	}
-	if c, _ := s.GetCard(card.ID); c.Column != "soon" {
-		t.Fatalf("colonne attendue 'soon' tant que T2 est active, reçue %q", c.Column)
+	if c, _ := s.GetCard(card.ID); c.Column != "doing" {
+		t.Fatalf("colonne attendue 'doing' tant que T2 est active, reçue %q", c.Column)
 	}
 
 	// T2 est annulée : les deux tâches sont maintenant terminales.
@@ -841,5 +842,25 @@ func TestContextualizeCliInput(t *testing.T) {
 	}
 	if got := contextualizeCliInput("Mon titre", ""); got != "Task: Mon titre" {
 		t.Fatalf("résultat inattendu (sans texte) : %q", got)
+	}
+}
+
+func TestCardAutoMovesFromSoonToDoingWhenTaskStarts(t *testing.T) {
+	s, err := NewStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+	p, _ := s.AddProject("p", "", "", []Repo{{Name: "r", Path: "/tmp/x"}})
+	card, _ := s.AddCard(p.ID, "Carte", "")
+	if card.Column != "soon" {
+		t.Fatalf("colonne initiale attendue soon, reçue %q", card.Column)
+	}
+	id, ref := s.ReserveTaskID()
+	if _, err := s.CreateTask(id, ref, card.ID, p.ID, "T", "echo", "sillage/x", "main", "/tmp/wt", "r"); err != nil {
+		t.Fatalf("CreateTask: %v", err)
+	}
+	got, _ := s.GetCard(card.ID)
+	if got.Column != "doing" {
+		t.Fatalf("la carte devrait passer en doing quand une tâche démarre, reçue %q", got.Column)
 	}
 }

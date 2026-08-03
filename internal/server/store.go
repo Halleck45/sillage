@@ -296,7 +296,9 @@ func (s *Store) recomputeCard(cardID string) {
 	if hasTasks {
 		if allTerminal {
 			c.Column = "done"
-		} else if c.Column == "done" {
+		} else if c.Column != "doing" {
+			// Du travail actif : une carte encore en "soon" (ou redescendue en
+			// "done") rejoint la colonne "En cours".
 			c.Column = "doing"
 		}
 	}

@@ -676,11 +676,12 @@ func (s *Server) handlePostMessage(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "text is required")
 		return
 	}
-	if err := s.runner.Start(id, false, body.Text); err != nil {
+	queued, err := s.runner.Message(id, body.Text)
+	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	w.WriteHeader(http.StatusAccepted)
+	writeJSON(w, http.StatusAccepted, map[string]bool{"queued": queued})
 }
 
 func (s *Server) handleInterrupt(w http.ResponseWriter, r *http.Request) {
