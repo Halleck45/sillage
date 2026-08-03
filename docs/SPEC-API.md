@@ -3,6 +3,7 @@
 Serveur Go sur `:8787`. Frontend statique servi sur `/`. Tout le JSON est en camelCase.
 
 Chaque fichier statique est servi avec un `ETag` (empreinte de son contenu embarqué, calculée au démarrage) et `Cache-Control: no-cache` : le navigateur revalide à chaque chargement et reçoit `304 Not Modified` tant que le contenu n'a pas changé. Sans ces en-têtes, `embed.FS` ne fournissant aucune date de modification, la réponse n'aurait aucun validateur et le navigateur garderait indéfiniment son ancienne copie de `app.js` après un rebuild.
+
 Auth par cookie de session (`sillage_session`, HttpOnly). Toute route `/api/*` (sauf `/api/login`) renvoie `401` sans session valide : le frontend affiche alors l'écran de connexion.
 
 Mono-utilisateur : un seul mot de passe partagé (pas de comptes, pas de rôles). Tous les messages d'erreur API (`{"error": "..."}`) sont en anglais, courts (ex : `"confirmation required"`, `"task not found"`, `"invalid project path: not a git repository"`).
