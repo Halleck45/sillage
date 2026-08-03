@@ -897,11 +897,16 @@ func ValidateRepoPath(path string) error {
 
 // AddProject crée un projet avec un ou plusieurs dépôts git (repos).
 // description et contextPrompt peuvent être vides ; delivery nil vaut le mode
-// par défaut ("pr").
+// par défaut ("pr"). Un nom vide est déduit du premier dépôt : créer un projet
+// ne demande donc qu'un chemin, tout le reste se règle ensuite.
 func (s *Store) AddProject(name, description, contextPrompt string, repos []Repo, links []Link, delivery *Delivery) (Project, error) {
 	normalized, err := NormalizeRepos(repos)
 	if err != nil {
 		return Project{}, err
+	}
+	name = strings.TrimSpace(name)
+	if name == "" {
+		name = normalized[0].Name
 	}
 	normalizedLinks, err := NormalizeLinks(links)
 	if err != nil {
