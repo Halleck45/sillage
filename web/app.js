@@ -219,7 +219,8 @@
       'preferences.langLabel': 'Langue',
       'preferences.errorSaveFailed': 'Échec de l\'enregistrement.',
       'sidebar.settingsButton': 'Réglages',
-      'usage.title': 'Utilisation',
+      'settings.tabGeneral': 'Général',
+      'settings.tabStats': 'Statistiques',
       'usage.empty': 'Aucun projet.'
     },
     en: {
@@ -433,7 +434,8 @@
       'preferences.langLabel': 'Language',
       'preferences.errorSaveFailed': 'Failed to save.',
       'sidebar.settingsButton': 'Settings',
-      'usage.title': 'Usage',
+      'settings.tabGeneral': 'General',
+      'settings.tabStats': 'Statistics',
       'usage.empty': 'No projects yet.'
     }
   };
@@ -507,6 +509,7 @@
   var modalLinks = []; // [{url, title}] liens épinglés, modale d'édition de projet
   var modalRepoCreateMode = true;
   var onboardingExpanded = null;
+  var settingsModalTab = 'general'; // 'general' | 'stats'
   var sseOpenedOnce = false;
 
   // ---------------------------------------------------------------------
@@ -551,17 +554,9 @@
     if (n >= 1000) return (n / 1000).toFixed(1).replace('.', localeDecimalSep()) + 'k';
     return String(n);
   }
-  function formatCostNumber(n) {
-    return (n || 0).toFixed(2).replace('.', localeDecimalSep());
-  }
-  function formatMoney(n) {
-    var num = formatCostNumber(n);
-    return state.lang === 'en' ? ('$' + num) : (num + ' $');
-  }
-  function tokenSummary(tokens) {
+  function tokenTotal(tokens) {
     tokens = tokens || {};
-    var total = (tokens.input || 0) + (tokens.output || 0);
-    return 'Σ ' + formatTokens(total) + ' ' + t('tokens.unit') + ' · ' + formatMoney(tokens.costUsd);
+    return (tokens.input || 0) + (tokens.output || 0);
   }
 
   function timeAgo(iso) {
@@ -1038,8 +1033,7 @@
       return '<article class="project-tile" data-action="nav-project" data-project-id="' + p.id + '">' +
         '<div class="project-tile-top"><span class="project-hash">#</span><h3>' + escapeHtml(p.name) + '</h3>' +
         (unread ? '<span class="badge-unread">' + unread + '</span>' : '') + '</div>' +
-        '<div class="project-tile-meta"><span>' + escapeHtml(tCount('allProjects.cardCount', cardCount)) + '</span>' +
-        '<span>' + tokenSummary(p.tokens) + '</span></div>' +
+        '<div class="project-tile-meta"><span>' + escapeHtml(tCount('allProjects.cardCount', cardCount)) + '</span></div>' +
         '</article>';
     }).join('');
     return buildHeaderHTML() + '<div class="view-body all-projects-body"><div class="project-grid">' + tiles +
@@ -1445,7 +1439,6 @@
           '</div>' +
           '<button class="icon-btn" data-action="close-panel" aria-label="' + escapeHtml(t('common.close')) + '">✕</button>' +
         '</div>' +
-        '<div class="detail-tokens" id="detail-token-line">' + tokenSummary(task.tokens) + '</div>' +
         buildStatusBadgeHTML(task.status) +
         '<div class="action-row">' + primaryBtnHTML +
           '<span class="checks">' + renderChecks(task.checks) + '</span>' +
@@ -2558,28 +2551,43 @@
       '<div class="preferences-divider"></div>';
   }
 
-  // Section « Utilisation » : total global de tokens/coût, sobre, sans
-  // graphique, suivi d'une petite liste par projet. Le contenu (hors titre
-  // de section) vit dans #usage-section pour permettre un patch ciblé sur
-  // l'événement SSE `tokens`, sans reconstruire toute la modale.
-  function buildUsageSectionInnerHTML() {
+  // Onglet Statistiques de Settings : consommation de tokens par projet,
+  // sans prix (charge mentale). Le contenu vit dans #usage-section pour
+  // permettre un patch ciblé sur l'événement SSE `tokens`, sans reconstruire
+  // toute la modale.
+  function buildStatsSectionInnerHTML() {
     var global = (state.tokens && state.tokens.global) || {};
-    var rows = state.projects.map(function (p) {
-      var tok = p.tokens || {};
-      var total = (tok.input || 0) + (tok.output || 0);
-      return '<div class="usage-project-row"><span class="usage-project-name">' + escapeHtml(p.name) + '</span>' +
-        '<span class="usage-project-value">' + formatTokens(total) + ' ' + escapeHtml(t('tokens.unit')) + ' · ' + formatMoney(tok.costUsd) + '</span></div>';
-    }).join('');
-    return '<div class="usage-global">' + tokenSummary(global) + '</div>' +
+    var rows = state.projects
+      .map(function (p) { return { name: p.name, total: tokenTotal(p.tokens) }; })
+      .sort(function (a, b) { return b.total - a.total; })
+      .map(function (r) {
+        return '<div class="usage-project-row"><span class="usage-project-name">' + escapeHtml(r.name) + '</span>' +
+          '<span class="usage-project-value">' + formatTokens(r.total) + ' ' + escapeHtml(t('tokens.unit')) + '</span></div>';
+      }).join('');
+    return '<div class="usage-global">Σ ' + formatTokens(tokenTotal(global)) + ' ' + escapeHtml(t('tokens.unit')) + '</div>' +
       (rows ? '<div class="usage-project-list">' + rows + '</div>' : '<div class="empty-note-sm">' + escapeHtml(t('usage.empty')) + '</div>');
   }
-  function buildUsageSectionHTML() {
-    return '<div class="modal-label">' + escapeHtml(t('usage.title')) + '</div>' +
-      '<div id="usage-section">' + buildUsageSectionInnerHTML() + '</div>' +
-      '<div class="preferences-divider"></div>';
+  function buildStatsSectionHTML() {
+    return '<div id="usage-section">' + buildStatsSectionInnerHTML() + '</div>';
   }
 
-  function buildWorkspaceModalBodyHTML() {
+  function buildSettingsTabsHTML() {
+    var tabs = [
+      { key: 'general', label: t('settings.tabGeneral') },
+      { key: 'stats', label: t('settings.tabStats') }
+    ];
+    return '<div class="tabs">' + tabs.map(function (tb) {
+      var active = settingsModalTab === tb.key;
+      return '<button class="tab ' + (active ? 'tab-active' : '') + '" role="tab" data-action="set-settings-tab" data-settings-tab="' + tb.key + '">' +
+        escapeHtml(tb.label) + '</button>';
+    }).join('') + '</div>';
+  }
+  function setSettingsTab(tabKey) {
+    settingsModalTab = tabKey === 'stats' ? 'stats' : 'general';
+    refreshWorkspaceModalBody();
+  }
+
+  function buildSettingsGeneralHTML() {
     var ws = state.workspace || {};
     var gitEnabled = !!ws.gitEnabled;
     var hasRemote = !!ws.remote;
@@ -2610,7 +2618,6 @@
     }
 
     return buildPreferencesSectionHTML() +
-      buildUsageSectionHTML() +
       '<div class="workspace-state">' + escapeHtml(stateLabel) + '</div>' +
       '<div class="modal-label">' + escapeHtml(t('workspace.remoteLabel')) + '</div>' +
       '<div class="workspace-remote-row">' +
@@ -2630,6 +2637,10 @@
       '</div>' +
       dirtyNote;
   }
+  function buildWorkspaceModalBodyHTML() {
+    var inner = settingsModalTab === 'stats' ? buildStatsSectionHTML() : buildSettingsGeneralHTML();
+    return buildSettingsTabsHTML() + '<div class="settings-tab-body">' + inner + '</div>';
+  }
   function buildWorkspaceModalHTML() {
     return '<div class="modal modal-sm">' +
       '<div class="modal-head"><span class="modal-title">' + escapeHtml(t('workspace.title')) + '</span><button class="icon-btn" data-action="close-modal" aria-label="' + escapeHtml(t('common.close')) + '">✕</button></div>' +
@@ -2637,6 +2648,7 @@
       '</div>';
   }
   function openWorkspaceModal() {
+    settingsModalTab = 'general';
     openModal(buildWorkspaceModalHTML());
     setTimeout(function () { var el = document.getElementById('workspace-remote-input'); if (el) el.focus(); }, 0);
   }
@@ -2825,9 +2837,7 @@
       });
     }
     var usageSection = document.getElementById('usage-section');
-    if (usageSection) usageSection.innerHTML = buildUsageSectionInnerHTML();
-    var detailTok = document.getElementById('detail-token-line');
-    if (detailTok && state.taskId && state.tasksById[state.taskId]) detailTok.textContent = tokenSummary(state.tasksById[state.taskId].tokens);
+    if (usageSection) usageSection.innerHTML = buildStatsSectionInnerHTML();
   }
 
   function onCardsEvent(list) {
@@ -2997,6 +3007,7 @@
       case 'close-sidebar-drawer': closeSidebarDrawer(); break;
       case 'set-lang': setLang(el.getAttribute('data-lang')); break;
       case 'open-workspace-modal': openWorkspaceModal(); break;
+      case 'set-settings-tab': setSettingsTab(el.getAttribute('data-settings-tab')); break;
       case 'save-workspace-remote': saveWorkspaceRemote(); break;
       case 'toggle-autosync': saveAutoSync(el.checked); break;
       case 'save-display-name': saveDisplayName(); break;

@@ -207,5 +207,5 @@ Le frontend maintient son état en mémoire à partir de `/api/state` + SSE ; re
 ## Règles produit à respecter côté UI
 
 - Push / livraison uniquement via le bouton du détail de tâche avec confirmation explicite (double clic de confirmation ou bouton qui devient « Confirmer le push ? »). Jamais automatique. Même règle pour l'ouverture de la PR et pour la synchronisation de l'espace de travail (`/api/workspace/sync`).
-- Tokens visibles : total global en bas de sidebar (`Σ 12,4k tokens · 0,84 $`), par projet dans l'en-tête kanban, par tâche dans le détail (sous l'en-tête).
+- Tokens : jamais affichés dans le flux de travail (kanban, détail de tâche, liste des projets), pour ne pas ajouter de charge mentale. Seul endroit visible : Réglages > onglet Statistiques, consommation par projet, sans prix.
 - Une tâche s'ouvre → POST `/read`.

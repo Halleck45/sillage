@@ -7,7 +7,7 @@
 
 **A calm web dashboard to pilot AI coding agents (Claude Code, Codex CLI) across your projects.**
 
-Sillage runs your agents in isolated git worktrees, streams their activity live, tracks every token they spend, and never lets anything leave your machine without your explicit approval. **One self-contained binary, zero dependencies, zero configuration**: download, run, open a browser tab.
+Sillage runs your agents in isolated git worktrees, streams their activity live, and never lets anything leave your machine without your explicit approval. **One self-contained binary, zero dependencies, zero configuration**: download, run, open a browser tab.
 
 ![Task view: PR-style task list, conversation with the agent, one primary action](docs/screenshots/task-detail.png)
 
@@ -21,7 +21,7 @@ Working with several AI agents quickly turns into tab hell: five terminals, thre
 - **Agents can never push**: each task runs in an isolated git worktree; shipping is one confirmed click, and `git push` exists in exactly one place in the code, behind that click.
 - **Real conversations**: chat with the agent mid-task, review the colored diff, open the PR. Messages sent while it works are queued, context never gets lost.
 - **Layered context**: agent prompt + project context + workstream context. Write things once, at the right level.
-- **Token accounting everywhere**: input/output/cost per task, per project and global, live.
+- **Token usage, out of the way**: no counters cluttering the kanban or the task view; per-project token totals live in Settings > Statistics.
 - **Your workspace is a git repo** (optional): conversations, projects and settings versioned locally, synced to a private remote to follow you across machines.
 
 Also: multiple repositories per project, task reassignment, agent health warnings, pinned project links, English and French UI, works from your phone, and a free built-in agent to try everything without spending a token.
