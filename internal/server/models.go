@@ -26,15 +26,23 @@ type Link struct {
 }
 
 // Delivery définit ce que « livrer » veut dire pour un projet (voir
-// docs/SPEC-LIVRAISON.md) : ouvrir une pull/merge request, ou fusionner
-// localement dans une branche de destination. Le fournisseur (github, gitlab)
-// n'est jamais persisté : il est redéduit du remote origin à chaque opération.
+// docs/SPEC-LIVRAISON.md). Le fournisseur (github, gitlab) n'est jamais
+// persisté : il est redéduit du remote origin à chaque opération.
 type Delivery struct {
-	Mode string `json:"mode"` // pr|merge
+	// Mode est l'un des quatre comportements de livraison :
+	//
+	//	pr         pousse la branche du chantier, puis ouvre la pull/merge request
+	//	push       pousse la branche du chantier, sans rien ouvrir
+	//	merge      fusionne la branche du chantier dans Target, en local, sans jamais pousser
+	//	merge-push fusionne dans Target puis pousse Target
+	//
+	// Les deux modes de fusion sont fast-forward uniquement (voir MergeLocal).
+	Mode string `json:"mode"` // pr|push|merge|merge-push
 
 	// Target est la branche de destination : base de la PR en mode "pr",
-	// branche fusionnée en mode "merge". Vide = branche par défaut du dépôt
-	// (branche courante au moment de la création de la branche de chantier).
+	// branche fusionnée en modes "merge" et "merge-push". Vide = branche par
+	// défaut du dépôt (branche courante au moment de la création de la branche
+	// de chantier).
 	Target string `json:"target"`
 
 	// StackedPrs réserve l'option « une PR par tâche, empilées » (lot 3, voir
@@ -165,6 +173,13 @@ type Task struct {
 	Unread        bool      `json:"unread"`
 	UpdatedAt     time.Time `json:"updatedAt"`
 	Tokens        Tokens    `json:"tokens"`
+
+	// Rebasing indique qu'un rebase automatique de cette tâche est en cours sur
+	// la branche de son chantier (voir Server.rebaseSiblingTasks) : le frontend
+	// affiche un fuseau à la place de l'icône d'état. État volatile, remis à
+	// faux au chargement de state.json (resetTransientTaskFlags) pour qu'un
+	// arrêt brutal en plein rebase ne laisse pas un fuseau tourner sans fin.
+	Rebasing bool `json:"rebasing"`
 
 	// Champs internes ; persistés dans state.json (sinon perdus au redémarrage)
 	// et visibles par le client authentifié, ce qui est sans enjeu en mono-utilisateur.
@@ -323,6 +338,29 @@ type AcceptResponse struct {
 	ConflictFilePaths string `json:"conflictFilePaths,omitempty"`
 }
 
+// CatchUpRepoResult est le résultat, sur un dépôt, d'un rattrapage de la
+// branche de destination dans la branche du chantier (voir handleCardCatchUp).
+type CatchUpRepoResult struct {
+	RepoName string `json:"repoName"`
+	Target   string `json:"target"`
+
+	Merged   bool `json:"merged"`   // la destination a été fusionnée dans le chantier
+	UpToDate bool `json:"upToDate"` // rien à rattraper, la destination y était déjà
+
+	// ConflictFilePaths liste les fichiers en conflit, séparés par des espaces.
+	// La fusion est alors annulée : le worktree du chantier revient intact.
+	ConflictFilePaths string `json:"conflictFilePaths,omitempty"`
+	Output            string `json:"output"`
+	Error             string `json:"error"`
+}
+
+// CatchUpResponse est la réponse de POST /api/cards/{id}/catch-up. Un dépôt en
+// échec n'annule pas les autres : chaque ligne porte son propre résultat.
+type CatchUpResponse struct {
+	Card  Card                `json:"card"`
+	Repos []CatchUpRepoResult `json:"repos"`
+}
+
 // DeliveryRepoPreview décrit ce que la livraison ferait sur un dépôt donné.
 // Commits/Files (contenu de la livraison, base..branche) et Pending (ce qui
 // reste réellement à livrer) sont calculés à la volée par git.
@@ -337,6 +375,23 @@ type DeliveryRepoPreview struct {
 	// "pr" (origin/<branche>..<branche>), pas encore fusionnés dans la branche
 	// de destination en mode "merge". Zéro partout signifie « rien à livrer ».
 	Pending int `json:"pending"`
+
+	// Behind est le nombre de commits que la base a et que la branche du
+	// chantier n'a pas (branche..base) : le chantier est en retard sur la
+	// release et devra être rebasé avant d'être livré proprement.
+	Behind int `json:"behind"`
+
+	// MergedIntoTarget dit que la branche du chantier est entièrement contenue
+	// dans la branche de destination : tout est arrivé à destination, il n'y a
+	// plus rien à livrer, que ce soit par Sillage ou à la main. L'UI remplace
+	// alors le bouton par « Déjà sur <destination> ».
+	MergedIntoTarget bool `json:"mergedIntoTarget"`
+
+	// FastForwardable dit qu'une fusion fast-forward de la branche du chantier
+	// dans la destination est possible (la destination est un ancêtre de la
+	// branche). Faux avec Behind > 0 : les deux modes de fusion refuseraient,
+	// l'UI désactive donc le bouton plutôt que d'annoncer un échec certain.
+	FastForwardable bool `json:"fastForwardable"`
 
 	PrURL     string     `json:"prUrl"`
 	ShippedAt *time.Time `json:"shippedAt"`
@@ -354,6 +409,12 @@ type DeliveryPreview struct {
 	Warnings []string              `json:"warnings"`
 	Counts   DeliveryCounts        `json:"counts"`
 	Repos    []DeliveryRepoPreview `json:"repos"`
+
+	// Behind indique, par identifiant de tâche encore vivante (running ou
+	// review), le nombre de commits que la branche du chantier a et que la
+	// branche de la tâche n'a pas : le retard qui produira un conflit à
+	// l'acceptation. Une tâche à jour n'apparaît pas dans la table.
+	Behind map[string]int `json:"behind"`
 }
 
 // DeliveryCounts compte les tâches du chantier par état, pour la ligne d'état

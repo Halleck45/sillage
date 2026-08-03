@@ -17,6 +17,11 @@
   --hover: #eae7df;
   --accent: #2f66d0;
   --accent-dark: #1e4ba6;
+  /* Boutons d'action pleins : noir partout (primaire, livraison, envoi). Le
+     bleu accent ne sert plus qu'aux liens et aux anneaux de focus. */
+  --solid: #191917;
+  --solid-hover: #2c2b28;
+  --solid-shadow: rgba(25, 25, 23, 0.22);
   --green: #1f7a4d;
   --green-live: #2f7d54;
   --green-bg: #e9f3ec;
@@ -105,7 +110,14 @@ button, input, textarea { font-family: inherit; }
   gap: 9px;
   padding: 0 18px;
 }
-.brand-mark { width: 18px; height: 18px; border-radius: 6px; background: var(--text); flex: none; }
+/* Marque du produit : le logo (docs/logo-sillage.png) redessiné en SVG pixel par
+   pixel, en data-URI. Net à toute taille, aucun fichier binaire à embarquer, et
+   un seul endroit à changer pour les deux usages (barre latérale, page de
+   connexion). Grille 20x20, comme l'original. */
+.brand-mark {
+  width: 18px; height: 18px; flex: none;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cpath fill='%23122220' d='M4.4 0h11.2A4.4 4.4 0 0 1 20 4.4v11.2a4.4 4.4 0 0 1-4.4 4.4H4.4A4.4 4.4 0 0 1 0 15.6V4.4A4.4 4.4 0 0 1 4.4 0Z'/%3E%3Cg clip-path='url(%23c)'%3E%3Cpath fill='%23f0eae1' d='M9 2h1v1h-1z'/%3E%3Cpath fill='%23f0eae1' d='M9 3h2v1h-2z'/%3E%3Cpath fill='%23f0eae1' d='M9 4h3v1h-3z'/%3E%3Cpath fill='%23f0eae1' d='M9 5h4v1h-4z'/%3E%3Cpath fill='%23f0eae1' d='M9 6h5v1h-5z'/%3E%3Cpath fill='%23f0eae1' d='M9 7h6v1h-6z'/%3E%3Cpath fill='%23789799' d='M1 8h1v1h-1z'/%3E%3Cpath fill='%23f0eae1' d='M9 8h1v1h-1z'/%3E%3Cpath fill='%23789799' d='M18 8h1v1h-1z'/%3E%3Cpath fill='%23789799' d='M1 9h2v1h-2z'/%3E%3Cpath fill='%23f0eae1' d='M7 9h6v1h-6z'/%3E%3Cpath fill='%23789799' d='M17 9h2v1h-2z'/%3E%3Cpath fill='%23789799' d='M1 10h3v1h-3z'/%3E%3Cpath fill='%23f0eae1' d='M6 10h8v1h-8z'/%3E%3Cpath fill='%23789799' d='M16 10h3v1h-3z'/%3E%3Cpath fill='%23789799' d='M2 11h3v1h-3z'/%3E%3Cpath fill='%23f0eae1' d='M7 11h6v2h-6z'/%3E%3Cpath fill='%23789799' d='M15 11h3v1h-3z'/%3E%3Cpath fill='%23789799' d='M2 12h4v1h-4z'/%3E%3Cpath fill='%23789799' d='M14 12h4v1h-4z'/%3E%3Cpath fill='%23789799' d='M3 13h4v1h-4z'/%3E%3Cpath fill='%23789799' d='M13 13h4v1h-4z'/%3E%3Cpath fill='%23789799' d='M3 14h5v1h-5z'/%3E%3Cpath fill='%23789799' d='M12 14h5v1h-5z'/%3E%3Cpath fill='%23789799' d='M4 15h5v1h-5z'/%3E%3Cpath fill='%23789799' d='M11 15h5v1h-5z'/%3E%3Cpath fill='%23789799' d='M5 16h10v1h-10z'/%3E%3Cpath fill='%23789799' d='M6 17h8v1h-8z'/%3E%3Cpath fill='%23789799' d='M7 18h6v1h-6z'/%3E%3Cpath fill='%23789799' d='M8 19h4v1h-4z'/%3E%3C/g%3E%3CclipPath id='c'%3E%3Cpath d='M4.4 0h11.2A4.4 4.4 0 0 1 20 4.4v11.2a4.4 4.4 0 0 1-4.4 4.4H4.4A4.4 4.4 0 0 1 0 15.6V4.4A4.4 4.4 0 0 1 4.4 0Z'/%3E%3C/clipPath%3E%3C/svg%3E") center/contain no-repeat;
+}
 .brand-name { font-size: 14px; font-weight: 600; letter-spacing: -0.015em; }
 
 .sidebar-search-wrap { padding: 4px 12px 12px; }
@@ -253,12 +265,16 @@ button, input, textarea { font-family: inherit; }
   font-size: 12.5px; font-weight: 500; cursor: pointer; border: 0;
   transition: filter .12s ease, transform .12s ease, box-shadow .12s ease, background-color .12s ease;
 }
-.btn-primary { color: #fff; background: var(--accent); box-shadow: 0 1px 2px rgba(47, 102, 208, 0.2); }
-.btn-primary:hover { filter: brightness(0.93); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(47, 102, 208, 0.3); }
-.btn-primary:active { filter: brightness(0.9); transform: translateY(0); box-shadow: 0 1px 2px rgba(47, 102, 208, 0.2); }
-.btn-green { color: #fff; background: var(--green); box-shadow: 0 2px 10px rgba(31, 122, 77, 0.25); }
-.btn-green:hover { filter: brightness(0.95); transform: translateY(-1px); box-shadow: 0 5px 14px rgba(31, 122, 77, 0.32); }
-.btn-green:active { filter: brightness(0.9); transform: translateY(0); box-shadow: 0 2px 10px rgba(31, 122, 77, 0.25); }
+/* Un seul bouton plein, noir : la couleur ne sert plus à hiérarchiser les
+   actions (c'est la place dans l'écran qui le fait), et le noir se lit partout.
+   .btn-green garde son nom, utilisé par les modales et la livraison. */
+.btn-primary, .btn-green { color: #fff; background: var(--solid); box-shadow: 0 1px 2px var(--solid-shadow); }
+.btn-primary:hover, .btn-green:hover {
+  background: var(--solid-hover); transform: translateY(-1px); box-shadow: 0 4px 12px var(--solid-shadow);
+}
+.btn-primary:active, .btn-green:active {
+  background: var(--solid); transform: translateY(0); box-shadow: 0 1px 2px var(--solid-shadow);
+}
 .btn-outline { color: var(--text-2); background: #fff; border: 1px solid var(--border-3); }
 .btn-outline:hover { background: #f6f4f0; transform: translateY(-1px); box-shadow: 0 3px 8px rgba(25, 25, 23, 0.07); }
 .btn-outline:active { transform: translateY(0); box-shadow: none; }
@@ -273,6 +289,8 @@ button, input, textarea { font-family: inherit; }
 .btn-primary:disabled:hover, .btn-green:disabled:hover, .btn-neutral:disabled:hover {
   transform: none; box-shadow: none; filter: none;
 }
+/* Le fond du survol ne doit pas s'appliquer à un bouton désactivé. */
+.btn-primary:disabled:hover, .btn-green:disabled:hover { background: var(--solid); }
 .btn-primary:focus-visible, .btn-green:focus-visible, .btn-outline:focus-visible, .btn-neutral:focus-visible {
   outline: 2px solid var(--accent); outline-offset: 2px;
 }
@@ -289,6 +307,11 @@ button, input, textarea { font-family: inherit; }
   background: #fff; border-color: var(--border-3); color: var(--text-3);
 }
 .modal-foot .btn-green, .modal-foot .btn-neutral { display: inline-flex; align-items: center; gap: 7px; }
+/* Icône SVG d'un bouton (le bateau de la livraison) : décorative, jamais lue,
+   et de la couleur du texte du bouton (fill="currentColor"). */
+.btn-icon { flex: none; margin-right: 6px; vertical-align: -2px; }
+/* Dans un pied de modale le bouton est déjà en flex avec gap : pas de marge. */
+.modal-foot .btn-icon { margin-right: 0; }
 @media (max-width: 700px) {
   .kbd-in-btn { display: none; }
 }
@@ -407,11 +430,24 @@ button, input, textarea { font-family: inherit; }
 }
 .task-row:hover { background: #faf9f6; }
 .task-row.selected { background: #f6f4f0; }
-.task-glyph { flex: none; width: 18px; height: 18px; margin-top: 1px; display: flex; align-items: center; justify-content: center; font-size: 13px; }
+/* Pastille d'état d'une tâche : le repère qu'on balaie des yeux dans une liste.
+   Un cercle teinté par état, assez contrasté pour se voir sans être lu. */
+.task-glyph {
+  flex: none; width: 22px; height: 22px; border-radius: 50%; margin-top: 1px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12.5px; font-weight: 700; line-height: 1;
+  background: #f1efea; box-shadow: inset 0 0 0 1px var(--border-3);
+}
+.task-glyph-review { background: var(--amber-bg); box-shadow: inset 0 0 0 1px #f0dcae; }
+.task-glyph-accepted { background: var(--green-bg); box-shadow: inset 0 0 0 1px #c6e2d0; }
+.task-glyph-cancelled { background: #f1efea; box-shadow: inset 0 0 0 1px var(--border-3); }
+.task-glyph-rebasing { background: var(--amber-bg); box-shadow: inset 0 0 0 1px #f0dcae; }
 .task-spinner {
   width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--border-3);
   border-top-color: var(--muted); animation: om-spin .7s linear infinite;
 }
+/* Le fuseau d'un rebase est ambre : la même couleur que le retard qu'il efface. */
+.task-glyph-rebasing .task-spinner { border-color: #f0dcae; border-top-color: var(--amber); }
 .task-main { flex: 1; min-width: 0; }
 .task-title-line { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
 .task-title { flex: 0 1 auto; min-width: 0; font-size: 14.5px; font-weight: 500; letter-spacing: -0.014em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -420,6 +456,17 @@ button, input, textarea { font-family: inherit; }
   flex: none; height: 17px; padding: 0 6px; border-radius: 5px; background: var(--green-bg); color: var(--green-live);
   font-size: 10.5px; font-weight: 700; letter-spacing: 0.03em; display: inline-flex; align-items: center;
 }
+/* Retard sur la branche de base : ambre comme les avertissements de livraison,
+   la tâche marche toujours, c'est le rebase qui manque. */
+.behind-badge {
+  flex: none; height: 17px; padding: 0 6px; border-radius: 5px; background: var(--amber-bg); color: var(--amber);
+  font-size: 10.5px; font-weight: 700; letter-spacing: 0.03em; display: inline-flex; align-items: center;
+  font-family: ui-monospace, Menlo, monospace; cursor: help;
+}
+.behind-row { display: flex; align-items: center; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+.behind-text { flex: 1; min-width: 0; font-size: 11.5px; line-height: 1.35; color: var(--amber); }
+.ship-bar-behind { font-size: 11.5px; line-height: 1.35; color: var(--amber); cursor: help; }
+
 .task-meta-line { display: flex; align-items: center; gap: 8px; margin-top: 4px; flex-wrap: wrap; font-size: 12px; color: var(--muted-2); }
 .task-project-tag { color: var(--muted-3); white-space: nowrap; }
 .agent-chip { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
@@ -463,6 +510,7 @@ button, input, textarea { font-family: inherit; }
 }
 .task-row-state-accepted { color: var(--green-live); }
 .task-row-state-cancelled { color: var(--muted-3); font-weight: 400; }
+.task-row-state-rebasing { color: var(--amber); }
 .task-row-actions { flex: none; display: flex; align-items: center; gap: 6px; opacity: 0; transition: opacity .12s ease; }
 .task-row:hover .task-row-actions, .task-row-actions:focus-within { opacity: 1; }
 .row-btn {
@@ -470,8 +518,10 @@ button, input, textarea { font-family: inherit; }
   font-family: inherit; font-size: 11.5px; font-weight: 500; color: var(--text-2); cursor: pointer; white-space: nowrap;
 }
 .row-btn:hover { background: #f6f4f0; }
-.row-btn-accept { border-color: var(--green); color: var(--green); }
-.row-btn-accept:hover { background: var(--green-bg); }
+/* Accepter est l'action de la ligne : seul bouton plein, noir comme les autres.
+   Refuser reste blanc bordé, en retrait. */
+.row-btn-accept { border-color: var(--solid); background: var(--solid); color: #fff; }
+.row-btn-accept:hover { background: var(--solid-hover); }
 
 /* ---------- Barre de livraison d'un chantier ---------- */
 
@@ -483,8 +533,18 @@ button, input, textarea { font-family: inherit; }
 .ship-bar-counts { font-size: 12.5px; font-weight: 600; color: var(--text-2); }
 .ship-bar-sub { font-size: 12px; color: var(--muted-2); line-height: 1.35; }
 .ship-bar-warning { font-size: 11.5px; line-height: 1.35; color: var(--amber); }
+.ship-slot { flex: none; display: inline-flex; align-items: center; gap: 8px; }
+/* Rattraper la destination : action secondaire, juste avant celle qu'elle débloque. */
+.catch-up-btn { height: 30px; }
+.ship-btn { display: inline-flex; align-items: center; }
+/* Chantier arrivé à destination : une ancre, pas un bouton mort. */
+.ship-anchored {
+  display: inline-flex; align-items: center; white-space: nowrap; height: 30px; padding: 0 13px;
+  border-radius: 9px; background: var(--green-bg); color: var(--green-live);
+  font-size: 12.5px; font-weight: 600; cursor: default;
+}
 .ship-btn:disabled { background: #e7e5df; color: var(--muted-3); box-shadow: none; cursor: default; }
-.ship-btn:disabled:hover { filter: none; transform: none; box-shadow: none; }
+.ship-btn:disabled:hover { background: #e7e5df; transform: none; box-shadow: none; }
 .ship-links { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 2px; }
 .ship-link { font-size: 12px; color: var(--accent); text-decoration: none; }
 .ship-link:hover { text-decoration: underline; }
@@ -513,7 +573,7 @@ button, input, textarea { font-family: inherit; }
 .empty-cta:hover { background: #faf9f6; }
 .empty-cta:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .empty-cta-title { font-size: 13.5px; color: var(--muted); }
-.empty-cta-sub { font-size: 13px; font-weight: 600; color: var(--accent); }
+.empty-cta-sub { font-size: 13px; font-weight: 600; color: var(--solid); }
 
 /* ---------- Detail panel ---------- */
 
@@ -530,9 +590,13 @@ button, input, textarea { font-family: inherit; }
 .detail-title { font-size: 15px; font-weight: 600; letter-spacing: -0.015em; line-height: 1.35; }
 .detail-meta { display: flex; align-items: center; gap: 8px; margin-top: 5px; flex-wrap: wrap; font-size: 12px; color: var(--muted-2); }
 
-.status-badge { display: flex; align-items: center; gap: 6px; margin-top: 14px; }
-.status-badge-icon { font-size: 13px; line-height: 1; }
+.status-badge { display: flex; align-items: center; gap: 6px; margin-top: 14px; flex-wrap: wrap; }
+.status-badge-icon { font-size: 13px; line-height: 1; display: inline-flex; align-items: center; }
 .status-badge-label { font-size: 12.5px; font-weight: 600; color: var(--text-2); }
+/* Rebase en cours : ambre, et une phrase qui dit ce qui se passe. */
+.status-badge-rebasing .status-badge-label { color: var(--amber); }
+.status-badge-rebasing .status-badge-icon .task-spinner { border-color: #f0dcae; border-top-color: var(--amber); }
+.status-badge-note { font-size: 11.5px; color: var(--muted-2); }
 
 .action-row { display: flex; align-items: center; gap: 10px; margin-top: 14px; }
 .btn-action { flex: 1; min-width: 0; height: 40px; padding: 0 16px; border: 0; border-radius: 10px; font-size: 14px; font-weight: 600; letter-spacing: -0.01em; cursor: pointer; }
@@ -602,9 +666,9 @@ button, input, textarea { font-family: inherit; }
 .composer-model { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
 .btn-send {
   margin-left: auto; flex: none; height: 28px; padding: 0 12px; border: 0; border-radius: 8px;
-  font-size: 12.5px; font-weight: 500; color: #fff; cursor: pointer; background: var(--accent);
+  font-size: 12.5px; font-weight: 500; color: #fff; cursor: pointer; background: var(--solid);
 }
-.btn-send:hover { filter: brightness(0.92); }
+.btn-send:hover { background: var(--solid-hover); }
 
 /* ---------- Diff ---------- */
 
@@ -764,7 +828,7 @@ button, input, textarea { font-family: inherit; }
 .workspace-remote-row { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
 .workspace-remote-row .modal-input { margin-top: 0; flex: 1; min-width: 0; }
 .link-save-btn {
-  flex: none; border: 0; background: transparent; color: var(--accent); font-size: 12.5px;
+  flex: none; border: 0; background: transparent; color: var(--text-2); font-size: 12.5px;
   font-weight: 500; cursor: pointer; padding: 4px 2px;
 }
 .link-save-btn:hover { text-decoration: underline; }
