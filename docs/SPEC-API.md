@@ -189,10 +189,20 @@ Le chantier est une branche de feature : une branche `sillage/ws-<card.ref>-<slu
   "warnings": ["gh not found in PATH; ..."],
   "counts": { "accepted": 3, "refused": 1, "pending": 1 },
   "repos": [ { "repoName": "api", "branch": "sillage/ws-101-refonte-auth", "base": "main",
-               "commits": 4, "files": 11, "pending": 4, "prUrl": "", "shippedAt": null } ] }
+               "commits": 4, "files": 11, "pending": 4, "behind": 2, "prUrl": "", "shippedAt": null } ],
+  "behind": { "t12": 2 } }
 ```
 
 `commits`/`files` décrivent le contenu de la livraison (`base..branche`) ; `pending` est ce qu'il reste réellement à livrer (commits non poussés en mode `pr`, non encore fusionnés en mode `merge`). `pending` à zéro partout signifie « rien à livrer » : le bouton est inactif et la livraison marque le dépôt `skipped`.
+
+**Retard sur la base** (`behind`, deux niveaux, jamais persistés, calculés par `git rev-list --count`) :
+
+- `repos[].behind` = commits que la base a et que la branche du chantier n'a pas (`branche..base`) : le chantier est en retard sur la release. Ne bloque pas la livraison, l'annonce seulement.
+- `behind` (table à la racine, par identifiant de tâche) = commits que la branche du chantier a et que la branche de la tâche n'a pas. Renseignée uniquement pour les tâches `running` et `review` ; une tâche à jour n'y figure pas. C'est le retard qui produit un conflit à l'acceptation, typiquement après l'acceptation d'une autre tâche du même chantier (deux commits par acceptation : celui de la tâche, puis le commit de fusion `--no-ff`).
+
+Une révision manquante (branche jamais poussée, worktree retiré) rend `0` : mieux vaut n'annoncer aucun retard qu'un retard faux.
+
+Règles UI : badge `↓{n}` ambre dans la ligne de tâche et dans l'en-tête du panneau de détail, avec l'explication en infobulle ; ligne de retard du chantier dans la barre de livraison. Le bouton **Demander le rebase** de l'en-tête n'appelle aucun endpoint git : il poste un message dans le fil de la tâche (`POST /api/tasks/{id}/messages`) demandant à l'agent de rebaser, ce qui le met en file si l'agent tourne encore. Aucun rebase n'est jamais exécuté par le serveur : seul l'agent sait résoudre un conflit.
 
 `POST /api/cards/{id}/ship` `{confirm:true}` (400 `"confirmation required"` sinon) traite chaque dépôt du chantier et répond :
 

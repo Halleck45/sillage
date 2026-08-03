@@ -338,6 +338,11 @@ type DeliveryRepoPreview struct {
 	// de destination en mode "merge". Zéro partout signifie « rien à livrer ».
 	Pending int `json:"pending"`
 
+	// Behind est le nombre de commits que la base a et que la branche du
+	// chantier n'a pas (branche..base) : le chantier est en retard sur la
+	// release et devra être rebasé avant d'être livré proprement.
+	Behind int `json:"behind"`
+
 	PrURL     string     `json:"prUrl"`
 	ShippedAt *time.Time `json:"shippedAt"`
 }
@@ -354,6 +359,12 @@ type DeliveryPreview struct {
 	Warnings []string              `json:"warnings"`
 	Counts   DeliveryCounts        `json:"counts"`
 	Repos    []DeliveryRepoPreview `json:"repos"`
+
+	// Behind indique, par identifiant de tâche encore vivante (running ou
+	// review), le nombre de commits que la branche du chantier a et que la
+	// branche de la tâche n'a pas : le retard qui produira un conflit à
+	// l'acceptation. Une tâche à jour n'apparaît pas dans la table.
+	Behind map[string]int `json:"behind"`
 }
 
 // DeliveryCounts compte les tâches du chantier par état, pour la ligne d'état

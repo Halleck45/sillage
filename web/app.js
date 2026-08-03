@@ -93,6 +93,16 @@
       'action.refuse': 'Refuser',
       'action.refuseTooltip': 'Écarter cette tâche du chantier',
       'action.reopen': 'Rouvrir la tâche',
+      'behind.taskTooltip.one': '1 commit de retard sur {base} : à rebaser avant acceptation, sinon conflit.',
+      'behind.taskTooltip.other': '{n} commits de retard sur {base} : à rebaser avant acceptation, sinon conflit.',
+      'behind.cardTooltip.one': 'Le chantier a 1 commit de retard sur {base}.',
+      'behind.cardTooltip.other': 'Le chantier a {n} commits de retard sur {base}.',
+      'behind.cardLabel.one': '↓ 1 commit de retard sur {base}',
+      'behind.cardLabel.other': '↓ {n} commits de retard sur {base}',
+      'behind.askRebase': 'Demander le rebase',
+      'behind.askRebaseTooltip': 'Envoyer un message à l\'agent pour qu\'il rebase sa branche sur {base}',
+      'behind.rebasePrompt.one': 'Ta branche a 1 commit de retard sur {base}. Rebase-la dessus, règle les conflits éventuels, puis relance les vérifications du projet.',
+      'behind.rebasePrompt.other': 'Ta branche a {n} commits de retard sur {base}. Rebase-la dessus, règle les conflits éventuels, puis relance les vérifications du projet.',
       'action.cancelTask': 'Annuler la tâche',
       'action.cancelTaskConfirm': 'Confirmer l\'annulation ?',
       'task.delete': 'Supprimer la tâche',
@@ -372,6 +382,16 @@
       'action.refuse': 'Refuse',
       'action.refuseTooltip': 'Leave this task out of the workstream',
       'action.reopen': 'Reopen the task',
+      'behind.taskTooltip.one': '1 commit behind {base}: rebase before accepting, or it will conflict.',
+      'behind.taskTooltip.other': '{n} commits behind {base}: rebase before accepting, or it will conflict.',
+      'behind.cardTooltip.one': 'The workstream is 1 commit behind {base}.',
+      'behind.cardTooltip.other': 'The workstream is {n} commits behind {base}.',
+      'behind.cardLabel.one': '↓ 1 commit behind {base}',
+      'behind.cardLabel.other': '↓ {n} commits behind {base}',
+      'behind.askRebase': 'Ask for a rebase',
+      'behind.askRebaseTooltip': 'Send the agent a message asking it to rebase its branch onto {base}',
+      'behind.rebasePrompt.one': 'Your branch is 1 commit behind {base}. Rebase onto it, settle any conflicts, then run the project checks again.',
+      'behind.rebasePrompt.other': 'Your branch is {n} commits behind {base}. Rebase onto it, settle any conflicts, then run the project checks again.',
       'action.cancelTask': 'Cancel the task',
       'action.cancelTaskConfirm': 'Confirm cancellation?',
       'task.delete': 'Delete the task',
@@ -1305,7 +1325,8 @@
       '<span class="task-glyph" style="color:' + glyph.color + '">' + glyph.icon + '</span>' +
       '<div class="task-main">' +
         '<div class="task-title-line"><span class="' + titleClass + '">' + escapeHtml(t.title) + '</span>' +
-        (isNew ? '<span class="badge-new">' + escapeHtml(t2('badge.new')) + '</span>' : '') + '</div>' +
+        (isNew ? '<span class="badge-new">' + escapeHtml(t2('badge.new')) + '</span>' : '') +
+        buildBehindBadgeHTML(t) + '</div>' +
         '<div class="task-meta-line">' + projectTag +
         '<span class="mono">#' + t.ref + '</span>' +
         '<span class="agent-chip"><span class="agent-avatar-sm" style="background:' + softColor(agent.color) + '">' + agent.emoji + '</span>' + escapeHtml(agent.name) + '</span>' +
@@ -1315,6 +1336,23 @@
       buildTaskRowStateHTML(t) +
       '<div class="task-counts"><span>◆ ' + (t.filesCount || 0) + '</span><span>💬 ' + (t.messagesCount || 0) + '</span></div>' +
       '</div>';
+  }
+
+  // Retard d'une tâche sur la branche de son chantier, tel que l'annonce le
+  // dernier aperçu de livraison (state.deliveryByCard, rechargé à l'ouverture
+  // du chantier et toutes les 60 s). Absent de la table = à jour.
+  function taskBehindCount(task) {
+    var prev = state.deliveryByCard[task.cardId];
+    if (!prev || !prev.behind) return 0;
+    return prev.behind[task.id] || 0;
+  }
+
+  // Badge « en retard » : un compteur discret, avec l'explication en infobulle.
+  function buildBehindBadgeHTML(task) {
+    var n = taskBehindCount(task);
+    if (!n) return '';
+    var tip = tCount('behind.taskTooltip', n, { base: task.base || '' });
+    return '<span class="behind-badge" title="' + escapeHtml(tip) + '">↓' + n + '</span>';
   }
 
   // État d'une tâche dans la liste : lisible sans clic (acceptée, refusée), et
@@ -1427,6 +1465,11 @@
     }).then(function () {
       delete state.loading[key];
       refreshShipBar(cardId);
+      // Les badges de retard vivent aussi dans les lignes de tâches et dans
+      // l'en-tête du détail : deux rafraîchissements ciblés, jamais un rendu
+      // complet, pour ne pas toucher au fil de conversation ni au composeur.
+      if (state.cardId === cardId) refreshTaskListAndFilters();
+      if (state.taskId) patchDetailHead(state.taskId);
     });
   }
 
@@ -1533,10 +1576,23 @@
           '<span class="ship-bar-counts">' + escapeHtml(deliveryCountsLabel(cardTaskCounts(card.id))) + '</span>' +
           '<span class="ship-bar-sub">' + escapeHtml(sub) + '</span>' +
           warnings +
+          buildCardBehindHTML(prev) +
           (prev ? buildShipLinksHTML(prev) : '') +
         '</div>' +
         button +
       '</div>';
+  }
+
+  // Retard du chantier lui-même sur sa base (la release) : une ligne par dépôt
+  // concerné, seulement quand il y en a. Ce retard ne bloque pas la livraison,
+  // il annonce le rebase à faire pour livrer proprement.
+  function buildCardBehindHTML(prev) {
+    if (!prev || !prev.repos) return '';
+    return prev.repos.filter(function (r) { return r.behind > 0; }).map(function (r) {
+      var label = tCount('behind.cardLabel', r.behind, { base: r.base || '' });
+      var tip = tCount('behind.cardTooltip', r.behind, { base: r.base || '' });
+      return '<span class="ship-bar-behind" title="' + escapeHtml(tip) + '">' + escapeHtml(label) + '</span>';
+    }).join('');
   }
 
   // Rafraîchit uniquement la barre de livraison (pas la liste, pas le détail).
@@ -1796,6 +1852,19 @@
 
     // Refuser une tâche en revue, ou annuler une tâche en cours : même action
     // côté API (/cancel), seul le libellé change selon le contexte.
+    // Le retard se règle par l'agent, pas par le serveur : le bouton envoie un
+    // message dans le fil (mis en file si l'agent tourne encore), lui seul sait
+    // résoudre un conflit de rebase.
+    var behind = taskBehindCount(task);
+    var behindRow = '';
+    if (behind > 0) {
+      behindRow = '<div class="behind-row">' +
+        '<span class="behind-badge" title="' + escapeHtml(tCount('behind.taskTooltip', behind, { base: task.base || '' })) + '">↓' + behind + '</span>' +
+        '<span class="behind-text">' + escapeHtml(tCount('behind.taskTooltip', behind, { base: task.base || '' })) + '</span>' +
+        '<button class="detail-link" data-action="ask-rebase" data-task-id="' + task.id + '" title="' + escapeHtml(t('behind.askRebaseTooltip', { base: task.base || '' })) + '">' + escapeHtml(t('behind.askRebase')) + '</button>' +
+        '</div>';
+    }
+
     var linksRow = '';
     if (task.status === 'running' || task.status === 'review') {
       var refusing = task.status === 'review';
@@ -1830,6 +1899,7 @@
           '<button class="icon-btn" data-action="close-panel" aria-label="' + escapeHtml(t('common.close')) + '">✕</button>' +
         '</div>' +
         buildStatusBadgeHTML(task.status) +
+        behindRow +
         '<div class="action-row">' + primaryBtnHTML +
           '<span class="checks">' + renderChecks(task.checks) + '</span>' +
         '</div>' +
@@ -2012,6 +2082,20 @@
     var node = wrapper.firstElementChild;
     if (node) container.appendChild(node);
     if (wasAtBottom) container.scrollTop = container.scrollHeight;
+  }
+
+  // askRebase demande le rebase à l'agent au lieu de le faire côté serveur :
+  // un rebase serveur échouerait sur le premier conflit, alors que l'agent sait
+  // le résoudre. Le message part par le chemin normal, donc il se met en file
+  // tout seul si l'agent tourne encore (voir la mécanique pending du runner).
+  function askRebase(taskId) {
+    var task = state.tasksById[taskId];
+    if (!task) return;
+    var behind = taskBehindCount(task);
+    if (!behind) return;
+    var text = tCount('behind.rebasePrompt', behind, { base: task.base || '' });
+    api('/api/tasks/' + taskId + '/messages', { method: 'POST', body: { text: text } })
+      .catch(function () {});
   }
 
   function sendMessage(taskId) {
@@ -3594,6 +3678,7 @@
       case 'reopen': doReopen(el.getAttribute('data-task-id')); break;
       case 'accept-task': doAcceptTask(el.getAttribute('data-task-id')); break;
       case 'refuse-task': doCancelTask(el.getAttribute('data-task-id')); break;
+      case 'ask-rebase': askRebase(el.getAttribute('data-task-id')); break;
       case 'open-ship-modal': openShipModal(el.getAttribute('data-card-id')); break;
       case 'submit-ship': submitShip(el.getAttribute('data-card-id')); break;
       case 'confirm-click': handleConfirmClickDispatch(el); break;

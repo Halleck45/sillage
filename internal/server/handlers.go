@@ -1125,6 +1125,7 @@ func (s *Server) deliveryPreview(card Card, project Project) DeliveryPreview {
 		Blocker:  card.ShipBlocker,
 		Warnings: []string{},
 		Repos:    []DeliveryRepoPreview{},
+		Behind:   map[string]int{},
 	}
 	for _, t := range s.store.TasksByCard(card.ID) {
 		switch t.Status {
@@ -1134,6 +1135,9 @@ func (s *Server) deliveryPreview(card Card, project Project) DeliveryPreview {
 			prev.Counts.Refused++
 		default:
 			prev.Counts.Pending++
+		}
+		if behind := taskBehind(t); behind > 0 {
+			prev.Behind[t.ID] = behind
 		}
 	}
 	if warning := deliveryWarning(project); warning != "" {
@@ -1154,9 +1158,31 @@ func (s *Server) deliveryPreview(card Card, project Project) DeliveryPreview {
 			row.Files = len(files)
 		}
 		row.Pending = pendingCommits(project, b, row.Commits)
+		if behind, err := CountCommits(b.WorktreeDir, b.Branch, b.Base); err == nil {
+			row.Behind = behind
+		}
 		prev.Repos = append(prev.Repos, row)
 	}
 	return prev
+}
+
+// taskBehind compte les commits que la branche du chantier a et que la branche
+// de la tâche n'a pas : le retard qui provoquera un conflit à l'acceptation.
+// Zéro pour une tâche terminale (rien à rebaser, worktree possiblement retiré)
+// ou quand la révision de comparaison manque : mieux vaut ne rien annoncer
+// qu'annoncer faux.
+func taskBehind(t Task) int {
+	if t.Status != "running" && t.Status != "review" {
+		return 0
+	}
+	if t.WorktreeDir == "" || t.Base == "" {
+		return 0
+	}
+	n, err := CountCommits(t.WorktreeDir, t.Branch, t.Base)
+	if err != nil {
+		return 0
+	}
+	return n
 }
 
 // pendingCommits compte ce qu'il reste réellement à livrer sur un dépôt : les

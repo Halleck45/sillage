@@ -438,6 +438,60 @@ func TestAcceptConflictKeepsTaskInReview(t *testing.T) {
 	}
 }
 
+// TestDeliveryPreviewReportsBehind couvre le retard annoncé par l'aperçu de
+// livraison, celui qui provoque les conflits : une tâche dont la branche de
+// chantier a avancé sous elle (parce qu'une autre tâche a été acceptée), et le
+// chantier lui-même quand sa base a avancé. Un rebase remet les compteurs à
+// zéro, et une tâche acceptée n'y figure jamais (rien à rebaser).
+func TestDeliveryPreviewReportsBehind(t *testing.T) {
+	f := newDeliveryFixture(t, Delivery{Mode: "pr"})
+
+	first, cb := f.addTask(t, "Première", "a.txt", "contenu a\n")
+	second, _ := f.addTask(t, "Seconde", "b.txt", "contenu b\n")
+
+	if prev := f.delivery(t); len(prev.Behind) != 0 {
+		t.Fatalf("deux tâches parties de la même branche ne sont pas en retard, reçu %v", prev.Behind)
+	}
+
+	// Accepter la première fait avancer la branche du chantier d'un commit :
+	// la seconde tâche est désormais en retard de ce commit.
+	if w := f.accept(t, first); w.Code != http.StatusOK {
+		t.Fatalf("accept: attendu 200, reçu %d (%s)", w.Code, w.Body.String())
+	}
+	// Deux commits, pas un : celui de la tâche acceptée, puis le commit de
+	// fusion (MergeBranch fusionne en --no-ff). On compte des commits absents,
+	// comme le fait une forge, pas des acceptations.
+	prev := f.delivery(t)
+	if prev.Behind[second] != 2 {
+		t.Fatalf("la seconde tâche devrait être en retard de deux commits, reçu %d (%v)", prev.Behind[second], prev.Behind)
+	}
+	if _, ok := prev.Behind[first]; ok {
+		t.Fatalf("une tâche acceptée n'a rien à rebaser, elle ne doit pas figurer dans behind : %v", prev.Behind)
+	}
+
+	// Le rebase que le bouton demande à l'agent : le retard disparaît.
+	task, _ := f.srv.store.GetTask(second)
+	runTestGit(t, task.WorktreeDir, "-c", "user.email=test@example.com", "-c", "user.name=Test", "rebase", cb.Branch)
+	if prev := f.delivery(t); len(prev.Behind) != 0 {
+		t.Fatalf("après rebase, plus aucun retard attendu, reçu %v", prev.Behind)
+	}
+
+	// Retard du chantier sur sa base : un commit arrive sur main.
+	if err := os.WriteFile(filepath.Join(f.repo, "release.txt"), []byte("livré\n"), 0o644); err != nil {
+		t.Fatalf("écriture impossible : %v", err)
+	}
+	runTestGit(t, f.repo, "add", "-A")
+	runTestGit(t, f.repo, "commit", "-m", "avance sur main")
+
+	prev = f.delivery(t)
+	if len(prev.Repos) != 1 {
+		t.Fatalf("un seul dépôt attendu, reçu %d", len(prev.Repos))
+	}
+	if prev.Repos[0].Behind != 1 {
+		t.Fatalf("le chantier devrait être en retard d'un commit sur %q, reçu %d", prev.Repos[0].Base, prev.Repos[0].Behind)
+	}
+}
+
 // TestShipMergeModeNeverPushes couvre le mode "merge" : la branche du chantier
 // est fusionnée en fast-forward dans la branche de destination du dépôt de
 // travail, et RIEN n'est poussé (le remote reste vide).
