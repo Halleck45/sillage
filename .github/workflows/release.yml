@@ -34,3 +34,35 @@ jobs:
             dist/sillage_*
             dist/checksums.txt
           generate_release_notes: true
+      - name: Update Homebrew formula
+        run: |
+          set -eu
+          version="${GITHUB_REF_NAME#v}"
+          sha() { grep "sillage_$1" dist/checksums.txt | cut -d' ' -f1; }
+          git fetch origin main
+          git checkout main
+          sed -i \
+            -e "s|^  version \".*\"|  version \"$version\"|" \
+            -e "s|releases/download/v[0-9.]*/sillage_darwin_arm64\"|releases/download/${GITHUB_REF_NAME}/sillage_darwin_arm64\"|" \
+            -e "s|releases/download/v[0-9.]*/sillage_darwin_amd64\"|releases/download/${GITHUB_REF_NAME}/sillage_darwin_amd64\"|" \
+            -e "s|releases/download/v[0-9.]*/sillage_linux_arm64\"|releases/download/${GITHUB_REF_NAME}/sillage_linux_arm64\"|" \
+            -e "s|releases/download/v[0-9.]*/sillage_linux_amd64\"|releases/download/${GITHUB_REF_NAME}/sillage_linux_amd64\"|" \
+            Formula/sillage.rb
+          python3 - <<EOF
+          import re
+          shas = {}
+          for line in open("dist/checksums.txt"):
+              h, name = line.split()
+              shas[name] = h
+          src = open("Formula/sillage.rb").read()
+          for name, h in shas.items():
+              if not name.startswith("sillage_"):
+                  continue
+              src = re.sub(r'(%s"\n      sha256 ")[0-9a-f]+' % re.escape(name), r'\g<1>' + h, src)
+          open("Formula/sillage.rb", "w").write(src)
+          EOF
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Formula/sillage.rb
+          git diff --cached --quiet || git commit -m "Homebrew formula: ${GITHUB_REF_NAME}"
+          git push origin main

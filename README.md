@@ -39,12 +39,18 @@ Working with several AI agents quickly turns into tab hell: five terminals, thre
 Sillage is a single static binary with the web UI embedded: no database, no runtime, no config files to write. The only things it talks to are `git` and your agent CLIs ([Claude Code](https://docs.anthropic.com/en/docs/claude-code) and/or [Codex CLI](https://github.com/openai/codex), logged in; the built-in free agent works without either).
 
 ```bash
-# Linux (amd64)
-curl -fsSL https://github.com/Halleck45/sillage/releases/latest/download/sillage_linux_amd64 -o sillage
-chmod +x sillage && ./sillage
+curl -fsSL https://raw.githubusercontent.com/Halleck45/sillage/main/install.sh | sh
+sillage
 ```
 
-macOS: replace with `sillage_darwin_arm64` (Apple Silicon) or `sillage_darwin_amd64` (Intel). Also available: `linux_arm64`, [checksums](https://github.com/Halleck45/sillage/releases/latest), or `go install github.com/Halleck45/sillage@latest` if you prefer building it yourself.
+Or with Homebrew:
+
+```bash
+brew tap halleck45/sillage https://github.com/Halleck45/sillage
+brew install sillage
+```
+
+Prefer doing it by hand? Grab a binary from the [releases page](https://github.com/Halleck45/sillage/releases/latest), `chmod +x`, run it. Or `go install github.com/Halleck45/sillage@latest`.
 
 Then open http://127.0.0.1:8787. On first start, a password is generated and printed once in the terminal. To choose your own: `SILLAGE_PASSWORD=yourpassword sillage`.
 
