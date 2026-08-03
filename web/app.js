@@ -15,6 +15,7 @@
       'nav.back': 'Retour',
       'common.projects': 'Projets',
       'common.tasksWord': 'Tâches',
+      'common.workstreamsWord': 'Chantiers',
       'common.close': 'Fermer',
       'common.cancel': 'Annuler',
       'panel.expand': 'Agrandir le panneau',
@@ -332,6 +333,7 @@
       'nav.back': 'Back',
       'common.projects': 'Projects',
       'common.tasksWord': 'Tasks',
+      'common.workstreamsWord': 'Workstreams',
       'common.close': 'Close',
       'common.cancel': 'Cancel',
       'panel.expand': 'Expand panel',
@@ -2657,18 +2659,54 @@
 
   function overlayBgCloseSearch(e) { if (e.target === e.currentTarget) closeSearch(); }
 
+  // Score de pertinence d'un texte pour une requête déjà connue « contenue » :
+  // correspondance exacte ou en tête > en tête de mot > au milieu d'un mot.
+  // Permet de faire remonter les meilleurs résultats plutôt que de garder
+  // l'ordre de création des entités.
+  function searchTextScore(text, query) {
+    var idx = text.toLowerCase().indexOf(query);
+    if (idx === -1) return -1;
+    if (idx === 0) return text.length === query.length ? 3 : 2;
+    if (/[^a-z0-9]/i.test(text.charAt(idx - 1))) return 1;
+    return 0;
+  }
+  function searchRefScore(ref, query, isNumericQuery) {
+    if (!isNumericQuery) return -1;
+    var s = String(ref);
+    if (s === query) return 5;
+    if (s.indexOf(query) === 0) return 4;
+    return -1;
+  }
+  function rankSearchResults(list, query, isNumericQuery, textOf, refOf, limit) {
+    var scored = [];
+    list.forEach(function (item) {
+      var score = searchTextScore(textOf(item), query);
+      if (refOf) score = Math.max(score, searchRefScore(refOf(item), query, isNumericQuery));
+      if (score > -1) scored.push({ item: item, score: score });
+    });
+    scored.sort(function (a, b) { return b.score - a.score; });
+    return scored.slice(0, limit).map(function (x) { return x.item; });
+  }
+
   function buildSearchResultsHTML(q) {
     var query = q.trim().toLowerCase();
     if (!query) return '<div class="empty-note">' + escapeHtml(t('search.typeToSearch')) + '</div>';
-    var projects = state.projects.filter(function (p) { return p.name.toLowerCase().indexOf(query) !== -1; });
-    var tasks = state.tasks.filter(function (t) {
-      return t.title.toLowerCase().indexOf(query) !== -1 || String(t.ref).indexOf(query) !== -1;
-    }).slice(0, 20);
-    if (!projects.length && !tasks.length) return '<div class="empty-note">' + escapeHtml(t('search.noResults')) + '</div>';
+    var isNumericQuery = /^\d+$/.test(query);
+    var projects = rankSearchResults(state.projects, query, isNumericQuery, function (p) { return p.name; }, null, 20);
+    var cards = rankSearchResults(state.cards, query, isNumericQuery, function (c) { return c.title; }, function (c) { return c.ref; }, 20);
+    var tasks = rankSearchResults(state.tasks, query, isNumericQuery, function (t) { return t.title; }, function (t) { return t.ref; }, 20);
+    if (!projects.length && !cards.length && !tasks.length) return '<div class="empty-note">' + escapeHtml(t('search.noResults')) + '</div>';
     var html = '';
     if (projects.length) {
       html += '<div class="search-group-label">' + escapeHtml(t('common.projects')) + '</div>' + projects.map(function (p) {
         return '<button class="search-result" data-action="search-goto-project" data-project-id="' + p.id + '"><span class="hash">#</span>' + escapeHtml(p.name) + '</button>';
+      }).join('');
+    }
+    if (cards.length) {
+      html += '<div class="search-group-label">' + escapeHtml(t('common.workstreamsWord')) + '</div>' + cards.map(function (c) {
+        var p = state.projectsById[c.projectId];
+        return '<button class="search-result" data-action="search-goto-card" data-card-id="' + c.id + '"><span class="mono">#' + c.ref + '</span> ' +
+          escapeHtml(c.title) + '<span class="muted-sm">' + (p ? escapeHtml(p.name) : '') + '</span></button>';
       }).join('');
     }
     if (tasks.length) {
@@ -4113,6 +4151,7 @@
       case 'send-message': sendMessage(el.getAttribute('data-task-id')); break;
       case 'open-search': openSearch(); break;
       case 'search-goto-project': closeSearch(); goProject(el.getAttribute('data-project-id')); break;
+      case 'search-goto-card': closeSearch(); goCard(el.getAttribute('data-card-id')); break;
       case 'search-goto-task': closeSearch(); openTaskFromSearch(el.getAttribute('data-task-id')); break;
       case 'logout': doLogout(); break;
       case 'toggle-sidebar': toggleSidebarDrawer(); break;
