@@ -321,6 +321,8 @@
       'preferences.langLabel': 'Langue',
       'preferences.errorSaveFailed': 'Échec de l\'enregistrement.',
       'sidebar.settingsButton': 'Réglages',
+      'sidebar.repoTooltip': 'Voir le dépôt sur GitHub',
+      'sidebar.sponsorTooltip': 'Sponsoriser le projet',
       'settings.tabGeneral': 'Général',
       'settings.tabStats': 'Statistiques',
       'usage.empty': 'Aucun projet.'
@@ -638,6 +640,8 @@
       'preferences.langLabel': 'Language',
       'preferences.errorSaveFailed': 'Failed to save.',
       'sidebar.settingsButton': 'Settings',
+      'sidebar.repoTooltip': 'View the repository on GitHub',
+      'sidebar.sponsorTooltip': 'Sponsor the project',
       'settings.tabGeneral': 'General',
       'settings.tabStats': 'Statistics',
       'usage.empty': 'No projects yet.'
@@ -1200,7 +1204,10 @@
     }).join('');
 
     return '' +
-      '<div class="sidebar-brand"><span class="brand-mark"></span><span class="brand-name">Sillage</span></div>' +
+      '<div class="sidebar-brand">' +
+        '<span class="brand-mark"></span><span class="brand-name">Sillage</span>' +
+        '<button class="sidebar-shortcuts-link" data-action="open-shortcuts" title="' + escapeHtml(t('shortcuts.title')) + '">' + escapeHtml(t('shortcuts.hint')) + '</button>' +
+      '</div>' +
       '<div class="sidebar-search-wrap">' +
         '<button class="search-btn" data-action="open-search"><span>⌕</span><span class="search-btn-label">' + escapeHtml(t('search.buttonLabel')) + '</span>' +
         '<span class="kbd">' + (isMac() ? '⌘K' : 'Ctrl+K') + '</span></button>' +
@@ -1215,7 +1222,8 @@
       '<div class="sidebar-footer">' +
         '<button class="settings-btn" data-action="open-workspace-modal">⚙ ' + escapeHtml(t('sidebar.settingsButton')) + '</button>' +
         '<div class="sidebar-footer-actions">' +
-          '<button class="logout-link" data-action="open-shortcuts" title="' + escapeHtml(t('shortcuts.title')) + '">' + escapeHtml(t('shortcuts.hint')) + '</button>' +
+          '<a class="icon-link" href="https://github.com/Halleck45/sillage" target="_blank" rel="noopener noreferrer" title="' + escapeHtml(t('sidebar.repoTooltip')) + '" aria-label="' + escapeHtml(t('sidebar.repoTooltip')) + '">' + repoIconHTML() + '</a>' +
+          '<a class="icon-link" href="https://github.com/sponsors/Halleck45/" target="_blank" rel="noopener noreferrer" title="' + escapeHtml(t('sidebar.sponsorTooltip')) + '" aria-label="' + escapeHtml(t('sidebar.sponsorTooltip')) + '">' + sponsorIconHTML() + '</a>' +
         '</div>' +
       '</div>';
   }
@@ -1671,6 +1679,18 @@
   // taille, et dessiné différemment par chaque système) et plutôt qu'une police
   // d'icônes (le frontend n'a aucune dépendance et reste embarqué). Grand-voile,
   // foc et coque, en currentColor : l'icône suit la couleur du bouton.
+  function repoIconHTML() {
+    return '<svg class="icon-link-svg" viewBox="0 0 16 16" width="15" height="15" aria-hidden="true" focusable="false">' +
+      '<path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/>' +
+      '</svg>';
+  }
+
+  function sponsorIconHTML() {
+    return '<svg class="icon-link-svg" viewBox="0 0 16 16" width="15" height="15" aria-hidden="true" focusable="false">' +
+      '<path fill="currentColor" d="M4.25 2.5c-1.336 0-2.75 1.164-2.75 3 0 2.15 1.58 4.144 3.365 5.682A20.565 20.565 0 0 0 8 13.393a20.561 20.561 0 0 0 3.135-2.211C12.92 9.644 14.5 7.65 14.5 5.5c0-1.836-1.414-3-2.75-3-1.373 0-2.609.986-3.029 2.456a.75.75 0 0 1-1.442 0C6.859 3.486 5.623 2.5 4.25 2.5Z"/>' +
+      '</svg>';
+  }
+
   function shipIconHTML() {
     return '<svg class="btn-icon" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false">' +
       '<path fill="currentColor" d="M7.6 1.5a.5.5 0 0 1 .95-.2l3.2 6.4a.5.5 0 0 1-.45.72H8.1a.5.5 0 0 1-.5-.5V1.5Z"/>' +
