@@ -1,0 +1,68 @@
+name: Documentation
+
+# La branche "documentation" porte les sources du site vitrine.
+# Ce workflow construit le site avec Jekyll et publie le résultat sur "gh-pages",
+# qui ne contient donc que du build : elle n'est jamais éditée à la main.
+
+on:
+  push:
+    branches: [documentation]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: documentation-pages
+  cancel-in-progress: true
+
+jobs:
+  build-and-deploy:
+    name: Construire et publier
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Récupérer les sources
+        uses: actions/checkout@v4
+
+      - name: Installer Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3'
+
+      - name: Installer Jekyll
+        run: gem install jekyll --version '~> 4.3' --no-document
+
+      - name: Construire le site
+        run: jekyll build --trace
+
+      - name: Publier sur gh-pages
+        run: |
+          set -euo pipefail
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          # gh-pages peut ne pas exister encore : on la crée alors en orpheline.
+          if git fetch --depth=1 origin gh-pages; then
+            git worktree add -B gh-pages ../pages FETCH_HEAD
+          else
+            git worktree add --detach ../pages
+            git -C ../pages checkout --orphan gh-pages
+          fi
+
+          # On remplace intégralement le contenu publié par le build courant.
+          find ../pages -mindepth 1 -maxdepth 1 -not -name .git -exec rm -rf {} +
+          cp -r _site/. ../pages/
+
+          # Le contenu est déjà construit : GitHub Pages doit le servir tel quel.
+          touch ../pages/.nojekyll
+
+          git -C ../pages add -A
+          if git -C ../pages diff --cached --quiet; then
+            echo "Site inchangé, rien à publier."
+            exit 0
+          fi
+
+          git -C ../pages commit -m "Site publié depuis ${GITHUB_SHA::7}"
+          git -C ../pages push origin gh-pages

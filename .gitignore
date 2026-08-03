@@ -1,0 +1,4 @@
+# Sortie de build Jekyll : générée par la CI, jamais versionnée ici.
+_site/
+.jekyll-cache/
+.sass-cache/
