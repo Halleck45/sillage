@@ -1216,7 +1216,6 @@
         '<button class="settings-btn" data-action="open-workspace-modal">⚙ ' + escapeHtml(t('sidebar.settingsButton')) + '</button>' +
         '<div class="sidebar-footer-actions">' +
           '<button class="logout-link" data-action="open-shortcuts" title="' + escapeHtml(t('shortcuts.title')) + '">' + escapeHtml(t('shortcuts.hint')) + '</button>' +
-          '<button class="logout-link" data-action="logout">' + escapeHtml(t('nav.logout')) + '</button>' +
         '</div>' +
       '</div>';
   }
@@ -3724,7 +3723,9 @@
         '<span>' + escapeHtml(t('workspace.lastCommit', { time: lastCommit })) + '</span>' +
         '<span>' + escapeHtml(t('workspace.lastSync', { time: lastSync })) + '</span>' +
       '</div>' +
-      dirtyNote;
+      dirtyNote +
+      '<div class="preferences-divider"></div>' +
+      '<button class="btn-outline btn-block" data-action="logout">' + escapeHtml(t('nav.logout')) + '</button>';
   }
   function buildWorkspaceModalBodyHTML() {
     var inner = settingsModalTab === 'stats' ? buildStatsSectionHTML() : buildSettingsGeneralHTML();
