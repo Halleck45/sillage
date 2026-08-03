@@ -450,6 +450,50 @@ button, input, textarea { font-family: inherit; }
 .live-line { display: inline-flex; align-items: center; gap: 6px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11.5px; color: var(--green-live); }
 .task-counts { flex: none; display: flex; align-items: center; gap: 12px; padding-top: 2px; font-size: 12px; color: var(--muted-3); font-variant-numeric: tabular-nums; }
 
+/* État et actions d'une ligne de tâche : les boutons Accepter / Refuser
+   n'apparaissent qu'au survol (ou au focus clavier) d'une tâche à relire. */
+.task-row-state {
+  flex: none; padding-top: 2px; font-size: 11.5px; font-weight: 600; letter-spacing: 0.01em; white-space: nowrap;
+}
+.task-row-state-accepted { color: var(--green-live); }
+.task-row-state-cancelled { color: var(--muted-3); font-weight: 400; }
+.task-row-actions { flex: none; display: flex; align-items: center; gap: 6px; opacity: 0; transition: opacity .12s ease; }
+.task-row:hover .task-row-actions, .task-row-actions:focus-within { opacity: 1; }
+.row-btn {
+  height: 24px; padding: 0 10px; border-radius: 7px; border: 1px solid var(--border-3); background: #fff;
+  font-family: inherit; font-size: 11.5px; font-weight: 500; color: var(--text-2); cursor: pointer; white-space: nowrap;
+}
+.row-btn:hover { background: #f6f4f0; }
+.row-btn-accept { border-color: var(--green); color: var(--green); }
+.row-btn-accept:hover { background: var(--green-bg); }
+
+/* ---------- Barre de livraison d'un chantier ---------- */
+
+.ship-bar {
+  flex: none; display: flex; align-items: center; gap: 12px; padding: 10px 20px;
+  border-bottom: 1px solid var(--border-2); background: #fbfaf7;
+}
+.ship-bar-state { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.ship-bar-counts { font-size: 12.5px; font-weight: 600; color: var(--text-2); }
+.ship-bar-sub { font-size: 12px; color: var(--muted-2); line-height: 1.35; }
+.ship-bar-warning { font-size: 11.5px; line-height: 1.35; color: var(--amber); }
+.ship-btn:disabled { background: #e7e5df; color: var(--muted-3); box-shadow: none; cursor: default; }
+.ship-btn:disabled:hover { filter: none; transform: none; box-shadow: none; }
+.ship-links { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 2px; }
+.ship-link { font-size: 12px; color: var(--accent); text-decoration: none; }
+.ship-link:hover { text-decoration: underline; }
+.ship-link-note { font-size: 12px; color: var(--green-live); }
+
+/* Récapitulatif de livraison (modale) : le bouton d'action EST la confirmation. */
+.ship-modal-sub { font-size: 12.5px; color: var(--muted-2); line-height: 1.45; margin-bottom: 4px; }
+.ship-repo { padding: 9px 0; border-bottom: 1px solid var(--border-2); }
+.ship-repo-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.ship-repo-branch { font-size: 11.5px; color: var(--muted-2); }
+.ship-repo-meta { margin-top: 3px; font-size: 11.5px; color: var(--muted-3); }
+.ship-results { margin-top: 10px; display: flex; flex-direction: column; gap: 5px; }
+.ship-result-row { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--green-live); }
+.ship-result-error { color: var(--red); }
+
 .empty-state { padding: 40px 10px; text-align: center; color: var(--muted); font-size: 13.5px; }
 .empty-state.big { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 80px 10px; }
 .empty-title { font-size: 16px; font-weight: 600; color: var(--text); }
@@ -524,6 +568,7 @@ button, input, textarea { font-family: inherit; }
 .conversation { flex: 1; min-height: 0; overflow-y: auto; padding: 16px 18px 8px; display: flex; flex-direction: column; gap: 15px; }
 .msg-system { text-align: center; font-size: 11.5px; color: var(--muted-3); }
 .msg-system a { color: var(--accent); }
+.msg-system-warning { color: var(--amber); line-height: 1.4; }
 .message { display: flex; gap: 10px; }
 .msg-avatar { width: 26px; height: 26px; flex: none; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 13px; }
 .msg-body { flex: 1; min-width: 0; }
@@ -616,9 +661,16 @@ button, input, textarea { font-family: inherit; }
 .modal-textarea { padding: 10px 13px; font-size: 13.5px; resize: vertical; }
 .modal-input:focus, .modal-textarea:focus { border-color: #c9c5bb; }
 .modal-error { margin-top: 10px; color: var(--red); font-size: 12.5px; }
-.modal-note { margin-top: 10px; color: var(--green); font-size: 12.5px; }
-.modal-foot { display: flex; align-items: center; justify-content: flex-end; gap: 9px; margin-top: 18px; flex-wrap: wrap; }
-.modal-foot .btn-outline, .modal-foot .btn-green, .modal-foot .btn-neutral { height: 32px; }
+/* .modal-note : note explicative sous un champ (gris), variante ambre pour un
+   avertissement, variante verte pour une confirmation d'action réussie. */
+.modal-note { margin-top: 7px; font-size: 11.5px; line-height: 1.4; color: var(--muted-3); }
+.modal-note-warning { color: var(--amber); }
+.modal-note-success { color: var(--green); }
+.modal-foot { display: flex; align-items: center; gap: 9px; margin-top: 18px; flex-wrap: wrap; }
+.modal-hint { font-size: 12px; color: var(--muted-3); }
+.modal-foot .btn-outline, .modal-foot .btn-green { margin-left: auto; height: 32px; }
+.modal-foot .btn-neutral { height: 32px; }
+.modal-foot .btn-outline:first-of-type { margin-left: auto; }
 .modal-label-row { display: flex; align-items: baseline; gap: 8px; }
 .modal-label-hint { margin-left: auto; font-weight: 400; font-size: 11px; color: var(--muted-4); }
 

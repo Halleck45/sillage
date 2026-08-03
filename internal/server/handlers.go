@@ -129,15 +129,15 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/cards", s.handleCreateCard)
 	mux.HandleFunc("PATCH /api/cards/{id}", s.handleUpdateCard)
 	mux.HandleFunc("DELETE /api/cards/{id}", s.handleDeleteCard)
+	mux.HandleFunc("GET /api/cards/{id}/delivery", s.handleCardDelivery)
+	mux.HandleFunc("POST /api/cards/{id}/ship", s.handleCardShip)
 	mux.HandleFunc("POST /api/tasks", s.handleCreateTask)
 	mux.HandleFunc("PATCH /api/tasks/{id}", s.handleReassignTask)
 	mux.HandleFunc("DELETE /api/tasks/{id}", s.handleDeleteTask)
 	mux.HandleFunc("GET /api/tasks/{id}", s.handleGetTask)
 	mux.HandleFunc("POST /api/tasks/{id}/messages", s.handlePostMessage)
 	mux.HandleFunc("POST /api/tasks/{id}/interrupt", s.handleInterrupt)
-	mux.HandleFunc("POST /api/tasks/{id}/ship", s.handleShip)
-	mux.HandleFunc("POST /api/tasks/{id}/pr", s.handlePR)
-	mux.HandleFunc("POST /api/tasks/{id}/finish", s.handleFinish)
+	mux.HandleFunc("POST /api/tasks/{id}/accept", s.handleAccept)
 	mux.HandleFunc("POST /api/tasks/{id}/cancel", s.handleCancel)
 	mux.HandleFunc("POST /api/tasks/{id}/reopen", s.handleReopen)
 	mux.HandleFunc("POST /api/tasks/{id}/read", s.handleRead)
@@ -541,12 +541,13 @@ func (s *Server) handleDeleteAgent(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleCreateProject(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		Name          string `json:"name"`
-		Path          string `json:"path"`
-		Repos         []Repo `json:"repos"`
-		Description   string `json:"description"`
-		ContextPrompt string `json:"contextPrompt"`
-		Links         []Link `json:"links"`
+		Name          string    `json:"name"`
+		Path          string    `json:"path"`
+		Repos         []Repo    `json:"repos"`
+		Description   string    `json:"description"`
+		ContextPrompt string    `json:"contextPrompt"`
+		Links         []Link    `json:"links"`
+		Delivery      *Delivery `json:"delivery"`
 	}
 	if err := decodeJSON(r, &body); err != nil || body.Name == "" {
 		writeError(w, http.StatusBadRequest, "name is required")
@@ -573,23 +574,47 @@ func (s *Server) handleCreateProject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	links = fillMissingLinkTitles(links)
-	project, err := s.store.AddProject(body.Name, body.Description, body.ContextPrompt, normalized, links)
+	delivery := body.Delivery
+	if delivery == nil {
+		// Le réglage de livraison n'est jamais une question posée à froid :
+		// sans valeur explicite, il est déduit des remotes des dépôts.
+		detected := detectDelivery(normalized)
+		delivery = &detected
+	}
+	project, err := s.store.AddProject(body.Name, body.Description, body.ContextPrompt, normalized, links, delivery)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to create project")
+		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, project)
+	writeJSON(w, http.StatusOK, projectOut(project))
+}
+
+// detectDelivery déduit le mode de livraison par défaut d'un projet : "pr" si
+// tous les dépôts pointent vers une forge connue (GitHub ou GitLab), sinon
+// fusion locale dans la branche courante du premier dépôt.
+func detectDelivery(repos []Repo) Delivery {
+	for _, repo := range repos {
+		if DetectForge(repo.Path).Provider == "" {
+			target := ""
+			if len(repos) > 0 {
+				target, _ = currentBranch(repos[0].Path)
+			}
+			return Delivery{Mode: "merge", Target: target}
+		}
+	}
+	return Delivery{Mode: "pr"}
 }
 
 func (s *Server) handleUpdateProject(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	var body struct {
-		Name          *string `json:"name"`
-		Description   *string `json:"description"`
-		CheckCmd      *string `json:"checkCmd"`
-		ContextPrompt *string `json:"contextPrompt"`
-		Repos         *[]Repo `json:"repos"`
-		Links         *[]Link `json:"links"`
+		Name          *string   `json:"name"`
+		Description   *string   `json:"description"`
+		CheckCmd      *string   `json:"checkCmd"`
+		ContextPrompt *string   `json:"contextPrompt"`
+		Repos         *[]Repo   `json:"repos"`
+		Links         *[]Link   `json:"links"`
+		Delivery      *Delivery `json:"delivery"`
 	}
 	if err := decodeJSON(r, &body); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid request body")
@@ -618,13 +643,14 @@ func (s *Server) handleUpdateProject(w http.ResponseWriter, r *http.Request) {
 		links = fillMissingLinkTitles(links)
 		body.Links = &links
 	}
-	project, err := s.store.UpdateProject(id, body.Name, body.Description, body.CheckCmd, body.ContextPrompt, body.Repos, body.Links)
+	project, err := s.store.UpdateProject(id, body.Name, body.Description, body.CheckCmd, body.ContextPrompt, body.Repos, body.Links, body.Delivery)
 	if err != nil {
 		writeError(w, statusForStoreError(err), err.Error())
 		return
 	}
-	s.runner.publishProject(project)
-	writeJSON(w, http.StatusOK, project)
+	out := projectOut(project)
+	s.runner.publishProject(out)
+	writeJSON(w, http.StatusOK, out)
 }
 
 // handleDeleteProject supprime un projet, avec cascade sur ses chantiers et
@@ -741,9 +767,18 @@ func (s *Server) handleCreateTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// La tâche part de la branche du chantier (créée à la première tâche du
+	// chantier sur ce dépôt) : une tâche créée après une acceptation démarre
+	// donc sur le travail déjà accepté.
+	cardBranch, err := s.ensureCardBranch(card, project, repo)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
 	id, ref := s.store.ReserveTaskID()
 	branch := fmt.Sprintf("sillage/%d-%s", ref, Slugify(body.Title))
-	dir, base, err := CreateWorktree(repo.Path, s.dataDir, id, branch)
+	dir, base, err := CreateWorktree(repo.Path, s.dataDir, id, branch, cardBranch.Branch)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "failed to create worktree: "+err.Error())
 		return
@@ -866,41 +901,126 @@ func (s *Server) handleInterrupt(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, task)
 }
 
-// handleShip pousse la branche de la tâche (statut ready) : accepté depuis
-// "review" (l'étape d'acceptation manuelle a disparu, v0.3.4). Ajoute un
-// message marqueur "[shipped:<branch>]" et fournit branchUrl (GitHub
-// uniquement, vide sinon) dans la réponse.
-func (s *Server) handleShip(w http.ResponseWriter, r *http.Request) {
+// ensureCardBranch retourne la branche de feature du chantier sur un dépôt, en
+// la créant (branche + worktree dédié) si c'est la première tâche du chantier
+// sur ce dépôt. La base est la branche de destination du projet
+// (project.delivery.target), ou la branche courante du dépôt si elle est vide.
+//
+// Appelée à chaque création de tâche : si le chantier avait déjà été livré, il
+// repasse en « non livré » (tout n'est plus livré dès qu'il reste du travail à
+// faire), ce qui permet de continuer à travailler sur un chantier livré.
+func (s *Server) ensureCardBranch(card Card, project Project, repo Repo) (CardBranch, error) {
+	if existing, ok := s.store.GetCardBranch(card.ID, repo.Name); ok {
+		if existing.ShippedAt != nil {
+			if _, err := s.store.MarkCardBranchPending(card.ID, repo.Name); err != nil {
+				return CardBranch{}, err
+			}
+			existing.ShippedAt = nil
+			s.runner.publishCards(card.ProjectID)
+		}
+		return existing, nil
+	}
+	branch := fmt.Sprintf("sillage/ws-%d-%s", card.Ref, Slugify(card.Title))
+	dir, base, err := CreateCardWorktree(repo.Path, s.dataDir, card.ID, repo.Name, branch, project.Delivery.Target)
+	if err != nil {
+		return CardBranch{}, fmt.Errorf("failed to create workstream branch: %w", err)
+	}
+	cb := CardBranch{RepoName: repo.Name, Branch: branch, Base: base, WorktreeDir: dir}
+	if _, err := s.store.SetCardBranch(card.ID, cb); err != nil {
+		return CardBranch{}, err
+	}
+	s.runner.publishCards(card.ProjectID)
+	return cb, nil
+}
+
+// handleAccept accepte une tâche en revue : commite ce qui reste dans son
+// worktree, puis fusionne sa branche dans celle du chantier (aucun réseau,
+// donc aucune confirmation : l'action est locale et réversible par /reopen).
+// En cas de conflit, la tâche RESTE en revue et un message marqueur
+// "[merge-conflict:<fichiers>]" est ajouté au fil.
+func (s *Server) handleAccept(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	var body struct {
-		Confirm bool `json:"confirm"`
-	}
-	if err := decodeJSON(r, &body); err != nil || !body.Confirm {
-		writeError(w, http.StatusBadRequest, "confirmation required")
-		return
-	}
 	task, ok := s.store.GetTask(id)
 	if !ok {
 		writeError(w, http.StatusNotFound, "task not found")
 		return
 	}
 	if task.Status != "review" {
-		writeError(w, http.StatusBadRequest, "task must be in review before shipping")
+		writeError(w, http.StatusBadRequest, "only a task in review can be accepted")
+		return
+	}
+	cardBranch, ok := s.store.GetCardBranch(task.CardID, task.RepoName)
+	if !ok {
+		// Tâche antérieure aux branches de chantier (créée avant cette
+		// version) : la branche du chantier est créée à la volée plutôt que de
+		// refuser l'acceptation. Les deux branches descendent de la même base,
+		// la fusion a donc le même sens qu'une acceptation ordinaire, et le
+		// travail en cours n'est pas perdu.
+		card, project, found := s.cardWithProject(w, task.CardID)
+		if !found {
+			return
+		}
+		repo, found := repoByName(project, task.RepoName)
+		if !found {
+			writeError(w, http.StatusBadRequest, "repository "+task.RepoName+" is no longer part of the project")
+			return
+		}
+		created, err := s.ensureCardBranch(card, project, repo)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		cardBranch = created
+	}
+	s.acceptTaskInto(w, task, cardBranch)
+}
+
+// acceptTaskInto commite le worktree de la tâche puis fusionne sa branche dans
+// celle du chantier, et écrit la réponse HTTP.
+func (s *Server) acceptTaskInto(w http.ResponseWriter, task Task, cardBranch CardBranch) {
+	id := task.ID
+
+	output, err := CommitAll(task.WorktreeDir, "Sillage: "+task.Title)
+	if err != nil {
+		writeError(w, http.StatusBadGateway, err.Error())
+		return
+	}
+	shaBefore := HeadSha(cardBranch.WorktreeDir)
+	mergeOut, conflicts, err := MergeBranch(cardBranch.WorktreeDir, task.Branch, "Sillage: "+task.Title)
+	output += mergeOut
+	if err != nil {
+		if len(conflicts) > 0 {
+			msg, updated, addErr := s.store.AddMessage(task.ID, "agent", "", "[merge-conflict:"+strings.Join(conflicts, " ")+"]")
+			if addErr == nil {
+				s.runner.publishTask(updated)
+				s.runner.publishMessage(msg)
+			}
+			writeJSON(w, http.StatusConflict, map[string]string{
+				"error":             "merge conflict with the workstream branch",
+				"conflictFilePaths": strings.Join(conflicts, " "),
+			})
+			return
+		}
+		writeError(w, http.StatusBadGateway, err.Error())
 		return
 	}
 
-	output, err := Ship(task.WorktreeDir, task.Branch, task.Title)
-	if err != nil {
-		writeJSON(w, http.StatusBadGateway, ShipResponse{Task: task, Output: output + "\n" + err.Error()})
-		return
+	// Des commits ont réellement rejoint la branche du chantier (comparaison de
+	// SHA, la sortie de git étant localisée) : le chantier n'est plus à jour
+	// avec ce qui a été livré, il redevient livrable.
+	if HeadSha(cardBranch.WorktreeDir) != shaBefore {
+		if _, err := s.store.MarkCardBranchPending(task.CardID, task.RepoName); err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
 	}
 
-	task, err = s.store.UpdateTask(id, func(t *Task) { t.Status = "shipped" })
+	task, err = s.store.AcceptTask(id)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		writeError(w, statusForStoreError(err), err.Error())
 		return
 	}
-	msg, task, err := s.store.AddMessage(task.ID, "agent", "", "[shipped:"+task.Branch+"]")
+	msg, task, err := s.store.AddMessage(task.ID, "agent", "", "[accepted:"+cardBranch.Branch+"]")
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -909,14 +1029,163 @@ func (s *Server) handleShip(w http.ResponseWriter, r *http.Request) {
 	s.runner.publishMessage(msg)
 	s.runner.publishCards(task.ProjectID)
 	s.runner.publishAgents()
-	branchUrl := githubBranchURL(task.WorktreeDir, task.Branch)
-	writeJSON(w, http.StatusOK, ShipResponse{Task: task, Output: output, BranchUrl: branchUrl})
+	writeJSON(w, http.StatusOK, AcceptResponse{Task: task, WorkstreamBranch: cardBranch.Branch, Output: output})
 }
 
-// handlePR ouvre une pull request pour une tâche déjà livrée (shipped).
-// N'exécute jamais de push : la branche a déjà été poussée par Ship.
-func (s *Server) handlePR(w http.ResponseWriter, r *http.Request) {
-	id := r.PathValue("id")
+// autoAcceptMergedTasks marque « acceptées » les tâches en revue dont la
+// branche est déjà entièrement contenue dans la branche du chantier : le cas
+// d'une fusion faite à la main, hors de Sillage. Appelée à chaque lecture de
+// l'aperçu de livraison (ouverture de la vue chantier, puis rafraîchissement
+// périodique côté frontend).
+//
+// Trois garde-fous, dans cet ordre : aucun agent en cours pour la tâche, son
+// worktree propre (du travail non commité ne serait par définition pas fusionné
+// et serait perdu de vue), et sa branche effectivement contenue dans celle du
+// chantier. Aucune écriture git : la fusion a déjà eu lieu, on ne fait que
+// constater. Ne remet donc jamais le chantier en « non livré ».
+func (s *Server) autoAcceptMergedTasks(card Card) bool {
+	accepted := false
+	for _, task := range s.store.TasksByCard(card.ID) {
+		if task.Status != "review" || s.runner.IsRunning(task.ID) {
+			continue
+		}
+		cb, ok := s.store.GetCardBranch(card.ID, task.RepoName)
+		if !ok || task.WorktreeDir == "" {
+			continue
+		}
+		// Une tâche qui n'a rien produit est contenue dans la branche du
+		// chantier par construction : la fusionner « automatiquement » ne
+		// constaterait rien. Elle reste à relire (accepter ou refuser).
+		if task.FilesCount == 0 {
+			continue
+		}
+		if !IsWorktreeClean(task.WorktreeDir) {
+			continue
+		}
+		if !IsBranchMergedInto(cb.WorktreeDir, task.Branch, cb.Branch) {
+			continue
+		}
+		updated, err := s.store.AcceptTask(task.ID)
+		if err != nil {
+			continue
+		}
+		msg, updated, err := s.store.AddMessage(updated.ID, "agent", "", "[auto-accepted:"+cb.Branch+"]")
+		if err == nil {
+			s.runner.publishMessage(msg)
+		}
+		s.runner.publishTask(updated)
+		accepted = true
+	}
+	if accepted {
+		s.runner.publishCards(card.ProjectID)
+		s.runner.publishAgents()
+	}
+	return accepted
+}
+
+// handleCardDelivery est l'aperçu de livraison d'un chantier : ce qui va se
+// passer, sur quels dépôts, et ce qui bloque le cas échéant. Aucune commande
+// d'écriture git ; l'appel constate au passage les branches déjà fusionnées à
+// la main (voir autoAcceptMergedTasks) avant de calculer l'aperçu.
+func (s *Server) handleCardDelivery(w http.ResponseWriter, r *http.Request) {
+	card, project, ok := s.cardWithProject(w, r.PathValue("id"))
+	if !ok {
+		return
+	}
+	if s.autoAcceptMergedTasks(card) {
+		card, _ = s.store.GetCard(card.ID)
+	}
+	writeJSON(w, http.StatusOK, s.deliveryPreview(card, project))
+}
+
+// cardWithProject résout une carte et son projet, en écrivant la réponse
+// d'erreur adéquate si l'un des deux manque.
+func (s *Server) cardWithProject(w http.ResponseWriter, cardID string) (Card, Project, bool) {
+	card, ok := s.store.GetCard(cardID)
+	if !ok {
+		writeError(w, http.StatusNotFound, "card not found")
+		return Card{}, Project{}, false
+	}
+	project, ok := s.store.GetProject(card.ProjectID)
+	if !ok {
+		writeError(w, http.StatusInternalServerError, "project not found")
+		return Card{}, Project{}, false
+	}
+	return card, project, true
+}
+
+// deliveryPreview construit l'aperçu de livraison d'un chantier : mode, cible,
+// fournisseur détecté, état du bouton, avertissements de santé, compteurs de
+// tâches et, par dépôt, le nombre de commits et de fichiers à livrer.
+func (s *Server) deliveryPreview(card Card, project Project) DeliveryPreview {
+	prev := DeliveryPreview{
+		Mode:     project.Delivery.Mode,
+		Target:   project.Delivery.Target,
+		Ready:    card.ShipReady,
+		Blocker:  card.ShipBlocker,
+		Warnings: []string{},
+		Repos:    []DeliveryRepoPreview{},
+	}
+	for _, t := range s.store.TasksByCard(card.ID) {
+		switch t.Status {
+		case "accepted":
+			prev.Counts.Accepted++
+		case "cancelled":
+			prev.Counts.Refused++
+		default:
+			prev.Counts.Pending++
+		}
+	}
+	if warning := deliveryWarning(project); warning != "" {
+		prev.Warnings = append(prev.Warnings, warning)
+	}
+	for _, b := range card.Branches {
+		row := DeliveryRepoPreview{
+			RepoName: b.RepoName, Branch: b.Branch, Base: b.Base,
+			PrURL: b.PrURL, ShippedAt: b.ShippedAt,
+		}
+		if prev.Provider == "" {
+			prev.Provider = DetectForge(b.WorktreeDir).Provider
+		}
+		if commits, err := Commits(b.WorktreeDir, b.Base); err == nil {
+			row.Commits = len(commits)
+		}
+		if files, err := Diff(b.WorktreeDir, b.Base); err == nil {
+			row.Files = len(files)
+		}
+		row.Pending = pendingCommits(project, b, row.Commits)
+		prev.Repos = append(prev.Repos, row)
+	}
+	return prev
+}
+
+// pendingCommits compte ce qu'il reste réellement à livrer sur un dépôt : les
+// commits non poussés en mode "pr", ceux pas encore fusionnés dans la branche
+// de destination en mode "merge". Repli sur total (tout est à livrer) quand la
+// révision de comparaison n'existe pas encore (branche jamais poussée).
+func pendingCommits(project Project, b CardBranch, total int) int {
+	from := "origin/" + b.Branch
+	if project.Delivery.Mode == "merge" {
+		from = project.Delivery.Target
+		if from == "" {
+			from = b.Base
+		}
+	}
+	n, err := CountCommits(b.WorktreeDir, from, b.Branch)
+	if err != nil {
+		return total
+	}
+	return n
+}
+
+// handleCardShip livre un chantier : pour chaque dépôt touché, pousse la
+// branche du chantier puis ouvre la pull/merge request (mode "pr"), ou fusionne
+// localement dans la branche de destination sans jamais pousser (mode "merge").
+// C'est la SEULE action sortante du produit, d'où {"confirm":true}.
+//
+// Un dépôt en échec n'annule pas les autres : chaque ligne de la réponse porte
+// sa propre erreur, et la livraison est rejouable telle quelle.
+func (s *Server) handleCardShip(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Confirm bool `json:"confirm"`
 	}
@@ -924,38 +1193,114 @@ func (s *Server) handlePR(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "confirmation required")
 		return
 	}
-	task, ok := s.store.GetTask(id)
+	card, project, ok := s.cardWithProject(w, r.PathValue("id"))
 	if !ok {
-		writeError(w, http.StatusNotFound, "task not found")
 		return
 	}
-	if task.Status != "shipped" {
-		writeError(w, http.StatusBadRequest, "task must be shipped before opening a pull request")
+	if !card.ShipReady {
+		writeError(w, http.StatusConflict, shipBlockerMessage(card.ShipBlocker))
 		return
 	}
 
-	url, err := OpenPR(task.WorktreeDir, task.Branch, task.Base, task.Title)
-	if err != nil {
-		writeError(w, http.StatusBadGateway, err.Error())
-		return
+	results := make([]ShipRepoResult, 0, len(card.Branches))
+	for _, b := range card.Branches {
+		results = append(results, s.shipCardBranch(card, project, b))
 	}
-	writeJSON(w, http.StatusOK, PRResponse{URL: url})
+	card, _ = s.store.GetCard(card.ID)
+	s.runner.publishCards(card.ProjectID)
+	writeJSON(w, http.StatusOK, ShipResponse{Card: card, Mode: project.Delivery.Mode, Repos: results})
 }
 
-// handleFinish marque une tâche "done" (autorisé depuis review/ready/shipped).
-func (s *Server) handleFinish(w http.ResponseWriter, r *http.Request) {
-	id := r.PathValue("id")
-	task, err := s.store.FinishTask(id)
+// shipCardBranch livre la branche de chantier d'un seul dépôt et retourne son
+// résultat (jamais d'erreur remontée : elle est portée par le résultat).
+func (s *Server) shipCardBranch(card Card, project Project, b CardBranch) ShipRepoResult {
+	res := ShipRepoResult{RepoName: b.RepoName, Branch: b.Branch, Base: b.Base}
+
+	commits, err := Commits(b.WorktreeDir, b.Base)
 	if err != nil {
-		writeError(w, statusForStoreError(err), err.Error())
-		return
+		res.Error = err.Error()
+		return res
 	}
-	s.runner.publishTask(task)
-	s.runner.publishCards(task.ProjectID)
-	writeJSON(w, http.StatusOK, task)
+	// Rien à livrer : aucun commit, ou déjà tout poussé/fusionné.
+	if len(commits) == 0 || pendingCommits(project, b, len(commits)) == 0 {
+		res.Skipped = true
+		return res
+	}
+
+	if project.Delivery.Mode == "merge" {
+		target := project.Delivery.Target
+		if target == "" {
+			target = b.Base
+		}
+		repo, ok := repoByName(project, b.RepoName)
+		if !ok {
+			res.Error = "repository " + b.RepoName + " is no longer part of the project"
+			return res
+		}
+		out, err := MergeLocal(repo.Path, s.dataDir, card.ID, b.RepoName, target, b.Branch)
+		res.Output = out
+		if err != nil {
+			res.Error = err.Error()
+			return res
+		}
+		res.Merged = true
+		if _, err := s.store.MarkCardBranchShipped(card.ID, b.RepoName, "", time.Now().UTC()); err != nil {
+			res.Error = err.Error()
+		}
+		return res
+	}
+
+	out, err := Ship(b.WorktreeDir, b.Branch, card.Title)
+	res.Output = out
+	if err != nil {
+		res.Error = err.Error()
+		return res
+	}
+	res.Pushed = true
+	// La branche est poussée, la livraison a eu lieu. L'ouverture de la pull
+	// request est un bonus : sur GitHub et GitLab elle aboutit toujours (repli
+	// sur une URL pré-remplie), et sur une forge inconnue son absence n'est pas
+	// une erreur (l'avertissement de santé du projet le dit déjà).
+	//
+	// Une pull request déjà ouverte est réutilisée telle quelle : le push
+	// suffit à la mettre à jour, il n'y a rien de nouveau à ouvrir.
+	if b.PrURL != "" {
+		res.PrURL = b.PrURL
+	} else if prURL, err := OpenPR(b.WorktreeDir, b.Branch, b.Base, card.Title); err == nil {
+		res.PrURL = prURL
+	}
+	if _, err := s.store.MarkCardBranchShipped(card.ID, b.RepoName, res.PrURL, time.Now().UTC()); err != nil {
+		res.Error = err.Error()
+	}
+	return res
 }
 
-// handleCancel annule une tâche (autorisé depuis running/review/ready) ;
+// repoByName retrouve un dépôt du projet par son nom court.
+func repoByName(project Project, name string) (Repo, bool) {
+	for _, repo := range project.Repos {
+		if repo.Name == name {
+			return repo, true
+		}
+	}
+	return Repo{}, false
+}
+
+// shipBlockerMessage traduit un blocage de livraison en message d'API.
+func shipBlockerMessage(blocker string) string {
+	switch blocker {
+	case "no-tasks":
+		return "workstream has no task to ship"
+	case "tasks-pending":
+		return "workstream has tasks still running or in review"
+	case "nothing-accepted":
+		return "workstream has no accepted task"
+	case "nothing-to-ship":
+		return "workstream has no branch to ship"
+	}
+	return "workstream cannot be shipped"
+}
+
+// handleCancel refuse (ou annule) une tâche : autorisé depuis running/review ;
 // si elle est en cours d'exécution, l'agent est interrompu au préalable.
 func (s *Server) handleCancel(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")

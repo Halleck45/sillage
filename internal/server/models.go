@@ -25,6 +25,23 @@ type Link struct {
 	Title string `json:"title"`
 }
 
+// Delivery définit ce que « livrer » veut dire pour un projet (voir
+// docs/SPEC-LIVRAISON.md) : ouvrir une pull/merge request, ou fusionner
+// localement dans une branche de destination. Le fournisseur (github, gitlab)
+// n'est jamais persisté : il est redéduit du remote origin à chaque opération.
+type Delivery struct {
+	Mode string `json:"mode"` // pr|merge
+
+	// Target est la branche de destination : base de la PR en mode "pr",
+	// branche fusionnée en mode "merge". Vide = branche par défaut du dépôt
+	// (branche courante au moment de la création de la branche de chantier).
+	Target string `json:"target"`
+
+	// StackedPrs réserve l'option « une PR par tâche, empilées » (lot 3, voir
+	// docs/SPEC-LIVRAISON.md) : persistée mais ignorée pour l'instant.
+	StackedPrs bool `json:"stackedPrs"`
+}
+
 // Project est suivi par Sillage et peut regrouper plusieurs dépôts git (Repos).
 type Project struct {
 	ID          string `json:"id"`
@@ -42,6 +59,33 @@ type Project struct {
 	// ContextPrompt est un texte libre transmis aux agents (voir runner.go :
 	// ajouté au system prompt claude, préfixe du prompt codex, ignoré par fake).
 	ContextPrompt string `json:"contextPrompt"`
+
+	// Delivery définit ce que livrer veut dire pour ce projet (voir Delivery).
+	Delivery Delivery `json:"delivery"`
+}
+
+// ProjectOut est la représentation d'un Project exposée par l'API : les mêmes
+// champs que Project (via embedding), plus DeliveryWarning. Ce dernier est
+// calculé à la volée (binaire gh/glab absent, remote origin manquant) et
+// jamais persisté dans state.json : Project lui-même n'a pas ce champ, donc
+// rien à vider à l'écriture disque. Même pattern qu'AgentOut.
+type ProjectOut struct {
+	Project
+	DeliveryWarning string `json:"deliveryWarning"`
+}
+
+// CardBranch est la branche de feature d'un chantier sur un dépôt donné :
+// un chantier qui touche deux dépôts a deux CardBranch, et livrera deux pull
+// requests. Créée à la première tâche du chantier sur ce dépôt, avec son
+// worktree dédié (les tâches partent de cette branche et y sont fusionnées à
+// l'acceptation). PrURL et ShippedAt sont renseignés par la livraison.
+type CardBranch struct {
+	RepoName    string     `json:"repoName"`
+	Branch      string     `json:"branch"`
+	Base        string     `json:"base"`
+	WorktreeDir string     `json:"worktreeDir"`
+	PrURL       string     `json:"prUrl"`
+	ShippedAt   *time.Time `json:"shippedAt"`
 }
 
 // Card est un chantier (vocabulaire produit) : regroupe des tâches dans une
@@ -49,6 +93,7 @@ type Project struct {
 type Card struct {
 	ID            string  `json:"id"`
 	ProjectID     string  `json:"projectId"`
+	Ref           int     `json:"ref"` // référence courte du projet, utilisée dans le nom de branche
 	Column        string  `json:"column"`
 	Title         string  `json:"title"`
 	TasksTotal    int     `json:"tasksTotal"`
@@ -58,6 +103,16 @@ type Card struct {
 	ReviewCount   int     `json:"reviewCount"`
 	Progress      int     `json:"progress"`
 	LiveActivity  *string `json:"liveActivity"`
+
+	// Branches porte une entrée par dépôt touché par le chantier (voir CardBranch).
+	Branches []CardBranch `json:"branches"`
+
+	// ShipReady et ShipBlocker sont dérivés (recalculés dans recomputeCard) :
+	// le bouton de livraison n'est actif que si toutes les tâches sont
+	// acceptées ou refusées, qu'au moins une est acceptée, et qu'une branche
+	// de chantier existe. ShipBlocker nomme la raison du blocage, vide sinon.
+	ShipReady   bool   `json:"shipReady"`
+	ShipBlocker string `json:"shipBlocker"` // ""|no-tasks|tasks-pending|nothing-accepted|nothing-to-ship
 
 	// ContextPrompt est un texte libre transmis aux agents (voir runner.go :
 	// ajouté au system prompt claude, préfixe du prompt codex, ignoré par fake).
@@ -101,7 +156,7 @@ type Task struct {
 	AgentID       string    `json:"agentId"`
 	RepoName      string    `json:"repoName"` // dépôt du projet utilisé pour le worktree
 	Branch        string    `json:"branch"`
-	Status        string    `json:"status"` // running|review|shipped|done|cancelled
+	Status        string    `json:"status"` // running|review|accepted|cancelled
 	MessagesCount int       `json:"messagesCount"`
 	FilesCount    int       `json:"filesCount"`
 	DocsCount     int       `json:"docsCount"`
@@ -113,7 +168,7 @@ type Task struct {
 
 	// Champs internes ; persistés dans state.json (sinon perdus au redémarrage)
 	// et visibles par le client authentifié, ce qui est sans enjeu en mono-utilisateur.
-	Base        string `json:"base"`        // branche de base au moment de la création
+	Base        string `json:"base"`        // branche de base : la branche du chantier
 	WorktreeDir string `json:"worktreeDir"` //
 	SessionID   string `json:"sessionId"`   // session claude, pour --resume
 }
@@ -174,7 +229,7 @@ type Settings struct {
 
 // State est la réponse de GET /api/state.
 type State struct {
-	Projects  []Project       `json:"projects"`
+	Projects  []ProjectOut    `json:"projects"`
 	Cards     []Card          `json:"cards"`
 	Tasks     []Task          `json:"tasks"`
 	Agents    []AgentOut      `json:"agents"`
@@ -259,16 +314,73 @@ type DeliverablesResponse struct {
 	Images []Item `json:"images"`
 }
 
-// ShipResponse est la réponse de POST /api/tasks/{id}/ship. BranchUrl pointe
-// vers la branche sur GitHub (si le remote origin est un dépôt github.com),
-// vide sinon : jamais d'erreur pour cette information optionnelle.
-type ShipResponse struct {
-	Task      Task   `json:"task"`
-	Output    string `json:"output"`
-	BranchUrl string `json:"branchUrl"`
+// AcceptResponse est la réponse de POST /api/tasks/{id}/accept : la tâche mise
+// à jour et la branche de chantier dans laquelle son travail a été fusionné.
+type AcceptResponse struct {
+	Task              Task   `json:"task"`
+	WorkstreamBranch  string `json:"workstreamBranch"`
+	Output            string `json:"output"`
+	ConflictFilePaths string `json:"conflictFilePaths,omitempty"`
 }
 
-// PRResponse est la réponse de POST /api/tasks/{id}/pr.
-type PRResponse struct {
-	URL string `json:"url"`
+// DeliveryRepoPreview décrit ce que la livraison ferait sur un dépôt donné.
+// Commits/Files (contenu de la livraison, base..branche) et Pending (ce qui
+// reste réellement à livrer) sont calculés à la volée par git.
+type DeliveryRepoPreview struct {
+	RepoName string `json:"repoName"`
+	Branch   string `json:"branch"`
+	Base     string `json:"base"`
+	Commits  int    `json:"commits"`
+	Files    int    `json:"files"`
+
+	// Pending est le nombre de commits pas encore livrés : non poussés en mode
+	// "pr" (origin/<branche>..<branche>), pas encore fusionnés dans la branche
+	// de destination en mode "merge". Zéro partout signifie « rien à livrer ».
+	Pending int `json:"pending"`
+
+	PrURL     string     `json:"prUrl"`
+	ShippedAt *time.Time `json:"shippedAt"`
+}
+
+// DeliveryPreview est la réponse de GET /api/cards/{id}/delivery : tout ce
+// qu'il faut pour annoncer la livraison AVANT de la déclencher (sous-texte du
+// bouton et panneau de récapitulatif). Lecture seule, ne pousse jamais rien.
+type DeliveryPreview struct {
+	Mode     string                `json:"mode"`
+	Target   string                `json:"target"`
+	Provider string                `json:"provider"` // github|gitlab|"" (déduit du remote origin)
+	Ready    bool                  `json:"ready"`
+	Blocker  string                `json:"blocker"`
+	Warnings []string              `json:"warnings"`
+	Counts   DeliveryCounts        `json:"counts"`
+	Repos    []DeliveryRepoPreview `json:"repos"`
+}
+
+// DeliveryCounts compte les tâches du chantier par état, pour la ligne d'état
+// affichée au-dessus du bouton de livraison.
+type DeliveryCounts struct {
+	Accepted int `json:"accepted"`
+	Refused  int `json:"refused"`
+	Pending  int `json:"pending"`
+}
+
+// ShipRepoResult est le résultat de la livraison d'un dépôt. Un dépôt en échec
+// n'annule pas les autres : chaque ligne porte sa propre erreur.
+type ShipRepoResult struct {
+	RepoName string `json:"repoName"`
+	Branch   string `json:"branch"`
+	Base     string `json:"base"`
+	Pushed   bool   `json:"pushed"`
+	Merged   bool   `json:"merged"`
+	Skipped  bool   `json:"skipped"` // rien à livrer (aucun commit sur la branche)
+	PrURL    string `json:"prUrl"`
+	Output   string `json:"output"`
+	Error    string `json:"error"`
+}
+
+// ShipResponse est la réponse de POST /api/cards/{id}/ship.
+type ShipResponse struct {
+	Card  Card             `json:"card"`
+	Mode  string           `json:"mode"`
+	Repos []ShipRepoResult `json:"repos"`
 }

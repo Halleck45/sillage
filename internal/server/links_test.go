@@ -58,7 +58,7 @@ func TestAddProjectWithLinks(t *testing.T) {
 	}
 
 	links := []Link{{URL: "https://example.com", Title: "Example"}}
-	p, err := s.AddProject("demo", "", "", []Repo{{Path: "/tmp/demo"}}, links)
+	p, err := s.AddProject("demo", "", "", []Repo{{Path: "/tmp/demo"}}, links, nil)
 	if err != nil {
 		t.Fatalf("AddProject: %v", err)
 	}
@@ -66,12 +66,12 @@ func TestAddProjectWithLinks(t *testing.T) {
 		t.Fatalf("links inattendus : %+v", p.Links)
 	}
 
-	if _, err := s.AddProject("bad", "", "", []Repo{{Path: "/tmp/bad"}}, []Link{{URL: "ftp://nope"}}); err == nil {
+	if _, err := s.AddProject("bad", "", "", []Repo{{Path: "/tmp/bad"}}, []Link{{URL: "ftp://nope"}}, nil); err == nil {
 		t.Fatalf("un lien invalide devrait refuser la création du projet")
 	}
 
 	newLinks := []Link{{URL: "https://other.example"}}
-	updated, err := s.UpdateProject(p.ID, nil, nil, nil, nil, nil, &newLinks)
+	updated, err := s.UpdateProject(p.ID, nil, nil, nil, nil, nil, &newLinks, nil)
 	if err != nil {
 		t.Fatalf("UpdateProject: %v", err)
 	}
@@ -81,7 +81,7 @@ func TestAddProjectWithLinks(t *testing.T) {
 
 	// links=nil (non fourni) ne modifie pas la liste existante.
 	name := "demo2"
-	updated, err = s.UpdateProject(p.ID, &name, nil, nil, nil, nil, nil)
+	updated, err = s.UpdateProject(p.ID, &name, nil, nil, nil, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("UpdateProject (sans links): %v", err)
 	}

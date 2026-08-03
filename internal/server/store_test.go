@@ -17,7 +17,7 @@ func TestStoreRoundtripSaveLoad(t *testing.T) {
 		t.Fatalf("NewStore: %v", err)
 	}
 
-	project, err := s1.AddProject("sillage", "", "", []Repo{{Path: "/tmp/sillage"}}, nil)
+	project, err := s1.AddProject("sillage", "", "", []Repo{{Path: "/tmp/sillage"}}, nil, nil)
 	if err != nil {
 		t.Fatalf("AddProject: %v", err)
 	}
@@ -45,7 +45,7 @@ func TestStoreRoundtripSaveLoad(t *testing.T) {
 	}
 
 	task, err = s1.UpdateTask(taskID, func(tk *Task) {
-		tk.Status = "shipped"
+		tk.Status = "accepted"
 		tk.Unread = true
 		tk.Tokens = Tokens{Input: 10, Output: 5, CostUsd: 0.01}
 		tk.SessionID = "sess-abc"
@@ -76,8 +76,8 @@ func TestStoreRoundtripSaveLoad(t *testing.T) {
 	if !ok {
 		t.Fatalf("tâche %s introuvable après rechargement", taskID)
 	}
-	if loadedTask.Status != "shipped" {
-		t.Fatalf("statut attendu 'shipped' après rechargement, reçu %q", loadedTask.Status)
+	if loadedTask.Status != "accepted" {
+		t.Fatalf("statut attendu 'accepted' après rechargement, reçu %q", loadedTask.Status)
 	}
 	if loadedTask.Tokens.Input != 10 || loadedTask.Tokens.Output != 5 || loadedTask.Tokens.CostUsd != 0.01 {
 		t.Fatalf("tokens inattendus après rechargement : %+v", loadedTask.Tokens)
@@ -118,7 +118,7 @@ func TestDerivedCounters(t *testing.T) {
 		t.Fatalf("NewStore: %v", err)
 	}
 
-	project, err := s.AddProject("sillage", "", "", []Repo{{Path: "/tmp/sillage"}}, nil)
+	project, err := s.AddProject("sillage", "", "", []Repo{{Path: "/tmp/sillage"}}, nil, nil)
 	if err != nil {
 		t.Fatalf("AddProject: %v", err)
 	}
@@ -127,7 +127,7 @@ func TestDerivedCounters(t *testing.T) {
 		t.Fatalf("AddCard: %v", err)
 	}
 
-	statuses := []string{"shipped", "review", "running"}
+	statuses := []string{"accepted", "review", "running"}
 	var taskIDs []string
 	for _, st := range statuses {
 		id, ref := s.ReserveTaskID()
@@ -215,7 +215,7 @@ func TestMarkTaskReadDoesNotBumpUpdatedAt(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewStore: %v", err)
 	}
-	project, err := s.AddProject("p", "", "", []Repo{{Path: "/tmp/p"}}, nil)
+	project, err := s.AddProject("p", "", "", []Repo{{Path: "/tmp/p"}}, nil, nil)
 	if err != nil {
 		t.Fatalf("AddProject: %v", err)
 	}
@@ -280,7 +280,7 @@ func TestDeleteAgentGuardsReferencedAgent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewStore: %v", err)
 	}
-	project, err := s.AddProject("sillage", "", "", []Repo{{Path: "/tmp/sillage"}}, nil)
+	project, err := s.AddProject("sillage", "", "", []Repo{{Path: "/tmp/sillage"}}, nil, nil)
 	if err != nil {
 		t.Fatalf("AddProject: %v", err)
 	}
@@ -337,14 +337,14 @@ func TestUpdateProjectFields(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewStore: %v", err)
 	}
-	p, err := s.AddProject("sillage", "", "", []Repo{{Path: "/tmp/sillage"}}, nil)
+	p, err := s.AddProject("sillage", "", "", []Repo{{Path: "/tmp/sillage"}}, nil, nil)
 	if err != nil {
 		t.Fatalf("AddProject: %v", err)
 	}
 
 	name := "Nouveau nom"
 	checkCmd := "go test ./..."
-	updated, err := s.UpdateProject(p.ID, &name, nil, &checkCmd, nil, nil, nil)
+	updated, err := s.UpdateProject(p.ID, &name, nil, &checkCmd, nil, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("UpdateProject: %v", err)
 	}
@@ -356,7 +356,7 @@ func TestUpdateProjectFields(t *testing.T) {
 	}
 
 	newRepos := []Repo{{Name: "a", Path: "/tmp/a"}, {Name: "b", Path: "/tmp/b"}}
-	updated, err = s.UpdateProject(p.ID, nil, nil, nil, nil, &newRepos, nil)
+	updated, err = s.UpdateProject(p.ID, nil, nil, nil, nil, &newRepos, nil, nil)
 	if err != nil {
 		t.Fatalf("UpdateProject (repos): %v", err)
 	}
@@ -371,7 +371,7 @@ func TestUpdateProjectDescriptionAndContextPrompt(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewStore: %v", err)
 	}
-	p, err := s.AddProject("sillage", "Un projet", "Contexte initial", []Repo{{Path: "/tmp/sillage"}}, nil)
+	p, err := s.AddProject("sillage", "Un projet", "Contexte initial", []Repo{{Path: "/tmp/sillage"}}, nil, nil)
 	if err != nil {
 		t.Fatalf("AddProject: %v", err)
 	}
@@ -381,7 +381,7 @@ func TestUpdateProjectDescriptionAndContextPrompt(t *testing.T) {
 
 	desc := "Nouvelle description"
 	ctx := "Nouveau contexte"
-	updated, err := s.UpdateProject(p.ID, nil, &desc, nil, &ctx, nil, nil)
+	updated, err := s.UpdateProject(p.ID, nil, &desc, nil, &ctx, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("UpdateProject: %v", err)
 	}
@@ -398,7 +398,7 @@ func TestAddCardRejectsNonSoonColumn(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewStore: %v", err)
 	}
-	project, err := s.AddProject("p", "", "", []Repo{{Path: "/tmp/p"}}, nil)
+	project, err := s.AddProject("p", "", "", []Repo{{Path: "/tmp/p"}}, nil, nil)
 	if err != nil {
 		t.Fatalf("AddProject: %v", err)
 	}
@@ -437,7 +437,7 @@ func TestAddCardWithContextPrompt(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewStore: %v", err)
 	}
-	project, err := s.AddProject("p", "", "", []Repo{{Path: "/tmp/p"}}, nil)
+	project, err := s.AddProject("p", "", "", []Repo{{Path: "/tmp/p"}}, nil, nil)
 	if err != nil {
 		t.Fatalf("AddProject: %v", err)
 	}
@@ -457,7 +457,7 @@ func TestUpdateCardTitleAndContextPrompt(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewStore: %v", err)
 	}
-	project, err := s.AddProject("p", "", "", []Repo{{Path: "/tmp/p"}}, nil)
+	project, err := s.AddProject("p", "", "", []Repo{{Path: "/tmp/p"}}, nil, nil)
 	if err != nil {
 		t.Fatalf("AddProject: %v", err)
 	}
@@ -500,7 +500,7 @@ func TestUpdateCardTitleAndContextPrompt(t *testing.T) {
 	}
 }
 
-// --- Cycle de vie des tâches : finish/cancel/reopen (v0.3.1 section 4) ---
+// --- Cycle de vie des tâches : accept/cancel/reopen ---
 
 // mkTaskWithStatus crée une tâche sur la carte donnée puis force son statut
 // (sauf "running", statut initial de CreateTask).
@@ -518,13 +518,13 @@ func mkTaskWithStatus(t *testing.T, s *Store, cardID, projectID, status string) 
 	return id
 }
 
-func TestTaskFinishTransitions(t *testing.T) {
+func TestTaskAcceptTransitions(t *testing.T) {
 	dir := t.TempDir()
 	s, err := NewStore(dir)
 	if err != nil {
 		t.Fatalf("NewStore: %v", err)
 	}
-	project, err := s.AddProject("p", "", "", []Repo{{Path: "/tmp/p"}}, nil)
+	project, err := s.AddProject("p", "", "", []Repo{{Path: "/tmp/p"}}, nil, nil)
 	if err != nil {
 		t.Fatalf("AddProject: %v", err)
 	}
@@ -533,33 +533,31 @@ func TestTaskFinishTransitions(t *testing.T) {
 		t.Fatalf("AddCard: %v", err)
 	}
 
-	for _, status := range []string{"review", "shipped"} {
-		id := mkTaskWithStatus(t, s, card.ID, project.ID, status)
-		task, err := s.FinishTask(id)
-		if err != nil {
-			t.Fatalf("FinishTask depuis %s: %v", status, err)
-		}
-		if task.Status != "done" {
-			t.Fatalf("statut attendu 'done', reçu %q", task.Status)
-		}
+	id := mkTaskWithStatus(t, s, card.ID, project.ID, "review")
+	task, err := s.AcceptTask(id)
+	if err != nil {
+		t.Fatalf("AcceptTask depuis review: %v", err)
+	}
+	if task.Status != "accepted" {
+		t.Fatalf("statut attendu 'accepted', reçu %q", task.Status)
 	}
 
 	running := mkTaskWithStatus(t, s, card.ID, project.ID, "running")
-	if _, err := s.FinishTask(running); err == nil {
-		t.Fatalf("finish depuis running devrait être refusé")
-	} else if err.Error() != "task must be reviewed before finishing" {
+	if _, err := s.AcceptTask(running); err == nil {
+		t.Fatalf("accepter depuis running devrait être refusé")
+	} else if err.Error() != "interrupt the agent before accepting" {
 		t.Fatalf("message inattendu : %q", err.Error())
 	}
 
-	for _, status := range []string{"done", "cancelled"} {
+	for _, status := range []string{"accepted", "cancelled"} {
 		id := mkTaskWithStatus(t, s, card.ID, project.ID, status)
-		if _, err := s.FinishTask(id); err == nil {
-			t.Fatalf("finish depuis %s devrait être refusé", status)
+		if _, err := s.AcceptTask(id); err == nil {
+			t.Fatalf("accepter depuis %s devrait être refusé", status)
 		}
 	}
 
-	if _, err := s.FinishTask("inconnu"); err == nil {
-		t.Fatalf("finish d'une tâche inconnue devrait échouer")
+	if _, err := s.AcceptTask("inconnu"); err == nil {
+		t.Fatalf("accepter une tâche inconnue devrait échouer")
 	}
 }
 
@@ -569,7 +567,7 @@ func TestTaskCancelTransitions(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewStore: %v", err)
 	}
-	project, err := s.AddProject("p", "", "", []Repo{{Path: "/tmp/p"}}, nil)
+	project, err := s.AddProject("p", "", "", []Repo{{Path: "/tmp/p"}}, nil, nil)
 	if err != nil {
 		t.Fatalf("AddProject: %v", err)
 	}
@@ -589,7 +587,7 @@ func TestTaskCancelTransitions(t *testing.T) {
 		}
 	}
 
-	for _, status := range []string{"shipped", "done", "cancelled"} {
+	for _, status := range []string{"accepted", "cancelled"} {
 		id := mkTaskWithStatus(t, s, card.ID, project.ID, status)
 		if _, err := s.CancelTask(id); err == nil {
 			t.Fatalf("cancel depuis %s devrait être refusé", status)
@@ -603,7 +601,7 @@ func TestTaskReopenTransitions(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewStore: %v", err)
 	}
-	project, err := s.AddProject("p", "", "", []Repo{{Path: "/tmp/p"}}, nil)
+	project, err := s.AddProject("p", "", "", []Repo{{Path: "/tmp/p"}}, nil, nil)
 	if err != nil {
 		t.Fatalf("AddProject: %v", err)
 	}
@@ -612,7 +610,7 @@ func TestTaskReopenTransitions(t *testing.T) {
 		t.Fatalf("AddCard: %v", err)
 	}
 
-	for _, status := range []string{"shipped", "done", "cancelled"} {
+	for _, status := range []string{"accepted", "cancelled"} {
 		id := mkTaskWithStatus(t, s, card.ID, project.ID, status)
 		task, err := s.ReopenTask(id)
 		if err != nil {
@@ -631,7 +629,7 @@ func TestTaskReopenTransitions(t *testing.T) {
 	}
 }
 
-// --- Auto-déplacement de carte (v0.3.1 section 4) ---
+// --- Auto-déplacement de carte : "done" veut dire livré ---
 
 func TestCardAutoMoveToDoneAndBack(t *testing.T) {
 	dir := t.TempDir()
@@ -639,7 +637,7 @@ func TestCardAutoMoveToDoneAndBack(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewStore: %v", err)
 	}
-	project, err := s.AddProject("p", "", "", []Repo{{Path: "/tmp/p"}}, nil)
+	project, err := s.AddProject("p", "", "", []Repo{{Path: "/tmp/p"}}, nil, nil)
 	if err != nil {
 		t.Fatalf("AddProject: %v", err)
 	}
@@ -657,29 +655,48 @@ func TestCardAutoMoveToDoneAndBack(t *testing.T) {
 		t.Fatalf("CreateTask: %v", err)
 	}
 
+	// Une branche de chantier existe (première tâche créée sur le dépôt), mais
+	// rien n'est encore livré.
+	if _, err := s.SetCardBranch(card.ID, CardBranch{RepoName: "p", Branch: "sillage/ws-1-carte", Base: "main", WorktreeDir: "/tmp/ws"}); err != nil {
+		t.Fatalf("SetCardBranch: %v", err)
+	}
+
 	// Dès qu'une tâche active existe, la carte quitte "soon" pour "doing".
 	if c, _ := s.GetCard(card.ID); c.Column != "doing" {
 		t.Fatalf("colonne attendue 'doing' dès qu'une tâche est active, reçue %q", c.Column)
 	}
 
-	// T1 termine (running -> review -> done).
+	// T1 est acceptée (running -> review -> accepted).
 	if _, err := s.UpdateTask(id1, func(tk *Task) { tk.Status = "review" }); err != nil {
 		t.Fatalf("UpdateTask: %v", err)
 	}
-	if _, err := s.FinishTask(id1); err != nil {
-		t.Fatalf("FinishTask: %v", err)
+	if _, err := s.AcceptTask(id1); err != nil {
+		t.Fatalf("AcceptTask: %v", err)
 	}
 	if c, _ := s.GetCard(card.ID); c.Column != "doing" {
 		t.Fatalf("colonne attendue 'doing' tant que T2 est active, reçue %q", c.Column)
 	}
 
-	// T2 est annulée : les deux tâches sont maintenant terminales.
+	// T2 est refusée : les deux tâches sont terminales, mais rien n'est livré,
+	// donc la carte reste en "doing" (la colonne "Terminé" veut dire livré).
 	if _, err := s.CancelTask(id2); err != nil {
 		t.Fatalf("CancelTask: %v", err)
 	}
 	c, _ := s.GetCard(card.ID)
+	if c.Column != "doing" {
+		t.Fatalf("colonne attendue 'doing' avant livraison, reçue %q", c.Column)
+	}
+	if !c.ShipReady {
+		t.Fatalf("le chantier devrait être livrable (blocage %q)", c.ShipBlocker)
+	}
+
+	// Livraison : la carte passe en "done".
+	if _, err := s.MarkCardBranchShipped(card.ID, "p", "https://example.com/pr/1", time.Now().UTC()); err != nil {
+		t.Fatalf("MarkCardBranchShipped: %v", err)
+	}
+	c, _ = s.GetCard(card.ID)
 	if c.Column != "done" {
-		t.Fatalf("colonne attendue 'done' quand toutes les tâches sont terminales, reçue %q", c.Column)
+		t.Fatalf("colonne attendue 'done' après livraison, reçue %q", c.Column)
 	}
 
 	// Réouvrir T1 : la carte doit repasser en doing.
@@ -691,9 +708,9 @@ func TestCardAutoMoveToDoneAndBack(t *testing.T) {
 		t.Fatalf("colonne attendue 'doing' après réouverture, reçue %q", c.Column)
 	}
 
-	// Terminer à nouveau T1 : retour en done.
-	if _, err := s.FinishTask(id1); err != nil {
-		t.Fatalf("FinishTask: %v", err)
+	// Accepter à nouveau T1 : la carte a déjà été livrée, retour en done.
+	if _, err := s.AcceptTask(id1); err != nil {
+		t.Fatalf("AcceptTask: %v", err)
 	}
 	c, _ = s.GetCard(card.ID)
 	if c.Column != "done" {
@@ -719,7 +736,7 @@ func TestCardCountersExcludeCancelled(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewStore: %v", err)
 	}
-	project, err := s.AddProject("p", "", "", []Repo{{Path: "/tmp/p"}}, nil)
+	project, err := s.AddProject("p", "", "", []Repo{{Path: "/tmp/p"}}, nil, nil)
 	if err != nil {
 		t.Fatalf("AddProject: %v", err)
 	}
@@ -728,7 +745,7 @@ func TestCardCountersExcludeCancelled(t *testing.T) {
 		t.Fatalf("AddCard: %v", err)
 	}
 
-	for _, status := range []string{"shipped", "done", "cancelled", "review"} {
+	for _, status := range []string{"accepted", "accepted", "cancelled", "review"} {
 		mkTaskWithStatus(t, s, card.ID, project.ID, status)
 	}
 
@@ -736,12 +753,12 @@ func TestCardCountersExcludeCancelled(t *testing.T) {
 	if !ok {
 		t.Fatalf("carte introuvable")
 	}
-	// 3 tâches comptent (shipped, done, review) ; cancelled est exclue.
+	// 3 tâches comptent (deux acceptées, une en revue) ; cancelled est exclue.
 	if c.TasksTotal != 3 {
 		t.Fatalf("tasksTotal attendu 3 (cancelled exclue), reçu %d", c.TasksTotal)
 	}
 	if c.TasksDone != 2 {
-		t.Fatalf("tasksDone attendu 2 (shipped+done), reçu %d", c.TasksDone)
+		t.Fatalf("tasksDone attendu 2 (acceptées), reçu %d", c.TasksDone)
 	}
 	if c.ReviewCount != 1 {
 		t.Fatalf("reviewCount attendu 1, reçu %d", c.ReviewCount)
@@ -810,7 +827,7 @@ func TestReassignTask(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewStore: %v", err)
 	}
-	project, err := s.AddProject("p", "", "", []Repo{{Path: "/tmp/p"}}, nil)
+	project, err := s.AddProject("p", "", "", []Repo{{Path: "/tmp/p"}}, nil, nil)
 	if err != nil {
 		t.Fatalf("AddProject: %v", err)
 	}
@@ -972,7 +989,7 @@ func TestCardAutoMovesFromSoonToDoingWhenTaskStarts(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewStore: %v", err)
 	}
-	p, _ := s.AddProject("p", "", "", []Repo{{Name: "r", Path: "/tmp/x"}}, nil)
+	p, _ := s.AddProject("p", "", "", []Repo{{Name: "r", Path: "/tmp/x"}}, nil, nil)
 	card, _ := s.AddCard(p.ID, "Carte", "", "")
 	if card.Column != "soon" {
 		t.Fatalf("colonne initiale attendue soon, reçue %q", card.Column)
@@ -994,9 +1011,9 @@ func TestDeleteTaskRemovesTaskAndMessages(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewStore: %v", err)
 	}
-	p, _ := s.AddProject("p", "", "", []Repo{{Name: "r", Path: "/tmp/x"}}, nil)
+	p, _ := s.AddProject("p", "", "", []Repo{{Name: "r", Path: "/tmp/x"}}, nil, nil)
 	card, _ := s.AddCard(p.ID, "Carte", "", "")
-	id := mkTaskWithStatus(t, s, card.ID, p.ID, "done")
+	id := mkTaskWithStatus(t, s, card.ID, p.ID, "accepted")
 	if _, _, err := s.AddMessage(id, "user", "", "bonjour"); err != nil {
 		t.Fatalf("AddMessage: %v", err)
 	}
@@ -1035,11 +1052,11 @@ func TestCardCascadeDeletesAllTasks(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewStore: %v", err)
 	}
-	p, _ := s.AddProject("p", "", "", []Repo{{Name: "r", Path: "/tmp/x"}}, nil)
+	p, _ := s.AddProject("p", "", "", []Repo{{Name: "r", Path: "/tmp/x"}}, nil, nil)
 	card, _ := s.AddCard(p.ID, "Carte", "", "")
 	var taskIDs []string
 	for i := 0; i < 3; i++ {
-		taskIDs = append(taskIDs, mkTaskWithStatus(t, s, card.ID, p.ID, "done"))
+		taskIDs = append(taskIDs, mkTaskWithStatus(t, s, card.ID, p.ID, "accepted"))
 	}
 
 	runner := NewRunner(s, NewHub())
@@ -1062,10 +1079,10 @@ func TestProjectCascadeDeletesCardsAndTasks(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewStore: %v", err)
 	}
-	p, _ := s.AddProject("p", "", "", []Repo{{Name: "r", Path: "/tmp/x"}}, nil)
+	p, _ := s.AddProject("p", "", "", []Repo{{Name: "r", Path: "/tmp/x"}}, nil, nil)
 	card1, _ := s.AddCard(p.ID, "Carte 1", "", "")
 	card2, _ := s.AddCard(p.ID, "Carte 2", "", "")
-	t1 := mkTaskWithStatus(t, s, card1.ID, p.ID, "done")
+	t1 := mkTaskWithStatus(t, s, card1.ID, p.ID, "accepted")
 	t2 := mkTaskWithStatus(t, s, card2.ID, p.ID, "review")
 
 	runner := NewRunner(s, NewHub())

@@ -26,7 +26,9 @@ internal/server/
 
 ## Store
 
-`Store` avec `sync.Mutex`, méthodes CRUD, recalcul des compteurs dérivés (Card.progress, counts, Project.unread, Agent.active) à chaque lecture/émission. IDs : `p1`, `c1`, `t1`... (compteur) ; ref tâche : compteur global démarrant à 100.
+`Store` avec `sync.Mutex`, méthodes CRUD, recalcul des compteurs dérivés (Card.progress, counts, Card.shipReady/shipBlocker, Project.unread, Agent.active) à chaque lecture/émission. IDs : `p1`, `c1`, `t1`... (compteur) ; ref : compteur global démarrant à 100, partagé par les tâches et les chantiers (le nom de branche d'un chantier en a besoin).
+
+Branches de chantier : `GetCardBranch`, `SetCardBranch`, `MarkCardBranchShipped(cardID, repoName, prURL, at)` et `MarkCardBranchPending(cardID, repoName)` (remise à `shippedAt=nil` quand du travail nouveau arrive ; `prUrl` conservée). Tous recalculent la carte, verrou tenu.
 Tokens : cumulés dans Task.tokens ; agrégats projet/global calculés en sommant les tâches.
 
 ## Auth
@@ -42,12 +44,20 @@ Hub : `Subscribe() (ch chan Event, unsub func())`, `Publish(Event{Name, Data any
 
 ## Git (git.go)
 
-Chaque tâche travaille dans un **worktree** dédié : `<dataDir>/worktrees/<taskId>`, branche `sillage/<ref>-<slug>` créée depuis la branche par défaut du repo (`git rev-parse --abbrev-ref HEAD` au moment de la création ; stockée comme `base` dans la tâche).
+Deux niveaux de worktree, un par branche (voir docs/SPEC-LIVRAISON.md) :
 
-- `CreateWorktree(repoPath, taskID, branch) (dir, base, error)` : `git worktree add -b <branch> <dir>` depuis base.
+- **chantier** : `<dataDir>/worktrees/ws-<cardId>-<slug(repoName)>`, branche `sillage/ws-<card.ref>-<slug(titre)>`, créée depuis `project.delivery.target` (ou la branche courante du dépôt si vide). C'est là que les tâches acceptées sont fusionnées, et c'est cette branche que la livraison pousse.
+- **tâche** : `<dataDir>/worktrees/<taskId>`, branche `sillage/<ref>-<slug>`, créée depuis la branche du chantier (stockée comme `base` dans la tâche). Jamais poussée.
+
+- `CreateWorktree(repoPath, dataDir, taskID, branch, base) (dir, base, error)` et `CreateCardWorktree(repoPath, dataDir, cardID, repoName, branch, base)` : `git worktree add -B <branch> <dir> <base>` (base vide = branche courante du dépôt).
 - `Diff(dir, base)` : d'abord `git add -A -N` (fait apparaître les fichiers non suivis), puis `git diff <base>` ; parser le unified diff en structure de SPEC-API.md (fichiers, additions/deletions, hunks, lignes ctx/add/del). Parser robuste : ignorer les lignes binaires, gérer rename.
-- `Commits(dir, base)` : `git log <base>..HEAD --pretty=format:%h|%s|%cr`.
-- `Ship(dir, branch, title)` : `git add -A` ; commit `Sillage: <title>` si changements ; `git push -u origin <branch>`. Retourner la sortie combinée. Erreur claire si pas de remote. **C'est le SEUL endroit du code qui exécute `git push`.**
+- `Commits(dir, base)` : `git log <base>..HEAD --pretty=format:%h|%s|%cr`. `CountCommits(dir, from, to)` : `git rev-list --count from..to` (sert à `pending`, ce qu'il reste à livrer).
+- `CommitAll(dir, message)` : `git add -A` puis commit si l'arbre est sale (sans erreur s'il est propre). `IsWorktreeClean(dir)`, `HeadSha(dir)`, `IsBranchMergedInto(dir, branch, target)` : constats en lecture seule.
+- `MergeBranch(dir, branch, message)` : `git merge --no-ff -m <message> <branch>` dans le worktree du chantier (un merge commit par tâche acceptée, l'historique reste lisible). En cas de conflit : liste les fichiers en conflit (`git diff --name-only --diff-filter=U`), `git merge --abort`, et enveloppe `ErrMergeConflict`. Aucune résolution automatique.
+- `Ship(dir, branch, title)` : commit de sécurité si l'arbre est sale, puis `git push -u origin <branch>`. Erreur claire si pas de remote. **C'est, avec `SyncPush` (espace de travail uniquement), le SEUL endroit du code qui exécute `git push`.**
+- `DetectForge(dir) ForgeInfo` : remote `origin` parsé (ssh scp-like ou URL) → fournisseur `github` (github.com) / `gitlab` (hôte contenant `gitlab`) / `""`. `RemoteURL` vide distingue « pas de remote » de « forge inconnue ». Jamais persisté.
+- `OpenPR(dir, branch, base, title)` : `gh pr create` ou `glab mr create` si le binaire est présent, sinon URL de création pré-remplie (`GithubCompareURL` / `GitlabNewMRURL`). Aucune écriture git : la branche a déjà été poussée par `Ship`.
+- `MergeLocal(repoPath, dataDir, cardID, repoName, target, source)` : fusion locale **fast-forward uniquement, jamais de push**. D'abord un worktree transitoire dédié (`worktrees/.merge-<cardId>-<repoName>`, retiré à la fin) ; si `target` y est déjà empruntée (cas courant : c'est la branche courante du dépôt de travail), repli dans le dépôt lui-même, autorisé seulement si `target` **est** la branche courante et l'arbre propre (jamais de changement de branche, jamais de stash). Sinon `ErrTargetBusy`. Divergence → `ErrTargetDiverged`, avec la commande à jouer à la main.
 - Toutes les commandes git : `exec.Command` avec `Dir` fixé, env hérité + `GIT_TERMINAL_PROMPT=0`, timeout 60 s (120 s pour push) via context.
 
 ## Runner (runner.go)
@@ -102,10 +112,12 @@ Agents : Bolt 🐝 `#f2b705` claude/sonnet (contexte : dev backend pragmatique) 
 ## Handlers
 
 Suivre SPEC-API.md. Points d'attention :
-- POST /projects : vérifier que path existe et `git rev-parse --git-dir` réussit, sinon 400 avec message explicite.
-- POST /tasks : créer worktree ; si échec, 400 et pas de tâche. Lancer l'agent avec `title` + `prompt`.
-- ship : exiger `{"confirm":true}` sinon 400 `{"error":"confirmation requise"}` ; statut → shipped seulement si push OK ; sinon rester ready et renvoyer l'erreur dans `output` avec code 502.
-- reopen : shipped → review.
+- POST /projects : vérifier que path existe et `git rev-parse --git-dir` réussit, sinon 400 avec message explicite. Sans champ `delivery`, déduire le mode des remotes (`detectDelivery`).
+- POST /tasks : garantir la branche du chantier sur ce dépôt (`ensureCardBranch`, créée à la première tâche), puis le worktree de la tâche depuis cette branche ; si échec, 400 et pas de tâche. Lancer l'agent avec `title` + `prompt`. `ensureCardBranch` remet aussi le chantier en « non livré » (`MarkCardBranchPending`) s'il l'était : une tâche de plus veut dire que tout n'est plus livré.
+- POST /tasks/{id}/accept : commit du worktree de la tâche, puis `MergeBranch` dans le worktree du chantier. Conflit → 409, marqueur `[merge-conflict:...]`, tâche laissée en `review`. Aucune confirmation (rien ne sort de la machine). Si le SHA de HEAD du chantier a changé (des commits ont réellement rejoint la branche), `MarkCardBranchPending` : le chantier redevient livrable.
+- GET /cards/{id}/delivery : aucune écriture git ; commence par constater les acceptations déjà faites (`autoAcceptMergedTasks` : tâche en revue, aucun agent en cours, `filesCount > 0`, worktree propre, branche déjà contenue dans celle du chantier) avant de calculer l'aperçu. Publie `task`/`message`/`cards`/`agents` pour chaque tâche ainsi acceptée.
+- POST /cards/{id}/ship : exiger `{"confirm":true}` sinon 400 `"confirmation required"` ; 409 si `card.shipReady` est faux (message dérivé de `shipBlocker`) ; traiter chaque dépôt indépendamment, un échec n'annule pas les autres (erreur portée par la ligne de résultat). Un dépôt dont `pending` vaut 0 est `skipped`. Une `prUrl` déjà connue est réutilisée : le push met à jour la pull request existante, aucune tentative d'en ouvrir une seconde.
+- reopen : accepted/cancelled → review.
 - Après chaque mutation : publier les SSE nécessaires (`task`, `cards`, `tokens`, `agents`).
 
 ## Tests

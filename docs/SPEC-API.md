@@ -18,17 +18,37 @@ Repo    { "name": "api", "path": "/abs/path" }   // name court et unique dans le
 Link    { "url": "https://github.com/org/repo", "title": "org/repo" }
           // title fourni par l'utilisateur, ou récupéré best-effort (voir plus bas), ou nom d'hôte.
 
+Delivery { "mode": "pr|merge", "target": "main", "stackedPrs": false }
+          // Ce que « livrer » veut dire dans ce projet (voir "Livraison d'un chantier").
+          // target vide = branche par défaut du dépôt. stackedPrs : réservé, ignoré.
+
 Project { "id": "p1", "name": "sillage", "description": "...", "repos": [Repo, ...],
           "links": [Link, ...], "unread": 2,
-          "tokens": Tokens, "checkCmd": "go test ./...", "contextPrompt": "..." }
+          "tokens": Tokens, "checkCmd": "go test ./...", "contextPrompt": "...",
+          "delivery": Delivery, "deliveryWarning": "..." }
           // description : une phrase, affichée sous le nom. checkCmd/contextPrompt/description peuvent être vides.
           // links : au plus 12, http(s) uniquement (voir "Liens épinglés" ci-dessous).
+          // deliveryWarning : calculé à chaque lecture (jamais persisté), vide si tout va
+          // bien ; voir "Santé de la livraison" ci-dessous.
 
-Card    { "id": "c1", "projectId": "p1", "column": "soon|doing|done", "title": "...",
+CardBranch { "repoName": "api", "branch": "sillage/ws-101-refonte-auth", "base": "main",
+             "worktreeDir": "...", "prUrl": "", "shippedAt": null }
+          // Branche de feature du chantier sur un dépôt (une par dépôt touché).
+          // shippedAt : livré ET rien de nouveau depuis ; remis à null dès qu'une tâche
+          // est ajoutée au chantier ou qu'une acceptation ajoute des commits.
+          // prUrl : conservée après cette remise à zéro (la PR existe toujours).
+
+Card    { "id": "c1", "projectId": "p1", "ref": 101, "column": "soon|doing|done", "title": "...",
           "tasksTotal": 4, "tasksDone": 1, "docsCount": 2, "messagesCount": 12,
-          "reviewCount": 1, "progress": 25, "liveActivity": "..." | null, "contextPrompt": "..." }
+          "reviewCount": 1, "progress": 25, "liveActivity": "..." | null,
+          "branches": [CardBranch, ...], "shipReady": false,
+          "shipBlocker": "|no-tasks|tasks-pending|nothing-accepted|nothing-to-ship",
+          "contextPrompt": "..." }
           // Card = chantier (vocabulaire produit) ; nom technique inchangé. contextPrompt :
           // texte libre transmis aux agents (voir plus bas), peut être vide.
+          // ref : référence courte du projet (compteur partagé avec les tâches), utilisée
+          // dans le nom de la branche du chantier.
+          // shipReady/shipBlocker : dérivés, état du bouton de livraison (voir plus bas).
 
 Agent   { "id": "bolt", "name": "Bolt", "emoji": "🐝", "color": "#f2b705",
           "model": "claude-sonnet-5", "cli": "claude", "contextPrompt": "...",
@@ -39,7 +59,7 @@ Agent   { "id": "bolt", "name": "Bolt", "emoji": "🐝", "color": "#f2b705",
 
 Task    { "id": "t1", "cardId": "c1", "projectId": "p1", "ref": 482, "title": "...",
           "agentId": "bolt", "repoName": "api", "branch": "sillage/482-slug",
-          "status": "running|review|shipped|done|cancelled",
+          "status": "running|review|accepted|cancelled",
           "messagesCount": 5, "filesCount": 3, "docsCount": 1,
           "checks": [ { "label": "go test", "ok": true } ],   // [] si aucun
           "liveActivity": "Edit · internal/server/store.go" | null,
@@ -61,7 +81,7 @@ WorkspaceStatus { "setupDone": true, "gitEnabled": true, "remote": "git@host:org
 Settings { "displayName": "Ada", "lang": "fr" }   // lang : ""|"fr"|"en"
 ```
 
-`Card.progress` = tasksDone/tasksTotal en % (0 si vide). Les compteurs de Card sont calculés côté serveur. `tasksDone` = tâches `shipped`+`done`. `reviewCount` = tâches `review`. Les tâches `cancelled` sont exclues de `tasksTotal`/`tasksDone`/`progress`, mais comptent comme terminales pour l'auto-déplacement de carte (voir plus bas).
+`Card.progress` = tasksDone/tasksTotal en % (0 si vide). Les compteurs de Card sont calculés côté serveur. `tasksDone` = tâches `accepted`. `reviewCount` = tâches `review`. Les tâches `cancelled` (refusées) sont exclues de `tasksTotal`/`tasksDone`/`progress`, mais comptent comme terminales pour l'auto-déplacement de carte (voir plus bas).
 
 `Project.repos` : un projet regroupe un ou plusieurs dépôts git. `Repo.name` est unique dans le projet (défaut : basename du chemin si omis en entrée). L'ancien champ `path` (v0.1/v0.2, un seul dépôt) n'est plus exposé dans le modèle mais reste accepté en entrée de `POST /api/projects` (voir ci-dessous) ; les projets existants migrent automatiquement au chargement (`repos = [{name: basename(path), path}]`).
 
@@ -85,23 +105,23 @@ Settings { "displayName": "Ada", "lang": "fr" }   // lang : ""|"fr"|"en"
 | POST | `/api/agents` | `{name, emoji?, color?, cli, model?, contextPrompt?}` | Agent (name et cli requis ; cli ∈ {claude, codex, fake} ; id = slug du name, 400 si déjà pris) |
 | PATCH | `/api/agents/{id}` | mêmes champs, tous optionnels | Agent |
 | DELETE | `/api/agents/{id}` | | 204 (400 si une tâche référence encore l'agent) |
-| POST | `/api/projects` | `{name, path}` ou `{name, repos:[{name?,path}, ...], description?, contextPrompt?, links?:[{url,title?}, ...]}` | Project (400 si un path est invalide/pas un dépôt git, noms de repo dupliqués, ou lien invalide/en trop grand nombre : voir « Liens épinglés » ci-dessous) |
-| PATCH | `/api/projects/{id}` | `{name?, description?, checkCmd?, contextPrompt?, repos?, links?}` | Project (repos/links, si fournis, remplacent la liste entière ; retirer un repo ne casse pas les tâches existantes) |
+| POST | `/api/projects` | `{name, path}` ou `{name, repos:[{name?,path}, ...], description?, contextPrompt?, links?:[{url,title?}, ...], delivery?}` | Project (400 si un path est invalide/pas un dépôt git, noms de repo dupliqués, mode de livraison inconnu, ou lien invalide/en trop grand nombre). `delivery` absent = déduit des remotes des dépôts (voir « Livraison d'un chantier ») |
+| PATCH | `/api/projects/{id}` | `{name?, description?, checkCmd?, contextPrompt?, repos?, links?, delivery?}` | Project (repos/links, si fournis, remplacent la liste entière ; retirer un repo ne casse pas les tâches existantes) |
 | DELETE | `/api/projects/{id}` | `{confirm:true}` | 204 (voir « Suppressions » ci-dessous). **Validation humaine obligatoire** : refus 400 sans `confirm` |
 | POST | `/api/cards` | `{projectId, title, column?, contextPrompt?}` | Card. `column`, si fourni, doit valoir `"soon"` (400 `"cards are created in the soon column"` sinon) : les cartes se créent toujours dans "Bientôt" |
 | PATCH | `/api/cards/{id}` | `{column?, title?, contextPrompt?}` | Card. `title`, si fourni, doit être non vide. Le déplacement manuel de colonne (toutes colonnes acceptées) reste indépendant de l'auto-déplacement (voir plus bas) |
 | DELETE | `/api/cards/{id}` | `{confirm:true}` | 204 (voir « Suppressions » ci-dessous). **Validation humaine obligatoire** : refus 400 sans `confirm` |
+| GET | `/api/cards/{id}/delivery` | | DeliveryPreview : ce que la livraison ferait, avant tout clic (voir « Livraison d'un chantier »). Lecture seule |
+| POST | `/api/cards/{id}/ship` | `{confirm:true}` | ShipResponse : **la seule action sortante du produit** (push + pull request, ou fusion locale). 400 sans `confirm`, 409 si le chantier n'est pas livrable |
 | POST | `/api/tasks` | `{cardId, title, agentId, prompt?, repoName?}` | Task (créée `running`, agent lancé avec title+prompt). `repoName` optionnel si le projet n'a qu'un repo ; sinon 400 `"repoName required (project has several repositories)"` ou 400 si inconnu |
 | PATCH | `/api/tasks/{id}` | `{agentId}` | Task : réassigne l'agent (voir « Réassignation » ci-dessous). 400 si `status=running` (`"interrupt the agent before reassigning"`) ou si l'agent est inconnu |
 | DELETE | `/api/tasks/{id}` | `{confirm:true}` | 204 (voir « Suppressions » ci-dessous). **Validation humaine obligatoire** : refus 400 sans `confirm` |
 | GET | `/api/tasks/{id}` | | `{task, messages}` |
 | POST | `/api/tasks/{id}/messages` | `{text}` | 202 ; relance l'agent (statut → running) |
 | POST | `/api/tasks/{id}/interrupt` | | Task (running → review) |
-| POST | `/api/tasks/{id}/ship` | `{confirm:true}` | `{task, output, branchUrl}` : fait le `git push` réel, accepté depuis `review` (voir ci-dessous). **Validation humaine obligatoire** : refus 400 sans `confirm` |
-| POST | `/api/tasks/{id}/pr` | `{confirm:true}` | `{url}` : ouvre la pull request (voir ci-dessous). **Validation humaine obligatoire** : refus 400 sans `confirm` ; tâche `shipped` uniquement (400 sinon) |
-| POST | `/api/tasks/{id}/finish` | | Task (review/shipped → done). 400 depuis `running` (`"task must be reviewed before finishing"`) ou depuis done/cancelled |
-| POST | `/api/tasks/{id}/cancel` | | Task (running/review → cancelled). Si `running`, l'agent est d'abord interrompu (même mécanique qu'`/interrupt`). 400 depuis shipped/done/cancelled |
-| POST | `/api/tasks/{id}/reopen` | | Task (shipped/done/cancelled → review). 400 sinon |
+| POST | `/api/tasks/{id}/accept` | | `{task, workstreamBranch, output}` : commite le worktree de la tâche puis fusionne sa branche dans celle du chantier. Accepté depuis `review` uniquement (400 sinon). **Aucune confirmation** : action locale, réversible par `/reopen`. 409 en cas de conflit (voir ci-dessous) |
+| POST | `/api/tasks/{id}/cancel` | | Task (running/review → cancelled, c'est le « refuser » de l'UI). Si `running`, l'agent est d'abord interrompu (même mécanique qu'`/interrupt`). 400 depuis accepted/cancelled |
+| POST | `/api/tasks/{id}/reopen` | | Task (accepted/cancelled → review). 400 sinon |
 | POST | `/api/tasks/{id}/read` | | 204 (unread=false, ne modifie jamais `updatedAt` : voir plus bas) |
 | GET | `/api/tasks/{id}/diff` | | voir ci-dessous |
 | GET | `/api/tasks/{id}/deliverables` | | voir ci-dessous |
@@ -109,11 +129,13 @@ Settings { "displayName": "Ada", "lang": "fr" }   // lang : ""|"fr"|"en"
 
 ### Cycle de vie des tâches et auto-déplacement de carte
 
-Statuts : `running → review → shipped`, plus `done` (via `/finish`) et `cancelled` (via `/cancel`). L'état intermédiaire `ready` (et l'étape d'acceptation manuelle `/accept`) a disparu : `ship` est accepté directement depuis `review`. `/reopen` accepte shipped/done/cancelled et ramène en `review`. Compatibilité : au chargement de state.json, toute tâche encore `ready` (installation antérieure à la v0.3.4) migre vers `review`.
+Statuts : `running → review → accepted`, plus `cancelled` (via `/cancel`, le « refuser » de l'UI). Une tâche ne se livre plus seule : elle est acceptée (fusionnée) dans la branche de son chantier, et c'est le chantier qui se livre (voir « Livraison d'un chantier »). `/reopen` accepte accepted/cancelled et ramène en `review` ; le merge déjà fait n'est pas annulé, la prochaine acceptation fusionnera les nouveaux commits.
 
-Après un ship réussi : un Message marqueur est ajouté au fil (`author="agent"`, `authorName=""`, texte figé `"[shipped:<branch>]"` ; le frontend détecte ce marqueur et affiche une ligne système localisée). La réponse inclut aussi `branchUrl` : l'URL de la branche sur GitHub (`https://github.com/<owner>/<repo>/tree/<branch>`) si le remote `origin` du dépôt est un dépôt github.com, chaîne vide sinon (jamais d'erreur pour cette information optionnelle).
+Compatibilité, au chargement de state.json : `ready` (antérieur à la v0.3.4) migre vers `review` ; `shipped` et `done` migrent vers `accepted`.
 
-Après chaque changement de statut de tâche, la carte est automatiquement replacée : si elle a au moins une tâche et que toutes ses tâches sont terminales (`shipped`/`done`/`cancelled`), `card.column` passe à `"done"` ; si une tâche redevient active (reopen, nouvelle tâche) alors que la carte est en `"done"`, elle repasse en `"doing"`. Le déplacement manuel (PATCH `/api/cards/{id}`) reste indépendant de cette règle. Chaque changement republie l'événement SSE `cards`.
+Après une acceptation réussie : un Message marqueur est ajouté au fil (`author="agent"`, `authorName=""`, texte figé `"[accepted:<workstreamBranch>]"`). Une acceptation simplement constatée (la branche de la tâche était déjà contenue dans celle du chantier) pose `"[auto-accepted:<workstreamBranch>]"`. En cas de conflit, la fusion est annulée (`git merge --abort`), la tâche **reste** en `review`, un marqueur `"[merge-conflict:<fichiers séparés par des espaces>]"` est ajouté au fil, et la réponse est 409 `{"error":"merge conflict with the workstream branch","conflictFilePaths":"..."}`. Le frontend détecte ces marqueurs et affiche une ligne système localisée.
+
+Après chaque changement de statut de tâche, la carte est automatiquement replacée : si elle a au moins une tâche, qu'elles sont toutes terminales (`accepted`/`cancelled`) **et** que le chantier a été livré, `card.column` passe à `"done"` ; sinon elle passe (ou reste) en `"doing"`. La colonne « Terminé » veut donc dire livré, pas seulement relu. Une carte déjà livrée en ressort dès qu'un travail nouveau y apparaît (voir « Continuer un chantier déjà livré »). Les cartes antérieures aux branches de chantier (`branches` vide) sont considérées livrées, pour garder leur colonne historique. Le déplacement manuel (PATCH `/api/cards/{id}`) reste indépendant de cette règle. Chaque changement republie l'événement SSE `cards`.
 
 ### Lecture d'une tâche : `updatedAt` inchangé
 
@@ -145,9 +167,47 @@ Actions destructives, jamais déclenchées depuis les listes : confirmation doub
 - `cli=codex` ou `cli=claude` : si le binaire correspondant est introuvable dans le PATH → `"<cli> CLI not found in PATH"`.
 - Sinon (ou `cli=fake`) : chaîne vide.
 
-### Ouvrir la PR
+### Livraison d'un chantier
 
-`POST /api/tasks/{id}/pr` ne pousse jamais rien : la branche a déjà été poussée par `/ship`. Implémentation : `gh pr create` dans le worktree (si `gh` est disponible) ; en cas d'échec ou d'absence de `gh`, repli sur une URL de comparaison GitHub en lecture seule (`https://github.com/<owner>/<repo>/compare/<base>...<branch>?expand=1`), déduite de `git remote get-url origin` (ssh ou https). Si ni l'un ni l'autre n'aboutit (remote non-GitHub ou absent) : 502 `{error}`.
+Le chantier est une branche de feature : une branche `sillage/ws-<card.ref>-<slug>` par couple (chantier, dépôt), avec son worktree dédié, créée à la première tâche du chantier sur ce dépôt depuis `project.delivery.target` (ou la branche courante du dépôt si `target` est vide). Les branches de tâche partent de cette branche et y sont fusionnées à l'acceptation ; elles ne sont jamais poussées.
+
+**Réglage du projet** (`Project.delivery`) : `mode:"pr"` pousse la branche du chantier puis ouvre la pull request (GitHub, `gh pr create`) ou la merge request (GitLab, `glab mr create`) ; en l'absence du CLI ou en cas d'échec, repli sur une URL de création pré-remplie en lecture seule (`https://<host>/<path>/compare/<base>...<branch>?expand=1`, ou `https://<host>/<path>/-/merge_requests/new?merge_request[source_branch]=...&merge_request[target_branch]=...`). La branche est poussée dans les deux cas : le repli ne dégrade que l'ouverture de la requête. `mode:"merge"` fusionne la branche du chantier dans `target` **en local, en fast-forward uniquement, et ne pousse jamais rien** (worktree transitoire dédié ; repli dans le dépôt lui-même seulement si `target` y est la branche courante et l'arbre propre ; 409 sinon).
+
+À la création d'un projet sans champ `delivery`, le mode est déduit : `"pr"` si tous les dépôts pointent vers une forge connue (github.com, ou un hôte contenant `gitlab`), sinon `"merge"` avec `target` = branche courante du premier dépôt. Le fournisseur n'est jamais persisté : il est redéduit du remote `origin` à chaque opération.
+
+**Conditions de livraison** (`Card.shipReady`, sinon `Card.shipBlocker`) : au moins une tâche, aucune tâche `running` ni `review`, au moins une tâche `accepted`, au moins une branche de chantier. `POST /api/cards/{id}/ship` refuse en 409 avec le même vocabulaire.
+
+**Acceptation automatique des branches fusionnées à la main.** Une branche de tâche peut être fusionnée dans celle du chantier hors de Sillage (`git merge` dans un terminal). `GET /api/cards/{id}/delivery` le constate au passage : une tâche `review` dont la branche est entièrement contenue dans celle du chantier passe `accepted`, avec un message marqueur `[auto-accepted:<branche du chantier>]` (le frontend affiche une ligne système localisée) et les événements SSE `task`, `message`, `cards`, `agents`. Quatre garde-fous : aucun agent en cours pour la tâche, `filesCount > 0` (une tâche vide est contenue par construction), son worktree propre (du travail non commité n'est par définition pas fusionné), et sa branche effectivement contenue. Aucune écriture git : l'appel ne fait que constater. Le frontend rappelle cet endpoint à l'ouverture de la vue chantier et toutes les 60 s tant qu'elle reste ouverte.
+
+**Continuer un chantier déjà livré.** `CardBranch.shippedAt` signifie « livré, et rien de nouveau depuis ». Il est remis à `null` dès que du travail nouveau apparaît sur ce dépôt : création d'une tâche sur le chantier, ou acceptation qui ajoute réellement des commits à la branche (comparaison de SHA avant/après la fusion). Le chantier quitte alors la colonne `done`, et le bouton de livraison redevient actif une fois tout accepté ou refusé. `prUrl` est conservée : la pull request existe toujours, une nouvelle livraison la met à jour par un simple push (aucune tentative d'en ouvrir une seconde). Une acceptation automatique (voir ci-dessus) n'ajoute aucun commit et ne remet donc jamais le chantier en « non livré ».
+
+`GET /api/cards/{id}/delivery` (aucune écriture git ; peut accepter des tâches déjà fusionnées, voir ci-dessus) :
+
+```jsonc
+{ "mode": "pr", "target": "main", "provider": "github|gitlab|",
+  "ready": false, "blocker": "tasks-pending",
+  "warnings": ["gh not found in PATH; ..."],
+  "counts": { "accepted": 3, "refused": 1, "pending": 1 },
+  "repos": [ { "repoName": "api", "branch": "sillage/ws-101-refonte-auth", "base": "main",
+               "commits": 4, "files": 11, "pending": 4, "prUrl": "", "shippedAt": null } ] }
+```
+
+`commits`/`files` décrivent le contenu de la livraison (`base..branche`) ; `pending` est ce qu'il reste réellement à livrer (commits non poussés en mode `pr`, non encore fusionnés en mode `merge`). `pending` à zéro partout signifie « rien à livrer » : le bouton est inactif et la livraison marque le dépôt `skipped`.
+
+`POST /api/cards/{id}/ship` `{confirm:true}` (400 `"confirmation required"` sinon) traite chaque dépôt du chantier et répond :
+
+```jsonc
+{ "card": Card, "mode": "pr",
+  "repos": [ { "repoName": "api", "branch": "...", "base": "main", "pushed": true,
+               "merged": false, "skipped": false, "prUrl": "https://...",
+               "output": "...", "error": "" } ] }
+```
+
+Un dépôt en échec n'annule pas les autres : chaque ligne porte sa propre erreur, et la livraison est rejouable telle quelle (les dépôts déjà livrés sont `skipped`).
+
+### Santé de la livraison
+
+`Project.deliveryWarning` (dans `ProjectOut`, jamais `Project` lui-même : le champ n'est pas persisté) est recalculé à chaque lecture d'état ou mutation de projet. Vide en mode `merge` (aucun binaire externe, aucun remote requis) ; sinon, par ordre de priorité : `"no 'origin' remote on repository <name>; nothing can be pushed"`, `"unknown forge on repository <name>; the branch will be pushed without opening a pull request"`, `"gh not found in PATH; Sillage will fall back to a prefilled pull request URL"`, `"glab not found in PATH; ..."`. Aucun de ces avertissements n'empêche quoi que ce soit.
 
 ### Espace de travail (synchronisation git de dataDir)
 
@@ -209,7 +269,8 @@ Le frontend maintient son état en mémoire à partir de `/api/state` + SSE ; re
 
 ## Règles produit à respecter côté UI
 
-- Push / livraison uniquement via le bouton du détail de tâche avec confirmation explicite (double clic de confirmation ou bouton qui devient « Confirmer le push ? »). Jamais automatique. Même règle pour l'ouverture de la PR et pour la synchronisation de l'espace de travail (`/api/workspace/sync`).
+- Push / livraison uniquement via le bouton « Livrer » de l'en-tête du chantier, en deux clics : le bouton ouvre un récapitulatif (mode, dépôts, branche → base, commits, fichiers, avertissements) dont le bouton d'action **est** la confirmation (`{"confirm":true}`). Jamais automatique. Le bouton est grisé, avec la raison en infobulle, tant que `card.shipReady` est faux ou qu'il n'y a rien à livrer. Même règle de confirmation explicite pour la synchronisation de l'espace de travail (`/api/workspace/sync`).
+- Accepter ou refuser une tâche s'obtient en un clic depuis la liste de tâches (boutons révélés au survol d'une tâche à relire) : ces actions sont locales et réversibles (`/reopen`), donc sans confirmation. L'état de chaque tâche (acceptée, refusée) est lisible dans la liste sans ouvrir la tâche.
 - Tokens : jamais affichés dans le flux de travail (kanban, détail de tâche, liste des projets), pour ne pas ajouter de charge mentale. Seul endroit visible : Réglages > onglet Statistiques, consommation par projet, sans prix.
 - Une tâche s'ouvre → POST `/read`.
 

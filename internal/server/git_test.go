@@ -1,11 +1,17 @@
 package server
 
 import (
+	"encoding/json"
+	"errors"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+	"testing/fstest"
 )
 
 // diffFixture est un diff unifié inline couvrant : un fichier modifié
@@ -102,7 +108,7 @@ func TestWorktreeAndDiff(t *testing.T) {
 
 	wantBase := strings.TrimSpace(runTestGit(t, repo, "rev-parse", "--abbrev-ref", "HEAD"))
 
-	dir, base, err := CreateWorktree(repo, dataDir, "t1", "sillage/100-test")
+	dir, base, err := CreateWorktree(repo, dataDir, "t1", "sillage/100-test", "")
 	if err != nil {
 		t.Fatalf("CreateWorktree: %v", err)
 	}
@@ -201,19 +207,11 @@ func TestGithubBranchURL(t *testing.T) {
 	}
 }
 
-// TestShipFromReviewAddsMarkerMessage reproduit le flux de handleShip :
-// ship accepté directement depuis "review" (l'étape "ready" a disparu),
-// puis message marqueur "[shipped:<branch>]" (author=agent, authorName vide).
-func TestShipFromReviewAddsMarkerMessage(t *testing.T) {
-	if _, err := exec.LookPath("git"); err != nil {
-		t.Skip("git non disponible dans cet environnement")
-	}
+// --- Livraison par chantier (voir docs/SPEC-LIVRAISON.md) ---
 
-	bare := t.TempDir()
-	runTestGit(t, bare, "init", "--bare", "-b", "main")
-
-	repo := t.TempDir()
-	dataDir := t.TempDir()
+// initTestRepo initialise un dépôt git avec un commit initial sur main.
+func initTestRepo(t *testing.T, repo string) {
+	t.Helper()
 	runTestGit(t, repo, "init", "-b", "main")
 	runTestGit(t, repo, "config", "user.email", "test@example.com")
 	runTestGit(t, repo, "config", "user.name", "Test")
@@ -222,65 +220,489 @@ func TestShipFromReviewAddsMarkerMessage(t *testing.T) {
 	}
 	runTestGit(t, repo, "add", "-A")
 	runTestGit(t, repo, "commit", "-m", "initial")
+}
+
+// deliveryFixture monte un dépôt git réel (avec remote bare), un serveur, un
+// projet et un chantier, prêts pour les tests de livraison.
+type deliveryFixture struct {
+	srv     *Server
+	repo    string
+	bare    string
+	dataDir string
+	project Project
+	card    Card
+}
+
+func newDeliveryFixture(t *testing.T, delivery Delivery) *deliveryFixture {
+	t.Helper()
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git non disponible dans cet environnement")
+	}
+
+	bare := t.TempDir()
+	runTestGit(t, bare, "init", "--bare", "-b", "main")
+	repo := t.TempDir()
+	initTestRepo(t, repo)
 	runTestGit(t, repo, "remote", "add", "origin", bare)
 
-	dir, base, err := CreateWorktree(repo, dataDir, "t1", "sillage/100-demo")
-	if err != nil {
-		t.Fatalf("CreateWorktree: %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(dir, "feature.txt"), []byte("contenu\n"), 0o644); err != nil {
-		t.Fatalf("écriture feature.txt impossible : %v", err)
-	}
-
-	s, err := NewStore(t.TempDir())
+	dataDir := t.TempDir()
+	store, err := NewStore(dataDir)
 	if err != nil {
 		t.Fatalf("NewStore: %v", err)
 	}
-	project, err := s.AddProject("demo", "", "", []Repo{{Path: repo}}, nil)
+	srv := NewServer(store, "", dataDir, fstest.MapFS{})
+	project, err := store.AddProject("demo", "", "", []Repo{{Name: "demo", Path: repo}}, nil, &delivery)
 	if err != nil {
 		t.Fatalf("AddProject: %v", err)
 	}
-	card, err := s.AddCard(project.ID, "Carte", "", "")
+	card, err := store.AddCard(project.ID, "Refonte auth", "", "")
 	if err != nil {
 		t.Fatalf("AddCard: %v", err)
 	}
-	taskID, ref := s.ReserveTaskID()
-	task, err := s.CreateTask(taskID, ref, card.ID, project.ID, "Demo", "echo", "sillage/100-demo", base, dir, "demo")
+	return &deliveryFixture{srv: srv, repo: repo, bare: bare, dataDir: dataDir, project: project, card: card}
+}
+
+// addTask crée une tâche sur la branche du chantier (même chemin que
+// handleCreateTask, sans lancer d'agent), y écrit un fichier, et la met en
+// revue. Retourne l'identifiant de la tâche et la branche du chantier.
+func (f *deliveryFixture) addTask(t *testing.T, title, file, content string) (string, CardBranch) {
+	t.Helper()
+	cb, err := f.srv.ensureCardBranch(f.card, f.project, f.project.Repos[0])
 	if err != nil {
+		t.Fatalf("ensureCardBranch: %v", err)
+	}
+	id, ref := f.srv.store.ReserveTaskID()
+	branch := fmt.Sprintf("sillage/%d-%s", ref, Slugify(title))
+	dir, base, err := CreateWorktree(f.repo, f.dataDir, id, branch, cb.Branch)
+	if err != nil {
+		t.Fatalf("CreateWorktree: %v", err)
+	}
+	if base != cb.Branch {
+		t.Fatalf("la tâche devrait partir de la branche du chantier %q, reçu %q", cb.Branch, base)
+	}
+	if _, err := f.srv.store.CreateTask(id, ref, f.card.ID, f.project.ID, title, "echo", branch, base, dir, "demo"); err != nil {
 		t.Fatalf("CreateTask: %v", err)
 	}
-	if _, err := s.UpdateTask(taskID, func(tk *Task) { tk.Status = "review" }); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, file), []byte(content), 0o644); err != nil {
+		t.Fatalf("écriture %s impossible : %v", file, err)
+	}
+	// filesCount : ce que le runner calcule à la fin d'un agent. Une tâche à
+	// zéro fichier n'est jamais acceptée automatiquement (voir
+	// autoAcceptMergedTasks), il faut donc le renseigner ici comme en vrai.
+	if _, err := f.srv.store.UpdateTask(id, func(tk *Task) { tk.Status = "review"; tk.FilesCount = 1 }); err != nil {
 		t.Fatalf("UpdateTask: %v", err)
 	}
-	task, _ = s.GetTask(taskID)
+	return id, cb
+}
+
+func (f *deliveryFixture) accept(t *testing.T, taskID string) *httptest.ResponseRecorder {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodPost, "/", nil)
+	req.SetPathValue("id", taskID)
+	w := httptest.NewRecorder()
+	f.srv.handleAccept(w, req)
+	return w
+}
+
+func (f *deliveryFixture) ship(t *testing.T, body string) *httptest.ResponseRecorder {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(body))
+	req.SetPathValue("id", f.card.ID)
+	w := httptest.NewRecorder()
+	f.srv.handleCardShip(w, req)
+	return w
+}
+
+// delivery appelle l'aperçu de livraison (qui constate au passage les branches
+// fusionnées à la main) et retourne la réponse décodée.
+func (f *deliveryFixture) delivery(t *testing.T) DeliveryPreview {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.SetPathValue("id", f.card.ID)
+	w := httptest.NewRecorder()
+	f.srv.handleCardDelivery(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("aperçu de livraison : attendu 200, reçu %d (%s)", w.Code, w.Body.String())
+	}
+	var prev DeliveryPreview
+	if err := json.Unmarshal(w.Body.Bytes(), &prev); err != nil {
+		t.Fatalf("aperçu illisible : %v", err)
+	}
+	return prev
+}
+
+// TestAcceptThenShipWorkstream couvre le flux complet du nouveau modèle :
+// la tâche part de la branche du chantier, l'acceptation y fusionne son
+// travail, la livraison pousse cette branche (une seule action sortante), et
+// le chantier ne devient livrable que quand tout est accepté ou refusé.
+func TestAcceptThenShipWorkstream(t *testing.T) {
+	f := newDeliveryFixture(t, Delivery{Mode: "pr"})
+
+	taskID, cb := f.addTask(t, "Ajoute une feature", "feature.txt", "contenu\n")
+	if !strings.HasPrefix(cb.Branch, "sillage/ws-") {
+		t.Fatalf("nom de branche de chantier inattendu : %q", cb.Branch)
+	}
+
+	// Tant que la tâche est en revue, la livraison est bloquée des deux côtés.
+	card, _ := f.srv.store.GetCard(f.card.ID)
+	if card.ShipReady || card.ShipBlocker != "tasks-pending" {
+		t.Fatalf("chantier attendu non livrable (tasks-pending), reçu ready=%v blocker=%q", card.ShipReady, card.ShipBlocker)
+	}
+	if w := f.ship(t, `{"confirm":true}`); w.Code != http.StatusConflict {
+		t.Fatalf("livraison avec une tâche en revue : attendu 409, reçu %d (%s)", w.Code, w.Body.String())
+	}
+	if w := f.ship(t, `{"confirm":false}`); w.Code != http.StatusBadRequest {
+		t.Fatalf("livraison sans confirmation : attendu 400, reçu %d", w.Code)
+	}
+
+	if w := f.accept(t, taskID); w.Code != http.StatusOK {
+		t.Fatalf("accept: attendu 200, reçu %d (%s)", w.Code, w.Body.String())
+	}
+	if task, _ := f.srv.store.GetTask(taskID); task.Status != "accepted" {
+		t.Fatalf("statut attendu 'accepted', reçu %q", task.Status)
+	}
+	// Le travail de la tâche est dans la branche du chantier.
+	if _, err := os.Stat(filepath.Join(cb.WorktreeDir, "feature.txt")); err != nil {
+		t.Fatalf("feature.txt devrait être fusionné dans la branche du chantier : %v", err)
+	}
+	msgs := f.srv.store.GetMessages(taskID)
+	last := msgs[len(msgs)-1]
+	if last.Text != "[accepted:"+cb.Branch+"]" || last.Author != "agent" || last.AuthorName != "" {
+		t.Fatalf("message marqueur d'acceptation inattendu : %+v", last)
+	}
+
+	card, _ = f.srv.store.GetCard(f.card.ID)
+	if !card.ShipReady {
+		t.Fatalf("chantier attendu livrable, blocage %q", card.ShipBlocker)
+	}
+	if card.Column != "doing" {
+		t.Fatalf("colonne attendue 'doing' avant livraison, reçue %q", card.Column)
+	}
+
+	w := f.ship(t, `{"confirm":true}`)
+	if w.Code != http.StatusOK {
+		t.Fatalf("ship: attendu 200, reçu %d (%s)", w.Code, w.Body.String())
+	}
+	var resp ShipResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("réponse de livraison illisible : %v", err)
+	}
+	if len(resp.Repos) != 1 || !resp.Repos[0].Pushed || resp.Repos[0].Error != "" {
+		t.Fatalf("résultat de livraison inattendu : %+v", resp.Repos)
+	}
+	// La branche du chantier est réellement sur le remote.
+	if out := runTestGit(t, f.bare, "branch", "--list", cb.Branch); !strings.Contains(out, "ws-") {
+		t.Fatalf("la branche du chantier devrait être poussée, reçu : %q", out)
+	}
+	card, _ = f.srv.store.GetCard(f.card.ID)
+	if card.Column != "done" {
+		t.Fatalf("colonne attendue 'done' après livraison, reçue %q", card.Column)
+	}
+	if len(card.Branches) != 1 || card.Branches[0].ShippedAt == nil {
+		t.Fatalf("shippedAt devrait être renseigné : %+v", card.Branches)
+	}
+}
+
+// TestAcceptConflictKeepsTaskInReview : deux tâches du même chantier qui
+// touchent la même ligne. La seconde acceptation échoue en 409, la tâche RESTE
+// en revue, et un message marqueur de conflit est ajouté au fil.
+func TestAcceptConflictKeepsTaskInReview(t *testing.T) {
+	f := newDeliveryFixture(t, Delivery{Mode: "pr"})
+
+	first, _ := f.addTask(t, "Première", "README.md", "# projet\n\nversion A\n")
+	second, _ := f.addTask(t, "Seconde", "README.md", "# projet\n\nversion B\n")
+
+	if w := f.accept(t, first); w.Code != http.StatusOK {
+		t.Fatalf("première acceptation : attendu 200, reçu %d (%s)", w.Code, w.Body.String())
+	}
+	w := f.accept(t, second)
+	if w.Code != http.StatusConflict {
+		t.Fatalf("seconde acceptation : attendu 409, reçu %d (%s)", w.Code, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), "merge conflict") {
+		t.Fatalf("message de conflit attendu, reçu %q", w.Body.String())
+	}
+	task, _ := f.srv.store.GetTask(second)
 	if task.Status != "review" {
-		t.Fatalf("précondition : la tâche devrait être en review")
+		t.Fatalf("la tâche en conflit doit rester en revue, reçu %q", task.Status)
+	}
+	msgs := f.srv.store.GetMessages(second)
+	last := msgs[len(msgs)-1]
+	if !strings.HasPrefix(last.Text, "[merge-conflict:") || !strings.Contains(last.Text, "README.md") {
+		t.Fatalf("message marqueur de conflit inattendu : %+v", last)
+	}
+	// L'arbre du chantier est intact (merge --abort), donc livrable.
+	card, _ := f.srv.store.GetCard(f.card.ID)
+	if card.ShipBlocker != "tasks-pending" {
+		t.Fatalf("blocage attendu 'tasks-pending' (la seconde tâche est encore en revue), reçu %q", card.ShipBlocker)
+	}
+}
+
+// TestShipMergeModeNeverPushes couvre le mode "merge" : la branche du chantier
+// est fusionnée en fast-forward dans la branche de destination du dépôt de
+// travail, et RIEN n'est poussé (le remote reste vide).
+func TestShipMergeModeNeverPushes(t *testing.T) {
+	f := newDeliveryFixture(t, Delivery{Mode: "merge", Target: "main"})
+
+	taskID, _ := f.addTask(t, "Ajoute une feature", "feature.txt", "contenu\n")
+	if w := f.accept(t, taskID); w.Code != http.StatusOK {
+		t.Fatalf("accept: attendu 200, reçu %d (%s)", w.Code, w.Body.String())
 	}
 
-	// Reproduit le flux de handleShip : ship accepté depuis "review".
-	output, err := Ship(task.WorktreeDir, task.Branch, task.Title)
-	if err != nil {
-		t.Fatalf("Ship: %v (output=%s)", err, output)
+	w := f.ship(t, `{"confirm":true}`)
+	if w.Code != http.StatusOK {
+		t.Fatalf("ship: attendu 200, reçu %d (%s)", w.Code, w.Body.String())
 	}
-	task, err = s.UpdateTask(taskID, func(tk *Task) { tk.Status = "shipped" })
-	if err != nil {
-		t.Fatalf("UpdateTask (shipped): %v", err)
+	var resp ShipResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("réponse de livraison illisible : %v", err)
 	}
-	if task.Status != "shipped" {
-		t.Fatalf("statut attendu 'shipped', reçu %q", task.Status)
+	if len(resp.Repos) != 1 || !resp.Repos[0].Merged || resp.Repos[0].Pushed || resp.Repos[0].Error != "" {
+		t.Fatalf("résultat de livraison inattendu : %+v", resp.Repos)
+	}
+	// La fusion a bien eu lieu dans le dépôt de travail...
+	if _, err := os.Stat(filepath.Join(f.repo, "feature.txt")); err != nil {
+		t.Fatalf("feature.txt devrait être fusionné dans main : %v", err)
+	}
+	// ...et absolument rien n'a été poussé.
+	if out := strings.TrimSpace(runTestGit(t, f.bare, "branch", "--list")); out != "" {
+		t.Fatalf("le mode merge ne doit jamais pousser, branches distantes : %q", out)
+	}
+}
+
+// TestMergeLocalRefusesWhenTargetDiverged : la fusion locale n'accepte que le
+// fast-forward, et ne tente jamais de résoudre quoi que ce soit.
+func TestMergeLocalRefusesWhenTargetDiverged(t *testing.T) {
+	f := newDeliveryFixture(t, Delivery{Mode: "merge", Target: "main"})
+
+	taskID, cb := f.addTask(t, "Ajoute une feature", "feature.txt", "contenu\n")
+	if w := f.accept(t, taskID); w.Code != http.StatusOK {
+		t.Fatalf("accept: attendu 200, reçu %d (%s)", w.Code, w.Body.String())
+	}
+	// main avance de son côté : plus de fast-forward possible.
+	if err := os.WriteFile(filepath.Join(f.repo, "autre.txt"), []byte("divergence\n"), 0o644); err != nil {
+		t.Fatalf("écriture autre.txt impossible : %v", err)
+	}
+	runTestGit(t, f.repo, "add", "-A")
+	runTestGit(t, f.repo, "commit", "-m", "divergence")
+
+	_, err := MergeLocal(f.repo, f.dataDir, f.card.ID, "demo", "main", cb.Branch)
+	if !errors.Is(err, ErrTargetDiverged) {
+		t.Fatalf("erreur attendue ErrTargetDiverged, reçue %v", err)
+	}
+}
+
+// TestAutoAcceptBranchMergedByHand : une branche de tâche fusionnée à la main
+// dans la branche du chantier (hors de Sillage) est constatée à la lecture de
+// l'aperçu de livraison, et la tâche passe « acceptée » avec son marqueur.
+func TestAutoAcceptBranchMergedByHand(t *testing.T) {
+	f := newDeliveryFixture(t, Delivery{Mode: "pr"})
+
+	taskID, cb := f.addTask(t, "Fusionnée à la main", "manuel.txt", "contenu\n")
+
+	// Du travail non commité : rien ne doit être conclu automatiquement.
+	if prev := f.delivery(t); prev.Counts.Pending != 1 {
+		t.Fatalf("une tâche avec un worktree sale ne doit pas être acceptée : %+v", prev.Counts)
+	}
+	if task, _ := f.srv.store.GetTask(taskID); task.Status != "review" {
+		t.Fatalf("statut attendu 'review', reçu %q", task.Status)
 	}
 
-	msg, task, err := s.AddMessage(task.ID, "agent", "", "[shipped:"+task.Branch+"]")
-	if err != nil {
-		t.Fatalf("AddMessage: %v", err)
+	// L'humain commite puis fusionne lui-même, hors de Sillage.
+	task, _ := f.srv.store.GetTask(taskID)
+	runTestGit(t, task.WorktreeDir, "add", "-A")
+	runTestGit(t, task.WorktreeDir, "commit", "-m", "à la main")
+	runTestGit(t, cb.WorktreeDir, "merge", "--no-ff", "-m", "merge manuel", task.Branch)
+
+	// Une tâche qui n'a rien produit n'est jamais conclue automatiquement.
+	if _, err := f.srv.store.UpdateTask(taskID, func(tk *Task) { tk.FilesCount = 0 }); err != nil {
+		t.Fatalf("UpdateTask: %v", err)
 	}
-	wantText := "[shipped:sillage/100-demo]"
-	if msg.Author != "agent" || msg.AuthorName != "" || msg.Text != wantText {
-		t.Fatalf("message marqueur inattendu : %+v", msg)
+	if prev := f.delivery(t); prev.Counts.Accepted != 0 {
+		t.Fatalf("une tâche sans fichier ne doit pas être acceptée automatiquement : %+v", prev.Counts)
+	}
+	if _, err := f.srv.store.UpdateTask(taskID, func(tk *Task) { tk.FilesCount = 1 }); err != nil {
+		t.Fatalf("UpdateTask: %v", err)
 	}
 
-	if branchURL := githubBranchURL(task.WorktreeDir, task.Branch); branchURL != "" {
-		t.Fatalf("branchUrl attendu vide (remote non-GitHub), reçu %q", branchURL)
+	prev := f.delivery(t)
+	if prev.Counts.Accepted != 1 || prev.Counts.Pending != 0 {
+		t.Fatalf("la tâche fusionnée à la main devrait être acceptée : %+v", prev.Counts)
+	}
+	if task, _ := f.srv.store.GetTask(taskID); task.Status != "accepted" {
+		t.Fatalf("statut attendu 'accepted', reçu %q", task.Status)
+	}
+	msgs := f.srv.store.GetMessages(taskID)
+	if last := msgs[len(msgs)-1]; last.Text != "[auto-accepted:"+cb.Branch+"]" {
+		t.Fatalf("message marqueur attendu [auto-accepted:...], reçu %+v", last)
+	}
+	// Le chantier est livrable, et la livraison n'a pas été déclenchée.
+	if !prev.Ready {
+		t.Fatalf("chantier attendu livrable, blocage %q", prev.Blocker)
+	}
+	if out := strings.TrimSpace(runTestGit(t, f.bare, "branch", "--list")); out != "" {
+		t.Fatalf("aucune livraison ne devait avoir lieu, branches distantes : %q", out)
+	}
+}
+
+// TestAcceptLegacyTaskCreatesWorkstreamBranch : une tâche créée avant les
+// branches de chantier (aucune `branches` sur la carte, branche partie de
+// `main`) reste acceptable : la branche du chantier est créée à la volée et le
+// travail en cours n'est pas perdu.
+func TestAcceptLegacyTaskCreatesWorkstreamBranch(t *testing.T) {
+	f := newDeliveryFixture(t, Delivery{Mode: "pr"})
+
+	// Reproduit l'ancien modèle : branche de tâche partie de main, carte sans
+	// branche de chantier.
+	id, ref := f.srv.store.ReserveTaskID()
+	branch := fmt.Sprintf("sillage/%d-ancienne", ref)
+	dir, base, err := CreateWorktree(f.repo, f.dataDir, id, branch, "main")
+	if err != nil {
+		t.Fatalf("CreateWorktree: %v", err)
+	}
+	if _, err := f.srv.store.CreateTask(id, ref, f.card.ID, f.project.ID, "Ancienne tâche", "echo", branch, base, dir, "demo"); err != nil {
+		t.Fatalf("CreateTask: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "ancien.txt"), []byte("travail en cours\n"), 0o644); err != nil {
+		t.Fatalf("écriture impossible : %v", err)
+	}
+	if _, err := f.srv.store.UpdateTask(id, func(tk *Task) { tk.Status = "review"; tk.FilesCount = 1 }); err != nil {
+		t.Fatalf("UpdateTask: %v", err)
+	}
+	if card, _ := f.srv.store.GetCard(f.card.ID); len(card.Branches) != 0 {
+		t.Fatalf("précondition : la carte ne devrait avoir aucune branche de chantier")
+	}
+
+	if w := f.accept(t, id); w.Code != http.StatusOK {
+		t.Fatalf("accept: attendu 200, reçu %d (%s)", w.Code, w.Body.String())
+	}
+	card, _ := f.srv.store.GetCard(f.card.ID)
+	if len(card.Branches) != 1 {
+		t.Fatalf("la branche du chantier devrait avoir été créée : %+v", card.Branches)
+	}
+	if _, err := os.Stat(filepath.Join(card.Branches[0].WorktreeDir, "ancien.txt")); err != nil {
+		t.Fatalf("le travail de la tâche devrait être fusionné dans la branche du chantier : %v", err)
+	}
+	if task, _ := f.srv.store.GetTask(id); task.Status != "accepted" {
+		t.Fatalf("statut attendu 'accepted', reçu %q", task.Status)
+	}
+}
+
+// TestShipAgainAfterNewWork : un chantier livré redevient livrable dès qu'une
+// tâche nouvelle y est acceptée, et la seconde livraison ne pousse que le neuf
+// en réutilisant la pull request existante.
+func TestShipAgainAfterNewWork(t *testing.T) {
+	f := newDeliveryFixture(t, Delivery{Mode: "pr"})
+
+	first, cb := f.addTask(t, "Première", "un.txt", "un\n")
+	if w := f.accept(t, first); w.Code != http.StatusOK {
+		t.Fatalf("accept: attendu 200, reçu %d (%s)", w.Code, w.Body.String())
+	}
+	if w := f.ship(t, `{"confirm":true}`); w.Code != http.StatusOK {
+		t.Fatalf("ship: attendu 200, reçu %d (%s)", w.Code, w.Body.String())
+	}
+	card, _ := f.srv.store.GetCard(f.card.ID)
+	if card.Column != "done" || card.Branches[0].ShippedAt == nil {
+		t.Fatalf("chantier attendu livré : colonne %q, shippedAt %v", card.Column, card.Branches[0].ShippedAt)
+	}
+	// Plus rien à livrer : une seconde livraison ne fait rien.
+	if prev := f.delivery(t); prev.Repos[0].Pending != 0 {
+		t.Fatalf("aucun commit ne devrait rester à livrer, reçu %d", prev.Repos[0].Pending)
+	}
+
+	// Nouvelle tâche sur un chantier livré : il repart en travail.
+	second, _ := f.addTask(t, "Seconde", "deux.txt", "deux\n")
+	card, _ = f.srv.store.GetCard(f.card.ID)
+	if card.Branches[0].ShippedAt != nil {
+		t.Fatalf("le chantier ne devrait plus être marqué livré après une nouvelle tâche")
+	}
+	if card.Column != "doing" || card.ShipBlocker != "tasks-pending" {
+		t.Fatalf("chantier attendu en cours : colonne %q, blocage %q", card.Column, card.ShipBlocker)
+	}
+
+	if w := f.accept(t, second); w.Code != http.StatusOK {
+		t.Fatalf("accept (2e): attendu 200, reçu %d (%s)", w.Code, w.Body.String())
+	}
+	prev := f.delivery(t)
+	if !prev.Ready || prev.Repos[0].Pending == 0 {
+		t.Fatalf("chantier attendu livrable à nouveau : ready=%v pending=%d", prev.Ready, prev.Repos[0].Pending)
+	}
+
+	w := f.ship(t, `{"confirm":true}`)
+	if w.Code != http.StatusOK {
+		t.Fatalf("ship (2e): attendu 200, reçu %d (%s)", w.Code, w.Body.String())
+	}
+	var resp ShipResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("réponse de livraison illisible : %v", err)
+	}
+	if !resp.Repos[0].Pushed || resp.Repos[0].Error != "" {
+		t.Fatalf("seconde livraison inattendue : %+v", resp.Repos[0])
+	}
+	// Le remote a bien reçu le nouveau commit.
+	out := runTestGit(t, f.bare, "log", "--oneline", cb.Branch)
+	if !strings.Contains(out, "Seconde") {
+		t.Fatalf("le travail de la seconde tâche devrait être poussé, reçu : %q", out)
+	}
+}
+
+// TestParseRemoteAndForgeURLs couvre la détection de forge et les URL de repli
+// (pré-remplies, en lecture seule) pour GitHub et GitLab, sous-groupes compris.
+func TestParseRemoteAndForgeURLs(t *testing.T) {
+	cases := []struct {
+		in                 string
+		wantHost, wantPath string
+		wantOk             bool
+	}{
+		{"git@github.com:acme/demo.git", "github.com", "acme/demo", true},
+		{"https://github.com/acme/demo", "github.com", "acme/demo", true},
+		{"git@gitlab.com:acme/groupe/demo.git", "gitlab.com", "acme/groupe/demo", true},
+		{"https://gitlab.example.org:8443/acme/demo.git", "gitlab.example.org", "acme/demo", true},
+		{"ssh://git@gitlab.com/acme/demo.git", "gitlab.com", "acme/demo", true},
+		{"/tmp/local-bare", "", "", false},
+		{"", "", "", false},
+	}
+	for _, c := range cases {
+		host, path, ok := ParseRemote(c.in)
+		if ok != c.wantOk || host != c.wantHost || path != c.wantPath {
+			t.Errorf("ParseRemote(%q) = (%q, %q, %v), attendu (%q, %q, %v)",
+				c.in, host, path, ok, c.wantHost, c.wantPath, c.wantOk)
+		}
+	}
+
+	if got, want := GithubCompareURL("github.com", "acme/demo", "main", "sillage/ws-1-x"),
+		"https://github.com/acme/demo/compare/main...sillage/ws-1-x?expand=1"; got != want {
+		t.Errorf("GithubCompareURL = %q, attendu %q", got, want)
+	}
+	if got, want := GitlabNewMRURL("gitlab.com", "acme/groupe/demo", "main", "sillage/ws-1-x"),
+		"https://gitlab.com/acme/groupe/demo/-/merge_requests/new?merge_request[source_branch]=sillage%2Fws-1-x&merge_request[target_branch]=main"; got != want {
+		t.Errorf("GitlabNewMRURL = %q, attendu %q", got, want)
+	}
+}
+
+// TestDetectForgeFromRemote vérifie la détection du fournisseur depuis le
+// remote origin d'un dépôt réel (lecture seule, aucune commande réseau).
+func TestDetectForgeFromRemote(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git non disponible dans cet environnement")
+	}
+	cases := []struct{ remote, want string }{
+		{"git@github.com:acme/demo.git", "github"},
+		{"https://gitlab.com/acme/demo.git", "gitlab"},
+		// GitLab auto-hébergé : reconnu au nom d'hôte, comme prévu.
+		{"git@gitlab.self-hosted.example:acme/demo.git", "gitlab"},
+		{"git@bitbucket.org:acme/demo.git", ""},
+		{"", ""},
+	}
+	for _, c := range cases {
+		dir := t.TempDir()
+		runTestGit(t, dir, "init")
+		if c.remote != "" {
+			runTestGit(t, dir, "remote", "add", "origin", c.remote)
+		}
+		if got := DetectForge(dir).Provider; got != c.want {
+			t.Errorf("DetectForge(remote=%q) = %q, attendu %q", c.remote, got, c.want)
+		}
 	}
 }
 
@@ -306,7 +728,7 @@ func TestDeleteTaskInterruptsRunningAgentAndRemovesWorktree(t *testing.T) {
 	runTestGit(t, repo, "commit", "-m", "initial")
 
 	const branch = "sillage/100-demo"
-	dir, base, err := CreateWorktree(repo, dataDir, "t1", branch)
+	dir, base, err := CreateWorktree(repo, dataDir, "t1", branch, "")
 	if err != nil {
 		t.Fatalf("CreateWorktree: %v", err)
 	}
@@ -315,7 +737,7 @@ func TestDeleteTaskInterruptsRunningAgentAndRemovesWorktree(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewStore: %v", err)
 	}
-	project, err := s.AddProject("demo", "", "", []Repo{{Name: "demo", Path: repo}}, nil)
+	project, err := s.AddProject("demo", "", "", []Repo{{Name: "demo", Path: repo}}, nil, nil)
 	if err != nil {
 		t.Fatalf("AddProject: %v", err)
 	}

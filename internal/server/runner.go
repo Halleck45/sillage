@@ -77,7 +77,7 @@ func (r *Runner) publishTokens() {
 func (r *Runner) publishCards(projectID string) {
 	r.hub.Publish(Event{Name: "cards", Data: r.store.CardsByProject(projectID)})
 }
-func (r *Runner) publishProject(p Project) { r.hub.Publish(Event{Name: "project", Data: p}) }
+func (r *Runner) publishProject(p ProjectOut) { r.hub.Publish(Event{Name: "project", Data: p}) }
 func (r *Runner) publishWorkspace(w WorkspaceStatus) {
 	r.hub.Publish(Event{Name: "workspace", Data: w})
 }
@@ -201,6 +201,20 @@ func (r *Runner) startQueued(taskID, text string) {
 	go r.run(task, agent, handle, r.prepareCliInput(task, text))
 }
 
+// markerPrefixes liste les préfixes des messages marqueurs posés par le
+// backend (le frontend les remplace par une ligne système localisée). Ce ne
+// sont pas des tours de conversation : ils sont exclus du transcript rejoué.
+var markerPrefixes = []string{"[reassigned:", "[accepted:", "[auto-accepted:", "[merge-conflict:"}
+
+func isMarkerMessage(text string) bool {
+	for _, prefix := range markerPrefixes {
+		if strings.HasPrefix(text, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
 // buildTranscript rejoue la conversation pour un agent démarré sans session :
 // une ligne par message, marqueurs système exclus, chaque message tronqué à
 // 600 caractères et l'ensemble limité aux ~6000 derniers caractères (les
@@ -209,7 +223,7 @@ func buildTranscript(msgs []Message) string {
 	const perMsg, total = 600, 6000
 	var lines []string
 	for _, m := range msgs {
-		if strings.HasPrefix(m.Text, "[reassigned:") {
+		if isMarkerMessage(m.Text) {
 			continue
 		}
 		who := "assistant"
@@ -351,8 +365,34 @@ func (r *Runner) DeleteTask(taskID string) error {
 	return nil
 }
 
+// IsRunning indique qu'un process d'agent est en cours pour cette tâche.
+// Utilisé avant toute décision automatique sur son worktree (voir
+// l'acceptation automatique des branches déjà fusionnées).
+func (r *Runner) IsRunning(taskID string) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	_, ok := r.procs[taskID]
+	return ok
+}
+
+// removeCardWorktrees retire les worktrees des branches de chantier d'une
+// carte (un par dépôt touché). Best-effort, et la branche n'est JAMAIS
+// supprimée : elle a pu être poussée ou fusionnée.
+func (r *Runner) removeCardWorktrees(card Card) {
+	project, ok := r.store.GetProject(card.ProjectID)
+	if !ok {
+		return
+	}
+	for _, b := range card.Branches {
+		if repo, ok := repoByName(project, b.RepoName); ok {
+			RemoveWorktree(repo.Path, b.WorktreeDir)
+		}
+	}
+}
+
 // DeleteCard supprime une carte (chantier) : cascade sur ses tâches (même
-// traitement que deleteTaskQuiet, chacune), puis supprime la carte elle-même.
+// traitement que deleteTaskQuiet, chacune), retire les worktrees de ses
+// branches de chantier, puis supprime la carte elle-même.
 // Publie taskDeleted par tâche, cards, agents, tokens, puis cardDeleted.
 func (r *Runner) DeleteCard(cardID string) error {
 	card, ok := r.store.GetCard(cardID)
@@ -363,6 +403,7 @@ func (r *Runner) DeleteCard(cardID string) error {
 	for _, t := range tasks {
 		_, _ = r.deleteTaskQuiet(t.ID) // best-effort : la cascade continue même si une tâche échoue
 	}
+	r.removeCardWorktrees(card)
 	if _, err := r.store.DeleteCard(cardID); err != nil {
 		return err
 	}
@@ -388,6 +429,7 @@ func (r *Runner) DeleteProject(projectID string) error {
 		for _, t := range r.store.TasksByCard(c.ID) {
 			_, _ = r.deleteTaskQuiet(t.ID)
 		}
+		r.removeCardWorktrees(c)
 		_, _ = r.store.DeleteCard(c.ID)
 	}
 	if _, err := r.store.DeleteProject(projectID); err != nil {

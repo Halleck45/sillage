@@ -13,13 +13,14 @@ Sillage runs your agents in isolated git worktrees, streams their activity live,
 
 ## Why
 
-Working with several AI agents quickly turns into tab hell: five terminals, three repos, "wait, which task was I reviewing?". Sillage is built around one idea: **reduce mental load**. Each project is a kanban; each card is a small goal; each task is one agent working on one branch. You review, you approve, you ship. The wake (sillage, in French) of your work stays visible: branches, diffs, deliverables.
+Working with several AI agents quickly turns into tab hell: five terminals, three repos, "wait, which task was I reviewing?". Sillage is built around one idea: **reduce mental load**. Each project is a kanban; each workstream is a small goal and a feature branch; each task is one agent working on its own branch. You review a task and accept it, then you ship the workstream: one outbound action, once. The wake (sillage, in French) of your work stays visible: branches, diffs, deliverables.
 
 ## Features
 
 - **Delegate, then watch**: a kanban of workstreams per project, tasks like pull requests, live agent activity streamed to your browser.
-- **Agents can never push**: each task runs in an isolated git worktree; shipping is one confirmed click, and `git push` exists in exactly one place in the code, behind that click.
-- **Real conversations**: chat with the agent mid-task, review the colored diff, open the PR. Messages sent while it works are queued, context never gets lost.
+- **Agents can never push**: each task runs in an isolated git worktree; accepting a task merges it locally into the workstream branch, and shipping that branch is the only outbound action, behind one confirmed click. `git push` exists in exactly one place in the code.
+- **Ship your way**: per project, shipping means opening a pull request (GitHub, GitLab) or merging locally into the branch of your choice, never pushing. Branches you merged by hand are noticed, and a shipped workstream can be picked up again.
+- **Real conversations**: chat with the agent mid-task, review the colored diff. Messages sent while it works are queued, context never gets lost.
 - **Layered context**: agent prompt + project context + workstream context. Write things once, at the right level.
 - **Token usage, out of the way**: no counters cluttering the kanban or the task view; per-project token totals live in Settings > Statistics.
 - **Your workspace is a git repo** (optional): conversations, projects and settings versioned locally, synced to a private remote to follow you across machines.

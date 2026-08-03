@@ -21,7 +21,9 @@ Le frontend est embarqué via `//go:embed web` : toute modification de `web/` de
 
 ## Ce que fait le produit
 
-Sillage pilote des agents IA de code (Claude Code, Codex CLI) depuis un kanban web. Un projet regroupe un ou plusieurs dépôts git ; une carte est un objectif ; une tâche est un agent qui travaille dans un **worktree git dédié** sur une branche `sillage/<ref>-<slug>`. L'humain relit, accepte, livre.
+Sillage pilote des agents IA de code (Claude Code, Codex CLI) depuis un kanban web. Un projet regroupe un ou plusieurs dépôts git ; un chantier (carte) est un objectif **et une branche de feature** (`sillage/ws-<ref>-<slug>`, un worktree dédié par dépôt touché) ; une tâche est un agent qui travaille dans son propre **worktree git dédié** sur une branche `sillage/<ref>-<slug>` partant de celle du chantier.
+
+L'humain relit une tâche et l'accepte (fusion locale dans la branche du chantier) ou la refuse ; puis il livre le chantier, seule action sortante du produit. Voir `docs/SPEC-LIVRAISON.md`.
 
 Pour tester le flux complet sans coût, utiliser l'agent seedé Écho 🧪 (`cli:"fake"`, simulé, sans process externe).
 
@@ -29,8 +31,8 @@ Pour tester le flux complet sans coût, utiliser l'agent seedé Écho 🧪 (`cli
 
 Ce sont les promesses de sécurité du produit (voir `CONTRIBUTING.md`) :
 
-1. **`git push` n'existe qu'à deux endroits, tous deux dans `internal/server/git.go`** : `Ship()` (branche d'une tâche) et `SyncPush()` (synchronisation de l'espace de données, jamais un dépôt de projet). Aucune entrée capable de pousser dans les allowlists d'outils des agents, aucun flag de contournement de permissions (`--dangerously-skip-permissions` interdit).
-2. **Les actions sortantes exigent `{"confirm": true}`** sur une requête authentifiée : ship, ouverture de PR, sync de l'espace de travail.
+1. **`git push` n'existe qu'à deux endroits, tous deux dans `internal/server/git.go`** : `Ship()` (branche d'un chantier) et `SyncPush()` (synchronisation de l'espace de données, jamais un dépôt de projet). Aucune entrée capable de pousser dans les allowlists d'outils des agents, aucun flag de contournement de permissions (`--dangerously-skip-permissions` interdit). Le mode de livraison « fusion locale » (`MergeLocal`) ne pousse jamais et n'accepte que le fast-forward.
+2. **Les actions sortantes exigent `{"confirm": true}`** sur une requête authentifiée : livraison d'un chantier (la seule action sortante côté projets), sync de l'espace de travail.
 3. Le serveur reste sûr sur un portable : localhost par défaut, mot de passe bcrypt, rate-limit du login, `Content-Type: application/json` obligatoire sur les mutations (protection CSRF avec SameSite=Lax).
 4. Une seule dépendance Go externe : `golang.org/x/crypto`. En ajouter une demande une très bonne raison.
 
@@ -38,7 +40,7 @@ Ce sont les promesses de sécurité du produit (voir `CONTRIBUTING.md`) :
 
 - `docs/SPEC-API.md` : contrat HTTP/JSON/SSE complet (modèles, endpoints, cycle de vie des tâches, événements SSE, règles UI). **À lire avant toute modification de l'API et à mettre à jour dans le même commit** si le contrat change.
 - `docs/SPEC-BACKEND.md` : internes (store, auth, SSE, git, adaptateurs d'agents, seed).
-- `docs/SPEC-V2.md`, `SPEC-V3.md`, `SPEC-V3-1.md`, `SPEC-V3-2.md` : specs de fournées successives, historiques (contexte du « pourquoi »), pas des références courantes.
+- `docs/SPEC-LIVRAISON.md` : spec de fournée du modèle de livraison (chantier = branche de feature, acceptation, Ship de chantier, réglage de livraison). Contexte du « pourquoi » et lots restants ; le contrat courant reste SPEC-API.md.
 
 ## Architecture
 
@@ -51,7 +53,8 @@ internal/server/
   store.go                  état en mémoire + persistance atomique + compteurs dérivés
   handlers.go               routage (net/http ServeMux avec patterns méthode+chemin), middlewares
   runner.go                 adaptateurs claude / codex / fake, un process max par tâche
-  git.go                    worktrees, parser de diff unifié, commits, Ship + SyncPush (les deux push), OpenPR
+  git.go                    worktrees (chantier + tâche), parser de diff unifié, commits, fusions
+                            (MergeBranch, MergeLocal), Ship + SyncPush (les deux push), OpenPR (gh/glab)
   workspace.go              dataDir en dépôt git optionnel (setup, clone, commit auto throttlé)
   auth.go                   bcrypt, sessions en mémoire, rate-limit login
   sse.go                    Hub pub/sub
@@ -63,9 +66,9 @@ web/                        index.html + style.css + app.js (SPA vanilla, zéro 
 `Store` est à la fois l'état en mémoire et le format sur disque : ses champs exportés sont sérialisés tel quel dans `<dataDir>/state.json`. Points structurants :
 
 - Un `sync.Mutex` protège tout. Les helpers `recomputeCard/Project/Agent/All` doivent être appelés **verrou tenu** et recalculent les champs dérivés (progression, compteurs, `unread`, tokens agrégés, `active`).
-- `recomputeCard` porte aussi une règle produit : la colonne de la carte suit ses tâches (toutes terminales → `done` ; du travail actif → `doing`).
+- `recomputeCard` porte aussi deux règles produit : l'état du bouton de livraison (`ShipReady`/`ShipBlocker`, voir `shipReadiness`) et la colonne de la carte, qui ne passe à `done` que si toutes ses tâches sont terminales **et** que le chantier a été livré (`CardBranch.ShippedAt`). « Terminé » veut dire livré ; un chantier livré qui reçoit du travail nouveau en ressort.
 - `save()` écrit un fichier temporaire puis `os.Rename` (atomique), et arme le commit git de l'espace de travail. Ce commit est **throttlé** (`workspaceCommitInterval`, 15 min) et non debouncé : un minuteur en attente n'est jamais repoussé, sinon un agent actif (plusieurs sauvegardes par seconde) empêcherait tout commit. Chaque commit stockant un blob complet de `state.json`, commiter à chaque sauvegarde gonfle le dépôt en objets libres pour aucun gain.
-- Les migrations de format se font au chargement dans `loadStoreFile` (`migrateLegacyRepos`, `migrateLegacyWorkspace`) en relisant le JSON brut : ajouter une migration là, pas ailleurs.
+- Les migrations de format se font au chargement dans `loadStoreFile` (`migrateLegacyRepos`, `migrateLegacyWorkspace`, `migrateTaskStatuses`, `migrateLegacyDelivery`) en relisant le JSON brut : ajouter une migration là, pas ailleurs.
 - `AgentOut.Warning` (santé de l'agent : binaire absent du PATH, sandbox codex bloqué par AppArmor) est calculé à chaque `ListAgents` et **jamais persisté** : `Agent` n'a pas ce champ.
 - `ReloadFromDisk()` remplace le contenu sans changer le pointeur `Store`, pour que sessions et abonnements SSE survivent au rapatriement d'un espace de travail.
 
@@ -92,7 +95,8 @@ SPA vanilla d'un seul fichier, dans une IIFE, découpée en sections commentées
 - **Routage par hash** (`#/inbox`, `#/projects`, `#/p/{id}`, cartes et tâches) : `navigateTo()` change le hash, `applyRoute()` applique l'état au `hashchange`.
 - **i18n** : chaque chaîne visible passe par `t('cle')` / `tCount()`, et **doit exister dans les deux dictionnaires `fr` et `en`** de `I18N` (le fallback est `fr`). Langue détectée du navigateur, surchargée par les Settings et `localStorage`.
 - **État** : hydraté par `GET /api/state`, maintenu par SSE (`EventSource`), re-fetch complet à la reconnexion.
-- Confirmations en deux temps génériques (`data-action="confirm-click"`) pour ship, PR, sync, suppressions : le bouton devient « Confirmer ? » avant d'agir.
+- Confirmations en deux temps génériques (`data-action="confirm-click"`) pour la sync de l'espace de travail, le refus d'une tâche et les suppressions : le bouton devient « Confirmer ? » avant d'agir. La livraison d'un chantier n'utilise pas ce mécanisme : son récapitulatif **est** la confirmation (voir `openShipModal`).
+- Barre de livraison du chantier (`buildShipBarHTML`) : l'état du bouton vient de la carte (`shipReady`/`shipBlocker`, à jour via SSE), l'annonce et les compteurs de commits viennent de `GET /api/cards/{id}/delivery`, rechargé à l'ouverture, à chaque changement de statut et toutes les 60 s (`syncDeliveryPolling`).
 
 ## Conventions de langue
 
@@ -108,9 +112,10 @@ Tout est dans `internal/server/*_test.go`, sans dépendance de test externe. Deu
 
 - `NewStore(t.TempDir())` pour les tests de store (roundtrip, compteurs dérivés, transitions de statut, validations).
 - Un vrai dépôt git créé dans `t.TempDir()` via le helper `runTestGit` pour les tests git et workspace (worktree + diff, clone, sync, conflit de rebase, « SyncPush ne touche jamais un dépôt de projet »).
+- `newDeliveryFixture` (git_test.go) pour tout ce qui touche la livraison : dépôt git réel avec remote bare, serveur, projet et chantier prêts, plus les helpers `addTask` / `accept` / `ship` / `delivery`. Les tests couvrent le flux accepter → livrer, le conflit de fusion, le mode fusion locale (qui ne pousse jamais), l'acceptation automatique d'une branche fusionnée à la main et la relivraison après travail nouveau.
 
 Le parser de diff se teste sur une fixture inline (`TestParseDiffFixture`).
 
 ## Données à l'exécution
 
-`~/.local/share/sillage/` : `state.json` (tout l'état), `config.json` (`passwordHash`), `worktrees/<taskId>/` (un worktree git par tâche), et optionnellement un dépôt git de l'espace de travail qui ne versionne que `state.json`, `config.json` et `.gitignore`.
+`~/.local/share/sillage/` : `state.json` (tout l'état), `config.json` (`passwordHash`), `worktrees/<taskId>/` (un worktree git par tâche), `worktrees/ws-<cardId>-<repo>/` (un par branche de chantier), `worktrees/.merge-<cardId>-<repo>/` (transitoire, mode de livraison « fusion locale »), et optionnellement un dépôt git de l'espace de travail qui ne versionne que `state.json`, `config.json` et `.gitignore`.

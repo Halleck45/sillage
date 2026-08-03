@@ -100,7 +100,7 @@ func TestStaticFilesRevalidate(t *testing.T) {
 // confirm=false. Vérifie aussi qu'aucune suppression partielle n'a eu lieu.
 func TestDeleteHandlersRequireConfirm(t *testing.T) {
 	srv := newTestServer(t)
-	project, err := srv.store.AddProject("p", "", "", []Repo{{Name: "r", Path: "/tmp/x"}}, nil)
+	project, err := srv.store.AddProject("p", "", "", []Repo{{Name: "r", Path: "/tmp/x"}}, nil, nil)
 	if err != nil {
 		t.Fatalf("AddProject: %v", err)
 	}
@@ -108,7 +108,7 @@ func TestDeleteHandlersRequireConfirm(t *testing.T) {
 	if err != nil {
 		t.Fatalf("AddCard: %v", err)
 	}
-	taskID := mkTaskWithStatus(t, srv.store, card.ID, project.ID, "done")
+	taskID := mkTaskWithStatus(t, srv.store, card.ID, project.ID, "accepted")
 
 	cases := []struct {
 		name    string
@@ -154,7 +154,7 @@ func TestDeleteHandlersRequireConfirm(t *testing.T) {
 // HTTP : confirm=true supprime effectivement la tâche (204 No Content).
 func TestDeleteTaskHandlerConfirmedSucceeds(t *testing.T) {
 	srv := newTestServer(t)
-	project, err := srv.store.AddProject("p", "", "", []Repo{{Name: "r", Path: "/tmp/x"}}, nil)
+	project, err := srv.store.AddProject("p", "", "", []Repo{{Name: "r", Path: "/tmp/x"}}, nil, nil)
 	if err != nil {
 		t.Fatalf("AddProject: %v", err)
 	}
@@ -162,7 +162,7 @@ func TestDeleteTaskHandlerConfirmedSucceeds(t *testing.T) {
 	if err != nil {
 		t.Fatalf("AddCard: %v", err)
 	}
-	taskID := mkTaskWithStatus(t, srv.store, card.ID, project.ID, "done")
+	taskID := mkTaskWithStatus(t, srv.store, card.ID, project.ID, "accepted")
 
 	req := httptest.NewRequest(http.MethodDelete, "/", strings.NewReader(`{"confirm":true}`))
 	req.SetPathValue("id", taskID)

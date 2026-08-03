@@ -1,5 +1,5 @@
 // Sillage : frontend SPA vanilla (zéro framework, zéro dépendance).
-// Contrat d'API : voir docs/SPEC-API.md + docs/SPEC-V2.md à la racine du dépôt.
+// Contrat d'API : voir docs/SPEC-API.md à la racine du dépôt.
 (function () {
   'use strict';
 
@@ -81,36 +81,75 @@
       'filter.all': 'Toutes {n}',
       'filter.running': 'En cours {n}',
       'filter.review': 'À relire {n}',
-      'filter.finished': 'Terminées {n}',
+      'filter.finished': 'Traitées {n}',
       'badge.new': 'NOUVEAU',
       'status.running': 'En cours',
       'status.review': 'À relire',
-      'status.shipped': 'Livré',
-      'status.done': 'Terminé',
-      'status.cancelled': 'Annulé',
+      'status.accepted': 'Acceptée',
+      'status.cancelled': 'Refusée',
       'action.interrupt': 'Interrompre l\'agent',
-      'action.ship': 'Livrer',
-      'action.shipConfirm': 'Confirmer le push ?',
+      'action.accept': 'Accepter',
+      'action.acceptTooltip': 'Fusionner dans la branche du chantier',
+      'action.refuse': 'Refuser',
+      'action.refuseTooltip': 'Écarter cette tâche du chantier',
       'action.reopen': 'Rouvrir la tâche',
-      'action.pr': 'Ouvrir la PR',
-      'action.prConfirm': 'Confirmer la PR ?',
-      'action.finish': 'Marquer comme terminé',
       'action.cancelTask': 'Annuler la tâche',
       'action.cancelTaskConfirm': 'Confirmer l\'annulation ?',
       'task.delete': 'Supprimer la tâche',
       'task.deleteConfirm': 'Confirmer la suppression ?',
+      'ship.button': 'Livrer',
+      'ship.counts.accepted.one': '{n} acceptée',
+      'ship.counts.accepted.other': '{n} acceptées',
+      'ship.counts.refused.one': '{n} refusée',
+      'ship.counts.refused.other': '{n} refusées',
+      'ship.counts.pending.one': '{n} à relire',
+      'ship.counts.pending.other': '{n} à relire',
+      'ship.subtext.pr': 'Pousse {branch} et ouvre une pull request vers {base}',
+      'ship.subtext.mr': 'Pousse {branch} et ouvre une merge request vers {base}',
+      'ship.subtext.push': 'Pousse {branch} (forge inconnue : pas de pull request)',
+      'ship.subtext.merge': 'Fusionne {branch} dans {base} en local, sans jamais pousser',
+      'ship.subtext.repos': '{n} dépôts concernés',
+      'ship.subtext.nothing': 'Rien à livrer pour l\'instant',
+      'ship.blocked.noTasks': 'Aucune tâche dans ce chantier',
+      'ship.blocked.tasksPending': 'Il reste des tâches à accepter ou refuser',
+      'ship.blocked.nothingAccepted': 'Aucune tâche acceptée',
+      'ship.blocked.nothingToShip': 'Aucune branche à livrer',
+      'ship.modalTitle': 'Livrer le chantier',
+      'ship.modalConfirm': 'Livrer',
+      'ship.repoNothing': 'Rien à livrer',
+      'ship.repoShipped': 'Déjà livré',
+      'ship.commits.one': '{n} commit',
+      'ship.commits.other': '{n} commits',
+      'ship.files.one': '{n} fichier',
+      'ship.files.other': '{n} fichiers',
+      'ship.prLink': 'Voir la pull request',
+      'ship.mergedInto': 'Fusionné dans {base}',
+      'ship.pushedBranch': 'Branche {branch} poussée',
+      'ship.errorFailed': 'Échec de la livraison.',
+      'delivery.label': 'Livrer veut dire',
+      'delivery.modeAuto': 'Détecter d\'après le dépôt',
+      'delivery.modePr': 'Ouvrir une pull request (GitHub ou GitLab)',
+      'delivery.modeMerge': 'Fusionner localement dans une branche',
+      'delivery.targetLabel': 'Branche de destination',
+      'delivery.targetPlaceholder': 'branche par défaut du dépôt',
+      'delivery.mergeNote': 'Fusion locale en fast-forward uniquement : Sillage ne pousse jamais cette branche.',
+      'delivery.prNote': 'La branche du chantier est poussée, puis la pull request (ou merge request) est ouverte.',
+      'delivery.autoNote': 'Sillage choisira d\'après le remote des dépôts, à la création du projet.',
+      'delivery.warning.ghMissing': 'gh introuvable dans le PATH : repli sur une URL de pull request pré-remplie.',
+      'delivery.warning.glabMissing': 'glab introuvable dans le PATH : repli sur une URL de merge request pré-remplie.',
+      'delivery.warning.noRemote': 'Un dépôt du projet n\'a pas de remote « origin » : rien ne peut être poussé.',
+      'delivery.warning.unknownForge': 'Forge inconnue : la branche sera poussée sans ouvrir de pull request.',
       'tabs.conversation': 'Conversation',
       'tabs.diff': 'Diff',
       'tabs.deliverables': 'Livrables',
       'chat.you': 'Vous',
       'chat.placeholder': 'Répondre à {name}…',
       'chat.send': 'Envoyer ⏎',
-      'chat.shippedBranch': 'Livré : branche {branch} poussée',
+      'chat.accepted': 'Acceptée : fusionnée dans {branch}',
+      'chat.autoAccepted': 'Acceptée : son travail était déjà dans {branch}',
+      'chat.mergeConflict': 'Conflit avec la branche du chantier sur {files} : demandez à l\'agent de reprendre la base.',
       'conversation.empty': 'Aucun message pour l\'instant.',
       'diff.empty': 'Aucune modification.',
-      'detail.diff.pushButton': 'Push',
-      'detail.diff.pushDisabledTooltip': 'Disponible une fois la tâche à relire',
-      'detail.diff.prDisabledTooltip': 'Disponible une fois livré',
       'deliverables.code': 'Code',
       'deliverables.docs': 'Documents',
       'deliverables.images': 'Captures',
@@ -199,9 +238,8 @@
       'tokens.unit': 'tokens',
       'errors.interruptFailed': 'Échec de l\'interruption.',
       'errors.genericFailed': 'Échec.',
-      'errors.shipFailed': 'Échec du push.',
-      'errors.prFailed': 'Échec de l\'ouverture de la PR.',
-      'errors.finishFailed': 'Échec.',
+      'errors.acceptFailed': 'Échec de l\'acceptation.',
+      'errors.acceptConflict': 'Conflit avec la branche du chantier : demandez à l\'agent de reprendre la base.',
       'errors.cancelFailed': 'Échec de l\'annulation.',
       'errors.deleteTaskFailed': 'Échec de la suppression.',
       'errors.deleteCardFailed': 'Échec de la suppression.',
@@ -322,36 +360,75 @@
       'filter.all': 'All {n}',
       'filter.running': 'In progress {n}',
       'filter.review': 'To review {n}',
-      'filter.finished': 'Completed {n}',
+      'filter.finished': 'Handled {n}',
       'badge.new': 'NEW',
       'status.running': 'In progress',
       'status.review': 'To review',
-      'status.shipped': 'Shipped',
-      'status.done': 'Completed',
-      'status.cancelled': 'Cancelled',
+      'status.accepted': 'Accepted',
+      'status.cancelled': 'Refused',
       'action.interrupt': 'Stop the agent',
-      'action.ship': 'Ship',
-      'action.shipConfirm': 'Confirm push?',
+      'action.accept': 'Accept',
+      'action.acceptTooltip': 'Merge into the workstream branch',
+      'action.refuse': 'Refuse',
+      'action.refuseTooltip': 'Leave this task out of the workstream',
       'action.reopen': 'Reopen the task',
-      'action.pr': 'Open the PR',
-      'action.prConfirm': 'Confirm PR?',
-      'action.finish': 'Mark as completed',
       'action.cancelTask': 'Cancel the task',
       'action.cancelTaskConfirm': 'Confirm cancellation?',
       'task.delete': 'Delete the task',
       'task.deleteConfirm': 'Confirm deletion?',
+      'ship.button': 'Ship',
+      'ship.counts.accepted.one': '{n} accepted',
+      'ship.counts.accepted.other': '{n} accepted',
+      'ship.counts.refused.one': '{n} refused',
+      'ship.counts.refused.other': '{n} refused',
+      'ship.counts.pending.one': '{n} to review',
+      'ship.counts.pending.other': '{n} to review',
+      'ship.subtext.pr': 'Pushes {branch} and opens a pull request against {base}',
+      'ship.subtext.mr': 'Pushes {branch} and opens a merge request against {base}',
+      'ship.subtext.push': 'Pushes {branch} (unknown forge: no pull request)',
+      'ship.subtext.merge': 'Merges {branch} into {base} locally, never pushing',
+      'ship.subtext.repos': '{n} repositories involved',
+      'ship.subtext.nothing': 'Nothing to ship yet',
+      'ship.blocked.noTasks': 'No task in this workstream',
+      'ship.blocked.tasksPending': 'Some tasks still need to be accepted or refused',
+      'ship.blocked.nothingAccepted': 'No accepted task',
+      'ship.blocked.nothingToShip': 'No branch to ship',
+      'ship.modalTitle': 'Ship the workstream',
+      'ship.modalConfirm': 'Ship',
+      'ship.repoNothing': 'Nothing to ship',
+      'ship.repoShipped': 'Already shipped',
+      'ship.commits.one': '{n} commit',
+      'ship.commits.other': '{n} commits',
+      'ship.files.one': '{n} file',
+      'ship.files.other': '{n} files',
+      'ship.prLink': 'View the pull request',
+      'ship.mergedInto': 'Merged into {base}',
+      'ship.pushedBranch': 'Branch {branch} pushed',
+      'ship.errorFailed': 'Failed to ship.',
+      'delivery.label': 'Shipping means',
+      'delivery.modeAuto': 'Detect from the repository',
+      'delivery.modePr': 'Open a pull request (GitHub or GitLab)',
+      'delivery.modeMerge': 'Merge locally into a branch',
+      'delivery.targetLabel': 'Target branch',
+      'delivery.targetPlaceholder': 'repository default branch',
+      'delivery.mergeNote': 'Local fast-forward merge only: Sillage never pushes that branch.',
+      'delivery.prNote': 'The workstream branch is pushed, then the pull request (or merge request) is opened.',
+      'delivery.autoNote': 'Sillage will pick from the repository remotes, when the project is created.',
+      'delivery.warning.ghMissing': 'gh not found in PATH: falling back to a prefilled pull request URL.',
+      'delivery.warning.glabMissing': 'glab not found in PATH: falling back to a prefilled merge request URL.',
+      'delivery.warning.noRemote': 'One repository has no "origin" remote: nothing can be pushed.',
+      'delivery.warning.unknownForge': 'Unknown forge: the branch will be pushed without opening a pull request.',
       'tabs.conversation': 'Conversation',
       'tabs.diff': 'Diff',
       'tabs.deliverables': 'Deliverables',
       'chat.you': 'You',
       'chat.placeholder': 'Reply to {name}…',
       'chat.send': 'Send ⏎',
-      'chat.shippedBranch': 'Shipped: branch {branch} pushed',
+      'chat.accepted': 'Accepted: merged into {branch}',
+      'chat.autoAccepted': 'Accepted: its work was already in {branch}',
+      'chat.mergeConflict': 'Conflict with the workstream branch on {files}: ask the agent to rebase on it.',
       'conversation.empty': 'No messages yet.',
       'diff.empty': 'No changes.',
-      'detail.diff.pushButton': 'Push',
-      'detail.diff.pushDisabledTooltip': 'Available once the task is in review',
-      'detail.diff.prDisabledTooltip': 'Available once shipped',
       'deliverables.code': 'Code',
       'deliverables.docs': 'Documents',
       'deliverables.images': 'Screenshots',
@@ -440,9 +517,8 @@
       'tokens.unit': 'tokens',
       'errors.interruptFailed': 'Failed to stop the agent.',
       'errors.genericFailed': 'Failed.',
-      'errors.shipFailed': 'Failed to push.',
-      'errors.prFailed': 'Failed to open the PR.',
-      'errors.finishFailed': 'Failed.',
+      'errors.acceptFailed': 'Failed to accept.',
+      'errors.acceptConflict': 'Conflict with the workstream branch: ask the agent to rebase on it.',
       'errors.cancelFailed': 'Failed to cancel.',
       'errors.deleteTaskFailed': 'Failed to delete.',
       'errors.deleteCardFailed': 'Failed to delete.',
@@ -525,8 +601,7 @@
   var STATUS_GLYPH = {
     running: { icon: '◐', color: '#8b8982' },
     review: { icon: '◍', color: '#9a6b0d' },
-    shipped: { icon: '✓', color: '#2f7d54' },
-    done: { icon: '✓', color: '#2f7d54' },
+    accepted: { icon: '✓', color: '#2f7d54' },
     cancelled: { icon: '⊘', color: '#8b8982' }
   };
   var COLUMN_ORDER = ['soon', 'doing', 'done'];
@@ -546,7 +621,8 @@
     messagesByTask: {}, diffByTask: {}, deliverablesByTask: {},
     activeDiffFile: {},
     detailErrorByTask: {},
-    shipBranchUrlByTask: {}, // conservé côté client depuis la réponse du ship (non persisté serveur)
+    deliveryByCard: {}, // aperçu de livraison (GET /api/cards/{id}/delivery), non persisté
+    shipResultByCard: {}, // dernier résultat de livraison, affiché dans la modale
     loading: {},
     screen: 'inbox', // 'inbox' | 'projects' | 'kanban' | 'work'
     projectId: null, cardId: null, taskId: null,
@@ -762,7 +838,6 @@
     delete state.diffByTask[taskId];
     delete state.deliverablesByTask[taskId];
     delete state.detailErrorByTask[taskId];
-    delete state.shipBranchUrlByTask[taskId];
   }
 
   // Purge locale d'un chantier supprimé, avec cascade sur ses tâches (le
@@ -772,6 +847,8 @@
     var idx = state.cards.findIndex(function (c) { return c.id === cardId; });
     if (idx >= 0) state.cards.splice(idx, 1);
     delete state.cardsById[cardId];
+    delete state.deliveryByCard[cardId];
+    delete state.shipResultByCard[cardId];
     state.tasks.filter(function (t) { return t.cardId === cardId; }).forEach(function (t) {
       removeTaskLocally(t.id);
     });
@@ -822,9 +899,7 @@
     var kind = el.getAttribute('data-confirm-action');
     var id = el.getAttribute('data-confirm-id');
     handleConfirmClick(key, function () {
-      if (kind === 'ship') doShip(id);
-      else if (kind === 'pr') doPr(id);
-      else if (kind === 'agent-delete') doDeleteAgent(id);
+      if (kind === 'agent-delete') doDeleteAgent(id);
       else if (kind === 'workspace-sync') doWorkspaceSync();
       else if (kind === 'task-cancel') doCancelTask(id);
       else if (kind === 'task-delete') doDeleteTask(id);
@@ -919,6 +994,7 @@
       }
     }
     closeSidebarDrawer();
+    syncDeliveryPolling();
     render();
   }
 
@@ -1236,15 +1312,33 @@
         '<span>' + escapeHtml(timeAgo(t.updatedAt)) + '</span>' + liveLine +
         '</div>' +
       '</div>' +
+      buildTaskRowStateHTML(t) +
       '<div class="task-counts"><span>◆ ' + (t.filesCount || 0) + '</span><span>💬 ' + (t.messagesCount || 0) + '</span></div>' +
       '</div>';
+  }
+
+  // État d'une tâche dans la liste : lisible sans clic (acceptée, refusée), et
+  // pour une tâche à relire, les deux boutons qui apparaissent au survol.
+  // Un clic sur ces boutons agit tout de suite : l'acceptation est locale
+  // (fusion dans la branche du chantier) et réversible, donc sans confirmation.
+  function buildTaskRowStateHTML(t) {
+    if (t.status === 'review') {
+      return '<div class="task-row-actions">' +
+        '<button class="row-btn row-btn-accept" data-action="accept-task" data-task-id="' + t.id + '" title="' + escapeHtml(t2('action.acceptTooltip')) + '">' + escapeHtml(t2('action.accept')) + '</button>' +
+        '<button class="row-btn" data-action="refuse-task" data-task-id="' + t.id + '" title="' + escapeHtml(t2('action.refuseTooltip')) + '">' + escapeHtml(t2('action.refuse')) + '</button>' +
+        '</div>';
+    }
+    if (t.status === 'accepted' || t.status === 'cancelled') {
+      return '<div class="task-row-state task-row-state-' + t.status + '">' + escapeHtml(t2('status.' + t.status)) + '</div>';
+    }
+    return '';
   }
   // Alias local pour éviter un conflit de nom avec le paramètre `t` (Task) ci-dessus.
   function t2(key, vars) { return t(key, vars); }
 
   function taskMatchesFilter(t, filter) {
     if (filter === 'all') return true;
-    if (filter === 'finished') return t.status === 'shipped' || t.status === 'done' || t.status === 'cancelled';
+    if (filter === 'finished') return t.status === 'accepted' || t.status === 'cancelled';
     return t.status === filter;
   }
 
@@ -1260,7 +1354,7 @@
 
   function buildTaskListPaneInnerHTML(tasksAll, opts) {
     var counts = tasksAll.reduce(function (acc, t) { acc[t.status] = (acc[t.status] || 0) + 1; return acc; }, {});
-    var finishedCount = (counts.shipped || 0) + (counts.done || 0) + (counts.cancelled || 0);
+    var finishedCount = (counts.accepted || 0) + (counts.cancelled || 0);
     var filters = [
       { key: 'all', label: t('filter.all', { n: tasksAll.length }) },
       { key: 'running', label: t('filter.running', { n: counts.running || 0 }) },
@@ -1292,11 +1386,253 @@
     var paneInnerHTML = buildTaskListPaneInnerHTML(tasksAll, opts);
     var task = state.taskId ? state.tasksById[state.taskId] : null;
     var panelHTML = task ? buildDetailPanelHTML(task) : '';
+    var card = state.cardId ? state.cardsById[state.cardId] : null;
     var bodyClass = 'view-body work-body' + (task ? ' has-panel' : '') + (task && state.panelExpanded ? ' panel-expanded' : '');
-    return buildHeaderHTML() + '<div class="' + bodyClass + '" style="padding:0;">' +
+    return buildHeaderHTML() + (card ? buildShipBarHTML(card) : '') +
+      '<div class="' + bodyClass + '" style="padding:0;">' +
       '<div class="task-list-pane">' + paneInnerHTML + '</div>' +
       panelHTML +
       '</div>';
+  }
+
+  // ---------------------------------------------------------------------
+  // Livraison d'un chantier (barre d'en-tête + récapitulatif)
+  // ---------------------------------------------------------------------
+
+  // Rafraîchissement périodique de l'aperçu tant qu'une vue chantier est
+  // ouverte : c'est cet appel qui constate côté serveur les branches fusionnées
+  // à la main (elles passent alors « acceptées », voir autoAcceptMergedTasks).
+  var deliveryPollTimer = null;
+  var deliveryPollInterval = 60000;
+
+  function syncDeliveryPolling() {
+    if (deliveryPollTimer) { clearInterval(deliveryPollTimer); deliveryPollTimer = null; }
+    if (!state.cardId) return;
+    deliveryPollTimer = setInterval(function () {
+      if (!state.cardId) return;
+      loadDelivery(state.cardId);
+    }, deliveryPollInterval);
+  }
+
+  // loadDelivery récupère l'aperçu de livraison d'un chantier (lecture seule
+  // côté serveur : mode, dépôts, commits, avertissements, blocage).
+  function loadDelivery(cardId) {
+    var key = 'delivery:' + cardId;
+    if (state.loading[key]) return;
+    state.loading[key] = true;
+    api('/api/cards/' + cardId + '/delivery').then(function (data) {
+      state.deliveryByCard[cardId] = data;
+    }).catch(function () {
+      delete state.deliveryByCard[cardId];
+    }).then(function () {
+      delete state.loading[key];
+      refreshShipBar(cardId);
+    });
+  }
+
+  function shipBlockerLabel(blocker) {
+    switch (blocker) {
+      case 'no-tasks': return t('ship.blocked.noTasks');
+      case 'tasks-pending': return t('ship.blocked.tasksPending');
+      case 'nothing-accepted': return t('ship.blocked.nothingAccepted');
+      case 'nothing-to-ship': return t('ship.blocked.nothingToShip');
+      default: return '';
+    }
+  }
+
+  // cardTaskCounts compte les tâches d'un chantier par état, depuis l'état
+  // local (toujours à jour via SSE), sans attendre l'aperçu de livraison.
+  function cardTaskCounts(cardId) {
+    return state.tasks.reduce(function (acc, tk) {
+      if (tk.cardId !== cardId) return acc;
+      if (tk.status === 'accepted') acc.accepted++;
+      else if (tk.status === 'cancelled') acc.refused++;
+      else acc.pending++;
+      return acc;
+    }, { accepted: 0, refused: 0, pending: 0 });
+  }
+
+  // deliveryCountsLabel : « 3 acceptées · 1 refusée · 1 à relire », sans les
+  // zéros (une ligne d'état, pas un tableau de bord).
+  function deliveryCountsLabel(counts) {
+    var parts = [];
+    if (counts.accepted) parts.push(tCount('ship.counts.accepted', counts.accepted));
+    if (counts.refused) parts.push(tCount('ship.counts.refused', counts.refused));
+    if (counts.pending) parts.push(tCount('ship.counts.pending', counts.pending));
+    return parts.join(' · ');
+  }
+
+  // Dépôts qui ont réellement quelque chose à livrer (commits non poussés, ou
+  // pas encore fusionnés dans la branche de destination).
+  function deliverableRepos(prev) {
+    return (prev && prev.repos ? prev.repos : []).filter(function (r) { return r.pending > 0; });
+  }
+
+  // deliveryActionLabel annonce l'action exacte, avant tout clic.
+  function deliveryActionLabel(prev) {
+    var repos = deliverableRepos(prev);
+    if (!repos.length) return t('ship.subtext.nothing');
+    if (repos.length > 1) return t('ship.subtext.repos', { n: repos.length });
+    var r = repos[0];
+    var base = prev.target || r.base;
+    if (prev.mode === 'merge') return t('ship.subtext.merge', { branch: r.branch, base: base });
+    if (prev.provider === 'gitlab') return t('ship.subtext.mr', { branch: r.branch, base: r.base });
+    if (prev.provider === 'github') return t('ship.subtext.pr', { branch: r.branch, base: r.base });
+    return t('ship.subtext.push', { branch: r.branch });
+  }
+
+  function deliveryWarningText(warning) {
+    var w = String(warning || '');
+    if (w.indexOf('gh not found') === 0) return t('delivery.warning.ghMissing');
+    if (w.indexOf('glab not found') === 0) return t('delivery.warning.glabMissing');
+    if (w.indexOf('no \'origin\' remote') === 0) return t('delivery.warning.noRemote');
+    if (w.indexOf('unknown forge') === 0) return t('delivery.warning.unknownForge');
+    return w;
+  }
+
+  // buildShipLinksHTML : ce qui est déjà livré (une ligne par dépôt).
+  function buildShipLinksHTML(prev) {
+    // La pull request reste affichée même après l'arrivée de travail nouveau
+    // (elle existe toujours, et la prochaine livraison la mettra à jour) ; la
+    // mention « poussée » ou « fusionnée » ne s'affiche que si tout est livré.
+    var shipped = (prev.repos || []).filter(function (r) { return r.shippedAt || r.prUrl; });
+    if (!shipped.length) return '';
+    var items = shipped.map(function (r) {
+      if (r.prUrl) {
+        return '<a class="ship-link" href="' + escapeHtml(r.prUrl) + '" target="_blank" rel="noopener">' +
+          escapeHtml(t('ship.prLink')) + (prev.repos.length > 1 ? ' (' + escapeHtml(r.repoName) + ')' : '') + '</a>';
+      }
+      // Pas d'URL : fusion locale, ou branche poussée sur une forge inconnue.
+      var note = prev.mode === 'merge'
+        ? t('ship.mergedInto', { base: prev.target || r.base })
+        : t('ship.pushedBranch', { branch: r.branch });
+      return '<span class="ship-link-note">' + escapeHtml(note) + '</span>';
+    }).join('');
+    return '<div class="ship-links">' + items + '</div>';
+  }
+
+  // buildShipBarHTML : l'état du bouton vient de la carte (shipReady /
+  // shipBlocker, toujours à jour via SSE) ; l'aperçu (branche, base, commits,
+  // avertissements) vient de GET /api/cards/{id}/delivery, chargé à la demande.
+  function buildShipBarHTML(card) {
+    var prev = state.deliveryByCard[card.id];
+    if (!prev) loadDelivery(card.id);
+    var blocked = !card.shipReady;
+    var sub;
+    if (blocked) sub = shipBlockerLabel(card.shipBlocker);
+    else if (prev) sub = deliveryActionLabel(prev);
+    else sub = t('common.loading');
+    var warnings = (prev && prev.warnings ? prev.warnings : []).map(function (w) {
+      return '<div class="ship-bar-warning">⚠ ' + escapeHtml(deliveryWarningText(w)) + '</div>';
+    }).join('');
+    var ready = !blocked && !!prev && deliverableRepos(prev).length > 0;
+    var button = '<button class="btn-green ship-btn" ' + (ready ? '' : 'disabled title="' + escapeHtml(sub) + '"') +
+      ' data-action="open-ship-modal" data-card-id="' + card.id + '">' + escapeHtml(t('ship.button')) + '</button>';
+    return '<div class="ship-bar">' +
+        '<div class="ship-bar-state">' +
+          '<span class="ship-bar-counts">' + escapeHtml(deliveryCountsLabel(cardTaskCounts(card.id))) + '</span>' +
+          '<span class="ship-bar-sub">' + escapeHtml(sub) + '</span>' +
+          warnings +
+          (prev ? buildShipLinksHTML(prev) : '') +
+        '</div>' +
+        button +
+      '</div>';
+  }
+
+  // Rafraîchit uniquement la barre de livraison (pas la liste, pas le détail).
+  function refreshShipBar(cardId) {
+    if (state.cardId !== cardId) return false;
+    var card = state.cardsById[cardId];
+    var bar = document.querySelector('.ship-bar');
+    if (!card || !bar) return false;
+    var wrapper = document.createElement('div');
+    wrapper.innerHTML = buildShipBarHTML(card);
+    var fresh = wrapper.firstElementChild;
+    if (fresh) bar.replaceWith(fresh);
+    return true;
+  }
+
+  function buildShipRepoRowHTML(prev, r) {
+    var meta;
+    if (r.pending > 0) {
+      // Les commits annoncés sont ceux qui restent à livrer, pas le total du
+      // chantier : un chantier déjà livré puis repris ne compte que le neuf.
+      meta = tCount('ship.commits', r.pending) + ' · ' + tCount('ship.files', r.files);
+    } else {
+      meta = r.shippedAt ? t('ship.repoShipped') : t('ship.repoNothing');
+    }
+    var target = prev.mode === 'merge' ? (prev.target || r.base) : r.base;
+    return '<div class="ship-repo">' +
+      '<div class="ship-repo-head"><span class="repo-chip">' + escapeHtml(r.repoName) + '</span>' +
+      '<span class="mono ship-repo-branch">' + escapeHtml(r.branch) + ' → ' + escapeHtml(target) + '</span></div>' +
+      '<div class="ship-repo-meta">' + escapeHtml(meta) + '</div>' +
+      '</div>';
+  }
+
+  function buildShipResultsHTML(cardId) {
+    var result = state.shipResultByCard[cardId];
+    if (!result) return '';
+    var rows = (result.repos || []).map(function (r) {
+      var label;
+      if (r.error) label = '✕ ' + r.error;
+      else if (r.skipped) label = '· ' + t('ship.repoNothing');
+      else if (r.merged) label = '✓ ' + t('ship.mergedInto', { base: r.base });
+      else label = '✓ ' + (r.prUrl || r.branch);
+      return '<div class="ship-result-row ' + (r.error ? 'ship-result-error' : '') + '">' +
+        '<span class="repo-chip">' + escapeHtml(r.repoName) + '</span> ' + escapeHtml(label) + '</div>';
+    }).join('');
+    return '<div class="ship-results">' + rows + '</div>';
+  }
+
+  function buildShipModalHTML(card, prev) {
+    var reposHTML = (prev.repos || []).map(function (r) { return buildShipRepoRowHTML(prev, r); }).join('');
+    var warnings = (prev.warnings || []).map(function (w) {
+      return '<div class="modal-note modal-note-warning">⚠ ' + escapeHtml(deliveryWarningText(w)) + '</div>';
+    }).join('');
+    var mergeNote = prev.mode === 'merge' ? '<div class="modal-note">' + escapeHtml(t('delivery.mergeNote')) + '</div>' : '';
+    return '<div class="modal modal-sm">' +
+      '<div class="modal-head"><span class="modal-title">' + escapeHtml(t('ship.modalTitle')) + '</span>' +
+      '<button class="icon-btn" data-action="close-modal" aria-label="' + escapeHtml(t('common.close')) + '">✕</button></div>' +
+      '<div class="ship-modal-sub">' + escapeHtml(deliveryActionLabel(prev)) + '</div>' +
+      reposHTML + mergeNote + warnings +
+      buildShipResultsHTML(card.id) +
+      '<div id="ship-modal-error" class="modal-error hidden"></div>' +
+      '<div class="modal-foot"><button class="btn-outline" data-action="close-modal">' + escapeHtml(t('common.cancel')) + '</button>' +
+      '<button class="btn-green" data-action="submit-ship" data-card-id="' + card.id + '">' + escapeHtml(t('ship.modalConfirm')) + '</button></div>' +
+      '</div>';
+  }
+
+  // Le bouton d'action de cette modale EST la confirmation : deux clics au
+  // total pour livrer, le second en connaissance de cause (branche, base,
+  // dépôts concernés, avertissements).
+  function openShipModal(cardId) {
+    var card = state.cardsById[cardId];
+    var prev = state.deliveryByCard[cardId];
+    if (!card || !prev || !card.shipReady || !deliverableRepos(prev).length) return;
+    delete state.shipResultByCard[cardId];
+    openModal(buildShipModalHTML(card, prev));
+  }
+
+  function submitShip(cardId) {
+    var errEl = document.getElementById('ship-modal-error');
+    api('/api/cards/' + cardId + '/ship', { method: 'POST', body: { confirm: true } }).then(function (res) {
+      if (res && res.card) upsertCard(res.card);
+      state.shipResultByCard[cardId] = res;
+      var failed = (res.repos || []).filter(function (r) { return r.error; });
+      loadDelivery(cardId);
+      if (failed.length) {
+        var card = state.cardsById[cardId];
+        var prev = state.deliveryByCard[cardId];
+        if (card && prev) openModal(buildShipModalHTML(card, prev));
+        return;
+      }
+      closeModal();
+      renderMain();
+    }).catch(function (e) {
+      if (!errEl) return;
+      errEl.textContent = (e instanceof ApiError && e.message) || t('ship.errorFailed');
+      errEl.classList.remove('hidden');
+    });
   }
 
   // Contexte de liste courant (carte ou boîte de réception), utilisé à la fois
@@ -1347,21 +1683,16 @@
   // Rendu : panneau de détail de tâche
   // ---------------------------------------------------------------------
 
+  // L'action principale d'une tâche à relire est l'acceptation (fusion locale
+  // dans la branche du chantier) : sans confirmation, puisque rien ne sort de
+  // la machine. La seule action sortante du produit est le Ship du chantier.
   function primaryActionInfo(task) {
     switch (task.status) {
       case 'running':
         return { label: t('action.interrupt'), cls: 'btn-neutral', action: 'interrupt', kind: 'plain' };
-      case 'review': {
-        var key = 'ship:' + task.id;
-        var pending = isPendingConfirm(key);
-        return {
-          label: pending ? t('action.shipConfirm') : t('action.ship'),
-          cls: 'btn-green', kind: 'confirm', confirmKey: key, confirmAction: 'ship',
-          defaultLabel: t('action.ship'), confirmLabel: t('action.shipConfirm')
-        };
-      }
-      case 'shipped':
-      case 'done':
+      case 'review':
+        return { label: t('action.accept'), cls: 'btn-green', action: 'accept-task', kind: 'plain' };
+      case 'accepted':
       case 'cancelled':
         return { label: t('action.reopen'), cls: 'btn-neutral', action: 'reopen', kind: 'plain' };
       default:
@@ -1461,33 +1792,18 @@
         (isNew ? '<span class="tab-dot"></span>' : '') + '</button>';
     }).join('');
 
-    var primaryBtnHTML;
-    if (action.kind === 'confirm') {
-      primaryBtnHTML = '<button id="task-primary-action" class="btn-action ' + action.cls + '" data-action="confirm-click" data-confirm-key="' + action.confirmKey + '" data-confirm-action="' + action.confirmAction + '" data-confirm-id="' + task.id + '" data-default-label="' + escapeHtml(action.defaultLabel) + '" data-confirm-label="' + escapeHtml(action.confirmLabel) + '">' + escapeHtml(action.label) + '</button>';
-    } else {
-      primaryBtnHTML = '<button id="task-primary-action" class="btn-action ' + action.cls + '" data-action="' + action.action + '" data-task-id="' + task.id + '">' + escapeHtml(action.label) + '</button>';
-    }
+    var primaryBtnHTML = '<button id="task-primary-action" class="btn-action ' + action.cls + '" data-action="' + action.action + '" data-task-id="' + task.id + '">' + escapeHtml(action.label) + '</button>';
 
-    var showFinishLink = task.status === 'review' || task.status === 'shipped';
-    var showCancelLink = task.status === 'running' || task.status === 'review';
+    // Refuser une tâche en revue, ou annuler une tâche en cours : même action
+    // côté API (/cancel), seul le libellé change selon le contexte.
     var linksRow = '';
-    if (showFinishLink || showCancelLink) {
+    if (task.status === 'running' || task.status === 'review') {
+      var refusing = task.status === 'review';
+      var cancelDefault = refusing ? t('action.refuse') : t('action.cancelTask');
       var cancelKey = 'task-cancel:' + task.id;
-      var cancelPending = isPendingConfirm(cancelKey);
-      var cancelLabel = cancelPending ? t('action.cancelTaskConfirm') : t('action.cancelTask');
+      var cancelLabel = isPendingConfirm(cancelKey) ? t('action.cancelTaskConfirm') : cancelDefault;
       linksRow = '<div class="detail-link-row">' +
-        (showFinishLink ? '<button class="detail-link" data-action="finish-task" data-task-id="' + task.id + '">' + escapeHtml(t('action.finish')) + '</button>' : '') +
-        (showCancelLink ? '<button class="detail-link" data-action="confirm-click" data-confirm-key="' + cancelKey + '" data-confirm-action="task-cancel" data-confirm-id="' + task.id + '" data-default-label="' + escapeHtml(t('action.cancelTask')) + '" data-confirm-label="' + escapeHtml(t('action.cancelTaskConfirm')) + '">' + escapeHtml(cancelLabel) + '</button>' : '') +
-        '</div>';
-    }
-
-    var prRow = '';
-    if (task.status === 'shipped') {
-      var prKey = 'pr:' + task.id;
-      var prPending = isPendingConfirm(prKey);
-      var prLabel = prPending ? t('action.prConfirm') : t('action.pr');
-      prRow = '<div class="secondary-row">' +
-        '<button class="btn-outline btn-block" data-action="confirm-click" data-confirm-key="' + prKey + '" data-confirm-action="pr" data-confirm-id="' + task.id + '" data-default-label="' + escapeHtml(t('action.pr')) + '" data-confirm-label="' + escapeHtml(t('action.prConfirm')) + '">' + escapeHtml(prLabel) + '</button>' +
+        '<button class="detail-link" data-action="confirm-click" data-confirm-key="' + cancelKey + '" data-confirm-action="task-cancel" data-confirm-id="' + task.id + '" data-default-label="' + escapeHtml(cancelDefault) + '" data-confirm-label="' + escapeHtml(t('action.cancelTaskConfirm')) + '">' + escapeHtml(cancelLabel) + '</button>' +
         '</div>';
     }
 
@@ -1518,7 +1834,6 @@
           '<span class="checks">' + renderChecks(task.checks) + '</span>' +
         '</div>' +
         linksRow +
-        prRow +
         deleteRow +
         '<div class="tabs">' + tabsHTML + '</div>' +
       '</div>';
@@ -1581,8 +1896,10 @@
     return m ? m[1] : null;
   }
 
-  function parseShipMarker(text) {
-    var m = /^\[shipped:([^\]]+)\]$/.exec(String(text || '').trim());
+  // parseMarker extrait la charge d'un message marqueur "[<kind>:<valeur>]"
+  // (posé par le backend, volontairement neutre : la phrase est localisée ici).
+  function parseMarker(kind, text) {
+    var m = new RegExp('^\\[' + kind + ':([^\\]]+)\\]$').exec(String(text || '').trim());
     return m ? m[1] : null;
   }
 
@@ -1593,14 +1910,19 @@
       var targetName = targetAgent ? targetAgent.name : reassignedAgentId;
       return '<div class="msg-system">' + escapeHtml(t('chat.reassignedTo', { name: targetName })) + '</div>';
     }
-    var shippedBranch = parseShipMarker(m.text);
-    if (shippedBranch) {
-      var branchUrl = state.shipBranchUrlByTask[m.taskId];
-      var shippedLabel = t('chat.shippedBranch', { branch: shippedBranch });
-      if (branchUrl) {
-        return '<div class="msg-system"><a href="' + escapeHtml(branchUrl) + '" target="_blank" rel="noopener">' + escapeHtml(shippedLabel) + '</a></div>';
-      }
-      return '<div class="msg-system">' + escapeHtml(shippedLabel) + '</div>';
+    var acceptedBranch = parseMarker('accepted', m.text);
+    if (acceptedBranch) {
+      return '<div class="msg-system">' + escapeHtml(t('chat.accepted', { branch: acceptedBranch })) + '</div>';
+    }
+    // Acceptation constatée : la branche de la tâche était déjà contenue dans
+    // celle du chantier (voir autoAcceptMergedTasks côté serveur).
+    var autoAcceptedBranch = parseMarker('auto-accepted', m.text);
+    if (autoAcceptedBranch) {
+      return '<div class="msg-system">' + escapeHtml(t('chat.autoAccepted', { branch: autoAcceptedBranch })) + '</div>';
+    }
+    var conflictFiles = parseMarker('merge-conflict', m.text);
+    if (conflictFiles) {
+      return '<div class="msg-system msg-system-warning">' + escapeHtml(t('chat.mergeConflict', { files: conflictFiles.split(' ').join(', ') })) + '</div>';
     }
     var isUser = m.author === 'user';
     var emoji = isUser ? '🙂' : (agent.emoji || '');
@@ -1725,25 +2047,12 @@
     });
   }
 
+  // Le pied du diff ne porte plus d'action : la livraison n'est plus une action
+  // de tâche (voir la barre de livraison du chantier). Il ne reste que le
+  // rappel de la branche et de sa base.
   function buildDiffFooterHTML(task, diff) {
-    var shipKey = 'ship:' + task.id;
-    var canShip = task.status === 'review';
-    var shipPending = isPendingConfirm(shipKey);
-    var pushDefaultLabel = t('detail.diff.pushButton');
-    var pushLabel = (shipPending && canShip) ? t('action.shipConfirm') : pushDefaultLabel;
-
-    var prKey = 'pr:' + task.id;
-    var canPr = task.status === 'shipped';
-    var prPending = isPendingConfirm(prKey);
-    var prDefaultLabel = t('action.pr');
-    var prLabel = (prPending && canPr) ? t('action.prConfirm') : prDefaultLabel;
-
     return '<div class="diff-footer">' +
         '<span class="mono diff-branch">' + escapeHtml(diff.branch || '') + ' → ' + escapeHtml(diff.base || '') + '</span>' +
-        '<button class="btn-outline" ' + (canPr ? '' : ('disabled title="' + escapeHtml(t('detail.diff.prDisabledTooltip')) + '"')) +
-        ' data-action="confirm-click" data-confirm-key="' + prKey + '" data-confirm-action="pr" data-confirm-id="' + task.id + '" data-default-label="' + escapeHtml(prDefaultLabel) + '" data-confirm-label="' + escapeHtml(t('action.prConfirm')) + '">' + escapeHtml(prLabel) + '</button>' +
-        '<button class="btn-green" ' + (canShip ? '' : ('disabled title="' + escapeHtml(t('detail.diff.pushDisabledTooltip')) + '"')) +
-        ' data-action="confirm-click" data-confirm-key="' + shipKey + '" data-confirm-action="ship" data-confirm-id="' + task.id + '" data-default-label="' + escapeHtml(pushDefaultLabel) + '" data-confirm-label="' + escapeHtml(t('action.shipConfirm')) + '">' + escapeHtml(pushLabel) + '</button>' +
       '</div>';
   }
 
@@ -1854,32 +2163,48 @@
     }).catch(function (e) { if (e instanceof ApiError) showDetailError(taskId, e.message || t('errors.interruptFailed')); });
   }
   function doReopen(taskId) {
+    var previous = state.tasksById[taskId];
+    var cardId = previous ? previous.cardId : null;
     api('/api/tasks/' + taskId + '/reopen', { method: 'POST' }).then(function (task) {
-      upsertTask(task); renderMain();
+      upsertTask(task);
+      if (cardId) loadDelivery(cardId);
+      renderMain();
     }).catch(function (e) { if (e instanceof ApiError) showDetailError(taskId, e.message || t('errors.genericFailed')); });
   }
-  function doShip(taskId) {
-    api('/api/tasks/' + taskId + '/ship', { method: 'POST', body: { confirm: true } }).then(function (res) {
-      if (res && res.task) upsertTask(res.task);
-      if (res && res.branchUrl) state.shipBranchUrlByTask[taskId] = res.branchUrl;
-      renderMain();
-    }).catch(function (e) { if (e instanceof ApiError) showDetailError(taskId, e.message || t('errors.shipFailed')); });
+  // acceptErrorText localise le conflit de fusion (le seul échec attendu),
+  // avec le message de l'API en repli pour tout le reste.
+  function acceptErrorText(e) {
+    if (e.status === 409) return t('errors.acceptConflict');
+    return e.message || t('errors.acceptFailed');
   }
-  function doPr(taskId) {
-    api('/api/tasks/' + taskId + '/pr', { method: 'POST', body: { confirm: true } }).then(function (res) {
+
+  // doAcceptTask : un clic, pas de confirmation (fusion locale dans la branche
+  // du chantier, réversible par « Rouvrir »). Un conflit laisse la tâche en
+  // revue et affiche l'invite à faire reprendre la base par l'agent.
+  function doAcceptTask(taskId) {
+    var task = state.tasksById[taskId];
+    var cardId = task ? task.cardId : null;
+    api('/api/tasks/' + taskId + '/accept', { method: 'POST' }).then(function (res) {
       if (res && res.task) upsertTask(res.task);
-      if (res && res.url) { try { window.open(res.url, '_blank', 'noopener'); } catch (e) {} }
+      if (cardId) loadDelivery(cardId);
       renderMain();
-    }).catch(function (e) { if (e instanceof ApiError) showDetailError(taskId, e.message || t('errors.prFailed')); });
-  }
-  function doFinish(taskId) {
-    api('/api/tasks/' + taskId + '/finish', { method: 'POST' }).then(function (task) {
-      upsertTask(task); renderMain();
-    }).catch(function (e) { if (e instanceof ApiError) showDetailError(taskId, e.message || t('errors.finishFailed')); });
+    }).catch(function (e) {
+      if (!(e instanceof ApiError)) return;
+      // Le message marqueur de conflit arrive par SSE : rien à recharger ici.
+      // L'erreur s'affiche dans le panneau de détail : si l'acceptation venait
+      // de la liste (panneau fermé), ouvrir la tâche, sinon le message serait
+      // invisible et le clic semblerait sans effet.
+      showDetailError(taskId, acceptErrorText(e));
+      if (state.taskId !== taskId) openTask(taskId);
+    });
   }
   function doCancelTask(taskId) {
+    var task = state.tasksById[taskId];
+    var cardId = task ? task.cardId : null;
     api('/api/tasks/' + taskId + '/cancel', { method: 'POST' }).then(function (task) {
-      upsertTask(task); renderMain();
+      upsertTask(task);
+      if (cardId) loadDelivery(cardId);
+      renderMain();
     }).catch(function (e) { if (e instanceof ApiError) showDetailError(taskId, e.message || t('errors.cancelFailed')); });
   }
   function doDeleteTask(taskId) {
@@ -2138,7 +2463,7 @@
       (project && project.contextPrompt ? '<div class="project-context-note">' + escapeHtml(t('newTask.projectContextNote')) + '</div>' : '') +
       (card && card.contextPrompt ? '<div class="project-context-note">' + escapeHtml(t('newTask.workstreamContextNote')) + '</div>' : '') +
       '<div id="new-task-error" class="modal-error hidden"></div>' +
-      '<div id="new-task-note" class="modal-note hidden" role="status" aria-live="polite"></div>' +
+      '<div id="new-task-note" class="modal-note modal-note-success hidden" role="status" aria-live="polite"></div>' +
       // Pas d'indice ici : les deux libellés de boutons disent déjà ce qui suit
       // la création, et trois boutons remplissent la largeur de la modale.
       '<div class="modal-foot">' +
@@ -2290,6 +2615,53 @@
       return o;
     });
   }
+  // Réglage de livraison (« ce que Ship veut dire dans ce projet »). À la
+  // création, l'option « détecter » laisse le serveur déduire le mode des
+  // remotes des dépôts : le réglage n'est jamais une question posée à froid.
+  function buildDeliverySectionHTML(project) {
+    var mode = project ? ((project.delivery && project.delivery.mode) || 'pr') : 'auto';
+    var target = project && project.delivery ? (project.delivery.target || '') : '';
+    var options = [];
+    if (!project) options.push({ value: 'auto', label: t('delivery.modeAuto') });
+    options.push({ value: 'pr', label: t('delivery.modePr') });
+    options.push({ value: 'merge', label: t('delivery.modeMerge') });
+    var optionsHTML = options.map(function (o) {
+      return '<option value="' + o.value + '"' + (o.value === mode ? ' selected' : '') + '>' + escapeHtml(o.label) + '</option>';
+    }).join('');
+    var warning = project && project.deliveryWarning
+      ? '<div class="modal-note modal-note-warning">⚠ ' + escapeHtml(deliveryWarningText(project.deliveryWarning)) + '</div>'
+      : '';
+    return '<div class="modal-label">' + escapeHtml(t('delivery.label')) + '</div>' +
+      '<select id="project-delivery-mode" class="modal-input" data-action="delivery-mode-change">' + optionsHTML + '</select>' +
+      '<div class="modal-label">' + escapeHtml(t('delivery.targetLabel')) + '</div>' +
+      '<input id="project-delivery-target" class="modal-input mono" placeholder="' + escapeHtml(t('delivery.targetPlaceholder')) + '" value="' + escapeHtml(target) + '">' +
+      '<div id="delivery-mode-note" class="modal-note">' + escapeHtml(deliveryModeNote(mode)) + '</div>' +
+      warning;
+  }
+
+  // La note sous le sélecteur dit ce que fera le mode choisi : elle suit donc
+  // la sélection, sans attendre l'enregistrement.
+  function deliveryModeNote(mode) {
+    if (mode === 'merge') return t('delivery.mergeNote');
+    if (mode === 'pr') return t('delivery.prNote');
+    return t('delivery.autoNote');
+  }
+
+  function refreshDeliveryModeNote() {
+    var modeEl = document.getElementById('project-delivery-mode');
+    var noteEl = document.getElementById('delivery-mode-note');
+    if (modeEl && noteEl) noteEl.textContent = deliveryModeNote(modeEl.value);
+  }
+
+  // collectDeliveryForSubmit retourne null quand la détection automatique est
+  // demandée (le champ delivery est alors absent du corps de la requête).
+  function collectDeliveryForSubmit() {
+    var modeEl = document.getElementById('project-delivery-mode');
+    var targetEl = document.getElementById('project-delivery-target');
+    if (!modeEl || modeEl.value === 'auto') return null;
+    return { mode: modeEl.value, target: targetEl ? targetEl.value.trim() : '' };
+  }
+
   function buildProjectExtraFieldsHTML(project) {
     return '<div class="modal-label">' + escapeHtml(t('project.description')) + '</div>' +
       '<input id="project-description" class="modal-input" placeholder="' + escapeHtml(t('project.descriptionPlaceholder')) + '" value="' + escapeHtml(project ? (project.description || '') : '') + '">' +
@@ -2374,6 +2746,7 @@
       '<div class="modal-head"><span class="modal-title">' + escapeHtml(t('newProject.title')) + '</span><button class="icon-btn" data-action="close-modal" aria-label="' + escapeHtml(t('common.close')) + '">✕</button></div>' +
       '<div class="modal-label">' + escapeHtml(t('newProject.nameLabel')) + '</div><input id="new-project-name" class="modal-input" placeholder="' + escapeHtml(t('newProject.namePlaceholder')) + '">' +
       buildRepoSectionHTML() +
+      buildDeliverySectionHTML(null) +
       buildProjectExtraFieldsHTML(null) +
       '<div id="new-project-error" class="modal-error hidden"></div>' +
       '<div class="modal-foot"><button class="btn-outline" data-action="close-modal">' + escapeHtml(t('common.cancel')) + '</button>' +
@@ -2394,7 +2767,10 @@
     var contextPrompt = document.getElementById('project-context-prompt').value.trim();
     var repos = collectReposForSubmit();
     if (!name || repos.length === 0) { errEl.textContent = t('newProject.errorRequired'); errEl.classList.remove('hidden'); return; }
-    api('/api/projects', { method: 'POST', body: { name: name, repos: reposToBody(repos), description: description, contextPrompt: contextPrompt } }).then(function (project) {
+    var body = { name: name, repos: reposToBody(repos), description: description, contextPrompt: contextPrompt };
+    var delivery = collectDeliveryForSubmit();
+    if (delivery) body.delivery = delivery;
+    api('/api/projects', { method: 'POST', body: body }).then(function (project) {
       upsertProject(project);
       closeModal();
       goProject(project.id);
@@ -2603,6 +2979,7 @@
       '<div class="modal-head"><span class="modal-title">' + escapeHtml(t('project.editTitle')) + '</span><button class="icon-btn" data-action="close-modal" aria-label="' + escapeHtml(t('common.close')) + '">✕</button></div>' +
       '<div class="modal-label">' + escapeHtml(t('project.name')) + '</div><input id="project-edit-name" class="modal-input" value="' + escapeHtml(project.name) + '">' +
       buildRepoSectionHTML() +
+      buildDeliverySectionHTML(project) +
       buildProjectExtraFieldsHTML(project) +
       '<div class="modal-label">' + escapeHtml(t('project.checkCmd')) + '</div><input id="project-edit-checkcmd" class="modal-input mono" placeholder="go test ./..." value="' + escapeHtml(project.checkCmd || '') + '">' +
       buildLinksSectionHTML() +
@@ -2635,7 +3012,13 @@
     var repos = collectReposForSubmit();
     if (repos.length === 0) { errEl.textContent = t('project.errorReposRequired'); errEl.classList.remove('hidden'); return; }
     var links = collectLinksForSubmit();
-    api('/api/projects/' + projectId, { method: 'PATCH', body: { name: name, checkCmd: checkCmd, repos: reposToBody(repos), description: description, contextPrompt: contextPrompt, links: linksToBody(links) } }).then(function (project) {
+    var body = {
+      name: name, checkCmd: checkCmd, repos: reposToBody(repos), description: description,
+      contextPrompt: contextPrompt, links: linksToBody(links)
+    };
+    var delivery = collectDeliveryForSubmit();
+    if (delivery) body.delivery = delivery;
+    api('/api/projects/' + projectId, { method: 'PATCH', body: body }).then(function (project) {
       upsertProject(project);
       closeModal();
       renderSidebar(); renderMain();
@@ -3002,11 +3385,19 @@
   // en-tête du détail, pied du diff) ; le fil lui-même ne reçoit qu'un append
   // de nœud (onMessageEvent) et n'est donc jamais recréé.
   function onTaskEvent(task) {
+    // Un agent qui travaille publie beaucoup d'événements de tâche : l'aperçu
+    // de livraison (git log + git diff par dépôt) n'est rechargé que si le
+    // statut a réellement changé.
+    var previous = state.tasksById[task.id];
+    var statusChanged = !previous || previous.status !== task.status;
     upsertTask(task);
     refreshTaskListAndFilters();
     if (state.taskId === task.id) {
       patchDetailHead(task.id);
       if (state.panelTab === 'diff') patchDiffFooter(task.id);
+    }
+    if (statusChanged && state.cardId && task.cardId === state.cardId) {
+      loadDelivery(state.cardId);
     }
     renderSidebar();
   }
@@ -3201,7 +3592,10 @@
       case 'submit-new-card': submitNewCard(); break;
       case 'interrupt': doInterrupt(el.getAttribute('data-task-id')); break;
       case 'reopen': doReopen(el.getAttribute('data-task-id')); break;
-      case 'finish-task': doFinish(el.getAttribute('data-task-id')); break;
+      case 'accept-task': doAcceptTask(el.getAttribute('data-task-id')); break;
+      case 'refuse-task': doCancelTask(el.getAttribute('data-task-id')); break;
+      case 'open-ship-modal': openShipModal(el.getAttribute('data-card-id')); break;
+      case 'submit-ship': submitShip(el.getAttribute('data-card-id')); break;
       case 'confirm-click': handleConfirmClickDispatch(el); break;
       case 'select-diff-file': selectDiffFile(el.getAttribute('data-task-id'), el.getAttribute('data-path')); break;
       case 'send-message': sendMessage(el.getAttribute('data-task-id')); break;
@@ -3300,6 +3694,14 @@
     return !!shell && !shell.classList.contains('hidden');
   }
 
+  // Même principe de délégation que onGlobalClick, pour les champs dont la
+  // valeur pilote un affichage (aujourd'hui : le mode de livraison d'un projet).
+  function onGlobalChange(e) {
+    var el = e.target.closest ? e.target.closest('[data-action]') : null;
+    if (!el) return;
+    if (el.getAttribute('data-action') === 'delivery-mode-change') refreshDeliveryModeNote();
+  }
+
   function onGlobalKeydown(e) {
     if (!shellVisible()) return;
     var mod = e.ctrlKey || e.metaKey;
@@ -3344,6 +3746,7 @@
     var form = document.getElementById('login-form');
     if (form) form.addEventListener('submit', onLoginSubmit);
     document.addEventListener('click', onGlobalClick);
+    document.addEventListener('change', onGlobalChange);
     document.addEventListener('keydown', onGlobalKeydown);
     window.addEventListener('hashchange', applyRoute);
     boot();

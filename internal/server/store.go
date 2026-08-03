@@ -77,18 +77,59 @@ func loadStoreFile(dataDir string) (*Store, error) {
 	s.ensureMaps()
 	migrateLegacyRepos(data, s)
 	migrateLegacyWorkspace(data, s)
-	migrateReadyStatus(s)
+	migrateTaskStatuses(s)
+	migrateLegacyDelivery(s)
+	migrateCardRefs(s)
 	return s, nil
 }
 
-// migrateReadyStatus migre les tâches antérieures à la v0.3.4 : le statut
-// "ready" a disparu (ship est désormais accepté directement depuis review),
-// toute tâche encore "ready" devient "review".
-func migrateReadyStatus(s *Store) {
+// migrateCardRefs donne une référence aux chantiers antérieurs au champ Ref :
+// sans elle, leur branche s'appellerait `sillage/ws-0-<slug>` et deux chantiers
+// de même titre entreraient en collision. Attribution dans l'ordre des
+// identifiants pour rester déterministe.
+func migrateCardRefs(s *Store) {
+	var ids []string
+	for id, c := range s.Cards {
+		if c.Ref == 0 {
+			ids = append(ids, id)
+		}
+	}
+	sort.Slice(ids, func(i, j int) bool { return idNum(ids[i]) < idNum(ids[j]) })
+	for _, id := range ids {
+		c := s.Cards[id]
+		s.NextRef++
+		c.Ref = s.NextRef
+		s.Cards[id] = c
+	}
+}
+
+// migrateTaskStatuses migre les statuts de tâche disparus :
+//   - "ready" (antérieur à la v0.3.4) devient "review" ;
+//   - "shipped" et "done" deviennent "accepted" : une tâche ne se livre plus
+//     seule, elle est acceptée dans la branche de son chantier, et c'est le
+//     chantier qui se livre (voir docs/SPEC-LIVRAISON.md).
+func migrateTaskStatuses(s *Store) {
 	for id, t := range s.Tasks {
-		if t.Status == "ready" {
+		switch t.Status {
+		case "ready":
 			t.Status = "review"
-			s.Tasks[id] = t
+		case "shipped", "done":
+			t.Status = "accepted"
+		default:
+			continue
+		}
+		s.Tasks[id] = t
+	}
+}
+
+// migrateLegacyDelivery donne un mode de livraison aux projets antérieurs à
+// l'introduction de Project.Delivery : "pr", le comportement historique
+// (pousser la branche puis ouvrir la pull request).
+func migrateLegacyDelivery(s *Store) {
+	for id, p := range s.Projects {
+		if p.Delivery.Mode == "" {
+			p.Delivery.Mode = "pr"
+			s.Projects[id] = p
 		}
 	}
 }
@@ -293,13 +334,19 @@ func idNum(id string) int {
 }
 
 // recomputeCard recalcule les compteurs dérivés d'une carte à partir des
-// tâches, et déplace automatiquement la carte entre "doing" et "done" :
-// si la carte a au moins une tâche et qu'elles sont toutes terminales
-// (shipped/done/cancelled), la carte passe (ou reste) en "done" ; si une
-// tâche redevient active (reopen, nouvelle tâche) alors que la carte est en
-// "done", elle repasse en "doing". Les tâches "cancelled" sont exclues de
-// tasksTotal/tasksDone/progress mais comptent comme terminales pour ce
-// déplacement automatique. Doit être appelée avec le verrou tenu.
+// tâches, l'état de son bouton de livraison (ShipReady/ShipBlocker) et sa
+// colonne.
+//
+// Colonne : une carte qui a des tâches passe en "done" quand elle a été
+// livrée ET que toutes ses tâches sont terminales (accepted/cancelled) ; sinon
+// elle passe (ou reste) en "doing". La colonne "Terminé" veut donc dire livré,
+// pas seulement relu. Le déplacement manuel reste indépendant. Les cartes
+// antérieures aux branches de chantier (aucune Branches) sont considérées
+// livrées : leur colonne garde le comportement historique.
+//
+// Les tâches "cancelled" (refusées) sont exclues de
+// tasksTotal/tasksDone/progress mais comptent comme terminales.
+// Doit être appelée avec le verrou tenu.
 func (s *Store) recomputeCard(cardID string) {
 	c, ok := s.Cards[cardID]
 	if !ok {
@@ -321,7 +368,7 @@ func (s *Store) recomputeCard(cardID string) {
 			live = &v
 		}
 
-		terminal := t.Status == "shipped" || t.Status == "done" || t.Status == "cancelled"
+		terminal := t.Status == "accepted" || t.Status == "cancelled"
 		if !terminal {
 			allTerminal = false
 		}
@@ -330,7 +377,7 @@ func (s *Store) recomputeCard(cardID string) {
 		}
 		total++
 		switch t.Status {
-		case "shipped", "done":
+		case "accepted":
 			done++
 		case "review":
 			review++
@@ -343,17 +390,50 @@ func (s *Store) recomputeCard(cardID string) {
 	c.TasksTotal, c.TasksDone, c.ReviewCount = total, done, review
 	c.DocsCount, c.MessagesCount, c.Progress = docs, msgs, progress
 	c.LiveActivity = live
+	if c.Branches == nil {
+		// Cartes antérieures aux branches de chantier : toujours exposer un
+		// tableau, jamais null (voir le modèle Card de SPEC-API.md).
+		c.Branches = []CardBranch{}
+	}
+	c.ShipReady, c.ShipBlocker = shipReadiness(c, hasTasks, allTerminal, done)
 
+	shipped := len(c.Branches) == 0 // carte historique : comportement d'avant
+	for _, b := range c.Branches {
+		if b.ShippedAt != nil {
+			shipped = true
+			break
+		}
+	}
 	if hasTasks {
-		if allTerminal {
+		if allTerminal && shipped {
 			c.Column = "done"
 		} else if c.Column != "doing" {
-			// Du travail actif : une carte encore en "soon" (ou redescendue en
-			// "done") rejoint la colonne "En cours".
+			// Du travail actif (ou relu mais pas encore livré) : une carte
+			// encore en "soon" (ou redescendue de "done") rejoint "En cours".
 			c.Column = "doing"
 		}
 	}
 	s.Cards[cardID] = c
+}
+
+// shipReadiness calcule si un chantier peut être livré, et sinon pourquoi.
+// Les quatre conditions de docs/SPEC-LIVRAISON.md, dans l'ordre : au moins une
+// tâche, aucune tâche encore active (running/review), au moins une tâche
+// acceptée, au moins une branche de chantier. Le nombre de commits à livrer
+// n'est pas vérifié ici (il coûterait un appel git à chaque mutation) : c'est
+// l'aperçu de livraison qui le rapporte, dépôt par dépôt.
+func shipReadiness(c Card, hasTasks, allTerminal bool, accepted int) (bool, string) {
+	switch {
+	case !hasTasks:
+		return false, "no-tasks"
+	case !allTerminal:
+		return false, "tasks-pending"
+	case accepted == 0:
+		return false, "nothing-accepted"
+	case len(c.Branches) == 0:
+		return false, "nothing-to-ship"
+	}
+	return true, ""
 }
 
 // recomputeProject recalcule le nombre de tâches non lues et le total de tokens du projet.
@@ -417,6 +497,59 @@ func sortedProjects(m map[string]Project) []Project {
 	}
 	sort.Slice(out, func(i, j int) bool { return idNum(out[i].ID) < idNum(out[j].ID) })
 	return out
+}
+
+// sortedProjectsWithWarnings retourne les projets triés par ID, avec leur
+// avertissement de santé de livraison calculé (voir deliveryWarning). Coûteux
+// (LookPath + git remote par dépôt) : à n'appeler qu'à la lecture de l'état ou
+// après une mutation de projet, jamais depuis recompute*.
+func sortedProjectsWithWarnings(m map[string]Project) []ProjectOut {
+	sorted := sortedProjects(m)
+	out := make([]ProjectOut, len(sorted))
+	for i, p := range sorted {
+		out[i] = projectOut(p)
+	}
+	return out
+}
+
+// projectOut habille un projet de son avertissement de livraison.
+func projectOut(p Project) ProjectOut {
+	return ProjectOut{Project: p, DeliveryWarning: deliveryWarning(p)}
+}
+
+// deliveryWarning calcule un avertissement de santé de la livraison (chaîne
+// vide si tout va bien) : CLI de la forge absent du PATH, ou dépôt sans remote
+// origin alors que le mode exige un push. N'empêche jamais rien : le repli est
+// une URL de pull request pré-remplie. Jamais persisté : voir ProjectOut.
+func deliveryWarning(p Project) string {
+	if p.Delivery.Mode == "merge" {
+		return "" // fusion locale : aucun binaire externe, aucun remote requis
+	}
+	needsGh, needsGlab := false, false
+	for _, repo := range p.Repos {
+		info := DetectForge(repo.Path)
+		switch {
+		case info.Provider == "github":
+			needsGh = true
+		case info.Provider == "gitlab":
+			needsGlab = true
+		case info.RemoteURL == "":
+			return "no 'origin' remote on repository " + repo.Name + "; nothing can be pushed"
+		default:
+			return "unknown forge on repository " + repo.Name + "; the branch will be pushed without opening a pull request"
+		}
+	}
+	if needsGh {
+		if _, err := lookPath("gh"); err != nil {
+			return "gh not found in PATH; Sillage will fall back to a prefilled pull request URL"
+		}
+	}
+	if needsGlab {
+		if _, err := lookPath("glab"); err != nil {
+			return "glab not found in PATH; Sillage will fall back to a prefilled merge request URL"
+		}
+	}
+	return ""
 }
 
 func sortedCards(m map[string]Card) []Card {
@@ -513,7 +646,7 @@ func (s *Store) Snapshot() State {
 	}
 
 	st := State{
-		Projects: sortedProjects(s.Projects),
+		Projects: sortedProjectsWithWarnings(s.Projects),
 		Cards:    sortedCards(s.Cards),
 		Tasks:    sortedTasks(s.Tasks),
 		Agents:   sortedAgentsWithWarnings(s.Agents),
@@ -701,6 +834,26 @@ func NormalizeRepos(repos []Repo) ([]Repo, error) {
 	return out, nil
 }
 
+var validDeliveryModes = map[string]bool{"pr": true, "merge": true}
+
+// NormalizeDelivery valide et normalise le réglage de livraison d'un projet.
+// nil (ou un mode vide) vaut le défaut "pr" : pousser la branche du chantier
+// et ouvrir la pull/merge request. Target vide signifie « branche par défaut
+// du dépôt », et n'est donc pas une erreur.
+func NormalizeDelivery(d *Delivery) (Delivery, error) {
+	if d == nil {
+		return Delivery{Mode: "pr"}, nil
+	}
+	out := Delivery{Mode: strings.TrimSpace(d.Mode), Target: strings.TrimSpace(d.Target), StackedPrs: d.StackedPrs}
+	if out.Mode == "" {
+		out.Mode = "pr"
+	}
+	if !validDeliveryModes[out.Mode] {
+		return Delivery{}, fmt.Errorf("invalid delivery mode: must be pr or merge")
+	}
+	return out, nil
+}
+
 // ValidateRepoPath vérifie que path existe et est un dépôt git valide.
 // Validation coûteuse (filesystem + exec git) : appelée par les handlers
 // avant de persister un projet, jamais par le Store lui-même (pour que les
@@ -717,13 +870,18 @@ func ValidateRepoPath(path string) error {
 }
 
 // AddProject crée un projet avec un ou plusieurs dépôts git (repos).
-// description et contextPrompt peuvent être vides.
-func (s *Store) AddProject(name, description, contextPrompt string, repos []Repo, links []Link) (Project, error) {
+// description et contextPrompt peuvent être vides ; delivery nil vaut le mode
+// par défaut ("pr").
+func (s *Store) AddProject(name, description, contextPrompt string, repos []Repo, links []Link, delivery *Delivery) (Project, error) {
 	normalized, err := NormalizeRepos(repos)
 	if err != nil {
 		return Project{}, err
 	}
 	normalizedLinks, err := NormalizeLinks(links)
+	if err != nil {
+		return Project{}, err
+	}
+	normalizedDelivery, err := NormalizeDelivery(delivery)
 	if err != nil {
 		return Project{}, err
 	}
@@ -733,6 +891,7 @@ func (s *Store) AddProject(name, description, contextPrompt string, repos []Repo
 	p := Project{
 		ID: fmt.Sprintf("p%d", s.NextProjectN), Name: name, Description: description,
 		ContextPrompt: contextPrompt, Repos: normalized, Links: normalizedLinks,
+		Delivery: normalizedDelivery,
 	}
 	s.Projects[p.ID] = p
 	if err := s.save(); err != nil {
@@ -747,7 +906,7 @@ func (s *Store) AddProject(name, description, contextPrompt string, repos []Repo
 // fournis (même vides), remplacent entièrement la liste existante (mêmes
 // validations que AddProject). Retirer un repo ne casse pas les tâches
 // existantes : leur worktree déjà créé vit sa vie indépendamment.
-func (s *Store) UpdateProject(id string, name, description, checkCmd, contextPrompt *string, repos *[]Repo, links *[]Link) (Project, error) {
+func (s *Store) UpdateProject(id string, name, description, checkCmd, contextPrompt *string, repos *[]Repo, links *[]Link, delivery *Delivery) (Project, error) {
 	var normalized []Repo
 	if repos != nil {
 		var err error
@@ -760,6 +919,14 @@ func (s *Store) UpdateProject(id string, name, description, checkCmd, contextPro
 	if links != nil {
 		var err error
 		normalizedLinks, err = NormalizeLinks(*links)
+		if err != nil {
+			return Project{}, err
+		}
+	}
+	var normalizedDelivery Delivery
+	if delivery != nil {
+		var err error
+		normalizedDelivery, err = NormalizeDelivery(delivery)
 		if err != nil {
 			return Project{}, err
 		}
@@ -790,6 +957,9 @@ func (s *Store) UpdateProject(id string, name, description, checkCmd, contextPro
 	}
 	if links != nil {
 		p.Links = normalizedLinks
+	}
+	if delivery != nil {
+		p.Delivery = normalizedDelivery
 	}
 	s.Projects[id] = p
 	if err := s.save(); err != nil {
@@ -842,9 +1012,12 @@ func (s *Store) AddCard(projectID, title, column, contextPrompt string) (Card, e
 		return Card{}, fmt.Errorf("cards are created in the soon column")
 	}
 	s.NextCardN++
+	// Le compteur de référence est partagé avec les tâches : une référence
+	// courte, unique et stable, utilisée dans le nom de la branche du chantier.
+	s.NextRef++
 	c := Card{
-		ID: fmt.Sprintf("c%d", s.NextCardN), ProjectID: projectID, Column: column, Title: title,
-		ContextPrompt: contextPrompt,
+		ID: fmt.Sprintf("c%d", s.NextCardN), ProjectID: projectID, Ref: s.NextRef,
+		Column: column, Title: title, ContextPrompt: contextPrompt, Branches: []CardBranch{},
 	}
 	s.Cards[c.ID] = c
 	s.recomputeCard(c.ID)
@@ -884,6 +1057,105 @@ func (s *Store) UpdateCard(id string, column, title, contextPrompt *string) (Car
 		return Card{}, err
 	}
 	return c, nil
+}
+
+// GetCardBranch retourne la branche de feature d'un chantier sur un dépôt
+// donné, si elle a déjà été créée (première tâche du chantier sur ce dépôt).
+func (s *Store) GetCardBranch(cardID, repoName string) (CardBranch, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, b := range s.Cards[cardID].Branches {
+		if b.RepoName == repoName {
+			return b, true
+		}
+	}
+	return CardBranch{}, false
+}
+
+// SetCardBranch enregistre (ou remplace) la branche de feature d'un chantier
+// sur un dépôt. Appelée après la création effective de la branche et de son
+// worktree par git (voir CreateCardWorktree).
+func (s *Store) SetCardBranch(cardID string, b CardBranch) (Card, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	c, ok := s.Cards[cardID]
+	if !ok {
+		return Card{}, fmt.Errorf("card not found")
+	}
+	replaced := false
+	for i, existing := range c.Branches {
+		if existing.RepoName == b.RepoName {
+			c.Branches[i] = b
+			replaced = true
+			break
+		}
+	}
+	if !replaced {
+		c.Branches = append(c.Branches, b)
+	}
+	s.Cards[cardID] = c
+	s.recomputeCard(cardID)
+	if err := s.save(); err != nil {
+		return Card{}, err
+	}
+	return s.Cards[cardID], nil
+}
+
+// MarkCardBranchShipped enregistre le résultat d'une livraison réussie sur un
+// dépôt : URL de la pull/merge request (vide en mode fusion locale) et date.
+func (s *Store) MarkCardBranchShipped(cardID, repoName, prURL string, at time.Time) (Card, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	c, ok := s.Cards[cardID]
+	if !ok {
+		return Card{}, fmt.Errorf("card not found")
+	}
+	for i, b := range c.Branches {
+		if b.RepoName != repoName {
+			continue
+		}
+		when := at
+		c.Branches[i].ShippedAt = &when
+		if prURL != "" {
+			c.Branches[i].PrURL = prURL
+		}
+	}
+	s.Cards[cardID] = c
+	s.recomputeCard(cardID)
+	if err := s.save(); err != nil {
+		return Card{}, err
+	}
+	return s.Cards[cardID], nil
+}
+
+// MarkCardBranchPending remet la branche de chantier d'un dépôt à l'état « non
+// livré » : appelée dès que du travail nouveau apparaît (acceptation qui ajoute
+// des commits, nouvelle tâche sur ce dépôt), pour qu'un chantier déjà livré
+// puisse continuer à vivre. PrURL est conservée : la pull request existe
+// toujours, et une nouvelle livraison la mettra à jour.
+func (s *Store) MarkCardBranchPending(cardID, repoName string) (Card, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	c, ok := s.Cards[cardID]
+	if !ok {
+		return Card{}, fmt.Errorf("card not found")
+	}
+	changed := false
+	for i, b := range c.Branches {
+		if b.RepoName == repoName && b.ShippedAt != nil {
+			c.Branches[i].ShippedAt = nil
+			changed = true
+		}
+	}
+	if !changed {
+		return c, nil
+	}
+	s.Cards[cardID] = c
+	s.recomputeCard(cardID)
+	if err := s.save(); err != nil {
+		return Card{}, err
+	}
+	return s.Cards[cardID], nil
 }
 
 // ReserveTaskID réserve un identifiant de tâche et une référence globale.
@@ -953,25 +1225,26 @@ func (s *Store) updateTask(id string, fn func(t *Task), bumpUpdatedAt bool) (Tas
 	return s.Tasks[id], nil
 }
 
-// FinishTask marque une tâche "done". Autorisé depuis review/shipped ;
-// message dédié depuis "running" (l'agent tourne encore). Le statut "ready"
-// a disparu (v0.3.4) : ship est désormais accepté directement depuis review.
-func (s *Store) FinishTask(id string) (Task, error) {
+// AcceptTask marque une tâche "accepted" : son travail a été fusionné dans la
+// branche du chantier. Autorisé depuis "review" uniquement ; la fusion git
+// elle-même est faite par l'appelant AVANT cet appel (voir handleAccept), pour
+// qu'un conflit laisse la tâche en revue.
+func (s *Store) AcceptTask(id string) (Task, error) {
 	t, ok := s.GetTask(id)
 	if !ok {
 		return Task{}, fmt.Errorf("task not found")
 	}
 	switch t.Status {
-	case "review", "shipped":
+	case "review":
 	case "running":
-		return Task{}, fmt.Errorf("task must be reviewed before finishing")
+		return Task{}, fmt.Errorf("interrupt the agent before accepting")
 	default:
-		return Task{}, fmt.Errorf("task cannot be finished from its current status")
+		return Task{}, fmt.Errorf("only a task in review can be accepted")
 	}
-	return s.UpdateTask(id, func(t *Task) { t.Status = "done" })
+	return s.UpdateTask(id, func(t *Task) { t.Status = "accepted" })
 }
 
-// CancelTask marque une tâche "cancelled". Autorisé depuis running/review.
+// CancelTask marque une tâche "cancelled" (refusée). Autorisé depuis running/review.
 // N'interrompt PAS l'agent : c'est la responsabilité de l'appelant pour une
 // tâche "running" (voir Runner.Cancel, qui interrompt le process puis appelle
 // CancelTask).
@@ -989,16 +1262,17 @@ func (s *Store) CancelTask(id string) (Task, error) {
 }
 
 // ReopenTask remet une tâche en revue ("review"). Autorisé depuis
-// shipped/done/cancelled.
+// accepted/cancelled. Le merge déjà fait dans la branche du chantier n'est pas
+// annulé : la prochaine acceptation fusionnera les nouveaux commits.
 func (s *Store) ReopenTask(id string) (Task, error) {
 	t, ok := s.GetTask(id)
 	if !ok {
 		return Task{}, fmt.Errorf("task not found")
 	}
 	switch t.Status {
-	case "shipped", "done", "cancelled":
+	case "accepted", "cancelled":
 	default:
-		return Task{}, fmt.Errorf("only a shipped, done or cancelled task can be reopened")
+		return Task{}, fmt.Errorf("only an accepted or refused task can be reopened")
 	}
 	return s.UpdateTask(id, func(t *Task) { t.Status = "review" })
 }

@@ -41,9 +41,9 @@ func TestMigrateProjectPathToRepos(t *testing.T) {
 	}
 }
 
-// --- Migration du statut "ready" (supprimé en v0.3.4) vers "review" ---
+// --- Migration des statuts disparus ("ready" -> review, "shipped"/"done" -> accepted) ---
 
-func TestMigrateReadyStatusToReview(t *testing.T) {
+func TestMigrateTaskStatuses(t *testing.T) {
 	dir := t.TempDir()
 	legacy := `{
   "Projects": {"p1": {"id":"p1","name":"p","repos":[{"name":"p","path":"/tmp/p"}],"unread":0,"tokens":{"input":0,"output":0,"costUsd":0},"checkCmd":""}},
@@ -70,10 +70,22 @@ func TestMigrateReadyStatusToReview(t *testing.T) {
 	if t1.Status != "review" {
 		t.Fatalf("statut migré attendu 'review', reçu %q", t1.Status)
 	}
-	// Les autres statuts ne sont pas affectés par la migration.
+	// Une tâche livrée seule (ancien modèle) devient une tâche acceptée : la
+	// livraison est désormais une action de chantier.
 	t2, ok := s.GetTask("t2")
-	if !ok || t2.Status != "shipped" {
-		t.Fatalf("le statut 'shipped' ne devrait pas être modifié par la migration, reçu %+v (ok=%v)", t2, ok)
+	if !ok || t2.Status != "accepted" {
+		t.Fatalf("statut migré attendu 'accepted' pour une tâche 'shipped', reçu %+v (ok=%v)", t2, ok)
+	}
+	// Le chantier reçoit une référence : sans elle, sa branche s'appellerait
+	// `sillage/ws-0-<slug>`.
+	c1, ok := s.GetCard("c1")
+	if !ok || c1.Ref == 0 {
+		t.Fatalf("le chantier devrait avoir reçu une référence, reçu %+v (ok=%v)", c1, ok)
+	}
+	// Le mode de livraison par défaut est celui d'avant : ouvrir une PR.
+	p1, ok := s.GetProject("p1")
+	if !ok || p1.Delivery.Mode != "pr" {
+		t.Fatalf("mode de livraison migré attendu 'pr', reçu %+v (ok=%v)", p1.Delivery, ok)
 	}
 }
 
@@ -161,7 +173,7 @@ func TestResolveTaskRepo(t *testing.T) {
 		t.Fatalf("NewStore: %v", err)
 	}
 
-	single, err := s.AddProject("mono", "", "", []Repo{{Path: "/tmp/mono"}}, nil)
+	single, err := s.AddProject("mono", "", "", []Repo{{Path: "/tmp/mono"}}, nil, nil)
 	if err != nil {
 		t.Fatalf("AddProject: %v", err)
 	}
@@ -173,7 +185,7 @@ func TestResolveTaskRepo(t *testing.T) {
 		t.Fatalf("repo attendu /tmp/mono, reçu %+v", repo)
 	}
 
-	multi, err := s.AddProject("multi", "", "", []Repo{{Name: "api", Path: "/tmp/api"}, {Name: "web", Path: "/tmp/web"}}, nil)
+	multi, err := s.AddProject("multi", "", "", []Repo{{Name: "api", Path: "/tmp/api"}, {Name: "web", Path: "/tmp/web"}}, nil, nil)
 	if err != nil {
 		t.Fatalf("AddProject: %v", err)
 	}
@@ -517,7 +529,7 @@ func TestWorkspaceCommitThrottledNotDebounced(t *testing.T) {
 	}
 
 	// Plusieurs mutations rapprochées, comme un agent qui travaille.
-	project, err := s.AddProject("sillage", "", "", []Repo{{Path: "/tmp/sillage"}}, nil)
+	project, err := s.AddProject("sillage", "", "", []Repo{{Path: "/tmp/sillage"}}, nil, nil)
 	if err != nil {
 		t.Fatalf("AddProject: %v", err)
 	}
@@ -586,7 +598,7 @@ func TestWorkspaceCommitFiresOncePerInterval(t *testing.T) {
 	s.mu.Unlock()
 
 	// Trois mutations dans le même créneau : un seul commit attendu.
-	project, err := s.AddProject("sillage", "", "", []Repo{{Path: "/tmp/sillage"}}, nil)
+	project, err := s.AddProject("sillage", "", "", []Repo{{Path: "/tmp/sillage"}}, nil, nil)
 	if err != nil {
 		t.Fatalf("AddProject: %v", err)
 	}

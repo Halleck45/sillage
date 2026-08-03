@@ -4,10 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -53,14 +55,32 @@ func currentBranch(repoPath string) (string, error) {
 }
 
 // CreateWorktree crée un worktree git dédié à une tâche, sur une nouvelle
-// branche partant de la branche par défaut du dépôt. Retourne le répertoire
-// du worktree et le nom de la branche de base.
-func CreateWorktree(repoPath, dataDir, taskID, branch string) (dir, base string, err error) {
-	base, err = currentBranch(repoPath)
-	if err != nil {
-		return "", "", err
+// branche partant de base (la branche du chantier, voir CreateCardWorktree).
+// Si base est vide, la branche courante du dépôt est utilisée. Retourne le
+// répertoire du worktree et la branche de base effective.
+func CreateWorktree(repoPath, dataDir, taskID, branch, base string) (dir, resolvedBase string, err error) {
+	return createWorktree(repoPath, filepath.Join(dataDir, "worktrees", taskID), branch, base)
+}
+
+// CreateCardWorktree crée la branche de feature d'un chantier sur un dépôt,
+// avec son worktree dédié : c'est là que les tâches acceptées sont fusionnées,
+// et c'est cette branche que la livraison pousse. base vide = branche courante
+// du dépôt.
+func CreateCardWorktree(repoPath, dataDir, cardID, repoName, branch, base string) (dir, resolvedBase string, err error) {
+	name := "ws-" + cardID + "-" + Slugify(repoName)
+	return createWorktree(repoPath, filepath.Join(dataDir, "worktrees", name), branch, base)
+}
+
+// createWorktree est l'implémentation commune : crée dir comme worktree du
+// dépôt repoPath, sur la branche branch partant de base.
+func createWorktree(repoPath, dir, branch, base string) (string, string, error) {
+	if base == "" {
+		var err error
+		base, err = currentBranch(repoPath)
+		if err != nil {
+			return "", "", err
+		}
 	}
-	dir = filepath.Join(dataDir, "worktrees", taskID)
 	if err := os.MkdirAll(filepath.Dir(dir), 0o700); err != nil {
 		return "", "", err
 	}
@@ -186,6 +206,21 @@ func parseDiff(output string) []DiffFile {
 	return files
 }
 
+// CountCommits compte les commits de from..to (lecture seule, aucun réseau).
+// Une révision inconnue (par exemple origin/<branche> avant tout push) rend
+// une erreur : l'appelant décide quoi en faire.
+func CountCommits(dir, from, to string) (int, error) {
+	out, err := runGit(dir, gitDefaultTimeout, "rev-list", "--count", from+".."+to)
+	if err != nil {
+		return 0, err
+	}
+	n, err := strconv.Atoi(strings.TrimSpace(out))
+	if err != nil {
+		return 0, err
+	}
+	return n, nil
+}
+
 // Commits liste les commits de base..HEAD (le plus récent en premier, comme git log).
 func Commits(dir, base string) ([]CommitInfo, error) {
 	out, err := runGit(dir, gitDefaultTimeout, "log", base+"..HEAD", "--pretty=format:%h|%s|%cr")
@@ -207,9 +242,9 @@ func Commits(dir, base string) ([]CommitInfo, error) {
 	return commits, nil
 }
 
-// Ship commite les changements en attente puis pousse la branche vers origin.
-// C'est le SEUL endroit du code qui exécute `git push`.
-func Ship(dir, branch, title string) (string, error) {
+// CommitAll indexe tout l'arbre de travail de dir et commite s'il y a quelque
+// chose à commiter (sinon ne fait rien, sans erreur). Aucun réseau.
+func CommitAll(dir, message string) (string, error) {
 	var out strings.Builder
 
 	addOut, err := runGit(dir, gitDefaultTimeout, "add", "-A")
@@ -222,12 +257,97 @@ func Ship(dir, branch, title string) (string, error) {
 	if err != nil {
 		return out.String(), err
 	}
-	if strings.TrimSpace(statusOut) != "" {
-		commitOut, err := runGit(dir, gitDefaultTimeout, "commit", "-m", "Sillage: "+title)
-		out.WriteString(commitOut)
-		if err != nil {
-			return out.String(), fmt.Errorf("git commit failed: %w", err)
+	if strings.TrimSpace(statusOut) == "" {
+		return out.String(), nil
+	}
+	commitOut, err := runGit(dir, gitDefaultTimeout, "commit", "-m", message)
+	out.WriteString(commitOut)
+	if err != nil {
+		return out.String(), fmt.Errorf("git commit failed: %w", err)
+	}
+	return out.String(), nil
+}
+
+// ErrMergeConflict signale un conflit de fusion (branche de tâche dans la
+// branche du chantier, ou branche de chantier dans la branche de destination).
+var ErrMergeConflict = errors.New("merge conflict")
+
+// HeadSha retourne le SHA de HEAD d'un worktree (chaîne vide en cas d'échec).
+// Sert à savoir si une fusion a réellement ajouté des commits, sans dépendre
+// de la sortie de git, qui est localisée selon la machine.
+func HeadSha(dir string) string {
+	out, err := runGit(dir, gitDefaultTimeout, "rev-parse", "HEAD")
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(out)
+}
+
+// IsWorktreeClean indique si un worktree n'a aucune modification en attente
+// (fichiers non suivis compris). Une erreur git vaut « pas propre » : on ne
+// prend jamais de décision automatique sur une information manquante.
+func IsWorktreeClean(dir string) bool {
+	out, err := runGit(dir, gitDefaultTimeout, "status", "--porcelain")
+	if err != nil {
+		return false
+	}
+	return strings.TrimSpace(out) == ""
+}
+
+// IsBranchMergedInto indique si branch est entièrement contenue dans target
+// (tous ses commits en sont des ancêtres). Lecture seule : sert à détecter une
+// fusion faite à la main, hors de Sillage.
+func IsBranchMergedInto(dir, branch, target string) bool {
+	_, err := runGit(dir, gitDefaultTimeout, "merge-base", "--is-ancestor", branch, target)
+	return err == nil
+}
+
+// MergeBranch fusionne branch dans la branche courante du worktree dir, avec
+// un merge commit dédié (--no-ff) : l'historique du chantier garde une trace
+// lisible de chaque tâche acceptée. Aucun réseau.
+//
+// En cas de conflit, la fusion est annulée (git merge --abort, l'arbre revient
+// intact) et l'erreur enveloppe ErrMergeConflict avec la liste des fichiers en
+// conflit : rien n'est résolu automatiquement.
+func MergeBranch(dir, branch, message string) (string, []string, error) {
+	out, err := runGit(dir, gitDefaultTimeout, "merge", "--no-ff", "-m", message, branch)
+	if err == nil {
+		return out, nil, nil
+	}
+	conflicts := conflictedFiles(dir)
+	_, _ = runGit(dir, gitDefaultTimeout, "merge", "--abort")
+	if len(conflicts) > 0 {
+		return out, conflicts, fmt.Errorf("%w: %s", ErrMergeConflict, strings.Join(conflicts, ", "))
+	}
+	return out, nil, fmt.Errorf("git merge failed: %w", err)
+}
+
+// conflictedFiles liste les fichiers en conflit d'une fusion en cours.
+func conflictedFiles(dir string) []string {
+	out, err := runGit(dir, gitDefaultTimeout, "diff", "--name-only", "--diff-filter=U")
+	if err != nil {
+		return nil
+	}
+	var files []string
+	for _, line := range strings.Split(strings.TrimSpace(out), "\n") {
+		if line = strings.TrimSpace(line); line != "" {
+			files = append(files, line)
 		}
+	}
+	return files
+}
+
+// Ship pousse la branche d'un chantier vers origin (les commits ont déjà été
+// faits à l'acceptation des tâches, voir MergeBranch ; un arbre sale est tout
+// de même commité pour ne rien perdre). C'est, avec SyncPush (espace de
+// travail), le SEUL endroit du code qui exécute `git push`.
+func Ship(dir, branch, title string) (string, error) {
+	var out strings.Builder
+
+	commitOut, err := CommitAll(dir, "Sillage: "+title)
+	out.WriteString(commitOut)
+	if err != nil {
+		return out.String(), err
 	}
 
 	pushOut, err := runGit(dir, gitPushTimeout, "push", "-u", "origin", branch)
@@ -238,59 +358,198 @@ func Ship(dir, branch, title string) (string, error) {
 	return out.String(), nil
 }
 
-// --- Ouverture de pull request (lecture seule, jamais de push) ---
+// --- Livraison en fusion locale (mode "merge" : jamais de push) ---
 
-// githubSSHRemoteRe et githubHTTPSRemoteRe reconnaissent les deux formats
-// d'URL de remote github.com utilisés par git (ssh de type scp, ou https).
-var githubSSHRemoteRe = regexp.MustCompile(`^git@github\.com:([^/]+)/(.+?)(\.git)?/?$`)
-var githubHTTPSRemoteRe = regexp.MustCompile(`^https?://github\.com/([^/]+)/(.+?)(\.git)?/?$`)
+// ErrTargetDiverged signale que la branche de destination a divergé : la
+// fusion locale n'accepte que le fast-forward, aucune résolution automatique.
+var ErrTargetDiverged = errors.New("target branch has diverged")
 
-// ParseGithubRemote extrait le owner et le repo d'une URL de remote
-// github.com, au format ssh (git@github.com:owner/repo.git) ou https
-// (https://github.com/owner/repo[.git]).
-func ParseGithubRemote(remoteURL string) (owner, repo string, ok bool) {
+// ErrTargetBusy signale que la branche de destination est empruntée par un
+// worktree dans un état qui interdit toute fusion sûre (autre branche
+// courante, ou modifications non commitées dans le dépôt de travail).
+var ErrTargetBusy = errors.New("target branch is busy")
+
+// MergeLocal fusionne la branche d'un chantier dans la branche de destination,
+// en local et en fast-forward uniquement. Ne pousse JAMAIS rien : pousser une
+// branche partagée reste une décision humaine, prise dans un terminal.
+//
+// Deux chemins, dans cet ordre :
+//  1. worktree transitoire dédié (retiré à la fin), quand target n'est
+//     empruntée par aucun worktree : le dépôt de travail n'est pas touché ;
+//  2. repli dans le dépôt lui-même quand target y est déjà empruntée (cas
+//     courant : main est la branche courante du dépôt de travail). Autorisé
+//     uniquement si target EST la branche courante et que l'arbre est propre :
+//     jamais de changement de branche, jamais de stash, jamais de force. Sinon
+//     ErrTargetBusy, avec la commande à jouer à la main.
+func MergeLocal(repoPath, dataDir, cardID, repoName, target, source string) (string, error) {
+	dir := filepath.Join(dataDir, "worktrees", ".merge-"+cardID+"-"+Slugify(repoName))
+	_, _ = runGit(repoPath, gitDefaultTimeout, "worktree", "prune")
+	_ = os.RemoveAll(dir)
+
+	if _, err := runGit(repoPath, gitDefaultTimeout, "worktree", "add", dir, target); err == nil {
+		defer RemoveWorktree(repoPath, dir)
+		return mergeFastForward(dir, target, source)
+	}
+
+	cur, err := currentBranch(repoPath)
+	if err != nil {
+		return "", err
+	}
+	if cur != target {
+		return "", fmt.Errorf("%w: %s is checked out in another worktree; run `git merge --ff-only %s` there", ErrTargetBusy, target, source)
+	}
+	statusOut, err := runGit(repoPath, gitDefaultTimeout, "status", "--porcelain")
+	if err != nil {
+		return "", err
+	}
+	if strings.TrimSpace(statusOut) != "" {
+		return "", fmt.Errorf("%w: %s has uncommitted changes in %s", ErrTargetBusy, target, repoPath)
+	}
+	return mergeFastForward(repoPath, target, source)
+}
+
+// mergeFastForward exécute la fusion fast-forward proprement dite et traduit
+// un refus de git en ErrTargetDiverged (message actionnable).
+func mergeFastForward(dir, target, source string) (string, error) {
+	out, err := runGit(dir, gitDefaultTimeout, "merge", "--ff-only", source)
+	if err != nil {
+		return out, fmt.Errorf("%w: %s cannot fast-forward to %s, merge manually", ErrTargetDiverged, target, source)
+	}
+	return out, nil
+}
+
+// --- Ouverture de pull/merge request (lecture seule, jamais de push) ---
+
+// remoteSSHRe et remoteHTTPSRe reconnaissent les deux formats d'URL de remote
+// utilisés par git : ssh de type scp (git@host:owner/repo.git) ou https
+// (https://host/owner/repo[.git], sous-groupes compris pour GitLab).
+var remoteSSHRe = regexp.MustCompile(`^(?:[^@]+@)?([^:/]+):(.+?)(\.git)?/?$`)
+var remoteHTTPSRe = regexp.MustCompile(`^[a-z]+://(?:[^@/]+@)?([^:/]+)(?::\d+)?/(.+?)(\.git)?/?$`)
+
+// ParseRemote extrait l'hôte et le chemin (owner/repo, sous-groupes GitLab
+// compris) d'une URL de remote git.
+func ParseRemote(remoteURL string) (host, path string, ok bool) {
 	remoteURL = strings.TrimSpace(remoteURL)
-	if m := githubSSHRemoteRe.FindStringSubmatch(remoteURL); m != nil {
+	if m := remoteHTTPSRe.FindStringSubmatch(remoteURL); m != nil {
 		return m[1], m[2], true
 	}
-	if m := githubHTTPSRemoteRe.FindStringSubmatch(remoteURL); m != nil {
+	if m := remoteSSHRe.FindStringSubmatch(remoteURL); m != nil {
 		return m[1], m[2], true
 	}
 	return "", "", false
 }
 
-// OpenPR ouvre une pull request pour une branche déjà poussée sur origin.
-// Tente d'abord `gh pr create` (aucune commande d'écriture : la branche est
-// supposée déjà poussée par Ship). En l'absence de gh, ou en cas d'échec,
-// replie sur une URL de comparaison GitHub en lecture seule.
-func OpenPR(dir, branch, base, title string) (string, error) {
-	if _, lookErr := exec.LookPath("gh"); lookErr == nil {
-		if url, err := runGhPRCreate(dir, branch, title); err == nil && url != "" {
-			return url, nil
-		}
+// ParseGithubRemote extrait le owner et le repo d'une URL de remote
+// github.com, au format ssh (git@github.com:owner/repo.git) ou https
+// (https://github.com/owner/repo[.git]).
+func ParseGithubRemote(remoteURL string) (owner, repo string, ok bool) {
+	host, path, ok := ParseRemote(remoteURL)
+	if !ok || host != "github.com" {
+		return "", "", false
 	}
-	return fallbackCompareURL(dir, base, branch)
+	owner, repo, found := strings.Cut(path, "/")
+	if !found || owner == "" || repo == "" {
+		return "", "", false
+	}
+	return owner, repo, true
 }
 
-// runGhPRCreate exécute `gh pr create` (timeout 60 s, environnement hérité)
-// et extrait l'URL de la pull request depuis sa sortie standard.
-func runGhPRCreate(dir, branch, title string) (string, error) {
+// ForgeInfo décrit le remote origin d'un dépôt. RemoteURL vide signifie
+// « aucun remote origin » ; Provider vide avec un RemoteURL renseigné signifie
+// « forge inconnue » (les deux cas n'ont pas la même conséquence produit).
+type ForgeInfo struct {
+	Provider  string // github|gitlab|""
+	Host      string
+	Path      string // owner/repo, sous-groupes GitLab compris
+	RemoteURL string
+}
+
+// DetectForge déduit le fournisseur de forge du remote origin d'un dépôt.
+// Jamais persisté : redéduit à chaque opération, un remote peut changer.
+func DetectForge(dir string) ForgeInfo {
+	out, err := runGit(dir, gitDefaultTimeout, "remote", "get-url", "origin")
+	if err != nil {
+		return ForgeInfo{}
+	}
+	info := ForgeInfo{RemoteURL: strings.TrimSpace(out)}
+	if info.RemoteURL == "" {
+		return ForgeInfo{}
+	}
+	host, path, ok := ParseRemote(info.RemoteURL)
+	if !ok {
+		return info
+	}
+	info.Host, info.Path = host, path
+	switch {
+	case host == "github.com":
+		info.Provider = "github"
+	case strings.Contains(host, "gitlab"):
+		info.Provider = "gitlab"
+	}
+	return info
+}
+
+// OpenPR ouvre une pull request (GitHub) ou une merge request (GitLab) pour une
+// branche déjà poussée sur origin. Aucune commande d'écriture git : la branche
+// a été poussée par Ship. En l'absence du CLI de la forge, ou en cas d'échec,
+// replie sur une URL de création pré-remplie, en lecture seule.
+func OpenPR(dir, branch, base, title string) (string, error) {
+	info := DetectForge(dir)
+	switch info.Provider {
+	case "github":
+		if _, lookErr := exec.LookPath("gh"); lookErr == nil {
+			if u, err := runForgeCreate(dir, "gh", "pr", "create", "--head", branch, "--base", base, "--title", title, "--body", prBody(title)); err == nil && u != "" {
+				return u, nil
+			}
+		}
+		return GithubCompareURL(info.Host, info.Path, base, branch), nil
+	case "gitlab":
+		if _, lookErr := exec.LookPath("glab"); lookErr == nil {
+			if u, err := runForgeCreate(dir, "glab", "mr", "create", "--source-branch", branch, "--target-branch", base, "--title", title, "--description", prBody(title), "--yes"); err == nil && u != "" {
+				return u, nil
+			}
+		}
+		return GitlabNewMRURL(info.Host, info.Path, base, branch), nil
+	}
+	return "", fmt.Errorf("origin remote is not a github or gitlab repository")
+}
+
+// GithubCompareURL construit l'URL de création de pull request GitHub
+// pré-remplie (lecture seule, aucun effet de bord).
+func GithubCompareURL(host, path, base, branch string) string {
+	return fmt.Sprintf("https://%s/%s/compare/%s...%s?expand=1", host, path, base, branch)
+}
+
+// GitlabNewMRURL construit l'URL de création de merge request GitLab
+// pré-remplie (lecture seule, aucun effet de bord).
+func GitlabNewMRURL(host, path, base, branch string) string {
+	return fmt.Sprintf("https://%s/%s/-/merge_requests/new?merge_request[source_branch]=%s&merge_request[target_branch]=%s",
+		host, path, url.QueryEscape(branch), url.QueryEscape(base))
+}
+
+// prBody est le corps de la pull/merge request créée par Sillage.
+func prBody(title string) string {
+	return "Created with Sillage\n\n" + title
+}
+
+// runForgeCreate exécute le CLI de la forge (gh ou glab, timeout 60 s,
+// environnement hérité) et extrait l'URL de la requête depuis sa sortie.
+func runForgeCreate(dir, bin string, args ...string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
-	body := "Created with Sillage\n\n" + title
-	cmd := exec.CommandContext(ctx, "gh", "pr", "create", "--head", branch, "--title", title, "--body", body)
+	cmd := exec.CommandContext(ctx, bin, args...)
 	cmd.Dir = dir
 	cmd.Env = os.Environ()
 
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		return "", fmt.Errorf("gh pr create failed: %w: %s", err, strings.TrimSpace(string(out)))
+		return "", fmt.Errorf("%s %s failed: %w: %s", bin, args[0], err, strings.TrimSpace(string(out)))
 	}
-	if url := extractURL(string(out)); url != "" {
-		return url, nil
+	if u := extractURL(string(out)); u != "" {
+		return u, nil
 	}
-	return "", fmt.Errorf("gh pr create succeeded but no URL was found in its output")
+	return "", fmt.Errorf("%s succeeded but no URL was found in its output", bin)
 }
 
 // extractURL retourne la première ligne ressemblant à une URL http(s) dans s.
@@ -302,20 +561,6 @@ func extractURL(s string) string {
 		}
 	}
 	return ""
-}
-
-// fallbackCompareURL construit une URL de comparaison GitHub en lecture
-// seule, sans exécuter aucune commande d'écriture.
-func fallbackCompareURL(dir, base, branch string) (string, error) {
-	out, err := runGit(dir, gitDefaultTimeout, "remote", "get-url", "origin")
-	if err != nil {
-		return "", fmt.Errorf("no github remote configured")
-	}
-	owner, repo, ok := ParseGithubRemote(out)
-	if !ok {
-		return "", fmt.Errorf("origin remote is not a github.com repository")
-	}
-	return fmt.Sprintf("https://github.com/%s/%s/compare/%s...%s?expand=1", owner, repo, base, branch), nil
 }
 
 // githubBranchURL construit l'URL de la branche sur GitHub

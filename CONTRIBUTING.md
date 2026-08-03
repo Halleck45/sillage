@@ -23,9 +23,10 @@ The frontend is plain HTML/CSS/JS in `web/`, embedded in the binary: rebuild and
 
 These are the product's security promises. PRs that weaken them will not be merged:
 
-1. Agents never get push rights: no `git push` outside `Ship()` in `internal/server/git.go`, no push-capable entries in agent tool allowlists, no permission-bypass flags for agent CLIs.
-2. Shipping requires an explicit human confirmation (`{"confirm": true}`) on an authenticated request.
-3. The server must stay safe to run on a laptop: localhost by default, hashed password, rate-limited login.
+1. Agents never get push rights: no `git push` outside `Ship()` and `SyncPush()` in `internal/server/git.go`, no push-capable entries in agent tool allowlists, no permission-bypass flags for agent CLIs. `Ship()` pushes a workstream branch; `SyncPush()` only ever operates on the data directory, never on a project repository.
+2. Shipping requires an explicit human confirmation (`{"confirm": true}`) on an authenticated request. Shipping a workstream is the only outbound action in the product.
+3. Local-merge delivery never pushes and never fast-forwards anything but the target branch, and never switches branches in your working repository: pushing a shared branch stays a human decision, taken in a terminal.
+4. The server must stay safe to run on a laptop: localhost by default, hashed password, rate-limited login.
 
 ## Style
 

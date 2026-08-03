@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Workstreams are feature branches. A workstream now owns a `sillage/ws-<ref>-<slug>` branch per repository, with its own worktree; task branches start from it and are merged into it when accepted, so a task created after an acceptance builds on the work already accepted.
+- Shipping moved from the task to the workstream: one button at the top of the workstream view, with a one-line announcement of what it will do, and a recap panel whose action button is the confirmation. Two clicks instead of four, and the second one informed.
+- Reviewing a task is now Accept / Refuse, revealed on hover in the task list. Accepting merges locally (no confirmation, reversible with Reopen); a merge conflict leaves the task in review and says which files clash.
+- New per-project delivery setting: open a pull request (GitHub via `gh`) or a merge request (GitLab via `glab`), or merge locally into a branch of your choice. Detected from the repository remotes at project creation. Local merge is fast-forward only and never pushes.
+- Health warnings when `gh` or `glab` is missing, when a repository has no `origin` remote, or when the forge is unknown. Everything keeps working: the fallback is a prefilled pull request URL.
+- Task statuses are now `running / review / accepted / cancelled` (`shipped` and `done` migrate to `accepted`). The Done column now means shipped, not merely reviewed.
+- Branches you merge by hand into the workstream branch are noticed: the task is marked accepted (only when no agent is running and its worktree is clean), on opening the workstream view and every 60 seconds after that.
+- A shipped workstream keeps living: adding a task, or accepting one that brings new commits, marks it as not fully shipped again, so the button comes back. The next delivery pushes only the new commits and updates the existing pull request instead of opening a second one.
+- Removed: per-task ship, per-task "Open the PR", and "Mark as completed".
 - Keyboard-first creation: `N` creates the object of the current screen (task, workstream or project), `?` opens a shortcut cheatsheet, `/` opens search, `Esc` closes the task panel.
 - "Create and add another" in the new-task form (`Ctrl/⌘+Shift+Enter`): the form stays open with the agent and repository kept, so a batch of tasks can be queued in a row. "Create and chat" is `Ctrl/⌘+Enter`.
 - Creation buttons now carry a `+` pictogram and their shortcut badge.
