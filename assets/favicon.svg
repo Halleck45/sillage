@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" shape-rendering="crispEdges">
+  <defs><clipPath id="corners"><rect width="16" height="16" rx="3.20"/></clipPath></defs>
+  <g clip-path="url(#corners)">
+    <rect width="16" height="16" fill="#122220"/>
+    <rect x="7" y="2" width="2" height="1" fill="#f0eae1"/>
+    <rect x="7" y="3" width="3" height="1" fill="#f0eae1"/>
+    <rect x="7" y="4" width="4" height="1" fill="#f0eae1"/>
+    <rect x="7" y="5" width="5" height="1" fill="#f0eae1"/>
+    <rect x="7" y="6" width="6" height="1" fill="#f0eae1"/>
+    <rect x="7" y="7" width="1" height="1" fill="#f0eae1"/>
+    <rect x="0" y="8" width="2" height="1" fill="#78999a"/>
+    <rect x="7" y="8" width="1" height="1" fill="#f0eae1"/>
+    <rect x="14" y="8" width="2" height="1" fill="#78999a"/>
+    <rect x="1" y="9" width="2" height="1" fill="#78999a"/>
+    <rect x="4" y="9" width="8" height="1" fill="#f0eae1"/>
+    <rect x="13" y="9" width="2" height="1" fill="#78999a"/>
+    <rect x="2" y="10" width="2" height="1" fill="#78999a"/>
+    <rect x="5" y="10" width="6" height="1" fill="#f0eae1"/>
+    <rect x="12" y="10" width="2" height="1" fill="#78999a"/>
+    <rect x="3" y="11" width="2" height="1" fill="#78999a"/>
+    <rect x="11" y="11" width="2" height="1" fill="#78999a"/>
+    <rect x="4" y="12" width="2" height="1" fill="#78999a"/>
+    <rect x="10" y="12" width="2" height="1" fill="#78999a"/>
+    <rect x="5" y="13" width="2" height="1" fill="#78999a"/>
+    <rect x="9" y="13" width="2" height="1" fill="#78999a"/>
+    <rect x="6" y="14" width="4" height="1" fill="#78999a"/>
+  </g>
+</svg>
