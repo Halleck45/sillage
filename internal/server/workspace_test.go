@@ -144,6 +144,32 @@ func TestNormalizeReposValidation(t *testing.T) {
 	}
 }
 
+// TestAddProjectDerivesName couvre la règle qui permet à la modale de création
+// de ne poser qu'une question (le chemin) : sans nom, le projet prend celui du
+// premier dépôt.
+func TestAddProjectDerivesName(t *testing.T) {
+	s, err := NewStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+
+	p, err := s.AddProject("  ", "", "", []Repo{{Path: "/tmp/mon-projet"}}, nil, nil)
+	if err != nil {
+		t.Fatalf("AddProject: %v", err)
+	}
+	if p.Name != "mon-projet" {
+		t.Fatalf("nom déduit attendu 'mon-projet', reçu %q", p.Name)
+	}
+
+	named, err := s.AddProject("Autre nom", "", "", []Repo{{Path: "/tmp/mon-projet-2"}}, nil, nil)
+	if err != nil {
+		t.Fatalf("AddProject: %v", err)
+	}
+	if named.Name != "Autre nom" {
+		t.Fatalf("un nom fourni doit être conservé, reçu %q", named.Name)
+	}
+}
+
 func TestValidateRepoPath(t *testing.T) {
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git non disponible dans cet environnement")

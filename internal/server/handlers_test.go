@@ -1,8 +1,13 @@
 package server
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"testing/fstest"
@@ -91,6 +96,51 @@ func TestStaticFilesRevalidate(t *testing.T) {
 	}
 	if before, after := etagOf(handler), etagOf(rebuilt.Handler()); before == after {
 		t.Fatalf("l'ETag doit changer avec le contenu, inchangé : %s", before)
+	}
+}
+
+// TestCreateProjectFromPathOnly couvre la promesse de la modale « Nouveau
+// projet » : un seul champ, le chemin d'un dépôt git. Le nom du projet vient du
+// dépôt et le mode de livraison des remotes, sans qu'aucune question soit posée
+// à froid.
+func TestCreateProjectFromPathOnly(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git non disponible dans cet environnement")
+	}
+	srv := newTestServer(t)
+	repo := filepath.Join(t.TempDir(), "mon-projet")
+	if err := os.MkdirAll(repo, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	initTestRepo(t, repo)
+
+	body := `{"repos":[{"path":` + strconv.Quote(repo) + `}]}`
+	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	srv.handleCreateProject(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("attendu 200, reçu %d (body=%s)", w.Code, w.Body.String())
+	}
+	var out ProjectOut
+	if err := json.Unmarshal(w.Body.Bytes(), &out); err != nil {
+		t.Fatalf("réponse illisible : %v", err)
+	}
+	if out.Name != "mon-projet" {
+		t.Fatalf("nom déduit du dépôt attendu 'mon-projet', reçu %q", out.Name)
+	}
+	if out.Delivery.Mode == "" {
+		t.Fatalf("le mode de livraison devrait être déduit, reçu vide")
+	}
+
+	// Sans dépôt, il ne reste rien à déduire : la création doit être refusée.
+	req = httptest.NewRequest(http.MethodPost, "/", strings.NewReader(`{}`))
+	req.Header.Set("Content-Type", "application/json")
+	w = httptest.NewRecorder()
+	srv.handleCreateProject(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("attendu 400 sans dépôt, reçu %d (body=%s)", w.Code, w.Body.String())
 	}
 }
 

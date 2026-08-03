@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- Creating a project asks one question: the path to a git repository. The project name comes from the repository, the delivery mode from its remotes; description, instructions and links stay empty until you need them. `name` is now optional on `POST /api/projects`.
+- Project settings became a modal with side navigation instead of eleven fields stacked in one scrolling column: General, Repositories, Instructions, Delivery, Links, Delete. Two or three fields per panel, no horizontal rules, and the project context prompt finally gets room to breathe.
+- The delivery mode is picked from four cards, each carrying the sentence describing what it will do, instead of a dropdown with a caption that only changed once you had already changed your selection.
+- The target branch moved to General under its real name, "Base branch": Sillage also uses it as the branch workstreams start from, so it is the project's reference branch, not a delivery sub-setting.
+- Deleting a project moved out of an always-visible red block into its own panel at the bottom of the navigation. It keeps its two-step confirmation.
+- Pressing `Enter` in the "add a link" field now adds the link instead of saving the project and dropping the URL you had just typed.
+
 ## v0.5.0 (2026-08-03)
 
 - Workstreams are feature branches. A workstream now owns a `sillage/ws-<ref>-<slug>` branch per repository, with its own worktree; task branches start from it and are merged into it when accepted, so a task created after an acceptance builds on the work already accepted.

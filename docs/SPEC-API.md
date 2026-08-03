@@ -25,6 +25,10 @@ Delivery { "mode": "pr|push|merge|merge-push", "target": "main", "stackedPrs": f
           //   merge      fusionne dans target, en local, sans jamais pousser
           //   merge-push fusionne dans target puis pousse target
           // target vide = branche par défaut du dépôt. stackedPrs : réservé, ignoré.
+          // target n'est pas qu'une destination de livraison : c'est aussi la branche
+          // d'où partent les branches de chantier (voir "Livraison d'un chantier").
+          // C'est donc la branche de référence du projet, présentée comme telle dans
+          // l'UI (« Branche de base », onglet Général) et non sous la livraison.
 
 Project { "id": "p1", "name": "sillage", "description": "...", "repos": [Repo, ...],
           "links": [Link, ...], "unread": 2,
@@ -113,7 +117,7 @@ Settings { "displayName": "Ada", "lang": "fr" }   // lang : ""|"fr"|"en"
 | POST | `/api/agents` | `{name, emoji?, color?, cli, model?, contextPrompt?}` | Agent (name et cli requis ; cli ∈ {claude, codex, fake} ; id = slug du name, 400 si déjà pris) |
 | PATCH | `/api/agents/{id}` | mêmes champs, tous optionnels | Agent |
 | DELETE | `/api/agents/{id}` | | 204 (400 si une tâche référence encore l'agent) |
-| POST | `/api/projects` | `{name, path}` ou `{name, repos:[{name?,path}, ...], description?, contextPrompt?, links?:[{url,title?}, ...], delivery?}` | Project (400 si un path est invalide/pas un dépôt git, noms de repo dupliqués, mode de livraison inconnu, ou lien invalide/en trop grand nombre). `delivery` absent = déduit des remotes des dépôts (voir « Livraison d'un chantier ») |
+| POST | `/api/projects` | `{name?, path}` ou `{name?, repos:[{name?,path}, ...], description?, contextPrompt?, links?:[{url,title?}, ...], delivery?}` | Project (400 si aucun dépôt, un path invalide/pas un dépôt git, noms de repo dupliqués, mode de livraison inconnu, ou lien invalide/en trop grand nombre). Seul le chemin d'un dépôt est requis : `name` absent ou vide = basename du premier dépôt, `delivery` absent = déduit des remotes des dépôts (voir « Livraison d'un chantier ») |
 | PATCH | `/api/projects/{id}` | `{name?, description?, checkCmd?, contextPrompt?, repos?, links?, delivery?}` | Project (repos/links, si fournis, remplacent la liste entière ; retirer un repo ne casse pas les tâches existantes) |
 | DELETE | `/api/projects/{id}` | `{confirm:true}` | 204 (voir « Suppressions » ci-dessous). **Validation humaine obligatoire** : refus 400 sans `confirm` |
 | POST | `/api/cards` | `{projectId, title, column?, contextPrompt?}` | Card. `column`, si fourni, doit valoir `"soon"` (400 `"cards are created in the soon column"` sinon) : les cartes se créent toujours dans "Bientôt" |
@@ -190,7 +194,7 @@ Actions destructives, jamais déclenchées depuis les listes : confirmation doub
 
 Le chantier est une branche de feature : une branche `sillage/ws-<card.ref>-<slug>` par couple (chantier, dépôt), avec son worktree dédié, créée à la première tâche du chantier sur ce dépôt depuis `project.delivery.target` (ou la branche courante du dépôt si `target` est vide). Les branches de tâche partent de cette branche et y sont fusionnées à l'acceptation ; elles ne sont jamais poussées.
 
-**Réglage du projet** (`Project.delivery.mode`), quatre comportements, réglables à la création et dans les paramètres du projet :
+**Réglage du projet** (`Project.delivery.mode`), quatre comportements. L'API l'accepte à la création comme à la modification ; l'UI ne le demande qu'après coup (onglet Livraison des réglages du projet), la création s'appuyant sur la déduction décrite plus bas :
 
 - `"pr"` : pousse la branche du chantier puis ouvre la pull request (GitHub, `gh pr create`) ou la merge request (GitLab, `glab mr create`) ; en l'absence du CLI ou en cas d'échec, repli sur une URL de création pré-remplie en lecture seule (`https://<host>/<path>/compare/<base>...<branch>?expand=1`, ou `https://<host>/<path>/-/merge_requests/new?merge_request[source_branch]=...&merge_request[target_branch]=...`). La branche est poussée dans les deux cas : le repli ne dégrade que l'ouverture de la requête.
 - `"push"` : pousse la branche du chantier, et s'arrête là. Aucune pull request n'est ouverte, `prUrl` reste vide.
@@ -329,6 +333,35 @@ Le frontend maintient son état en mémoire à partir de `/api/state` + SSE ; re
 - Tokens : jamais affichés dans le flux de travail (kanban, détail de tâche, liste des projets), pour ne pas ajouter de charge mentale. Seul endroit visible : Réglages > onglet Statistiques, consommation par projet, sans prix.
 - Une tâche s'ouvre → POST `/read`.
 
+### Créer un projet : une seule question
+
+La modale « Nouveau projet » ne demande **que le chemin d'un dépôt git**. Rien d'autre n'est posé à froid : le nom du projet est le basename du dépôt, le mode de livraison est déduit des remotes, la description, les instructions et les liens restent vides. Tout se règle ensuite, quand le besoin apparaît.
+
+La règle vaut aussi côté serveur (`name` optionnel sur `POST /api/projects`) : elle n'est pas une astuce de formulaire.
+
+### Réglages d'un projet : une modale à panneaux
+
+L'édition d'un projet est une modale à navigation latérale, pas une colonne de champs empilés. Six panneaux, deux ou trois champs chacun :
+
+| Panneau | Contenu |
+|---|---|
+| Général | nom, description, branche de base (`delivery.target`) |
+| Dépôts | les lignes nom + chemin, « + dépôt » |
+| Instructions | `contextPrompt` en grand (≥ 12 lignes), puis `checkCmd` |
+| Livraison | les quatre modes en cartes à cocher, plus l'avertissement de santé s'il y en a un |
+| Liens | les liens épinglés |
+| Supprimer | conséquences chiffrées, puis le bouton de suppression en deux temps |
+
+Règles qui tiennent ce découpage :
+
+- **La colonne de navigation est le seul découpage** : aucun filet horizontal, aucun bloc encadré. Le panneau garde une hauteur minimale pour que la modale ne saute pas d'un onglet à l'autre.
+- **La branche de base est dans Général, pas dans Livraison** : le serveur s'en sert aussi comme point de départ des branches de chantier, ce n'est donc pas un sous-réglage de la livraison.
+- **Le mode de livraison se choisit en cartes**, chacune portant sa phrase de conséquence (les quatre sont lisibles d'un coup). Une liste déroulante obligerait à changer la sélection pour découvrir ce que chaque option ferait, alors que c'est le réglage qui décide si le produit pousse ou non.
+- **La suppression est un panneau**, en bas de la colonne, détaché des autres : ce qu'on ne touche qu'une fois ne pèse pas en permanence sur ce qu'on change souvent. Elle garde la confirmation en deux temps.
+- **Les libellés des champs courts sont en ligne** (libellé à gauche, saisie à droite, alignés d'un champ à l'autre) ; seuls les grands champs gardent leur libellé au-dessus.
+- **L'aide est conditionnelle** : la phrase sur les chemins de dépôts ne s'affiche que si aucun chemin n'est encore saisi.
+- **Un seul enregistrement pour toute la modale** : les champs saisis sont conservés d'un panneau à l'autre, le pied affiche « Modifications non enregistrées » dès la première frappe, et une erreur de validation ramène sur le panneau fautif.
+
 ### Création de tâche et navigation clavier
 
 - Le bouton de création principal d'un écran porte trois éléments : un pictogramme `+`, son libellé, et le badge du raccourci (`N`). Le badge disparaît sous 700 px de large (pas de clavier physique attendu).
@@ -343,7 +376,7 @@ Le frontend maintient son état en mémoire à partir de `/api/state` + SSE ; re
   | Partout | `Esc` | Fermer recherche / modale / tiroir, ou refermer le panneau d'une tâche |
   | Formulaire | `Ctrl/⌘+Entrée` | Valider |
   | Formulaire | `Ctrl/⌘+Maj+Entrée` | Valider et enchaîner (modale Nouvelle tâche) |
-  | Formulaire | `Entrée` dans un champ d'une ligne | Valider |
+  | Formulaire | `Entrée` dans un champ d'une ligne | Valider (sauf dans le champ d'ajout d'un lien, où la validation est l'ajout du lien) |
   | Formulaire | `←` `→` `↑` `↓` | Changer d'agent dans le sélecteur |
   | Formulaire | `Tab` | Circuler dans les champs, sans jamais sortir de la modale |
   | Recherche | `↑` `↓` puis `Entrée` | Parcourir les résultats et ouvrir le résultat actif |

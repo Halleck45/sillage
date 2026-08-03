@@ -562,8 +562,10 @@ func (s *Server) handleCreateProject(w http.ResponseWriter, r *http.Request) {
 		Links         []Link    `json:"links"`
 		Delivery      *Delivery `json:"delivery"`
 	}
-	if err := decodeJSON(r, &body); err != nil || body.Name == "" {
-		writeError(w, http.StatusBadRequest, "name is required")
+	// Le nom est optionnel : sans lui, AddProject prend celui du premier dépôt.
+	// Créer un projet ne demande donc qu'un chemin.
+	if err := decodeJSON(r, &body); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid body")
 		return
 	}
 	repos := body.Repos
