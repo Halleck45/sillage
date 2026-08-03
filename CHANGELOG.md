@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- A workstream can now be shipped while some of its tasks are still running or waiting for review: what is accepted goes out now, the rest ships later. Nothing unreviewed can leak, because a workstream branch only ever contains accepted work; the ship bar and the recap announce the partial delivery ("2 tasks are not accepted yet"). The `tasks-pending` ship blocker is gone. A partially shipped workstream stays in "Doing": the "Done" column still means shipped *and* finished.
 - Creating a project asks one question: the path to a git repository. The project name comes from the repository, the delivery mode from its remotes; description, instructions and links stay empty until you need them. `name` is now optional on `POST /api/projects`.
 - Project settings became a modal with side navigation instead of eleven fields stacked in one scrolling column: General, Repositories, Instructions, Delivery, Links, Delete. Two or three fields per panel, no horizontal rules, and the project context prompt finally gets room to breathe.
 - The delivery mode is picked from four cards, each carrying the sentence describing what it will do, instead of a dropdown with a caption that only changed once you had already changed your selection.

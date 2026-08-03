@@ -50,7 +50,7 @@ Card    { "id": "c1", "projectId": "p1", "ref": 101, "column": "soon|doing|done"
           "tasksTotal": 4, "tasksDone": 1, "docsCount": 2, "messagesCount": 12,
           "reviewCount": 1, "progress": 25, "liveActivity": "..." | null,
           "branches": [CardBranch, ...], "shipReady": false,
-          "shipBlocker": "|no-tasks|tasks-pending|nothing-accepted|nothing-to-ship",
+          "shipBlocker": "|no-tasks|nothing-accepted|nothing-to-ship",
           "contextPrompt": "..." }
           // Card = chantier (vocabulaire produit) ; nom technique inchangé. contextPrompt :
           // texte libre transmis aux agents (voir plus bas), peut être vide.
@@ -205,7 +205,9 @@ Un mode inconnu est refusé en 400 (`"invalid delivery mode: must be pr, push, m
 
 À la création d'un projet sans champ `delivery`, le mode est déduit : `"pr"` si tous les dépôts pointent vers une forge connue (github.com, ou un hôte contenant `gitlab`), sinon `"merge"` avec `target` = branche courante du premier dépôt. Le fournisseur n'est jamais persisté : il est redéduit du remote `origin` à chaque opération.
 
-**Conditions de livraison** (`Card.shipReady`, sinon `Card.shipBlocker`) : au moins une tâche, aucune tâche `running` ni `review`, au moins une tâche `accepted`, au moins une branche de chantier. `POST /api/cards/{id}/ship` refuse en 409 avec le même vocabulaire.
+**Conditions de livraison** (`Card.shipReady`, sinon `Card.shipBlocker`) : au moins une tâche, au moins une tâche `accepted`, au moins une branche de chantier. `POST /api/cards/{id}/ship` refuse en 409 avec le même vocabulaire.
+
+**Livraison partielle.** Des tâches encore `running` ou `review` ne bloquent pas la livraison : la branche du chantier ne contient que le travail accepté, donc livrer un chantier inachevé n'envoie jamais rien qui n'ait été relu. On livre ce qui est prêt, on livre le reste ensuite (voir « Continuer un chantier déjà livré »). `counts.pending` de l'aperçu compte ces tâches ; l'UI l'annonce dans la barre de livraison et dans le récapitulatif de la modale, comme une information et non comme un avertissement. La colonne `done`, elle, exige toujours « tout terminal ET livré » : un chantier livré partiellement reste en `doing`.
 
 Deux états supplémentaires ne se calculent qu'avec git, donc dans l'aperçu (`GET /api/cards/{id}/delivery`) et non dans `shipReady`, qui est recalculé sous verrou sans jamais lancer de commande :
 
@@ -222,13 +224,13 @@ Un conflit annule la fusion (`git merge --abort`) : le worktree du chantier revi
 
 **Acceptation automatique des branches fusionnées à la main.** Une branche de tâche peut être fusionnée dans celle du chantier hors de Sillage (`git merge` dans un terminal). `GET /api/cards/{id}/delivery` le constate au passage : une tâche `review` dont la branche est entièrement contenue dans celle du chantier passe `accepted`, avec un message marqueur `[auto-accepted:<branche du chantier>]` (le frontend affiche une ligne système localisée) et les événements SSE `task`, `message`, `cards`, `agents`. Quatre garde-fous : aucun agent en cours pour la tâche, `filesCount > 0` (une tâche vide est contenue par construction), son worktree propre (du travail non commité n'est par définition pas fusionné), et sa branche effectivement contenue. Aucune écriture git : l'appel ne fait que constater. Le frontend rappelle cet endpoint à l'ouverture de la vue chantier et toutes les 60 s tant qu'elle reste ouverte.
 
-**Continuer un chantier déjà livré.** `CardBranch.shippedAt` signifie « livré, et rien de nouveau depuis ». Il est remis à `null` dès que du travail nouveau apparaît sur ce dépôt : création d'une tâche sur le chantier, ou acceptation qui ajoute réellement des commits à la branche (comparaison de SHA avant/après la fusion). Le chantier quitte alors la colonne `done`, et le bouton de livraison redevient actif une fois tout accepté ou refusé. `prUrl` est conservée : la pull request existe toujours, une nouvelle livraison la met à jour par un simple push (aucune tentative d'en ouvrir une seconde). Une acceptation automatique (voir ci-dessus) n'ajoute aucun commit et ne remet donc jamais le chantier en « non livré ».
+**Continuer un chantier déjà livré.** `CardBranch.shippedAt` signifie « livré, et rien de nouveau depuis ». Il est remis à `null` dès que du travail nouveau apparaît sur ce dépôt : création d'une tâche sur le chantier, ou acceptation qui ajoute réellement des commits à la branche (comparaison de SHA avant/après la fusion). Le chantier quitte alors la colonne `done`, et le bouton de livraison redevient actif dès qu'une acceptation a remis des commits à livrer. `prUrl` est conservée : la pull request existe toujours, une nouvelle livraison la met à jour par un simple push (aucune tentative d'en ouvrir une seconde). Une acceptation automatique (voir ci-dessus) n'ajoute aucun commit et ne remet donc jamais le chantier en « non livré ».
 
 `GET /api/cards/{id}/delivery` (aucune écriture git ; peut accepter des tâches déjà fusionnées, voir ci-dessus) :
 
 ```jsonc
 { "mode": "pr", "target": "main", "provider": "github|gitlab|",
-  "ready": false, "blocker": "tasks-pending",
+  "ready": true, "blocker": "",
   "warnings": ["gh not found in PATH; ..."],
   "counts": { "accepted": 3, "refused": 1, "pending": 1 },
   "repos": [ { "repoName": "api", "branch": "sillage/ws-101-refonte-auth", "base": "main",
@@ -328,7 +330,7 @@ Le frontend maintient son état en mémoire à partir de `/api/state` + SSE ; re
 
 ## Règles produit à respecter côté UI
 
-- Push / livraison uniquement via le bouton « Livrer » de l'en-tête du chantier, en deux clics : le bouton ouvre un récapitulatif (mode, dépôts, branche → base, commits, fichiers, avertissements) dont le bouton d'action **est** la confirmation (`{"confirm":true}`). Jamais automatique. Le bouton est grisé, avec la raison en infobulle, tant que `card.shipReady` est faux ou qu'il n'y a rien à livrer. Même règle de confirmation explicite pour la synchronisation de l'espace de travail (`/api/workspace/sync`).
+- Push / livraison uniquement via le bouton « Livrer » de l'en-tête du chantier, en deux clics : le bouton ouvre un récapitulatif (mode, dépôts, branche → base, commits, fichiers, avertissements) dont le bouton d'action **est** la confirmation (`{"confirm":true}`). Jamais automatique. Le bouton est grisé, avec la raison en infobulle, tant que `card.shipReady` est faux ou qu'il n'y a rien à livrer. Il reste actif quand des tâches sont encore en cours ou à relire : le récapitulatif annonce alors la livraison partielle (« n tâches ne sont pas encore acceptées ») plutôt que d'interdire d'envoyer ce qui est prêt. Même règle de confirmation explicite pour la synchronisation de l'espace de travail (`/api/workspace/sync`).
 - Accepter ou refuser une tâche s'obtient en un clic depuis la liste de tâches (boutons révélés au survol d'une tâche à relire) : ces actions sont locales et réversibles (`/reopen`), donc sans confirmation. L'état de chaque tâche (acceptée, refusée) est lisible dans la liste sans ouvrir la tâche.
 - Tokens : jamais affichés dans le flux de travail (kanban, détail de tâche, liste des projets), pour ne pas ajouter de charge mentale. Seul endroit visible : Réglages > onglet Statistiques, consommation par projet, sans prix.
 - Une tâche s'ouvre → POST `/read`.

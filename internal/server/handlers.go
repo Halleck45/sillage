@@ -1504,8 +1504,6 @@ func shipBlockerMessage(blocker string) string {
 	switch blocker {
 	case "no-tasks":
 		return "workstream has no task to ship"
-	case "tasks-pending":
-		return "workstream has tasks still running or in review"
 	case "nothing-accepted":
 		return "workstream has no accepted task"
 	case "nothing-to-ship":

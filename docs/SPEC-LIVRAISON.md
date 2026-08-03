@@ -183,7 +183,7 @@ récapitulatif de livraison. Ils n'empêchent jamais rien.
 
 ```jsonc
 { "mode": "pr", "target": "main", "provider": "github",
-  "ready": false, "blocker": "tasks-pending",
+  "ready": true, "blocker": "",
   "warnings": ["gh not found in PATH; ..."],
   "counts": { "accepted": 3, "refused": 1, "pending": 1 },
   "repos": [ { "repoName": "api", "branch": "sillage/ws-7-refonte-auth", "base": "main",
@@ -216,14 +216,32 @@ une branche déjà poussée, donc un push ordinaire, jamais de force).
 Le Ship est **possible** si et seulement si :
 
 1. le chantier a au moins une tâche ;
-2. aucune tâche n'est `running` ni `review` (tout est accepté ou refusé) ;
-3. au moins une tâche est `accepted` ;
-4. au moins un dépôt du chantier a des commits à livrer.
+2. au moins une tâche est `accepted` ;
+3. au moins un dépôt du chantier a des commits à livrer.
 
 Champs dérivés sur `Card`, recalculés dans `recomputeCard` (verrou tenu) :
-`shipReady: bool` et `shipBlocker: "" | "no-tasks" | "tasks-pending" | "nothing-accepted" | "nothing-to-ship"`.
+`shipReady: bool` et `shipBlocker: "" | "no-tasks" | "nothing-accepted" | "nothing-to-ship"`.
 Côté API, `POST /api/cards/{id}/ship` refuse en 409 avec le même vocabulaire ; côté UI, le
-bouton est grisé avec le blocage en infobulle (« 1 tâche encore à relire »).
+bouton est grisé avec le blocage en infobulle.
+
+*Assoupli après coup* : la condition « aucune tâche n'est `running` ni `review` » (blocage
+`tasks-pending`) a été retirée. Elle interdisait de livrer un chantier en cours, alors qu'envoyer
+tôt ce qui est prêt est exactement ce qu'on veut d'un chantier qui dure : une première PR partie,
+relue pendant que le reste se fabrique, plutôt qu'un gros bloc à la fin.
+
+Ce que cette condition semblait protéger, la structure le garantit déjà : **la branche du chantier
+ne contient que le travail accepté**. Une tâche en cours travaille dans son propre worktree, sur sa
+propre branche, et n'entre dans le chantier qu'à l'acceptation. Livrer un chantier inachevé
+n'envoie donc jamais rien qui n'ait été relu ; ça envoie moins, pas autre chose. Le seul vrai
+risque était l'illusion de complétude, qui est un problème d'affichage : l'UI annonce la livraison
+partielle (« n tâches ne sont pas encore acceptées ») dans la barre de livraison et dans le
+récapitulatif, comme une information et non comme un avertissement, puisque rien d'anormal ne se
+produit.
+
+Deux règles restent inchangées, et c'est ce qui rend l'assouplissement sûr : la colonne « Terminé »
+exige toujours « tout terminal ET livré » (un chantier livré partiellement reste en « En cours »),
+et `CardBranch.shippedAt` retombe à `null` à chaque travail nouveau, si bien que la livraison
+suivante ne pousse que le neuf.
 
 ### Colonne du chantier
 

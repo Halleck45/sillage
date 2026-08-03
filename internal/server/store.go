@@ -408,7 +408,7 @@ func (s *Store) recomputeCard(cardID string) {
 		// tableau, jamais null (voir le modèle Card de SPEC-API.md).
 		c.Branches = []CardBranch{}
 	}
-	c.ShipReady, c.ShipBlocker = shipReadiness(c, hasTasks, allTerminal, done)
+	c.ShipReady, c.ShipBlocker = shipReadiness(c, hasTasks, done)
 
 	shipped := len(c.Branches) == 0 // carte historique : comportement d'avant
 	for _, b := range c.Branches {
@@ -430,17 +430,21 @@ func (s *Store) recomputeCard(cardID string) {
 }
 
 // shipReadiness calcule si un chantier peut être livré, et sinon pourquoi.
-// Les quatre conditions de docs/SPEC-LIVRAISON.md, dans l'ordre : au moins une
-// tâche, aucune tâche encore active (running/review), au moins une tâche
-// acceptée, au moins une branche de chantier. Le nombre de commits à livrer
-// n'est pas vérifié ici (il coûterait un appel git à chaque mutation) : c'est
-// l'aperçu de livraison qui le rapporte, dépôt par dépôt.
-func shipReadiness(c Card, hasTasks, allTerminal bool, accepted int) (bool, string) {
+// Les trois conditions de docs/SPEC-LIVRAISON.md, dans l'ordre : au moins une
+// tâche, au moins une tâche acceptée, au moins une branche de chantier. Le
+// nombre de commits à livrer n'est pas vérifié ici (il coûterait un appel git à
+// chaque mutation) : c'est l'aperçu de livraison qui le rapporte, dépôt par
+// dépôt.
+//
+// Une tâche encore en cours ou à relire ne bloque PAS la livraison : la branche
+// du chantier ne contient que le travail accepté, donc livrer un chantier
+// inachevé n'envoie jamais rien de non relu. On peut ainsi livrer en cours de
+// route et relivrer ensuite (voir CardBranch.ShippedAt). La colonne « Terminé »,
+// elle, reste conditionnée à « tout terminal ET livré » (voir recomputeCard).
+func shipReadiness(c Card, hasTasks bool, accepted int) (bool, string) {
 	switch {
 	case !hasTasks:
 		return false, "no-tasks"
-	case !allTerminal:
-		return false, "tasks-pending"
 	case accepted == 0:
 		return false, "nothing-accepted"
 	case len(c.Branches) == 0:
