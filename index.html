@@ -54,13 +54,14 @@ description: A calm dashboard for your AI coding agents.
         <h2>Nothing to install</h2>
         <span class="install-badge">One file, that's all</span>
       </div>
-      <p class="install-lede">Sillage is a <strong>single self-contained binary</strong>. Download it, make it executable, run it. There is no installer, no package manager, no Docker, no Node, no Python, no database and no config file to write. Delete the file and nothing of it remains on your machine.</p>
+      <p class="install-lede">Sillage is a <strong>single self-contained binary</strong>. Download it, make it executable, run it. There is nothing to set up around it: no Docker, no Node, no Python, no database, no config file to write. Delete the file and nothing of it remains on your machine. Homebrew works too, if that is your habit.</p>
 
       <div class="install-tabs" role="tablist" aria-label="Platform">
         <button type="button" class="install-tab" data-target="linux-amd64" role="tab">Linux amd64</button>
         <button type="button" class="install-tab" data-target="linux-arm64" role="tab">Linux arm64</button>
         <button type="button" class="install-tab" data-target="mac-arm64" role="tab">macOS Apple Silicon</button>
         <button type="button" class="install-tab" data-target="mac-amd64" role="tab">macOS Intel</button>
+        <button type="button" class="install-tab" data-target="brew" role="tab">Homebrew</button>
         <button type="button" class="install-tab" data-target="go" role="tab">Go</button>
       </div>
 
@@ -199,6 +200,7 @@ description: A calm dashboard for your AI coding agents.
     "linux-arm64": "curl -fsSL https://github.com/Halleck45/sillage/releases/latest/download/sillage_linux_arm64 -o sillage && chmod +x sillage && ./sillage",
     "mac-arm64": "curl -fsSL https://github.com/Halleck45/sillage/releases/latest/download/sillage_darwin_arm64 -o sillage && chmod +x sillage && ./sillage",
     "mac-amd64": "curl -fsSL https://github.com/Halleck45/sillage/releases/latest/download/sillage_darwin_amd64 -o sillage && chmod +x sillage && ./sillage",
+    "brew": "brew tap halleck45/sillage https://github.com/Halleck45/sillage\nbrew install sillage",
     "go": "go install github.com/Halleck45/sillage@latest"
   };
 
