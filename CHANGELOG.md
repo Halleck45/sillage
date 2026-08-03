@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Keyboard-first creation: `N` creates the object of the current screen (task, workstream or project), `?` opens a shortcut cheatsheet, `/` opens search, `Esc` closes the task panel.
+- "Create and add another" in the new-task form (`Ctrl/⌘+Shift+Enter`): the form stays open with the agent and repository kept, so a batch of tasks can be queued in a row. "Create and chat" is `Ctrl/⌘+Enter`.
+- Creation buttons now carry a `+` pictogram and their shortcut badge.
+- Better keyboard navigation: the agent picker is an arrow-navigable radio group, `Tab` stays inside the open modal, and search results are reachable with `↑` `↓` and `Enter`.
+
 ## v0.4.0 (2026-08-03)
 
 First public release. Highlights since 0.2: workstreams with layered agent context, one or several git repositories per project, git-backed workspace sync, simplified review-then-ship workflow, task lifecycle (finish, cancel, reassign, delete), message queueing while agents run, deep links, pinned project links, agent health warnings, incremental conversation rendering.

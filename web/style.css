@@ -276,6 +276,22 @@ button, input, textarea { font-family: inherit; }
   outline: 2px solid var(--accent); outline-offset: 2px;
 }
 
+/* Bouton de création : pictogramme + libellé + badge du raccourci clavier. */
+.btn-create { display: inline-flex; align-items: center; gap: 7px; padding-right: 10px; }
+.btn-ico { font-size: 15px; line-height: 1; font-weight: 400; }
+.kbd-in-btn {
+  font-family: ui-monospace, Menlo, monospace; font-size: 10.5px; line-height: 16px;
+  padding: 0 5px; border-radius: 5px; color: inherit;
+  background: rgba(255, 255, 255, 0.2); border: 1px solid rgba(255, 255, 255, 0.38);
+}
+.btn-outline .kbd-in-btn, .btn-neutral .kbd-in-btn {
+  background: #fff; border-color: var(--border-3); color: var(--text-3);
+}
+.modal-foot .btn-green, .modal-foot .btn-neutral { display: inline-flex; align-items: center; gap: 7px; }
+@media (max-width: 700px) {
+  .kbd-in-btn { display: none; }
+}
+
 .view-body { flex: 1; min-height: 0; overflow-y: auto; padding: 24px 24px 48px; }
 
 /* ---------- Kanban ---------- */
@@ -600,10 +616,20 @@ button, input, textarea { font-family: inherit; }
 .modal-textarea { padding: 10px 13px; font-size: 13.5px; resize: vertical; }
 .modal-input:focus, .modal-textarea:focus { border-color: #c9c5bb; }
 .modal-error { margin-top: 10px; color: var(--red); font-size: 12.5px; }
-.modal-foot { display: flex; align-items: center; gap: 9px; margin-top: 18px; }
-.modal-hint { font-size: 12px; color: var(--muted-3); }
-.modal-foot .btn-outline, .modal-foot .btn-green { margin-left: auto; height: 32px; }
-.modal-foot .btn-outline:first-of-type { margin-left: auto; }
+.modal-note { margin-top: 10px; color: var(--green); font-size: 12.5px; }
+.modal-foot { display: flex; align-items: center; justify-content: flex-end; gap: 9px; margin-top: 18px; flex-wrap: wrap; }
+.modal-foot .btn-outline, .modal-foot .btn-green, .modal-foot .btn-neutral { height: 32px; }
+.modal-label-row { display: flex; align-items: baseline; gap: 8px; }
+.modal-label-hint { margin-left: auto; font-weight: 400; font-size: 11px; color: var(--muted-4); }
+
+/* Aide des raccourcis clavier */
+.shortcut-row { display: flex; align-items: baseline; gap: 10px; padding: 5px 0; font-size: 12.5px; color: var(--text-2); }
+.shortcut-keys { flex: none; display: flex; gap: 4px; min-width: 104px; }
+.shortcut-desc { flex: 1; min-width: 0; }
+.kbd-key {
+  font-family: ui-monospace, Menlo, monospace; font-size: 11px; line-height: 17px; color: var(--text-3);
+  background: var(--panel); border: 1px solid var(--border-3); border-radius: 5px; padding: 0 5px;
+}
 
 .agent-choices { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; margin-top: 8px; }
 .agent-choice {
@@ -730,8 +756,13 @@ button, input, textarea { font-family: inherit; }
   display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; border: 0; background: transparent;
   padding: 8px 8px; border-radius: 8px; font-size: 13px; color: var(--text-2); cursor: pointer;
 }
-.search-result:hover { background: var(--hover); }
+.search-result:hover, .search-result.active { background: var(--hover); }
+.search-result.active { box-shadow: inset 0 0 0 1px var(--border-3); }
 .search-result .hash { color: var(--muted-5); }
+.search-foot {
+  display: flex; align-items: center; gap: 14px; padding: 7px 12px 5px;
+  border-top: 1px solid var(--border-2);
+}
 .muted-sm { margin-left: auto; color: var(--muted-3); font-size: 11.5px; flex: none; }
 
 /* ---------- Login ---------- */

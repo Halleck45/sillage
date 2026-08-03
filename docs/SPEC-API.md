@@ -211,3 +211,26 @@ Le frontend maintient son état en mémoire à partir de `/api/state` + SSE ; re
 - Push / livraison uniquement via le bouton du détail de tâche avec confirmation explicite (double clic de confirmation ou bouton qui devient « Confirmer le push ? »). Jamais automatique. Même règle pour l'ouverture de la PR et pour la synchronisation de l'espace de travail (`/api/workspace/sync`).
 - Tokens : jamais affichés dans le flux de travail (kanban, détail de tâche, liste des projets), pour ne pas ajouter de charge mentale. Seul endroit visible : Réglages > onglet Statistiques, consommation par projet, sans prix.
 - Une tâche s'ouvre → POST `/read`.
+
+### Création de tâche et navigation clavier
+
+- Le bouton de création principal d'un écran porte trois éléments : un pictogramme `+`, son libellé, et le badge du raccourci (`N`). Le badge disparaît sous 700 px de large (pas de clavier physique attendu).
+- La modale « Nouvelle tâche » offre deux validations : **Créer et discuter** (la conversation s'ouvre, `Ctrl/⌘+Entrée`) et **Créer et enchaîner** (la modale reste ouverte, `Ctrl/⌘+Maj+Entrée`). Après un enchaînement, l'agent et le dépôt choisis sont conservés, le titre et le prompt sont vidés, le focus revient au titre, et une ligne de confirmation annonce la tâche créée (`Tâche #{ref} créée : {titre}`).
+- Raccourcis clavier, tous documentés dans la modale d'aide ouverte par `?` (et par le lien « Raccourcis : ? » en bas de sidebar) :
+
+  | Portée | Touche | Effet |
+  | --- | --- | --- |
+  | Partout | `Ctrl/⌘+K`, `/` | Ouvrir la recherche |
+  | Partout | `N` | Créer l'objet de l'écran courant (tâche dans un chantier, chantier dans un projet, projet dans « Tous les projets ») |
+  | Partout | `?` | Ouvrir l'aide des raccourcis |
+  | Partout | `Esc` | Fermer recherche / modale / tiroir, ou refermer le panneau d'une tâche |
+  | Formulaire | `Ctrl/⌘+Entrée` | Valider |
+  | Formulaire | `Ctrl/⌘+Maj+Entrée` | Valider et enchaîner (modale Nouvelle tâche) |
+  | Formulaire | `Entrée` dans un champ d'une ligne | Valider |
+  | Formulaire | `←` `→` `↑` `↓` | Changer d'agent dans le sélecteur |
+  | Formulaire | `Tab` | Circuler dans les champs, sans jamais sortir de la modale |
+  | Recherche | `↑` `↓` puis `Entrée` | Parcourir les résultats et ouvrir le résultat actif |
+  | Tâche | `Entrée` | Envoyer le message du composeur |
+
+- Aucun raccourci d'écran ne se déclenche pendant une saisie (champ, zone de texte, liste déroulante) ni avant l'authentification.
+- Le sélecteur d'agent est un groupe de radios (`role="radiogroup"`, `aria-checked`) à tabulation roulante : un seul arrêt de `Tab` pour tout le groupe, les flèches déplacent la sélection et le focus ensemble.

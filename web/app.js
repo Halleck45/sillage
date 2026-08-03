@@ -35,7 +35,9 @@
       'sidebar.noAgents': 'Aucun agent',
       'aria.menu': 'Menu',
       'header.newTask': 'Nouvelle tâche',
-      'header.newProject': '+ Nouveau projet',
+      'header.newTaskTooltip': 'Nouvelle tâche (N)',
+      'header.newProject': 'Nouveau projet',
+      'header.newProjectTooltip': 'Nouveau projet (N)',
       'allProjects.emptyTitle': 'Aucun projet pour l\'instant',
       'allProjects.emptySub': 'Créez votre premier projet pour commencer.',
       'allProjects.cardCount.one': '{n} chantier',
@@ -120,11 +122,32 @@
       'newTask.repoLabel': 'Dépôt',
       'newTask.projectContextNote': '+ contexte du projet',
       'newTask.workstreamContextNote': '+ contexte du chantier',
-      'newTask.hint': 'La conversation s\'ouvre après la création',
       'newTask.submit': 'Créer et discuter',
+      'newTask.submitAnother': 'Créer et enchaîner',
+      'newTask.submitTooltip': 'Créer et ouvrir la conversation ({mod}+Entrée)',
+      'newTask.submitAnotherTooltip': 'Créer et garder le formulaire ouvert ({mod}+Maj+Entrée)',
+      'newTask.created': 'Tâche #{ref} créée : {title}',
+      'newTask.agentHint': 'Flèches pour changer d\'agent',
       'newTask.errorTitleRequired': 'Le titre est requis.',
       'newTask.errorAgentRequired': 'Choisissez un agent.',
       'newTask.errorCreateFailed': 'Erreur lors de la création.',
+      'shortcuts.title': 'Raccourcis clavier',
+      'shortcuts.hint': 'Raccourcis : ?',
+      'shortcuts.sectionGlobal': 'Partout',
+      'shortcuts.sectionForm': 'Dans un formulaire',
+      'shortcuts.sectionSearch': 'Dans la recherche',
+      'shortcuts.sectionTask': 'Dans une tâche',
+      'shortcuts.search': 'Rechercher',
+      'shortcuts.create': 'Créer (tâche, chantier ou projet selon l\'écran)',
+      'shortcuts.help': 'Afficher cette aide',
+      'shortcuts.escape': 'Fermer / revenir en arrière',
+      'shortcuts.submit': 'Valider',
+      'shortcuts.submitAnother': 'Valider et enchaîner',
+      'shortcuts.pickAgent': 'Changer d\'agent',
+      'shortcuts.tab': 'Passer d\'un champ à l\'autre (reste dans le formulaire)',
+      'shortcuts.searchNav': 'Parcourir les résultats',
+      'shortcuts.searchOpen': 'Ouvrir le résultat',
+      'shortcuts.sendMessage': 'Envoyer le message',
       'newProject.title': 'Nouveau projet',
       'newProject.nameLabel': 'Nom',
       'newProject.namePlaceholder': 'mon-projet',
@@ -253,7 +276,9 @@
       'sidebar.noAgents': 'No agents',
       'aria.menu': 'Menu',
       'header.newTask': 'New task',
-      'header.newProject': '+ New project',
+      'header.newTaskTooltip': 'New task (N)',
+      'header.newProject': 'New project',
+      'header.newProjectTooltip': 'New project (N)',
       'allProjects.emptyTitle': 'No projects yet',
       'allProjects.emptySub': 'Create your first project to get started.',
       'allProjects.cardCount.one': '{n} workstream',
@@ -338,11 +363,32 @@
       'newTask.repoLabel': 'Repository',
       'newTask.projectContextNote': '+ project context',
       'newTask.workstreamContextNote': '+ workstream context',
-      'newTask.hint': 'The conversation opens after creation',
       'newTask.submit': 'Create and chat',
+      'newTask.submitAnother': 'Create and add another',
+      'newTask.submitTooltip': 'Create and open the conversation ({mod}+Enter)',
+      'newTask.submitAnotherTooltip': 'Create and keep the form open ({mod}+Shift+Enter)',
+      'newTask.created': 'Task #{ref} created: {title}',
+      'newTask.agentHint': 'Arrow keys to switch agent',
       'newTask.errorTitleRequired': 'A title is required.',
       'newTask.errorAgentRequired': 'Choose an agent.',
       'newTask.errorCreateFailed': 'Failed to create.',
+      'shortcuts.title': 'Keyboard shortcuts',
+      'shortcuts.hint': 'Shortcuts: ?',
+      'shortcuts.sectionGlobal': 'Anywhere',
+      'shortcuts.sectionForm': 'In a form',
+      'shortcuts.sectionSearch': 'In search',
+      'shortcuts.sectionTask': 'In a task',
+      'shortcuts.search': 'Search',
+      'shortcuts.create': 'Create (task, workstream or project, depending on the screen)',
+      'shortcuts.help': 'Show this help',
+      'shortcuts.escape': 'Close / go back',
+      'shortcuts.submit': 'Submit',
+      'shortcuts.submitAnother': 'Submit and add another',
+      'shortcuts.pickAgent': 'Switch agent',
+      'shortcuts.tab': 'Move between fields (stays inside the form)',
+      'shortcuts.searchNav': 'Move through results',
+      'shortcuts.searchOpen': 'Open the result',
+      'shortcuts.sendMessage': 'Send the message',
       'newProject.title': 'New project',
       'newProject.nameLabel': 'Name',
       'newProject.namePlaceholder': 'my-project',
@@ -514,6 +560,7 @@
   var modalRepos = []; // [{name, path}] pour la modale projet (création/édition)
   var modalLinks = []; // [{url, title}] liens épinglés, modale d'édition de projet
   var modalRepoCreateMode = true;
+  var searchIndex = 0; // résultat de recherche actif (navigation aux flèches)
   var onboardingExpanded = null;
   var settingsModalTab = 'general'; // 'general' | 'stats'
   var sseOpenedOnce = false;
@@ -534,6 +581,9 @@
   function isMac() {
     return /Mac|iPod|iPhone|iPad/.test(navigator.platform || '');
   }
+
+  // Libellé de la touche de modification (badges et infobulles des raccourcis).
+  function modKeyLabel() { return isMac() ? '⌘' : 'Ctrl'; }
 
   // Fallback favicon (liens épinglés) : référencé depuis un attribut onerror
   // généré côté chaîne HTML, doit donc être une fonction globale réelle.
@@ -986,6 +1036,7 @@
       '<div class="sidebar-footer">' +
         '<button class="settings-btn" data-action="open-workspace-modal">⚙ ' + escapeHtml(t('sidebar.settingsButton')) + '</button>' +
         '<div class="sidebar-footer-actions">' +
+          '<button class="logout-link" data-action="open-shortcuts" title="' + escapeHtml(t('shortcuts.title')) + '">' + escapeHtml(t('shortcuts.hint')) + '</button>' +
           '<button class="logout-link" data-action="logout">' + escapeHtml(t('nav.logout')) + '</button>' +
         '</div>' +
       '</div>';
@@ -1000,13 +1051,22 @@
   // Rendu : en-tête commun
   // ---------------------------------------------------------------------
 
+  // Bouton de création principal d'un écran : pictogramme + libellé + badge du
+  // raccourci clavier (« N »), pour que le raccourci s'apprenne sans documentation.
+  function buildCreateButtonHTML(action, label, tooltip, cls) {
+    return '<button class="' + cls + ' btn-create" data-action="' + action + '" title="' + escapeHtml(tooltip) + '">' +
+      '<span class="btn-ico" aria-hidden="true">+</span>' +
+      '<span class="btn-create-label">' + escapeHtml(label) + '</span>' +
+      '<span class="kbd kbd-in-btn" aria-hidden="true">N</span></button>';
+  }
+
   function buildHeaderHTML() {
     var back = '', title = '', sub = '', actions = '', editBtn = '';
     if (state.screen === 'inbox') {
       title = t('nav.inbox');
     } else if (state.screen === 'projects') {
       title = t('nav.allProjects');
-      actions = '<button class="btn-outline" data-action="open-new-project">' + escapeHtml(t('header.newProject')) + '</button>';
+      actions = buildCreateButtonHTML('open-new-project', t('header.newProject'), t('header.newProjectTooltip'), 'btn-outline');
     } else if (state.screen === 'kanban') {
       var p = state.projectsById[state.projectId];
       title = p ? p.name : '';
@@ -1019,7 +1079,7 @@
       if (c) {
         editBtn = '<button class="icon-btn" data-action="open-edit-card" title="' + escapeHtml(t('workstream.editTooltip')) + '" aria-label="' + escapeHtml(t('workstream.editTooltip')) + '">✎</button>';
       }
-      actions = '<button class="btn-primary" data-action="open-new-task">' + escapeHtml(t('header.newTask')) + '</button>';
+      actions = buildCreateButtonHTML('open-new-task', t('header.newTask'), t('header.newTaskTooltip'), 'btn-primary');
     }
     var hamburger = '<button class="icon-btn hamburger-btn" data-action="toggle-sidebar" aria-label="' + escapeHtml(t('aria.menu')) + '">☰</button>';
     return '<header class="topbar">' + hamburger + back + '<span class="crumb-title">' + escapeHtml(title) + '</span>' + editBtn + sub +
@@ -1035,7 +1095,7 @@
       return buildHeaderHTML() + '<div class="view-body"><div class="empty-state big">' +
         '<div class="empty-title">' + escapeHtml(t('allProjects.emptyTitle')) + '</div>' +
         '<div class="empty-sub">' + escapeHtml(t('allProjects.emptySub')) + '</div>' +
-        '<button class="btn-primary" data-action="open-new-project">' + escapeHtml(t('header.newProject')) + '</button>' +
+        buildCreateButtonHTML('open-new-project', t('header.newProject'), t('header.newProjectTooltip'), 'btn-primary') +
         '</div></div>';
     }
     var tiles = state.projects.map(function (p) {
@@ -1914,11 +1974,41 @@
 
   function buildSearchHTML(q) {
     return '<div class="search-box"><input id="search-input" class="search-input" placeholder="' + escapeHtml(t('search.placeholder')) + '" value="' + escapeHtml(q) + '">' +
-      '<div class="search-results" id="search-results">' + buildSearchResultsHTML(q) + '</div></div>';
+      '<div class="search-results" id="search-results">' + buildSearchResultsHTML(q) + '</div>' +
+      '<div class="search-foot"><span class="kbd">↑ ↓ ' + escapeHtml(t('shortcuts.searchNav')) + '</span>' +
+      '<span class="kbd">⏎ ' + escapeHtml(t('shortcuts.searchOpen')) + '</span></div></div>';
+  }
+
+  // Le résultat actif (surligné, cible de la touche Entrée) est repéré par sa
+  // position dans la liste : la liste est reconstruite à chaque frappe.
+  function searchResultEls() {
+    return Array.prototype.slice.call(document.querySelectorAll('#search-results .search-result'));
+  }
+  function highlightSearchResult() {
+    var els = searchResultEls();
+    if (!els.length) { searchIndex = 0; return; }
+    if (searchIndex >= els.length) searchIndex = els.length - 1;
+    if (searchIndex < 0) searchIndex = 0;
+    els.forEach(function (el, i) {
+      var on = i === searchIndex;
+      el.classList.toggle('active', on);
+      if (on && el.scrollIntoView) el.scrollIntoView({ block: 'nearest' });
+    });
+  }
+  function moveSearchResult(delta) {
+    var els = searchResultEls();
+    if (!els.length) return;
+    searchIndex = (searchIndex + delta + els.length) % els.length;
+    highlightSearchResult();
+  }
+  function activateSearchResult() {
+    var els = searchResultEls();
+    if (els[searchIndex]) els[searchIndex].click();
   }
 
   function openSearch() {
     state.searchOpen = true;
+    searchIndex = 0;
     var root = document.getElementById('search-overlay');
     root.classList.remove('hidden');
     root.innerHTML = buildSearchHTML('');
@@ -1927,11 +2017,15 @@
     input.focus();
     input.addEventListener('input', function () {
       var results = document.getElementById('search-results');
-      if (results) results.innerHTML = buildSearchResultsHTML(input.value);
+      if (!results) return;
+      results.innerHTML = buildSearchResultsHTML(input.value);
+      searchIndex = 0;
+      highlightSearchResult();
     });
   }
   function closeSearch() {
     state.searchOpen = false;
+    searchIndex = 0;
     var root = document.getElementById('search-overlay');
     root.classList.add('hidden');
     root.innerHTML = '';
@@ -1956,12 +2050,66 @@
     root.innerHTML = '';
   }
 
+  // ---------------------------------------------------------------------
+  // Aide des raccourcis clavier (touche « ? »)
+  // ---------------------------------------------------------------------
+
+  function shortcutSections() {
+    var mod = modKeyLabel();
+    return [
+      { label: t('shortcuts.sectionGlobal'), rows: [
+        [[mod + '+K', '/'], t('shortcuts.search')],
+        [['N'], t('shortcuts.create')],
+        [['?'], t('shortcuts.help')],
+        [['Esc'], t('shortcuts.escape')]
+      ] },
+      { label: t('shortcuts.sectionForm'), rows: [
+        [[mod + '+⏎'], t('shortcuts.submit')],
+        [[mod + '+⇧+⏎'], t('shortcuts.submitAnother')],
+        [['←', '→', '↑', '↓'], t('shortcuts.pickAgent')],
+        [['Tab'], t('shortcuts.tab')]
+      ] },
+      { label: t('shortcuts.sectionSearch'), rows: [
+        [['↑', '↓'], t('shortcuts.searchNav')],
+        [['⏎'], t('shortcuts.searchOpen')]
+      ] },
+      { label: t('shortcuts.sectionTask'), rows: [
+        [['⏎'], t('shortcuts.sendMessage')]
+      ] }
+    ];
+  }
+
+  function buildShortcutsModalHTML() {
+    var body = shortcutSections().map(function (section) {
+      var rows = section.rows.map(function (row) {
+        var keys = row[0].map(function (k) { return '<kbd class="kbd-key">' + escapeHtml(k) + '</kbd>'; }).join('');
+        return '<div class="shortcut-row"><span class="shortcut-keys">' + keys + '</span>' +
+          '<span class="shortcut-desc">' + escapeHtml(row[1]) + '</span></div>';
+      }).join('');
+      return '<div class="modal-label">' + escapeHtml(section.label) + '</div>' + rows;
+    }).join('');
+    return '<div class="modal modal-sm">' +
+      '<div class="modal-head"><span class="modal-title">' + escapeHtml(t('shortcuts.title')) + '</span>' +
+      '<button class="icon-btn" data-action="close-modal" aria-label="' + escapeHtml(t('common.close')) + '">✕</button></div>' +
+      body +
+      '<div class="modal-foot"><button class="btn-outline" data-action="close-modal">' + escapeHtml(t('common.close')) + '</button></div>' +
+      '</div>';
+  }
+
+  function openShortcutsModal() {
+    openModal(buildShortcutsModalHTML());
+  }
+
   // Nouvelle tâche
 
   function buildNewTaskModalHTML(card) {
+    // Groupe de radios : un seul arrêt de tabulation, les flèches changent
+    // d'agent (tabindex roulant, cf. moveAgentChoice).
     var agentChoices = state.agents.map(function (a) {
+      var isSel = a.id === modalAgentId;
       var warn = a.warning ? '<span class="agent-warning" title="' + escapeHtml(agentWarningText(a.warning)) + '">⚠</span>' : '';
-      return '<button class="agent-choice ' + (a.id === modalAgentId ? 'selected' : '') + '" data-action="pick-agent" data-agent-id="' + a.id + '">' +
+      return '<button class="agent-choice ' + (isSel ? 'selected' : '') + '" data-action="pick-agent" data-agent-id="' + a.id + '"' +
+        ' role="radio" aria-checked="' + (isSel ? 'true' : 'false') + '" tabindex="' + (isSel ? '0' : '-1') + '">' +
         '<span class="agent-choice-avatar" style="background:' + softColor(a.color) + '">' + a.emoji + '</span>' +
         '<span class="agent-choice-info"><span class="agent-choice-name">' + escapeHtml(a.name) + warn + '</span>' +
         '<span class="agent-choice-model mono">' + escapeHtml(a.model || '') + '</span></span></button>';
@@ -1983,15 +2131,24 @@
       '<input id="new-task-title" class="modal-input" placeholder="' + escapeHtml(t('newTask.titlePlaceholder')) + '">' +
       '<textarea id="new-task-prompt" class="modal-textarea" placeholder="' + escapeHtml(t('newTask.promptPlaceholder')) + '" rows="3"></textarea>' +
       repoSelectHTML +
-      '<div class="modal-label">' + escapeHtml(t('newTask.agentLabel')) + '</div>' +
-      '<div class="agent-choices" id="agent-choices">' + agentChoices + '</div>' +
+      '<div class="modal-label modal-label-row"><span>' + escapeHtml(t('newTask.agentLabel')) + '</span>' +
+      '<span class="modal-label-hint">' + escapeHtml(t('newTask.agentHint')) + '</span></div>' +
+      '<div class="agent-choices" id="agent-choices" role="radiogroup" aria-label="' + escapeHtml(t('newTask.agentLabel')) + '">' + agentChoices + '</div>' +
       '<div class="agent-context-preview" id="agent-context-preview">' + (selected ? escapeHtml(selected.contextPrompt || '') : '') + '</div>' +
       (project && project.contextPrompt ? '<div class="project-context-note">' + escapeHtml(t('newTask.projectContextNote')) + '</div>' : '') +
       (card && card.contextPrompt ? '<div class="project-context-note">' + escapeHtml(t('newTask.workstreamContextNote')) + '</div>' : '') +
       '<div id="new-task-error" class="modal-error hidden"></div>' +
-      '<div class="modal-foot"><span class="modal-hint">' + escapeHtml(t('newTask.hint')) + '</span>' +
+      '<div id="new-task-note" class="modal-note hidden" role="status" aria-live="polite"></div>' +
+      // Pas d'indice ici : les deux libellés de boutons disent déjà ce qui suit
+      // la création, et trois boutons remplissent la largeur de la modale.
+      '<div class="modal-foot">' +
       '<button class="btn-outline" data-action="close-modal">' + escapeHtml(t('common.cancel')) + '</button>' +
-      '<button class="btn-green" data-action="submit-new-task" data-card-id="' + card.id + '">' + escapeHtml(t('newTask.submit')) + '</button></div>' +
+      '<button class="btn-neutral" data-action="submit-new-task-another" data-card-id="' + card.id + '"' +
+      ' title="' + escapeHtml(t('newTask.submitAnotherTooltip', { mod: modKeyLabel() })) + '">' + escapeHtml(t('newTask.submitAnother')) +
+      '<span class="kbd kbd-in-btn" aria-hidden="true">' + escapeHtml(modKeyLabel()) + '⇧⏎</span></button>' +
+      '<button class="btn-green" data-action="submit-new-task" data-card-id="' + card.id + '"' +
+      ' title="' + escapeHtml(t('newTask.submitTooltip', { mod: modKeyLabel() })) + '">' + escapeHtml(t('newTask.submit')) +
+      '<span class="kbd kbd-in-btn" aria-hidden="true">' + escapeHtml(modKeyLabel()) + '⏎</span></button></div>' +
       '</div>';
   }
 
@@ -2003,30 +2160,62 @@
     setTimeout(function () { var el = document.getElementById('new-task-title'); if (el) el.focus(); }, 0);
   }
 
-  function pickAgentInModal(agentId) {
+  function pickAgentInModal(agentId, focusIt) {
     modalAgentId = agentId;
     document.querySelectorAll('#agent-choices .agent-choice').forEach(function (el) {
-      el.classList.toggle('selected', el.getAttribute('data-agent-id') === agentId);
+      var isSel = el.getAttribute('data-agent-id') === agentId;
+      el.classList.toggle('selected', isSel);
+      el.setAttribute('aria-checked', isSel ? 'true' : 'false');
+      el.setAttribute('tabindex', isSel ? '0' : '-1');
+      if (isSel && focusIt) el.focus();
     });
     var preview = document.getElementById('agent-context-preview');
     var a = state.agentsById[agentId];
     if (preview) preview.textContent = a ? (a.contextPrompt || '') : '';
   }
 
-  function submitNewTask(cardId) {
+  // Flèches dans le groupe d'agents : décale la sélection de `delta` en
+  // bouclant, et emmène le focus avec elle (tabindex roulant).
+  function moveAgentChoice(delta) {
+    var choices = Array.prototype.slice.call(document.querySelectorAll('#agent-choices .agent-choice'));
+    if (choices.length < 2) return;
+    var ids = choices.map(function (el) { return el.getAttribute('data-agent-id'); });
+    var i = ids.indexOf(modalAgentId);
+    if (i < 0) i = 0;
+    var next = (i + delta + ids.length) % ids.length;
+    pickAgentInModal(ids[next], true);
+  }
+
+  // mode 'chat' : la conversation s'ouvre. mode 'another' : le formulaire reste
+  // ouvert, agent et dépôt conservés, titre et prompt vidés (saisie en série).
+  function submitNewTask(cardId, mode) {
     var titleEl = document.getElementById('new-task-title');
     var promptEl = document.getElementById('new-task-prompt');
     var errEl = document.getElementById('new-task-error');
+    var noteEl = document.getElementById('new-task-note');
+    if (!titleEl || !promptEl) return;
     var title = titleEl.value.trim();
     var prompt = promptEl.value.trim();
-    if (!title) { errEl.textContent = t('newTask.errorTitleRequired'); errEl.classList.remove('hidden'); return; }
+    if (!title) { errEl.textContent = t('newTask.errorTitleRequired'); errEl.classList.remove('hidden'); titleEl.focus(); return; }
     if (!modalAgentId) { errEl.textContent = t('newTask.errorAgentRequired'); errEl.classList.remove('hidden'); return; }
+    errEl.classList.add('hidden');
     var body = { cardId: cardId, title: title, agentId: modalAgentId };
     if (prompt) body.prompt = prompt;
     var repoEl = document.getElementById('new-task-repo');
     if (repoEl && repoEl.value) body.repoName = repoEl.value;
     api('/api/tasks', { method: 'POST', body: body }).then(function (task) {
       upsertTask(task);
+      if (mode === 'another') {
+        titleEl.value = '';
+        promptEl.value = '';
+        if (noteEl) {
+          noteEl.textContent = t('newTask.created', { ref: task.ref, title: task.title });
+          noteEl.classList.remove('hidden');
+        }
+        titleEl.focus();
+        renderMain();
+        return;
+      }
       closeModal();
       openTask(task.id);
     }).catch(function (e) {
@@ -3005,7 +3194,9 @@
       case 'submit-agent': submitAgent(el.getAttribute('data-agent-id') || null); break;
       case 'close-modal': closeModal(); break;
       case 'pick-agent': pickAgentInModal(el.getAttribute('data-agent-id')); break;
-      case 'submit-new-task': submitNewTask(el.getAttribute('data-card-id')); break;
+      case 'submit-new-task': submitNewTask(el.getAttribute('data-card-id'), 'chat'); break;
+      case 'submit-new-task-another': submitNewTask(el.getAttribute('data-card-id'), 'another'); break;
+      case 'open-shortcuts': openShortcutsModal(); break;
       case 'submit-new-project': submitNewProject(); break;
       case 'submit-new-card': submitNewCard(); break;
       case 'interrupt': doInterrupt(el.getAttribute('data-task-id')); break;
@@ -3032,7 +3223,85 @@
     }
   }
 
+  // Une frappe dans un champ de saisie n'est jamais un raccourci d'écran.
+  function isTypingTarget(el) {
+    if (!el) return false;
+    var tag = el.tagName;
+    return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el.isContentEditable === true;
+  }
+
+  // Action de création principale de l'écran courant (raccourci « N »).
+  function createShortcutAction() {
+    if (state.screen === 'work' && state.cardId) return function () { openNewTaskModal(state.cardId); };
+    if (state.screen === 'kanban' && state.projectId) return openNewCardModal;
+    if (state.screen === 'projects') return openNewProjectModal;
+    return null;
+  }
+
+  function focusableInModal(modal) {
+    var sel = 'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [href], [tabindex]:not([tabindex="-1"])';
+    return Array.prototype.slice.call(modal.querySelectorAll(sel)).filter(function (el) {
+      return el.getAttribute('tabindex') !== '-1' && el.offsetParent !== null;
+    });
+  }
+
+  // Piège la tabulation dans la modale ouverte : le focus ne part jamais
+  // derrière l'overlay, où les boutons sont inaccessibles à la souris.
+  function trapModalTab(e, modal) {
+    var items = focusableInModal(modal);
+    if (!items.length) return;
+    var first = items[0], last = items[items.length - 1];
+    var current = document.activeElement;
+    var outside = !modal.contains(current);
+    if (e.shiftKey && (outside || current === first)) {
+      e.preventDefault();
+      last.focus();
+    } else if (!e.shiftKey && (outside || current === last)) {
+      e.preventDefault();
+      first.focus();
+    }
+  }
+
+  var AGENT_ARROW_KEYS = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 };
+
+  // Bouton de validation d'une modale : le vert du pied, quelle que soit l'action.
+  function primarySubmitButton(modal) {
+    return modal.querySelector('.modal-foot .btn-green');
+  }
+
+  // Raccourcis actifs dans une modale : validation, validation en série,
+  // choix de l'agent aux flèches, tabulation piégée.
+  function onModalKeydown(e) {
+    var modal = document.querySelector('#modal-root .modal');
+    if (!modal) return;
+    if (e.key === 'Tab') { trapModalTab(e, modal); return; }
+    var mod = e.ctrlKey || e.metaKey;
+    if (e.key === 'Enter' && mod) {
+      var wanted = e.shiftKey ? 'submit-new-task-another' : null;
+      var btn = wanted ? modal.querySelector('[data-action="' + wanted + '"]') : primarySubmitButton(modal);
+      if (btn) { e.preventDefault(); btn.click(); }
+      return;
+    }
+    // Entrée dans un champ d'une ligne (jamais dans un textarea) : valider.
+    if (e.key === 'Enter' && !e.shiftKey && e.target && e.target.tagName === 'INPUT' && modal.contains(e.target)) {
+      var primary = primarySubmitButton(modal);
+      if (primary) { e.preventDefault(); primary.click(); }
+      return;
+    }
+    if (modal.querySelector('#agent-choices') && AGENT_ARROW_KEYS[e.key] && !isTypingTarget(e.target)) {
+      e.preventDefault();
+      moveAgentChoice(AGENT_ARROW_KEYS[e.key]);
+    }
+  }
+
+  // Aucun raccourci avant l'authentification (l'écran de login n'en a pas).
+  function shellVisible() {
+    var shell = document.getElementById('shell');
+    return !!shell && !shell.classList.contains('hidden');
+  }
+
   function onGlobalKeydown(e) {
+    if (!shellVisible()) return;
     var mod = e.ctrlKey || e.metaKey;
     if (mod && (e.key === 'k' || e.key === 'K')) {
       e.preventDefault();
@@ -3043,13 +3312,31 @@
       if (state.searchOpen) { closeSearch(); return; }
       if (state.modal) { closeModal(); return; }
       if (state.sidebarOpen) { closeSidebarDrawer(); return; }
+      if (state.taskId && !isTypingTarget(e.target)) { closePanel(); return; }
     }
+    if (state.searchOpen) {
+      if (e.key === 'ArrowDown') { e.preventDefault(); moveSearchResult(1); return; }
+      if (e.key === 'ArrowUp') { e.preventDefault(); moveSearchResult(-1); return; }
+      if (e.key === 'Enter') { e.preventDefault(); activateSearchResult(); return; }
+      return;
+    }
+    if (state.modal) { onModalKeydown(e); return; }
     if (e.target && e.target.id === 'composer-input' && e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       var wrap = e.target.closest('.composer');
       var btn = wrap ? wrap.querySelector('[data-action="send-message"]') : null;
       if (btn) sendMessage(btn.getAttribute('data-task-id'));
+      return;
     }
+    // Raccourcis d'écran : seulement hors saisie et sans modificateur.
+    if (isTypingTarget(e.target) || mod || e.altKey) return;
+    if (e.key === 'n' || e.key === 'N') {
+      var create = createShortcutAction();
+      if (create) { e.preventDefault(); create(); }
+      return;
+    }
+    if (e.key === '/') { e.preventDefault(); openSearch(); return; }
+    if (e.key === '?') { e.preventDefault(); openShortcutsModal(); }
   }
 
   document.addEventListener('DOMContentLoaded', function () {

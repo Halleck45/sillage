@@ -24,6 +24,8 @@ Working with several AI agents quickly turns into tab hell: five terminals, thre
 - **Token usage, out of the way**: no counters cluttering the kanban or the task view; per-project token totals live in Settings > Statistics.
 - **Your workspace is a git repo** (optional): conversations, projects and settings versioned locally, synced to a private remote to follow you across machines.
 
+- **Keyboard first**: `N` creates what the screen holds, `Ctrl/⌘+K` searches, `?` lists every shortcut. In the new-task form, "Create and add another" (`Ctrl/⌘+Shift+Enter`) keeps the agent selected so you can queue a batch of tasks without touching the mouse.
+
 Also: multiple repositories per project, task reassignment, agent health warnings, pinned project links, English and French UI, works from your phone, and a free built-in agent to try everything without spending a token.
 
 ![Kanban view](docs/screenshots/kanban.png)
