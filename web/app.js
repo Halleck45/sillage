@@ -75,6 +75,7 @@
       'work.emptyCardAction': 'Créer la première tâche',
       'work.emptyFiltered': 'Aucune tâche ne correspond à ce filtre.',
       'filter.all': 'Toutes {n}',
+      'filter.running': 'En cours {n}',
       'filter.review': 'À relire {n}',
       'filter.finished': 'Terminées {n}',
       'badge.new': 'NOUVEAU',
@@ -290,6 +291,7 @@
       'work.emptyCardAction': 'Create the first task',
       'work.emptyFiltered': 'No tasks match this filter.',
       'filter.all': 'All {n}',
+      'filter.running': 'In progress {n}',
       'filter.review': 'To review {n}',
       'filter.finished': 'Completed {n}',
       'badge.new': 'NEW',
@@ -1192,6 +1194,7 @@
     var finishedCount = (counts.shipped || 0) + (counts.done || 0) + (counts.cancelled || 0);
     var filters = [
       { key: 'all', label: t('filter.all', { n: tasksAll.length }) },
+      { key: 'running', label: t('filter.running', { n: counts.running || 0 }) },
       { key: 'review', label: t('filter.review', { n: counts.review || 0 }) },
       { key: 'finished', label: t('filter.finished', { n: finishedCount }) }
     ];
