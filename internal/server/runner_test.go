@@ -1,6 +1,9 @@
 package server
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 // TestParseCodexTokenStreamKeepsLastCumulativeTotal reproduit le bug réel :
 // les événements token_count de codex portent des totaux CUMULÉS par
@@ -48,5 +51,33 @@ func TestParseCodexTokenStreamNoEvent(t *testing.T) {
 	tok, found := parseCodexTokenStream(lines)
 	if found {
 		t.Fatalf("aucun événement de tokens ne devrait être trouvé, reçu %+v", tok)
+	}
+}
+
+func TestBuildTranscript(t *testing.T) {
+	msgs := []Message{
+		{Author: "agent", AuthorName: "Otto", Text: "J'ai trouvé le bloc dans show_lead.html.twig lignes 78-80."},
+		{Author: "agent", AuthorName: "", Text: "[reassigned:bolt]"},
+		{Author: "user", AuthorName: "JF", Text: "réessaie"},
+	}
+	got := buildTranscript(msgs)
+	if strings.Contains(got, "[reassigned:") {
+		t.Fatalf("les marqueurs système ne doivent pas apparaître : %q", got)
+	}
+	if !strings.Contains(got, "[Otto] J'ai trouvé le bloc") || !strings.Contains(got, "[JF] réessaie") {
+		t.Fatalf("transcript incomplet : %q", got)
+	}
+
+	// Budget total : seuls les messages récents survivent.
+	var many []Message
+	for i := 0; i < 50; i++ {
+		many = append(many, Message{Author: "agent", AuthorName: "Bolt", Text: strings.Repeat("x", 500) + " fin" + string(rune('A'+i%26))})
+	}
+	out := buildTranscript(many)
+	if len(out) > 6100 {
+		t.Fatalf("transcript trop long : %d", len(out))
+	}
+	if buildTranscript(nil) != "" {
+		t.Fatalf("transcript vide attendu pour aucun message")
 	}
 }

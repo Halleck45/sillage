@@ -100,11 +100,21 @@ func (r *Runner) Start(taskID string, initial bool, text string) error {
 		task = updated
 		r.publishTask(task)
 
-		// Session vide = départ frais (lancement initial, ou message envoyé
-		// après réassignation à un nouvel agent qui vide sessionId) : rappeler
-		// le contexte minimal de la tâche, comme au lancement initial.
+		// Session vide = départ frais (codex sans reprise de session, ou message
+		// envoyé après réassignation qui vide sessionId) : le CLI ne connaît rien
+		// de la conversation, on lui rejoue donc l'historique en plus du titre.
 		if task.SessionID == "" {
+			msgs := r.store.GetMessages(taskID)
+			if n := len(msgs); n > 0 {
+				msgs = msgs[:n-1] // sans le message qu'on vient d'ajouter
+			}
+			transcript := buildTranscript(msgs)
 			cliInput = contextualizeCliInput(task.Title, text)
+			if transcript != "" {
+				cliInput = "Task: " + task.Title +
+					"\n\nPrevious conversation (for context):\n" + transcript +
+					"\n\nNew instruction:\n" + text
+			}
 		}
 	}
 
@@ -115,6 +125,35 @@ func (r *Runner) Start(taskID string, initial bool, text string) error {
 
 	go r.run(task, agent, handle, cliInput)
 	return nil
+}
+
+// buildTranscript rejoue la conversation pour un agent démarré sans session :
+// une ligne par message, marqueurs système exclus, chaque message tronqué à
+// 600 caractères et l'ensemble limité aux ~6000 derniers caractères (les
+// messages les plus récents priment).
+func buildTranscript(msgs []Message) string {
+	const perMsg, total = 600, 6000
+	var lines []string
+	for _, m := range msgs {
+		if strings.HasPrefix(m.Text, "[reassigned:") {
+			continue
+		}
+		who := "assistant"
+		if m.Author == "user" {
+			who = "user"
+		}
+		if m.AuthorName != "" {
+			who = m.AuthorName
+		}
+		lines = append(lines, "["+who+"] "+truncate(strings.TrimSpace(m.Text), perMsg))
+	}
+	// Garder la fin (messages récents) si l'ensemble dépasse le budget.
+	out := strings.Join(lines, "\n")
+	for len(out) > total && len(lines) > 1 {
+		lines = lines[1:]
+		out = strings.Join(lines, "\n")
+	}
+	return out
 }
 
 // contextualizeCliInput préfixe text par un rappel minimal de la tâche
