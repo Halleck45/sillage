@@ -1,10 +1,13 @@
 # Sillage
 
+[![CI](https://github.com/Halleck45/sillage/actions/workflows/ci.yml/badge.svg)](https://github.com/Halleck45/sillage/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/Halleck45/sillage)](https://github.com/Halleck45/sillage/releases/latest)
+[![Go version](https://img.shields.io/github/go-mod/go-version/Halleck45/sillage)](go.mod)
+[![License: MIT](https://img.shields.io/badge/license-MIT-2f7d54)](LICENSE)
+
 **A calm web dashboard to pilot AI coding agents (Claude Code, Codex CLI) across your projects.**
 
-Sillage runs your agents in isolated git worktrees, streams their activity live, tracks every token they spend, and never lets anything leave your machine without your explicit approval. One binary, one browser tab, zero juggling between terminal windows.
-
-*[Version française du README](README.fr.md)*
+Sillage runs your agents in isolated git worktrees, streams their activity live, tracks every token they spend, and never lets anything leave your machine without your explicit approval. **One self-contained binary, zero dependencies, zero configuration**: download, run, open a browser tab.
 
 ![Task view: PR-style task list, conversation with the agent, one primary action](docs/screenshots/task-detail.png)
 
@@ -33,14 +36,15 @@ Working with several AI agents quickly turns into tab hell: five terminals, thre
 
 ## Quickstart
 
-Requirements: Go 1.24+, git, and at least one agent CLI ([Claude Code](https://docs.anthropic.com/en/docs/claude-code) and/or [Codex CLI](https://github.com/openai/codex)), logged in.
+Sillage is a single static binary with the web UI embedded: no database, no runtime, no config files to write. The only things it talks to are `git` and your agent CLIs ([Claude Code](https://docs.anthropic.com/en/docs/claude-code) and/or [Codex CLI](https://github.com/openai/codex), logged in; the built-in free agent works without either).
 
 ```bash
-go install github.com/Halleck45/sillage@latest
-sillage
+# Linux (amd64)
+curl -fsSL https://github.com/Halleck45/sillage/releases/latest/download/sillage_linux_amd64 -o sillage
+chmod +x sillage && ./sillage
 ```
 
-Or from source: `go build -o sillage . && ./sillage`
+macOS: replace with `sillage_darwin_arm64` (Apple Silicon) or `sillage_darwin_amd64` (Intel). Also available: `linux_arm64`, [checksums](https://github.com/Halleck45/sillage/releases/latest), or `go install github.com/Halleck45/sillage@latest` if you prefer building it yourself.
 
 Then open http://127.0.0.1:8787. On first start, a password is generated and printed once in the terminal. To choose your own: `SILLAGE_PASSWORD=yourpassword sillage`.
 

@@ -19,11 +19,12 @@ jobs:
         run: |
           set -eu
           mkdir -p dist
+          # Noms sans version : les URLs releases/latest/download/... restent stables.
           for target in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64; do
             GOOS=${target%/*}
             GOARCH=${target#*/}
             CGO_ENABLED=0 GOOS=$GOOS GOARCH=$GOARCH go build -trimpath -ldflags "-s -w" \
-              -o "dist/sillage_${GITHUB_REF_NAME}_${GOOS}_${GOARCH}" .
+              -o "dist/sillage_${GOOS}_${GOARCH}" .
           done
           (cd dist && sha256sum sillage_* > checksums.txt)
       - name: Create release
