@@ -50,14 +50,14 @@ brew install sillage
 
 Prefer doing it by hand? Grab a binary from the [releases page](https://github.com/Halleck45/sillage/releases/latest), `chmod +x`, run it. Or `go install github.com/Halleck45/sillage@latest`.
 
-Then open http://127.0.0.1:8787. On first start, a password is generated and printed once in the terminal. To choose your own: `SILLAGE_PASSWORD=yourpassword sillage`.
+Then open http://127.0.0.1:8787. No login is required by default. To require a password, set `SILLAGE_PASSWORD=yourpassword sillage`.
 
 Add a project (any local git repository), create a card, create a task, pick an agent: it starts working immediately in its own worktree. Try the free agent Écho first if you want to see the flow without any API cost.
 
 ## Security model
 
 - Agents run headless with a fixed allowlist of tools: file edits and read-only commands inside the task worktree. Never `git push`, never permission bypass flags.
-- The server binds to `127.0.0.1` by default. Password login (bcrypt), HttpOnly session cookies, login rate limiting, JSON content-type enforcement on mutations.
+- The server binds to `127.0.0.1` by default. Optional password login (bcrypt, `SILLAGE_PASSWORD`), HttpOnly session cookies, login rate limiting, JSON content-type enforcement on mutations.
 - **Never expose the HTTP port directly to the internet.** For remote access use [Tailscale](https://tailscale.com) (`sillage -addr <tailscale-ip>:8787`) or a TLS reverse proxy; the session cookie switches to Secure automatically behind `X-Forwarded-Proto: https`.
 - Data lives in `~/.local/share/sillage` (JSON state, atomic writes) plus one git worktree per task.
 

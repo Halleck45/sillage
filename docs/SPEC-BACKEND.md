@@ -21,7 +21,7 @@ internal/server/
 ## Flags et config
 
 - `-addr` (défaut `127.0.0.1:8787`), `-data` (défaut `~/.local/share/sillage`).
-- `config.json` dans dataDir : `{ "passwordHash": "..." }`. Au premier lancement sans hash : générer un mot de passe aléatoire (16 chars alphanum, crypto/rand), l'afficher UNE FOIS sur stdout (`Mot de passe initial : ...`), stocker le hash bcrypt. Env `SILLAGE_PASSWORD` (si présent au démarrage) remplace le hash (pratique pour tests).
+- `config.json` dans dataDir : `{ "passwordHash": "..." }`. Le mot de passe est optionnel : sans `SILLAGE_PASSWORD` défini au démarrage ni hash déjà présent dans `config.json`, `LoadPasswordHash` renvoie un hash vide, aucun fichier n'est écrit, et le serveur tourne sans authentification (voir `withMiddleware`). Env `SILLAGE_PASSWORD` (si présent au démarrage) fournit le hash bcrypt en mémoire, jamais persisté.
 - `state.json` dans dataDir : tout l'état (projects, cards, tasks, messages, agents, refCounter, usages tokens). Écriture atomique : fichier temp + `os.Rename`, à chaque mutation (fichier petit).
 
 ## Store

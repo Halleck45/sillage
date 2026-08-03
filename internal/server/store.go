@@ -1279,7 +1279,7 @@ func (s *Store) AcceptTask(id string) (Task, error) {
 	default:
 		return Task{}, fmt.Errorf("only a task in review can be accepted")
 	}
-	return s.UpdateTask(id, func(t *Task) { t.Status = "accepted" })
+	return s.UpdateTask(id, func(t *Task) { t.Status = "accepted"; t.Unread = false })
 }
 
 // CancelTask marque une tâche "cancelled" (refusée). Autorisé depuis running/review.
@@ -1296,7 +1296,7 @@ func (s *Store) CancelTask(id string) (Task, error) {
 	default:
 		return Task{}, fmt.Errorf("task cannot be cancelled from its current status")
 	}
-	return s.UpdateTask(id, func(t *Task) { t.Status = "cancelled" })
+	return s.UpdateTask(id, func(t *Task) { t.Status = "cancelled"; t.Unread = false })
 }
 
 // ReopenTask remet une tâche en revue ("review"). Autorisé depuis
