@@ -720,35 +720,74 @@ button, input, textarea { font-family: inherit; }
   max-height: calc(100vh - 110px); overflow-y: auto;
 }
 .modal-sm { width: min(440px, 100%); }
-.modal-lg { width: min(680px, 100%); }
-/* .modal-section : découpe une modale en groupes visuellement distincts
-   (nom, dépôts, livraison, …), séparés par un filet fin. Le premier groupe
-   n'a ni filet ni espace au-dessus, pour rester collé à l'en-tête. */
-.modal-section { margin-top: 22px; padding-top: 20px; border-top: 1px solid var(--border-2); }
-.modal-head + .modal-section { margin-top: 16px; padding-top: 0; border-top: 0; }
-.modal-section-title { font-size: 13px; font-weight: 600; color: var(--text); letter-spacing: -0.005em; }
 .modal-section-hint { margin-top: 3px; font-size: 11.5px; line-height: 1.4; color: var(--muted-3); }
-.delivery-grid { display: flex; flex-wrap: wrap; gap: 16px; }
-.delivery-grid > div { flex: 1; min-width: 200px; }
-.modal-danger-zone {
-  margin-top: 22px; padding: 13px 16px; background: var(--red-bg); border: 1px solid var(--red-border);
-  border-radius: 12px; display: flex; align-items: center; justify-content: space-between; gap: 14px;
+
+/* Modale à panneaux (réglages d'un projet) : la colonne de navigation EST le
+   découpage, d'où l'absence de filet horizontal. La hauteur minimale du panneau
+   évite que la modale saute d'une taille à l'autre en changeant d'onglet. */
+.modal-tabbed { width: min(760px, 100%); }
+.ptabs { display: flex; gap: 24px; margin-top: 16px; }
+.ptabs-nav { flex: 0 0 152px; display: flex; flex-direction: column; gap: 2px; }
+.ptab {
+  border: 0; background: transparent; text-align: left; padding: 7px 10px; border-radius: 8px;
+  font-size: 13px; color: var(--muted); cursor: pointer;
 }
-.modal-danger-text { min-width: 0; }
-.modal-danger-title { font-size: 12.5px; font-weight: 600; color: var(--red); }
-.modal-danger-zone .modal-delete-subtext { margin-top: 2px; color: var(--text-3); }
-.modal-danger-zone .delete-link { flex: none; opacity: 1; }
+.ptab:hover { background: var(--bg); color: var(--text-2); }
+.ptab-active { background: var(--bg); color: var(--text); font-weight: 600; }
+/* La suppression se range en bas, détachée du reste : un réglage qu'on ne
+   touche qu'une fois n'a pas à peser sur ceux qu'on change tous les jours. */
+.ptab-danger { margin-top: 14px; color: var(--muted-3); }
+.ptab-danger.ptab-active { background: var(--red-bg); color: var(--red); }
+/* min-height calée sur le panneau le plus haut (Instructions) : la modale ne
+   change pas de taille quand on passe d'un onglet à l'autre. */
+.ptabs-panel { flex: 1; min-width: 0; min-height: 308px; }
+.ptabs-panel > .modal-label:first-child,
+.ptabs-panel > .modal-section-hint:first-child { margin-top: 0; }
+
+/* Champ court : libellé à gauche, saisie à droite, alignés d'un champ à l'autre. */
+.field-row { display: flex; align-items: center; gap: 14px; margin-top: 10px; }
+.field-row:first-child { margin-top: 0; }
+.field-row .modal-label { flex: 0 0 104px; margin-top: 0; }
+.field-row-input { flex: 1; min-width: 0; }
+.field-row-input .modal-input { margin-top: 0; }
+
+/* Cartes à cocher : un choix par carte, chacune portant sa conséquence. */
+.choice-cards { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+.choice-card {
+  display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; cursor: pointer;
+  border: 1px solid var(--border-3); border-radius: 10px;
+}
+.choice-card:hover { border-color: var(--muted-5); }
+/* accent-color : le bleu natif du navigateur détonne dans la palette (noir pour
+   les actions, beige pour les fonds). */
+.choice-card input[type="radio"] { margin: 2px 0 0; cursor: pointer; flex: none; accent-color: var(--solid); }
+.choice-card-active { border-color: var(--text); background: var(--green-soft-bg); }
+.choice-card-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.choice-card-title { font-size: 13px; font-weight: 600; color: var(--text); }
+.choice-card-desc { font-size: 11.5px; line-height: 1.4; color: var(--muted-3); }
+
+.danger-panel-action { margin-top: 16px; }
+.btn-danger {
+  height: 32px; padding: 0 14px; border-radius: 9px; border: 1px solid var(--red-border);
+  background: var(--red-bg); color: var(--red); font-size: 12.5px; font-weight: 600; cursor: pointer;
+}
+.btn-danger:hover { border-color: var(--red); }
 .modal-head { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; }
 .modal-title { font-size: 15px; font-weight: 600; letter-spacing: -0.015em; }
 .modal-sub { font-size: 12.5px; color: var(--muted-3); }
 .modal-head .icon-btn { margin-left: auto; }
-.modal-label { margin-top: 16px; font-size: 11.5px; font-weight: 600; color: var(--muted-3); }
+/* display:block pour que la marge haute s'applique aussi quand le libellé est un
+   <label> (associé à son champ) et non un <div>. */
+.modal-label { display: block; margin-top: 16px; font-size: 11.5px; font-weight: 600; color: var(--muted-3); }
 .modal-input, .modal-textarea {
   width: 100%; margin-top: 8px; padding: 0 13px; border: 1px solid var(--border-3); border-radius: 10px;
   font-size: 15px; color: var(--text); outline: none;
 }
 .modal-input { height: 42px; }
 .modal-textarea { padding: 10px 13px; font-size: 13.5px; resize: vertical; }
+/* Le contexte projet finit dans le prompt système de chaque agent : il mérite
+   de la hauteur, pas trois lignes coincées entre deux autres champs. */
+.modal-textarea-tall { min-height: 208px; }
 .modal-input:focus, .modal-textarea:focus { border-color: #c9c5bb; }
 .modal-error { margin-top: 10px; color: var(--red); font-size: 12.5px; }
 /* .modal-note : note explicative sous un champ (gris), variante ambre pour un
@@ -806,6 +845,7 @@ button, input, textarea { font-family: inherit; }
 
 .repo-row { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
 .repo-row .modal-input { margin-top: 0; }
+.repo-row-head { margin-top: 0; font-size: 11.5px; font-weight: 600; color: var(--muted-3); }
 .repo-row-name { flex: 0 0 140px; }
 .repo-row-path { flex: 1; min-width: 0; }
 .repo-row-remove { flex: none; }
@@ -967,4 +1007,13 @@ button, input, textarea { font-family: inherit; }
   .sidebar { width: min(240px, 82vw); }
   .modal, .search-box { width: calc(100vw - 40px); }
   .agent-form-row { grid-template-columns: 1fr; }
+  /* Trop étroit pour deux colonnes : la navigation des panneaux passe au-dessus,
+     en bandeau défilant, et les libellés reviennent au-dessus de leur champ. */
+  .ptabs { flex-direction: column; gap: 14px; }
+  .ptabs-nav { flex: none; flex-direction: row; gap: 6px; overflow-x: auto; }
+  .ptab { white-space: nowrap; }
+  .ptab-danger { margin-top: 0; }
+  .ptabs-panel { min-height: 0; }
+  .field-row { display: block; }
+  .field-row .modal-label { margin-bottom: 8px; }
 }
