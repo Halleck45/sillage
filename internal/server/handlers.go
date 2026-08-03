@@ -40,7 +40,19 @@ type Server struct {
 	// persisté) du dernier échec de synchronisation automatique.
 	syncErrMu   sync.Mutex
 	lastSyncErr string
+
+	// rebaseMu sérialise les rebases automatiques déclenchés par une
+	// acceptation (voir rebaseSiblingTasks) : deux acceptations rapprochées ne
+	// doivent pas rejouer la même branche en parallèle. rebaseWG permet aux
+	// tests d'attendre la fin de ces rebases, qui sont lancés en tâche de fond
+	// pour ne pas retarder la réponse de l'acceptation.
+	rebaseMu sync.Mutex
+	rebaseWG sync.WaitGroup
 }
+
+// waitRebases attend la fin des rebases automatiques en cours. Réservé aux
+// tests : en production personne n'attend une opération de fond.
+func (s *Server) waitRebases() { s.rebaseWG.Wait() }
 
 // NewServer construit le serveur Sillage. webFS doit pointer vers le sous-répertoire
 // "web" du système de fichiers embarqué (frontend statique).
@@ -131,6 +143,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("DELETE /api/cards/{id}", s.handleDeleteCard)
 	mux.HandleFunc("GET /api/cards/{id}/delivery", s.handleCardDelivery)
 	mux.HandleFunc("POST /api/cards/{id}/ship", s.handleCardShip)
+	mux.HandleFunc("POST /api/cards/{id}/catch-up", s.handleCardCatchUp)
 	mux.HandleFunc("POST /api/tasks", s.handleCreateTask)
 	mux.HandleFunc("PATCH /api/tasks/{id}", s.handleReassignTask)
 	mux.HandleFunc("DELETE /api/tasks/{id}", s.handleDeleteTask)
@@ -949,6 +962,13 @@ func (s *Server) handleAccept(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "only a task in review can be accepted")
 		return
 	}
+	// Un rebase automatique est en train de réécrire la branche de la tâche :
+	// fusionner maintenant reviendrait à courir contre lui. C'est l'affaire de
+	// quelques secondes, et l'UI désactive déjà le bouton.
+	if task.Rebasing {
+		writeError(w, http.StatusConflict, "task is being rebased, retry in a moment")
+		return
+	}
 	cardBranch, ok := s.store.GetCardBranch(task.CardID, task.RepoName)
 	if !ok {
 		// Tâche antérieure aux branches de chantier (créée avant cette
@@ -1029,7 +1049,89 @@ func (s *Server) acceptTaskInto(w http.ResponseWriter, task Task, cardBranch Car
 	s.runner.publishMessage(msg)
 	s.runner.publishCards(task.ProjectID)
 	s.runner.publishAgents()
+	// La branche du chantier vient d'avancer : les autres tâches en revue sont
+	// désormais en retard, et le seraient encore à leur propre acceptation. On
+	// les remet d'aplomb sans faire attendre la réponse : l'UI a déjà tout ce
+	// qu'il lui faut, le rebase s'annonce ensuite par SSE.
+	s.rebaseWG.Add(1)
+	go s.rebaseSiblingTasks(task.CardID, task.ID, cardBranch)
 	writeJSON(w, http.StatusOK, AcceptResponse{Task: task, WorkstreamBranch: cardBranch.Branch, Output: output})
+}
+
+// rebaseSiblingTasks rejoue les autres tâches en revue du chantier au-dessus de
+// la branche du chantier, après qu'une acceptation l'a fait avancer. Sans ça,
+// chaque tâche suivante se découvre en retard et conflicte à son tour à
+// l'acceptation, alors que la reprise est presque toujours mécanique.
+//
+// Quatre garde-fous, dans cet ordre (une opération automatique doit être
+// conservatrice, surtout quand elle réécrit un historique) :
+//
+//  1. même dépôt et statut "review" : une tâche en cours (running) appartient à
+//     son agent, une tâche terminale n'a plus rien à rejouer ;
+//  2. aucun agent en cours pour cette tâche, même en file d'attente ;
+//  3. réellement en retard : rien à faire si la branche contient déjà celle du
+//     chantier (et rien à annoncer dans le fil) ;
+//  4. worktree propre APRÈS commit du travail en attente : les agents ne
+//     commitent pas toujours, et un rebase perdrait leur travail. Le commit est
+//     le même que celui de l'acceptation (`Sillage: <titre>`), et ne change
+//     rien à la relecture : le diff d'une tâche se calcule contre sa base, que
+//     le travail soit commité ou non.
+//
+// Un conflit annule le rebase (l'arbre revient intact) et pose un marqueur dans
+// le fil : c'est alors à l'agent de reprendre la base, comme avant.
+func (s *Server) rebaseSiblingTasks(cardID, acceptedTaskID string, cardBranch CardBranch) {
+	defer s.rebaseWG.Done()
+	s.rebaseMu.Lock()
+	defer s.rebaseMu.Unlock()
+
+	for _, task := range s.store.TasksByCard(cardID) {
+		if task.ID == acceptedTaskID || task.Status != "review" || task.RepoName != cardBranch.RepoName {
+			continue
+		}
+		if task.WorktreeDir == "" || s.runner.IsRunning(task.ID) {
+			continue
+		}
+		if IsBranchMergedInto(task.WorktreeDir, cardBranch.Branch, task.Branch) {
+			continue // déjà à jour : la branche du chantier est contenue dans la tâche
+		}
+		if _, err := CommitAll(task.WorktreeDir, "Sillage: "+task.Title); err != nil {
+			continue
+		}
+		if !IsWorktreeClean(task.WorktreeDir) {
+			continue
+		}
+		s.rebaseOneTask(task, cardBranch)
+	}
+}
+
+// rebaseOneTask rejoue une tâche sur la branche du chantier, en annonçant
+// l'opération (Task.Rebasing, pour le fuseau de l'UI) puis son résultat.
+func (s *Server) rebaseOneTask(task Task, cardBranch CardBranch) {
+	if updated, err := s.store.SetTaskRebasing(task.ID, true); err == nil {
+		s.runner.publishTask(updated)
+	}
+	_, conflicts, err := RebaseOnto(task.WorktreeDir, cardBranch.Branch)
+	if updated, setErr := s.store.SetTaskRebasing(task.ID, false); setErr == nil {
+		s.runner.publishTask(updated)
+	}
+
+	marker := "[rebased:" + cardBranch.Branch + "]"
+	if err != nil {
+		if len(conflicts) == 0 {
+			// Échec sans conflit (worktree cassé, git indisponible) : rien à
+			// raconter dans le fil, le badge de retard reste et le bouton
+			// « Demander le rebase » fait toujours son travail.
+			return
+		}
+		marker = "[rebase-conflict:" + strings.Join(conflicts, " ") + "]"
+	}
+	msg, updated, addErr := s.store.AddMessage(task.ID, "agent", "", marker)
+	if addErr != nil {
+		return
+	}
+	s.runner.publishTask(updated)
+	s.runner.publishMessage(msg)
+	s.runner.publishCards(updated.ProjectID)
 }
 
 // autoAcceptMergedTasks marque « acceptées » les tâches en revue dont la
@@ -1161,6 +1263,12 @@ func (s *Server) deliveryPreview(card Card, project Project) DeliveryPreview {
 		if behind, err := CountCommits(b.WorktreeDir, b.Branch, b.Base); err == nil {
 			row.Behind = behind
 		}
+		// Où en est la branche du chantier par rapport à sa destination : déjà
+		// arrivée (plus rien à livrer), ou fusionnable en fast-forward. Les deux
+		// se lisent avec merge-base, sans rien écrire.
+		target := deliveryTarget(project, b)
+		row.MergedIntoTarget = IsBranchMergedInto(b.WorktreeDir, b.Branch, target)
+		row.FastForwardable = IsBranchMergedInto(b.WorktreeDir, target, b.Branch)
 		prev.Repos = append(prev.Repos, row)
 	}
 	return prev
@@ -1186,16 +1294,14 @@ func taskBehind(t Task) int {
 }
 
 // pendingCommits compte ce qu'il reste réellement à livrer sur un dépôt : les
-// commits non poussés en mode "pr", ceux pas encore fusionnés dans la branche
-// de destination en mode "merge". Repli sur total (tout est à livrer) quand la
-// révision de comparaison n'existe pas encore (branche jamais poussée).
+// commits non poussés dans les modes de branche ("pr", "push"), ceux pas encore
+// fusionnés dans la branche de destination dans les modes de fusion ("merge",
+// "merge-push"). Repli sur total (tout est à livrer) quand la révision de
+// comparaison n'existe pas encore (branche jamais poussée).
 func pendingCommits(project Project, b CardBranch, total int) int {
 	from := "origin/" + b.Branch
-	if project.Delivery.Mode == "merge" {
-		from = project.Delivery.Target
-		if from == "" {
-			from = b.Base
-		}
+	if deliveryModeMerges(project.Delivery.Mode) {
+		from = deliveryTarget(project, b)
 	}
 	n, err := CountCommits(b.WorktreeDir, from, b.Branch)
 	if err != nil {
@@ -1204,9 +1310,24 @@ func pendingCommits(project Project, b CardBranch, total int) int {
 	return n
 }
 
-// handleCardShip livre un chantier : pour chaque dépôt touché, pousse la
-// branche du chantier puis ouvre la pull/merge request (mode "pr"), ou fusionne
-// localement dans la branche de destination sans jamais pousser (mode "merge").
+// deliveryModeMerges indique si un mode de livraison fusionne dans la branche
+// de destination plutôt que de livrer la branche du chantier elle-même.
+func deliveryModeMerges(mode string) bool {
+	return mode == "merge" || mode == "merge-push"
+}
+
+// deliveryTarget résout la branche de destination d'une livraison : le réglage
+// du projet, ou la base de la branche de chantier quand il est vide (« branche
+// par défaut du dépôt »).
+func deliveryTarget(project Project, b CardBranch) string {
+	if target := project.Delivery.Target; target != "" {
+		return target
+	}
+	return b.Base
+}
+
+// handleCardShip livre un chantier : pour chaque dépôt touché, ce que le mode
+// de livraison du projet prescrit (voir Delivery.Mode et shipCardBranch).
 // C'est la SEULE action sortante du produit, d'où {"confirm":true}.
 //
 // Un dépôt en échec n'annule pas les autres : chaque ligne de la réponse porte
@@ -1253,23 +1374,25 @@ func (s *Server) shipCardBranch(card Card, project Project, b CardBranch) ShipRe
 		return res
 	}
 
-	if project.Delivery.Mode == "merge" {
-		target := project.Delivery.Target
-		if target == "" {
-			target = b.Base
-		}
+	if deliveryModeMerges(project.Delivery.Mode) {
 		repo, ok := repoByName(project, b.RepoName)
 		if !ok {
 			res.Error = "repository " + b.RepoName + " is no longer part of the project"
 			return res
 		}
-		out, err := MergeLocal(repo.Path, s.dataDir, card.ID, b.RepoName, target, b.Branch)
+		target := deliveryTarget(project, b)
+		merge := MergeLocal
+		if project.Delivery.Mode == "merge-push" {
+			merge = MergeAndPush
+		}
+		out, err := merge(repo.Path, s.dataDir, card.ID, b.RepoName, target, b.Branch)
 		res.Output = out
 		if err != nil {
 			res.Error = err.Error()
 			return res
 		}
 		res.Merged = true
+		res.Pushed = project.Delivery.Mode == "merge-push"
 		if _, err := s.store.MarkCardBranchShipped(card.ID, b.RepoName, "", time.Now().UTC()); err != nil {
 			res.Error = err.Error()
 		}
@@ -1289,13 +1412,76 @@ func (s *Server) shipCardBranch(card Card, project Project, b CardBranch) ShipRe
 	// une erreur (l'avertissement de santé du projet le dit déjà).
 	//
 	// Une pull request déjà ouverte est réutilisée telle quelle : le push
-	// suffit à la mettre à jour, il n'y a rien de nouveau à ouvrir.
+	// suffit à la mettre à jour, il n'y a rien de nouveau à ouvrir. Le mode
+	// "push" s'arrête ici : pousser sans ouvrir de pull request est justement
+	// ce qu'il promet.
 	if b.PrURL != "" {
 		res.PrURL = b.PrURL
-	} else if prURL, err := OpenPR(b.WorktreeDir, b.Branch, b.Base, card.Title); err == nil {
-		res.PrURL = prURL
+	} else if project.Delivery.Mode == "pr" {
+		if prURL, err := OpenPR(b.WorktreeDir, b.Branch, b.Base, card.Title); err == nil {
+			res.PrURL = prURL
+		}
 	}
 	if _, err := s.store.MarkCardBranchShipped(card.ID, b.RepoName, res.PrURL, time.Now().UTC()); err != nil {
+		res.Error = err.Error()
+	}
+	return res
+}
+
+// handleCardCatchUp rattrape la branche de destination dans la branche du
+// chantier : `git merge <destination>` dans le worktree du chantier, un dépôt
+// après l'autre. C'est ce qui débloque la livraison quand la destination a
+// avancé de son côté : la branche du chantier contient alors la destination, et
+// la fusion redevient possible en fast-forward.
+//
+// Une fusion, pas un rebase : les branches des tâches déjà acceptées descendent
+// de la branche du chantier, réécrire son historique les laisserait orphelines.
+// Aucun réseau (la destination est une branche locale), aucune confirmation
+// (rien ne sort de la machine), et un conflit annule tout (worktree intact).
+func (s *Server) handleCardCatchUp(w http.ResponseWriter, r *http.Request) {
+	card, project, ok := s.cardWithProject(w, r.PathValue("id"))
+	if !ok {
+		return
+	}
+
+	results := make([]CatchUpRepoResult, 0, len(card.Branches))
+	for _, b := range card.Branches {
+		results = append(results, s.catchUpCardBranch(card, project, b))
+	}
+	card, _ = s.store.GetCard(card.ID)
+	s.runner.publishCards(card.ProjectID)
+	writeJSON(w, http.StatusOK, CatchUpResponse{Card: card, Repos: results})
+}
+
+// catchUpCardBranch fusionne la destination dans la branche de chantier d'un
+// dépôt. Jamais d'erreur remontée : elle est portée par le résultat, pour qu'un
+// dépôt en échec n'empêche pas les autres d'être rattrapés.
+func (s *Server) catchUpCardBranch(card Card, project Project, b CardBranch) CatchUpRepoResult {
+	target := deliveryTarget(project, b)
+	res := CatchUpRepoResult{RepoName: b.RepoName, Target: target}
+
+	if IsBranchMergedInto(b.WorktreeDir, target, b.Branch) {
+		res.UpToDate = true
+		return res
+	}
+	if !IsWorktreeClean(b.WorktreeDir) {
+		res.Error = "workstream worktree has uncommitted changes"
+		return res
+	}
+
+	out, conflicts, err := MergeBranch(b.WorktreeDir, target, "Sillage: catch up with "+target)
+	res.Output = out
+	if err != nil {
+		if len(conflicts) > 0 {
+			res.ConflictFilePaths = strings.Join(conflicts, " ")
+		}
+		res.Error = err.Error()
+		return res
+	}
+	res.Merged = true
+	// La branche du chantier a de nouveaux commits : un chantier déjà livré ne
+	// l'est plus tout à fait (même règle qu'à l'acceptation).
+	if _, err := s.store.MarkCardBranchPending(card.ID, b.RepoName); err != nil {
 		res.Error = err.Error()
 	}
 	return res

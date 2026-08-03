@@ -18,8 +18,12 @@ Repo    { "name": "api", "path": "/abs/path" }   // name court et unique dans le
 Link    { "url": "https://github.com/org/repo", "title": "org/repo" }
           // title fourni par l'utilisateur, ou récupéré best-effort (voir plus bas), ou nom d'hôte.
 
-Delivery { "mode": "pr|merge", "target": "main", "stackedPrs": false }
-          // Ce que « livrer » veut dire dans ce projet (voir "Livraison d'un chantier").
+Delivery { "mode": "pr|push|merge|merge-push", "target": "main", "stackedPrs": false }
+          // Ce que « livrer » veut dire dans ce projet (voir "Livraison d'un chantier") :
+          //   pr         pousse la branche du chantier, puis ouvre la pull/merge request
+          //   push       pousse la branche du chantier, sans rien ouvrir
+          //   merge      fusionne dans target, en local, sans jamais pousser
+          //   merge-push fusionne dans target puis pousse target
           // target vide = branche par défaut du dépôt. stackedPrs : réservé, ignoré.
 
 Project { "id": "p1", "name": "sillage", "description": "...", "repos": [Repo, ...],
@@ -63,8 +67,12 @@ Task    { "id": "t1", "cardId": "c1", "projectId": "p1", "ref": 482, "title": ".
           "messagesCount": 5, "filesCount": 3, "docsCount": 1,
           "checks": [ { "label": "go test", "ok": true } ],   // [] si aucun
           "liveActivity": "Edit · internal/server/store.go" | null,
-          "unread": true, "updatedAt": "2026-08-02T10:00:00Z", "tokens": Tokens }
+          "unread": true, "updatedAt": "2026-08-02T10:00:00Z", "tokens": Tokens,
+          "rebasing": false }
           // repoName : nom du Repo du projet utilisé pour le worktree
+          // rebasing : un rebase automatique de cette tâche est en cours (voir
+          //   "Rebase automatique après une acceptation"). État volatile, remis à false au
+          //   chargement de state.json. N'affecte jamais updatedAt.
 
 Message { "id": "m1", "taskId": "t1", "author": "user|agent", "authorName": "Bolt",
           "text": "markdown...", "createdAt": "..." }
@@ -113,6 +121,7 @@ Settings { "displayName": "Ada", "lang": "fr" }   // lang : ""|"fr"|"en"
 | DELETE | `/api/cards/{id}` | `{confirm:true}` | 204 (voir « Suppressions » ci-dessous). **Validation humaine obligatoire** : refus 400 sans `confirm` |
 | GET | `/api/cards/{id}/delivery` | | DeliveryPreview : ce que la livraison ferait, avant tout clic (voir « Livraison d'un chantier »). Lecture seule |
 | POST | `/api/cards/{id}/ship` | `{confirm:true}` | ShipResponse : **la seule action sortante du produit** (push + pull request, ou fusion locale). 400 sans `confirm`, 409 si le chantier n'est pas livrable |
+| POST | `/api/cards/{id}/catch-up` | | CatchUpResponse : fusionne la branche de destination dans celle du chantier pour débloquer la livraison (voir « Livraison d'un chantier »). Local, aucune confirmation ; un conflit est annulé et rapporté par dépôt |
 | POST | `/api/tasks` | `{cardId, title, agentId, prompt?, repoName?}` | Task (créée `running`, agent lancé avec title+prompt). `repoName` optionnel si le projet n'a qu'un repo ; sinon 400 `"repoName required (project has several repositories)"` ou 400 si inconnu |
 | PATCH | `/api/tasks/{id}` | `{agentId}` | Task : réassigne l'agent (voir « Réassignation » ci-dessous). 400 si `status=running` (`"interrupt the agent before reassigning"`) ou si l'agent est inconnu |
 | DELETE | `/api/tasks/{id}` | `{confirm:true}` | 204 (voir « Suppressions » ci-dessous). **Validation humaine obligatoire** : refus 400 sans `confirm` |
@@ -134,6 +143,16 @@ Statuts : `running → review → accepted`, plus `cancelled` (via `/cancel`, le
 Compatibilité, au chargement de state.json : `ready` (antérieur à la v0.3.4) migre vers `review` ; `shipped` et `done` migrent vers `accepted`.
 
 Après une acceptation réussie : un Message marqueur est ajouté au fil (`author="agent"`, `authorName=""`, texte figé `"[accepted:<workstreamBranch>]"`). Une acceptation simplement constatée (la branche de la tâche était déjà contenue dans celle du chantier) pose `"[auto-accepted:<workstreamBranch>]"`. En cas de conflit, la fusion est annulée (`git merge --abort`), la tâche **reste** en `review`, un marqueur `"[merge-conflict:<fichiers séparés par des espaces>]"` est ajouté au fil, et la réponse est 409 `{"error":"merge conflict with the workstream branch","conflictFilePaths":"..."}`. Le frontend détecte ces marqueurs et affiche une ligne système localisée.
+
+#### Rebase automatique après une acceptation
+
+Une acceptation fait avancer la branche du chantier, ce qui met en retard les autres tâches du même chantier : chacune conflicterait à son tour à son acceptation, pour une reprise presque toujours mécanique. Une acceptation réussie déclenche donc, **en tâche de fond** (la réponse HTTP n'attend pas), le rebase des autres tâches du chantier sur la branche du chantier.
+
+Quatre garde-fous, dans cet ordre : même dépôt et statut `review` (une tâche `running` appartient à son agent) ; aucun agent en cours pour cette tâche ; réellement en retard (branche du chantier pas déjà contenue) ; worktree propre après commit du travail en attente (`Sillage: <titre>`, le même commit que celui de l'acceptation ; les agents ne commitent pas toujours, et un rebase perdrait leur travail). Les rebases sont sérialisés entre eux.
+
+Pendant l'opération, `Task.rebasing` vaut `true` (événement SSE `task` à l'entrée et à la sortie ; `updatedAt` n'est jamais touché). `POST /api/tasks/{id}/accept` répond 409 `{"error":"task is being rebased, retry in a moment"}` tant qu'il vaut `true`.
+
+Résultat au fil de la tâche : `"[rebased:<workstreamBranch>]"` en cas de succès. En cas de conflit, `git rebase --abort` remet le worktree exactement dans son état d'avant (rien n'est modifié, la branche est inchangée) et le marqueur est `"[rebase-conflict:<fichiers séparés par des espaces>]"` : la reprise redevient l'affaire de l'agent (bouton « Demander le rebase »). Un échec sans conflit ne pose aucun marqueur.
 
 Après chaque changement de statut de tâche, la carte est automatiquement replacée : si elle a au moins une tâche, qu'elles sont toutes terminales (`accepted`/`cancelled`) **et** que le chantier a été livré, `card.column` passe à `"done"` ; sinon elle passe (ou reste) en `"doing"`. La colonne « Terminé » veut donc dire livré, pas seulement relu. Une carte déjà livrée en ressort dès qu'un travail nouveau y apparaît (voir « Continuer un chantier déjà livré »). Les cartes antérieures aux branches de chantier (`branches` vide) sont considérées livrées, pour garder leur colonne historique. Le déplacement manuel (PATCH `/api/cards/{id}`) reste indépendant de cette règle. Chaque changement republie l'événement SSE `cards`.
 
@@ -171,11 +190,31 @@ Actions destructives, jamais déclenchées depuis les listes : confirmation doub
 
 Le chantier est une branche de feature : une branche `sillage/ws-<card.ref>-<slug>` par couple (chantier, dépôt), avec son worktree dédié, créée à la première tâche du chantier sur ce dépôt depuis `project.delivery.target` (ou la branche courante du dépôt si `target` est vide). Les branches de tâche partent de cette branche et y sont fusionnées à l'acceptation ; elles ne sont jamais poussées.
 
-**Réglage du projet** (`Project.delivery`) : `mode:"pr"` pousse la branche du chantier puis ouvre la pull request (GitHub, `gh pr create`) ou la merge request (GitLab, `glab mr create`) ; en l'absence du CLI ou en cas d'échec, repli sur une URL de création pré-remplie en lecture seule (`https://<host>/<path>/compare/<base>...<branch>?expand=1`, ou `https://<host>/<path>/-/merge_requests/new?merge_request[source_branch]=...&merge_request[target_branch]=...`). La branche est poussée dans les deux cas : le repli ne dégrade que l'ouverture de la requête. `mode:"merge"` fusionne la branche du chantier dans `target` **en local, en fast-forward uniquement, et ne pousse jamais rien** (worktree transitoire dédié ; repli dans le dépôt lui-même seulement si `target` y est la branche courante et l'arbre propre ; 409 sinon).
+**Réglage du projet** (`Project.delivery.mode`), quatre comportements, réglables à la création et dans les paramètres du projet :
+
+- `"pr"` : pousse la branche du chantier puis ouvre la pull request (GitHub, `gh pr create`) ou la merge request (GitLab, `glab mr create`) ; en l'absence du CLI ou en cas d'échec, repli sur une URL de création pré-remplie en lecture seule (`https://<host>/<path>/compare/<base>...<branch>?expand=1`, ou `https://<host>/<path>/-/merge_requests/new?merge_request[source_branch]=...&merge_request[target_branch]=...`). La branche est poussée dans les deux cas : le repli ne dégrade que l'ouverture de la requête.
+- `"push"` : pousse la branche du chantier, et s'arrête là. Aucune pull request n'est ouverte, `prUrl` reste vide.
+- `"merge"` : fusionne la branche du chantier dans `target` **en local, en fast-forward uniquement, et ne pousse jamais rien** (worktree transitoire dédié ; repli dans le dépôt lui-même seulement si `target` y est la branche courante et l'arbre propre ; 409 sinon).
+- `"merge-push"` : comme `"merge"`, mais `target` est **poussée** ensuite. Avant la fusion, `target` est rattrapée depuis `origin` (`git fetch origin <target>` puis fast-forward) : une vraie divergence est un 409 `"target branch has diverged: ..."` **avant** toute écriture, jamais une fusion locale suivie d'un push rejeté. Jamais de `--force`. La branche du chantier, elle, n'est pas poussée.
+
+Un mode inconnu est refusé en 400 (`"invalid delivery mode: must be pr, push, merge or merge-push"`).
 
 À la création d'un projet sans champ `delivery`, le mode est déduit : `"pr"` si tous les dépôts pointent vers une forge connue (github.com, ou un hôte contenant `gitlab`), sinon `"merge"` avec `target` = branche courante du premier dépôt. Le fournisseur n'est jamais persisté : il est redéduit du remote `origin` à chaque opération.
 
 **Conditions de livraison** (`Card.shipReady`, sinon `Card.shipBlocker`) : au moins une tâche, aucune tâche `running` ni `review`, au moins une tâche `accepted`, au moins une branche de chantier. `POST /api/cards/{id}/ship` refuse en 409 avec le même vocabulaire.
+
+Deux états supplémentaires ne se calculent qu'avec git, donc dans l'aperçu (`GET /api/cards/{id}/delivery`) et non dans `shipReady`, qui est recalculé sous verrou sans jamais lancer de commande :
+
+- **Chantier arrivé à destination** (`repos[].mergedIntoTarget` partout) : il n'y a plus rien à livrer, que Sillage l'ait fait ou qu'un humain ait fusionné à la main. L'UI remplace le bouton par une ancre et « Déjà sur `<destination>` ».
+- **Fusion fast-forward impossible** (modes `merge`/`merge-push`, un dépôt à livrer avec `fastForwardable: false`) : la destination a avancé de son côté, la livraison échouerait en 409 `ErrTargetDiverged`. Le bouton est désactivé et annonce le rattrapage à faire, au lieu de promettre une livraison certaine d'échouer.
+
+Pourquoi « en retard » suffit à bloquer : une fusion fast-forward avance la destination jusqu'à la branche du chantier. Si la branche est en retard, cette avance serait un recul (les commits de la destination disparaîtraient), et git refuse. Être derrière ne veut pas dire que le travail du chantier est déjà arrivé : c'est `mergedIntoTarget` qui répond à cette question, pas `behind`.
+
+**Rattraper la destination** : `POST /api/cards/{id}/catch-up` (aucun corps requis) fusionne la branche de destination **dans** la branche du chantier, un dépôt après l'autre : `git merge <destination>` dans le worktree du chantier, avec pour sujet `Sillage: catch up with <destination>`. La branche du chantier contient alors la destination, donc la livraison redevient fast-forward.
+
+Une fusion, pas un rebase : les branches des tâches acceptées descendent de la branche du chantier, réécrire son historique les laisserait orphelines. Aucun réseau (la destination est une branche locale), donc aucune confirmation, comme `/accept`. Réponse `{card, repos:[{repoName, target, merged, upToDate, conflictFilePaths, output, error}]}` en 200 même en cas de conflit : chaque dépôt porte son résultat.
+
+Un conflit annule la fusion (`git merge --abort`) : le worktree du chantier revient intact, `merged` reste faux et `conflictFilePaths` liste les fichiers. Le serveur ne résout jamais un conflit ; l'UI propose alors de confier le rattrapage à un agent (modale de création de tâche pré-remplie, l'humain choisit l'agent et valide). Un rattrapage réussi ajoute des commits à la branche : `MarkCardBranchPending` est appelé, comme à l'acceptation.
 
 **Acceptation automatique des branches fusionnées à la main.** Une branche de tâche peut être fusionnée dans celle du chantier hors de Sillage (`git merge` dans un terminal). `GET /api/cards/{id}/delivery` le constate au passage : une tâche `review` dont la branche est entièrement contenue dans celle du chantier passe `accepted`, avec un message marqueur `[auto-accepted:<branche du chantier>]` (le frontend affiche une ligne système localisée) et les événements SSE `task`, `message`, `cards`, `agents`. Quatre garde-fous : aucun agent en cours pour la tâche, `filesCount > 0` (une tâche vide est contenue par construction), son worktree propre (du travail non commité n'est par définition pas fusionné), et sa branche effectivement contenue. Aucune écriture git : l'appel ne fait que constater. Le frontend rappelle cet endpoint à l'ouverture de la vue chantier et toutes les 60 s tant qu'elle reste ouverte.
 
@@ -189,11 +228,15 @@ Le chantier est une branche de feature : une branche `sillage/ws-<card.ref>-<slu
   "warnings": ["gh not found in PATH; ..."],
   "counts": { "accepted": 3, "refused": 1, "pending": 1 },
   "repos": [ { "repoName": "api", "branch": "sillage/ws-101-refonte-auth", "base": "main",
-               "commits": 4, "files": 11, "pending": 4, "behind": 2, "prUrl": "", "shippedAt": null } ],
+               "commits": 4, "files": 11, "pending": 4, "behind": 2,
+               "mergedIntoTarget": false, "fastForwardable": true,
+               "prUrl": "", "shippedAt": null } ],
   "behind": { "t12": 2 } }
 ```
 
-`commits`/`files` décrivent le contenu de la livraison (`base..branche`) ; `pending` est ce qu'il reste réellement à livrer (commits non poussés en mode `pr`, non encore fusionnés en mode `merge`). `pending` à zéro partout signifie « rien à livrer » : le bouton est inactif et la livraison marque le dépôt `skipped`.
+`mergedIntoTarget` (la branche du chantier est entièrement contenue dans la branche de destination) et `fastForwardable` (la destination est un ancêtre de la branche, donc la fusion fast-forward passerait) situent le chantier par rapport à sa destination. Les deux se lisent par `git merge-base --is-ancestor`, sans rien écrire.
+
+`commits`/`files` décrivent le contenu de la livraison (`base..branche`) ; `pending` est ce qu'il reste réellement à livrer (commits non poussés dans les modes de branche `pr`/`push`, non encore fusionnés dans `target` dans les modes de fusion `merge`/`merge-push`). `pending` à zéro partout signifie « rien à livrer » : le bouton est inactif et la livraison marque le dépôt `skipped`.
 
 **Retard sur la base** (`behind`, deux niveaux, jamais persistés, calculés par `git rev-list --count`) :
 
@@ -202,7 +245,9 @@ Le chantier est une branche de feature : une branche `sillage/ws-<card.ref>-<slu
 
 Une révision manquante (branche jamais poussée, worktree retiré) rend `0` : mieux vaut n'annoncer aucun retard qu'un retard faux.
 
-Règles UI : badge `↓{n}` ambre dans la ligne de tâche et dans l'en-tête du panneau de détail, avec l'explication en infobulle ; ligne de retard du chantier dans la barre de livraison. Le bouton **Demander le rebase** de l'en-tête n'appelle aucun endpoint git : il poste un message dans le fil de la tâche (`POST /api/tasks/{id}/messages`) demandant à l'agent de rebaser, ce qui le met en file si l'agent tourne encore. Aucun rebase n'est jamais exécuté par le serveur : seul l'agent sait résoudre un conflit.
+Règles UI : badge `↓{n}` ambre dans la ligne de tâche et dans l'en-tête du panneau de détail, avec l'explication en infobulle ; ligne de retard du chantier dans la barre de livraison. Le bouton **Demander le rebase** de l'en-tête n'appelle aucun endpoint git : il poste un message dans le fil de la tâche (`POST /api/tasks/{id}/messages`) demandant à l'agent de rebaser, ce qui le met en file si l'agent tourne encore.
+
+Un retard qui subsiste veut donc dire que le rebase automatique de l'acceptation (voir ci-dessus) ne s'est pas appliqué ou a conflicté : agent au travail, tâche pas en revue, ou conflit réel. Le serveur ne rejoue jamais une branche autrement que par ce rebase, et n'y résout jamais un conflit : ça reste l'affaire de l'agent.
 
 `POST /api/cards/{id}/ship` `{confirm:true}` (400 `"confirmation required"` sinon) traite chaque dépôt du chantier et répond :
 
@@ -213,11 +258,11 @@ Règles UI : badge `↓{n}` ambre dans la ligne de tâche et dans l'en-tête du 
                "output": "...", "error": "" } ] }
 ```
 
-Un dépôt en échec n'annule pas les autres : chaque ligne porte sa propre erreur, et la livraison est rejouable telle quelle (les dépôts déjà livrés sont `skipped`).
+Un dépôt en échec n'annule pas les autres : chaque ligne porte sa propre erreur, et la livraison est rejouable telle quelle (les dépôts déjà livrés sont `skipped`). `pushed`/`merged` décrivent ce qui a réellement eu lieu : `pushed` seul dans les modes `pr` et `push`, `merged` seul en `merge`, les deux en `merge-push`.
 
 ### Santé de la livraison
 
-`Project.deliveryWarning` (dans `ProjectOut`, jamais `Project` lui-même : le champ n'est pas persisté) est recalculé à chaque lecture d'état ou mutation de projet. Vide en mode `merge` (aucun binaire externe, aucun remote requis) ; sinon, par ordre de priorité : `"no 'origin' remote on repository <name>; nothing can be pushed"`, `"unknown forge on repository <name>; the branch will be pushed without opening a pull request"`, `"gh not found in PATH; Sillage will fall back to a prefilled pull request URL"`, `"glab not found in PATH; ..."`. Aucun de ces avertissements n'empêche quoi que ce soit.
+`Project.deliveryWarning` (dans `ProjectOut`, jamais `Project` lui-même : le champ n'est pas persisté) est recalculé à chaque lecture d'état ou mutation de projet. Vide en mode `merge`, le seul qui ne touche jamais au réseau (aucun binaire externe, aucun remote requis). Sinon, par ordre de priorité : `"no 'origin' remote on repository <name>; nothing can be pushed"` (tout mode qui pousse), puis, en mode `pr` uniquement, `"unknown forge on repository <name>; the branch will be pushed without opening a pull request"`, `"gh not found in PATH; Sillage will fall back to a prefilled pull request URL"`, `"glab not found in PATH; ..."`. Les modes `push` et `merge-push` n'ont besoin d'aucune forge reconnue : ils poussent, point. Aucun de ces avertissements n'empêche quoi que ce soit.
 
 ### Espace de travail (synchronisation git de dataDir)
 

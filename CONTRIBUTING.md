@@ -23,9 +23,9 @@ The frontend is plain HTML/CSS/JS in `web/`, embedded in the binary: rebuild and
 
 These are the product's security promises. PRs that weaken them will not be merged:
 
-1. Agents never get push rights: no `git push` outside `Ship()` and `SyncPush()` in `internal/server/git.go`, no push-capable entries in agent tool allowlists, no permission-bypass flags for agent CLIs. `Ship()` pushes a workstream branch; `SyncPush()` only ever operates on the data directory, never on a project repository.
+1. Agents never get push rights: no `git push` outside `pushBranch()` and `SyncPush()` in `internal/server/git.go`, no push-capable entries in agent tool allowlists, no permission-bypass flags for agent CLIs. `pushBranch()` has exactly two callers, both in the ship path: `Ship()` (workstream branch) and `mergeThenPush()` (target branch, `merge-push` mode only). `SyncPush()` only ever operates on the data directory, never on a project repository.
 2. Shipping requires an explicit human confirmation (`{"confirm": true}`) on an authenticated request. Shipping a workstream is the only outbound action in the product.
-3. Local-merge delivery never pushes and never fast-forwards anything but the target branch, and never switches branches in your working repository: pushing a shared branch stays a human decision, taken in a terminal.
+3. Merge delivery is fast-forward only, never switches branches in your working repository, and fast-forwards nothing but the target branch. The `merge` mode never pushes at all; `merge-push` pushes the target branch and nothing else, never with `--force`, and refuses (before writing anything) when the target has really diverged from `origin`. Which of the two applies is a per-project setting the human made, not a default.
 4. The server must stay safe to run on a laptop: localhost by default, hashed password, rate-limited login.
 
 ## Style

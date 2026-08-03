@@ -25,13 +25,15 @@ Sillage pilote des agents IA de code (Claude Code, Codex CLI) depuis un kanban w
 
 L'humain relit une tâche et l'accepte (fusion locale dans la branche du chantier) ou la refuse ; puis il livre le chantier, seule action sortante du produit. Voir `docs/SPEC-LIVRAISON.md`.
 
+Une acceptation rebase en tâche de fond les autres tâches en revue du chantier (`rebaseSiblingTasks` dans `handlers.go`), pour qu'elles repartent du travail accepté au lieu de conflicter chacune à son tour. Ce que « livrer » veut dire est un réglage du projet (`Project.Delivery`, quatre modes : `pr`, `push`, `merge`, `merge-push`).
+
 Pour tester le flux complet sans coût, utiliser l'agent seedé Écho 🧪 (`cli:"fake"`, simulé, sans process externe).
 
 ## Invariants non négociables
 
 Ce sont les promesses de sécurité du produit (voir `CONTRIBUTING.md`) :
 
-1. **`git push` n'existe qu'à deux endroits, tous deux dans `internal/server/git.go`** : `Ship()` (branche d'un chantier) et `SyncPush()` (synchronisation de l'espace de données, jamais un dépôt de projet). Aucune entrée capable de pousser dans les allowlists d'outils des agents, aucun flag de contournement de permissions (`--dangerously-skip-permissions` interdit). Le mode de livraison « fusion locale » (`MergeLocal`) ne pousse jamais et n'accepte que le fast-forward.
+1. **`git push` n'existe qu'à deux endroits, tous deux dans `internal/server/git.go`** : `pushBranch()` (dépôts de projet, deux appelants seulement : `Ship()` pour la branche d'un chantier, `mergeThenPush()` pour la branche de destination du mode `merge-push`) et `SyncPush()` (synchronisation de l'espace de données, jamais un dépôt de projet). Aucune entrée capable de pousser dans les allowlists d'outils des agents, aucun flag de contournement de permissions (`--dangerously-skip-permissions` interdit). Les deux modes de fusion n'acceptent que le fast-forward ; `merge` ne pousse jamais rien, `merge-push` ne pousse que la branche de destination, jamais en force.
 2. **Les actions sortantes exigent `{"confirm": true}`** sur une requête authentifiée : livraison d'un chantier (la seule action sortante côté projets), sync de l'espace de travail.
 3. Le serveur reste sûr sur un portable : localhost par défaut, mot de passe bcrypt, rate-limit du login, `Content-Type: application/json` obligatoire sur les mutations (protection CSRF avec SameSite=Lax).
 4. Une seule dépendance Go externe : `golang.org/x/crypto`. En ajouter une demande une très bonne raison.
@@ -54,7 +56,8 @@ internal/server/
   handlers.go               routage (net/http ServeMux avec patterns méthode+chemin), middlewares
   runner.go                 adaptateurs claude / codex / fake, un process max par tâche
   git.go                    worktrees (chantier + tâche), parser de diff unifié, commits, fusions
-                            (MergeBranch, MergeLocal), Ship + SyncPush (les deux push), OpenPR (gh/glab)
+                            (MergeBranch, MergeLocal, MergeAndPush), pushBranch + SyncPush
+                            (les deux seuls push), Ship, OpenPR (gh/glab)
   workspace.go              dataDir en dépôt git optionnel (setup, clone, commit auto throttlé)
   auth.go                   bcrypt, sessions en mémoire, rate-limit login
   sse.go                    Hub pub/sub
@@ -68,7 +71,7 @@ web/                        index.html + style.css + app.js (SPA vanilla, zéro 
 - Un `sync.Mutex` protège tout. Les helpers `recomputeCard/Project/Agent/All` doivent être appelés **verrou tenu** et recalculent les champs dérivés (progression, compteurs, `unread`, tokens agrégés, `active`).
 - `recomputeCard` porte aussi deux règles produit : l'état du bouton de livraison (`ShipReady`/`ShipBlocker`, voir `shipReadiness`) et la colonne de la carte, qui ne passe à `done` que si toutes ses tâches sont terminales **et** que le chantier a été livré (`CardBranch.ShippedAt`). « Terminé » veut dire livré ; un chantier livré qui reçoit du travail nouveau en ressort.
 - `save()` écrit un fichier temporaire puis `os.Rename` (atomique), et arme le commit git de l'espace de travail. Ce commit est **throttlé** (`workspaceCommitInterval`, 15 min) et non debouncé : un minuteur en attente n'est jamais repoussé, sinon un agent actif (plusieurs sauvegardes par seconde) empêcherait tout commit. Chaque commit stockant un blob complet de `state.json`, commiter à chaque sauvegarde gonfle le dépôt en objets libres pour aucun gain.
-- Les migrations de format se font au chargement dans `loadStoreFile` (`migrateLegacyRepos`, `migrateLegacyWorkspace`, `migrateTaskStatuses`, `migrateLegacyDelivery`) en relisant le JSON brut : ajouter une migration là, pas ailleurs.
+- Les migrations de format se font au chargement dans `loadStoreFile` (`migrateLegacyRepos`, `migrateLegacyWorkspace`, `migrateTaskStatuses`, `migrateLegacyDelivery`) en relisant le JSON brut : ajouter une migration là, pas ailleurs. `resetTransientTaskFlags`, au même endroit, éteint les états qui ne décrivent qu'une opération en cours (`Task.Rebasing`).
 - `AgentOut.Warning` (santé de l'agent : binaire absent du PATH, sandbox codex bloqué par AppArmor) est calculé à chaque `ListAgents` et **jamais persisté** : `Agent` n'a pas ce champ.
 - `ReloadFromDisk()` remplace le contenu sans changer le pointeur `Store`, pour que sessions et abonnements SSE survivent au rapatriement d'un espace de travail.
 
@@ -96,6 +99,7 @@ SPA vanilla d'un seul fichier, dans une IIFE, découpée en sections commentées
 - **i18n** : chaque chaîne visible passe par `t('cle')` / `tCount()`, et **doit exister dans les deux dictionnaires `fr` et `en`** de `I18N` (le fallback est `fr`). Langue détectée du navigateur, surchargée par les Settings et `localStorage`.
 - **État** : hydraté par `GET /api/state`, maintenu par SSE (`EventSource`), re-fetch complet à la reconnexion.
 - Confirmations en deux temps génériques (`data-action="confirm-click"`) pour la sync de l'espace de travail, le refus d'une tâche et les suppressions : le bouton devient « Confirmer ? » avant d'agir. La livraison d'un chantier n'utilise pas ce mécanisme : son récapitulatif **est** la confirmation (voir `openShipModal`).
+- Aucune image binaire dans `web/` : la marque (`.brand-mark`, barre latérale et page de connexion) est le logo `docs/logo-sillage.png` redessiné en SVG pixel par pixel, en data-URI dans `style.css`. Même principe pour les icônes de bouton (`shipIconHTML`, `anchorIconHTML`) : SVG inline en `currentColor`, jamais d'emoji (illisible sous 16px) ni de police d'icônes.
 - Barre de livraison du chantier (`buildShipBarHTML`) : l'état du bouton vient de la carte (`shipReady`/`shipBlocker`, à jour via SSE), l'annonce et les compteurs de commits viennent de `GET /api/cards/{id}/delivery`, rechargé à l'ouverture, à chaque changement de statut et toutes les 60 s (`syncDeliveryPolling`).
 
 ## Conventions de langue
@@ -112,7 +116,7 @@ Tout est dans `internal/server/*_test.go`, sans dépendance de test externe. Deu
 
 - `NewStore(t.TempDir())` pour les tests de store (roundtrip, compteurs dérivés, transitions de statut, validations).
 - Un vrai dépôt git créé dans `t.TempDir()` via le helper `runTestGit` pour les tests git et workspace (worktree + diff, clone, sync, conflit de rebase, « SyncPush ne touche jamais un dépôt de projet »).
-- `newDeliveryFixture` (git_test.go) pour tout ce qui touche la livraison : dépôt git réel avec remote bare, serveur, projet et chantier prêts, plus les helpers `addTask` / `accept` / `ship` / `delivery`. Les tests couvrent le flux accepter → livrer, le conflit de fusion, le mode fusion locale (qui ne pousse jamais), l'acceptation automatique d'une branche fusionnée à la main et la relivraison après travail nouveau.
+- `newDeliveryFixture` (git_test.go) pour tout ce qui touche la livraison : dépôt git réel avec remote bare, serveur, projet et chantier prêts, plus les helpers `addTask` / `accept` / `ship` / `delivery`. Les tests couvrent le flux accepter → livrer, le conflit de fusion, les quatre modes de livraison (`merge` ne pousse jamais, `merge-push` pousse la branche de destination et refuse une divergence réelle, `push` ne crée aucune pull request), l'acceptation automatique d'une branche fusionnée à la main et la relivraison après travail nouveau.
 
 Le parser de diff se teste sur une fixture inline (`TestParseDiffFixture`).
 
