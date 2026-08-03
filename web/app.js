@@ -2568,7 +2568,9 @@
       '<div class="modal-label">' + escapeHtml(t('workspace.remoteLabel')) + '</div>' +
       '<div class="workspace-remote-row">' +
         '<input id="workspace-remote-input" class="modal-input mono" placeholder="git@github.com:vous/sillage-workspace.git" value="' + escapeHtml(ws.remote || '') + '">' +
-        '<button class="link-save-btn" data-action="save-workspace-remote">' + escapeHtml(t('common.save')) + '</button>' +
+        // Sans git initialisé, pas de PATCH possible : le bouton « Activer » ci-dessous
+        // embarque le remote saisi et fait l'initialisation et le branchement d'un coup.
+        (gitEnabled ? '<button class="link-save-btn" data-action="save-workspace-remote">' + escapeHtml(t('common.save')) + '</button>' : '') +
       '</div>' +
       '<div class="workspace-warning">' + escapeHtml(t('workspace.privateWarning')) + '</div>' +
       '<div id="workspace-modal-error" class="modal-error hidden"></div>' +
