@@ -14,17 +14,20 @@ Travailler avec plusieurs agents IA tourne vite à l'enfer des onglets : cinq te
 
 ## Fonctionnalités
 
-- **Kanban par projet** (Bientôt / En cours / Terminé), cartes avec activité live des agents, progression, non-lus.
-- **Tâches façon pull requests** : icônes d'état (en cours, à relire, prêt, livré), ligne d'activité en direct, compteurs, filtres en pilules. Les listes informent, le détail agit.
-- **Une action primaire par état** : interrompre, accepter, livrer, rouvrir.
-- **Conversation avec l'agent** (markdown, blocs de code), **diff coloré**, **livrables** (commits, docs, images) en onglets.
-- **Validation humaine structurelle** : les agents travaillent dans un worktree git dédié sur une branche `sillage/<ref>-...` et n'ont jamais le droit de pousser. `git push` n'existe qu'à un seul endroit du code, déclenché uniquement par le bouton de livraison après confirmation explicite.
-- **Comptage des tokens partout** : entrée/sortie/coût par tâche, agrégés par projet et en global, en temps réel.
-- **Temps réel** via SSE, **mobile** (sidebar en tiroir, parfait via Tailscale depuis le téléphone).
-- **Agent gratuit intégré** (Écho 🧪) pour essayer tout le workflow sans dépenser un token.
-- **UI en français et en anglais**, bascule dans la sidebar, détection automatique du navigateur.
-- **Agents gérés depuis l'interface** : créer, modifier (nom, emoji, CLI, modèle, prompt de contexte).
+- **Kanban par projet** (Bientôt / En cours / Terminé) de **chantiers** : des mini-objectifs qui regroupent des tâches et changent de colonne automatiquement quand le travail démarre et se termine.
+- **Tâches façon pull requests** : icônes d'état, ligne d'activité en direct, compteurs, filtres en pilules, liens profonds (`#/p/…/c/…/t/…`). Les listes informent, le détail agit, une action primaire par état.
+- **Conversation avec l'agent** (markdown, blocs de code, rendu incrémental qui ne casse jamais la sélection de texte), **diff coloré**, **livrables** en onglets. Les messages envoyés pendant que l'agent travaille sont mis en file et transmis dès qu'il termine.
+- **Validation humaine structurelle** : les agents travaillent dans un worktree git dédié sur une branche `sillage/<ref>-...` et n'ont jamais le droit de pousser. `git push` n'existe qu'à un seul endroit du code, déclenché uniquement par le bouton de livraison après confirmation explicite. La livraison affiche une ligne système avec le lien direct vers la branche poussée.
+- **Contexte en couches pour les agents** : chaque agent reçoit son propre prompt, plus le contexte du projet, plus celui du chantier. On écrit les choses une fois, au bon niveau.
+- **Un ou plusieurs dépôts git par projet** ; chaque tâche travaille sur exactement un dépôt.
+- **Comptage des tokens partout** : entrée/sortie/coût par tâche, par projet et global, en temps réel.
+- **Espace de travail versionné git** (optionnel) : projets, conversations et réglages vivent dans un dépôt git local avec commits automatiques ; synchronisation manuelle vers un remote privé pour passer d'une machine à l'autre.
+- **Agents gérés depuis l'interface** (nom, emoji, CLI, modèle, prompt), avec avertissements de santé en amont (CLI absent, sandbox bloqué) et réassignation d'une tâche à un autre agent en un clic.
 - **Ouvrir une PR** GitHub pour une tâche livrée (`gh pr create`, avec la même confirmation explicite que la livraison).
+- **Liens épinglés par projet** : une rangée discrète de favicons pour tes sites, dépôts et dashboards.
+- **UI en français et en anglais**, détection automatique, bascule dans les préférences.
+- **Mobile** (sidebar en tiroir), parfait via Tailscale depuis le téléphone.
+- **Agent gratuit intégré** (Écho 🧪) pour essayer tout le workflow sans dépenser un token.
 
 ![Vue kanban](docs/screenshots/kanban.png)
 

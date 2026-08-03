@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.4.0 (2026-08-03)
+
+First public release. Highlights since 0.2: workstreams with layered agent context, one or several git repositories per project, git-backed workspace sync, simplified review-then-ship workflow, task lifecycle (finish, cancel, reassign, delete), message queueing while agents run, deep links, pinned project links, agent health warnings, incremental conversation rendering.
+
 ## v0.2.0 (2026-08-02)
 
 - English and French UI with a sidebar language switch (auto-detected from the browser).
