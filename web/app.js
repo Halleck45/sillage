@@ -647,6 +647,7 @@
     screen: 'inbox', // 'inbox' | 'projects' | 'kanban' | 'work'
     projectId: null, cardId: null, taskId: null,
     panelTab: 'chat', panelExpanded: false, taskFilter: 'all',
+    pendingConversationScroll: false, // défiler vers le bas au prochain rendu (ouverture d'une conversation)
     searchOpen: false, modal: null,
     pendingConfirm: null, // { key, timer }
     sidebarOpen: false // tiroir mobile (< 860px)
@@ -999,6 +1000,7 @@
     }
     var prevCardId = state.cardId;
     var prevTaskId = state.taskId;
+    var prevPanelTab = state.panelTab;
     state.screen = route.screen;
     state.projectId = route.projectId || null;
     state.cardId = route.cardId || null;
@@ -1011,6 +1013,12 @@
         var t = state.tasksById[state.taskId];
         if (t) t.unread = false;
         api('/api/tasks/' + state.taskId + '/read', { method: 'POST' }).catch(function () {});
+      }
+      // Ouvrir une conversation (nouvelle tâche, ou retour sur l'onglet chat) doit
+      // toujours défiler vers le dernier message, même si celui-ci arrive après
+      // un chargement asynchrone (voir loadMessages -> renderMain).
+      if (state.panelTab === 'chat' && (state.taskId !== prevTaskId || prevPanelTab !== 'chat')) {
+        state.pendingConversationScroll = true;
       }
     }
     closeSidebarDrawer();
@@ -1174,8 +1182,8 @@
       sub = pr ? '<span class="crumb-sub">' + escapeHtml(pr.name) + '</span>' : '';
       if (c) {
         editBtn = '<button class="icon-btn" data-action="open-edit-card" title="' + escapeHtml(t('workstream.editTooltip')) + '" aria-label="' + escapeHtml(t('workstream.editTooltip')) + '">✎</button>';
+        actions = buildShipButtonHTML(c);
       }
-      actions = buildCreateButtonHTML('open-new-task', t('header.newTask'), t('header.newTaskTooltip'), 'btn-primary');
     }
     var hamburger = '<button class="icon-btn hamburger-btn" data-action="toggle-sidebar" aria-label="' + escapeHtml(t('aria.menu')) + '">☰</button>';
     return '<header class="topbar">' + hamburger + back + '<span class="crumb-title">' + escapeHtml(title) + '</span>' + editBtn + sub +
@@ -1321,8 +1329,11 @@
     var liveLine = (t.status === 'running' && t.liveActivity)
       ? '<span class="live-line mono"><span class="live-dot"></span>' + escapeHtml(t.liveActivity) + '</span>' : '';
     var titleClass = t.status === 'cancelled' ? 'task-title task-title-cancelled' : 'task-title';
+    var glyphHTML = t.status === 'running'
+      ? '<span class="task-glyph"><span class="task-spinner"></span></span>'
+      : '<span class="task-glyph" style="color:' + glyph.color + '">' + glyph.icon + '</span>';
     return '<div class="task-row ' + (selected ? 'selected' : '') + '" data-action="open-task" data-task-id="' + t.id + '">' +
-      '<span class="task-glyph" style="color:' + glyph.color + '">' + glyph.icon + '</span>' +
+      glyphHTML +
       '<div class="task-main">' +
         '<div class="task-title-line"><span class="' + titleClass + '">' + escapeHtml(t.title) + '</span>' +
         (isNew ? '<span class="badge-new">' + escapeHtml(t2('badge.new')) + '</span>' : '') +
@@ -1402,6 +1413,7 @@
     var filterHTML = filters.map(function (f) {
       return '<button class="pill ' + (state.taskFilter === f.key ? 'pill-active' : '') + '" data-action="set-filter" data-filter="' + f.key + '">' + escapeHtml(f.label) + '</button>';
     }).join('');
+    var newTaskHTML = state.cardId ? buildCreateButtonHTML('open-new-task', t('header.newTask'), t('header.newTaskTooltip'), 'btn-outline') : '';
     var visible = tasksAll.filter(function (t) { return taskMatchesFilter(t, state.taskFilter); })
       .sort(compareTasksForList);
     var rowsHTML;
@@ -1417,7 +1429,8 @@
     } else {
       rowsHTML = '<div class="empty-state">' + escapeHtml(t('work.emptyFiltered')) + '</div>';
     }
-    return '<div class="filter-pills">' + filterHTML + '</div>' + '<div class="task-list">' + rowsHTML + '</div>';
+    return '<div class="filter-pills-row"><div class="filter-pills">' + filterHTML + '</div>' + newTaskHTML + '</div>' +
+      '<div class="task-list">' + rowsHTML + '</div>';
   }
 
   function buildTaskListShell(tasksAll, opts) {
@@ -1554,12 +1567,28 @@
     return '<div class="ship-links">' + items + '</div>';
   }
 
-  // buildShipBarHTML : l'état du bouton vient de la carte (shipReady /
-  // shipBlocker, toujours à jour via SSE) ; l'aperçu (branche, base, commits,
-  // avertissements) vient de GET /api/cards/{id}/delivery, chargé à la demande.
-  function buildShipBarHTML(card) {
+  // buildShipButtonHTML : le bouton lui-même, affiché dans l'en-tête. L'état
+  // vient de la carte (shipReady / shipBlocker, toujours à jour via SSE) ;
+  // l'aperçu (branche, base, commits) vient de GET /api/cards/{id}/delivery,
+  // chargé à la demande.
+  function buildShipButtonHTML(card) {
     var prev = state.deliveryByCard[card.id];
     if (!prev) loadDelivery(card.id);
+    var blocked = !card.shipReady;
+    var sub;
+    if (blocked) sub = shipBlockerLabel(card.shipBlocker);
+    else if (prev) sub = deliveryActionLabel(prev);
+    else sub = t('common.loading');
+    var ready = !blocked && !!prev && deliverableRepos(prev).length > 0;
+    return '<button class="btn-green ship-btn" ' + (ready ? '' : 'disabled title="' + escapeHtml(sub) + '"') +
+      ' data-action="open-ship-modal" data-card-id="' + card.id + '">' + escapeHtml(t('ship.button')) + '</button>';
+  }
+
+  // buildShipBarHTML : l'aperçu de livraison (compteurs, état, avertissements,
+  // liens déjà livrés) ; le bouton lui-même est dans l'en-tête, voir
+  // buildShipButtonHTML.
+  function buildShipBarHTML(card) {
+    var prev = state.deliveryByCard[card.id];
     var blocked = !card.shipReady;
     var sub;
     if (blocked) sub = shipBlockerLabel(card.shipBlocker);
@@ -1568,9 +1597,6 @@
     var warnings = (prev && prev.warnings ? prev.warnings : []).map(function (w) {
       return '<div class="ship-bar-warning">⚠ ' + escapeHtml(deliveryWarningText(w)) + '</div>';
     }).join('');
-    var ready = !blocked && !!prev && deliverableRepos(prev).length > 0;
-    var button = '<button class="btn-green ship-btn" ' + (ready ? '' : 'disabled title="' + escapeHtml(sub) + '"') +
-      ' data-action="open-ship-modal" data-card-id="' + card.id + '">' + escapeHtml(t('ship.button')) + '</button>';
     return '<div class="ship-bar">' +
         '<div class="ship-bar-state">' +
           '<span class="ship-bar-counts">' + escapeHtml(deliveryCountsLabel(cardTaskCounts(card.id))) + '</span>' +
@@ -1579,7 +1605,6 @@
           buildCardBehindHTML(prev) +
           (prev ? buildShipLinksHTML(prev) : '') +
         '</div>' +
-        button +
       '</div>';
   }
 
@@ -1595,17 +1620,27 @@
     }).join('');
   }
 
-  // Rafraîchit uniquement la barre de livraison (pas la liste, pas le détail).
+  // Rafraîchit la barre de livraison et le bouton Ship de l'en-tête (pas la
+  // liste, pas le détail).
   function refreshShipBar(cardId) {
     if (state.cardId !== cardId) return false;
     var card = state.cardsById[cardId];
+    if (!card) return false;
     var bar = document.querySelector('.ship-bar');
-    if (!card || !bar) return false;
-    var wrapper = document.createElement('div');
-    wrapper.innerHTML = buildShipBarHTML(card);
-    var fresh = wrapper.firstElementChild;
-    if (fresh) bar.replaceWith(fresh);
-    return true;
+    if (bar) {
+      var barWrapper = document.createElement('div');
+      barWrapper.innerHTML = buildShipBarHTML(card);
+      var freshBar = barWrapper.firstElementChild;
+      if (freshBar) bar.replaceWith(freshBar);
+    }
+    var btn = document.querySelector('.ship-btn');
+    if (btn) {
+      var btnWrapper = document.createElement('div');
+      btnWrapper.innerHTML = buildShipButtonHTML(card);
+      var freshBtn = btnWrapper.firstElementChild;
+      if (freshBtn) btn.replaceWith(freshBtn);
+    }
+    return !!(bar || btn);
   }
 
   function buildShipRepoRowHTML(prev, r) {
@@ -2348,7 +2383,14 @@
       }
     }
     var newConv = document.getElementById('conversation-list');
-    if (newConv && prevScroll !== null) newConv.scrollTop = prevScroll;
+    if (newConv) {
+      if (state.pendingConversationScroll) {
+        scrollConversationToBottom();
+        state.pendingConversationScroll = false;
+      } else if (prevScroll !== null) {
+        newConv.scrollTop = prevScroll;
+      }
+    }
   }
 
   // ---------------------------------------------------------------------

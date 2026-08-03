@@ -54,6 +54,7 @@ button, input, textarea { font-family: inherit; }
 ::-webkit-scrollbar-thumb { background: #e2e1dd; border-radius: 8px; border: 3px solid transparent; background-clip: content-box; }
 
 @keyframes om-pulse { 0%, 100% { opacity: .25; } 50% { opacity: 1; } }
+@keyframes om-spin { to { transform: rotate(360deg); } }
 @keyframes om-fade { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: none; } }
 
 /* ---------- Layout ---------- */
@@ -390,7 +391,8 @@ button, input, textarea { font-family: inherit; }
 .work-body.panel-expanded .task-list-pane { display: none; }
 .work-body.panel-expanded .detail-panel { width: 100%; min-width: 0; border-left: 0; }
 
-.filter-pills { display: flex; align-items: center; gap: 7px; margin-bottom: 12px; flex-wrap: wrap; }
+.filter-pills-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
+.filter-pills { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
 .pill {
   flex: none; white-space: nowrap; height: 26px; padding: 0 11px; border: 0; background: transparent;
   color: var(--muted); border-radius: 8px; font-size: 12.5px; font-weight: 400; cursor: pointer;
@@ -401,11 +403,15 @@ button, input, textarea { font-family: inherit; }
 .task-list { display: flex; flex-direction: column; }
 .task-row {
   display: flex; align-items: flex-start; gap: 12px; padding: 13px 12px; border-radius: 10px;
-  cursor: pointer; border-bottom: 1px solid var(--border-2);
+  cursor: pointer; border-bottom: 1px solid var(--border-2); transition: background .15s ease;
 }
 .task-row:hover { background: #faf9f6; }
 .task-row.selected { background: #f6f4f0; }
 .task-glyph { flex: none; width: 18px; height: 18px; margin-top: 1px; display: flex; align-items: center; justify-content: center; font-size: 13px; }
+.task-spinner {
+  width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--border-3);
+  border-top-color: var(--muted); animation: om-spin .7s linear infinite;
+}
 .task-main { flex: 1; min-width: 0; }
 .task-title-line { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
 .task-title { flex: 0 1 auto; min-width: 0; font-size: 14.5px; font-weight: 500; letter-spacing: -0.014em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
