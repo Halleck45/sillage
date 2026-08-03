@@ -217,7 +217,10 @@
       'preferences.title': 'Préférences',
       'preferences.displayNamePlaceholder': 'Prénom',
       'preferences.langLabel': 'Langue',
-      'preferences.errorSaveFailed': 'Échec de l\'enregistrement.'
+      'preferences.errorSaveFailed': 'Échec de l\'enregistrement.',
+      'sidebar.settingsButton': 'Réglages',
+      'usage.title': 'Utilisation',
+      'usage.empty': 'Aucun projet.'
     },
     en: {
       'nav.inbox': 'Inbox',
@@ -428,7 +431,10 @@
       'preferences.title': 'Preferences',
       'preferences.displayNamePlaceholder': 'First name',
       'preferences.langLabel': 'Language',
-      'preferences.errorSaveFailed': 'Failed to save.'
+      'preferences.errorSaveFailed': 'Failed to save.',
+      'sidebar.settingsButton': 'Settings',
+      'usage.title': 'Usage',
+      'usage.empty': 'No projects yet.'
     }
   };
 
@@ -972,9 +978,8 @@
       '<button class="icon-btn-sm" data-action="open-new-agent" title="' + escapeHtml(t('sidebar.newAgentTooltip')) + '" aria-label="' + escapeHtml(t('sidebar.newAgentTooltip')) + '">+</button></div>' +
       '<div class="agent-list">' + (agentsHTML || '<div class="empty-note-sm">' + escapeHtml(t('sidebar.noAgents')) + '</div>') + '</div>' +
       '<div class="sidebar-footer">' +
-        '<span class="sidebar-tokens" id="sidebar-tokens">' + tokenSummary(state.tokens.global) + '</span>' +
+        '<button class="settings-btn" data-action="open-workspace-modal">⚙ ' + escapeHtml(t('sidebar.settingsButton')) + '</button>' +
         '<div class="sidebar-footer-actions">' +
-          '<button class="icon-btn-sm" data-action="open-workspace-modal" title="' + escapeHtml(t('workspace.tooltip')) + '" aria-label="' + escapeHtml(t('workspace.tooltip')) + '">⚙</button>' +
           '<button class="logout-link" data-action="logout">' + escapeHtml(t('nav.logout')) + '</button>' +
         '</div>' +
       '</div>';
@@ -1096,7 +1101,6 @@
   function buildKanbanHTML() {
     var project = state.projectsById[state.projectId];
     var cards = state.cards.filter(function (c) { return c.projectId === state.projectId; });
-    var tokenTxt = project ? tokenSummary(project.tokens) : '';
 
     var colsHTML = COLUMN_ORDER.map(function (key) {
       var label = columnLabel(key);
@@ -1123,7 +1127,6 @@
       head += '<div class="kanban-description">' + escapeHtml(project.description) + '</div>';
     }
     head += '</div>';
-    head += '<div class="kanban-stats"><span id="kanban-token-stat" class="token-stat">' + tokenTxt + '</span></div>';
     head += '</div>';
     head += buildPinnedLinksHTML(project);
 
@@ -2300,6 +2303,14 @@
 
   // Nouvel agent / édition d'agent
 
+  // Suggestions sobres et variées pour l'emoji d'agent ; la saisie libre
+  // reste possible (datalist, pas de select fermé).
+  var AGENT_EMOJI_SUGGESTIONS = ['🐝', '🦉', '🦊', '🪶', '🐙', '🦫', '🐢', '🦅', '🐺', '🦭', '🐬', '🦋', '🐞', '🪲', '🐌', '🦔', '🐿️', '🦜', '🦢', '🐋', '⚡', '🔧', '🎨', '📐'];
+  function buildAgentEmojiDatalistHTML() {
+    var options = AGENT_EMOJI_SUGGESTIONS.map(function (e) { return '<option value="' + e + '"></option>'; }).join('');
+    return '<datalist id="agent-emoji-options">' + options + '</datalist>';
+  }
+
   function buildAgentModalHTML(agent) {
     var isEdit = !!agent;
     var title = isEdit ? t('agent.editTitle') : t('agent.newTitle');
@@ -2322,7 +2333,7 @@
       warningBanner +
       '<div class="modal-label">' + escapeHtml(t('agent.name')) + '</div><input id="agent-name" class="modal-input" value="' + (agent ? escapeHtml(agent.name) : '') + '">' +
       '<div class="agent-form-row">' +
-        '<div><div class="modal-label">' + escapeHtml(t('agent.emoji')) + '</div><input id="agent-emoji" class="modal-input agent-emoji-input" maxlength="4" value="' + (agent ? escapeHtml(agent.emoji || '') : '') + '"></div>' +
+        '<div><div class="modal-label">' + escapeHtml(t('agent.emoji')) + '</div><input id="agent-emoji" class="modal-input agent-emoji-input" maxlength="4" list="agent-emoji-options" value="' + (agent ? escapeHtml(agent.emoji || '') : '') + '">' + buildAgentEmojiDatalistHTML() + '</div>' +
         '<div><div class="modal-label">' + escapeHtml(t('agent.color')) + '</div><input type="color" id="agent-color" class="color-input" value="' + (agent && agent.color ? agent.color : '#2f66d0') + '"></div>' +
         '<div><div class="modal-label">' + escapeHtml(t('agent.cli')) + '</div><select id="agent-cli" class="modal-input">' + cliOptions + '</select></div>' +
       '</div>' +
@@ -2547,6 +2558,27 @@
       '<div class="preferences-divider"></div>';
   }
 
+  // Section « Utilisation » : total global de tokens/coût, sobre, sans
+  // graphique, suivi d'une petite liste par projet. Le contenu (hors titre
+  // de section) vit dans #usage-section pour permettre un patch ciblé sur
+  // l'événement SSE `tokens`, sans reconstruire toute la modale.
+  function buildUsageSectionInnerHTML() {
+    var global = (state.tokens && state.tokens.global) || {};
+    var rows = state.projects.map(function (p) {
+      var tok = p.tokens || {};
+      var total = (tok.input || 0) + (tok.output || 0);
+      return '<div class="usage-project-row"><span class="usage-project-name">' + escapeHtml(p.name) + '</span>' +
+        '<span class="usage-project-value">' + formatTokens(total) + ' ' + escapeHtml(t('tokens.unit')) + ' · ' + formatMoney(tok.costUsd) + '</span></div>';
+    }).join('');
+    return '<div class="usage-global">' + tokenSummary(global) + '</div>' +
+      (rows ? '<div class="usage-project-list">' + rows + '</div>' : '<div class="empty-note-sm">' + escapeHtml(t('usage.empty')) + '</div>');
+  }
+  function buildUsageSectionHTML() {
+    return '<div class="modal-label">' + escapeHtml(t('usage.title')) + '</div>' +
+      '<div id="usage-section">' + buildUsageSectionInnerHTML() + '</div>' +
+      '<div class="preferences-divider"></div>';
+  }
+
   function buildWorkspaceModalBodyHTML() {
     var ws = state.workspace || {};
     var gitEnabled = !!ws.gitEnabled;
@@ -2578,6 +2610,7 @@
     }
 
     return buildPreferencesSectionHTML() +
+      buildUsageSectionHTML() +
       '<div class="workspace-state">' + escapeHtml(stateLabel) + '</div>' +
       '<div class="modal-label">' + escapeHtml(t('workspace.remoteLabel')) + '</div>' +
       '<div class="workspace-remote-row">' +
@@ -2791,10 +2824,8 @@
         if (state.tasksById[tid]) state.tasksById[tid].tokens = payload.tasks[tid];
       });
     }
-    var footer = document.getElementById('sidebar-tokens');
-    if (footer) footer.textContent = tokenSummary(state.tokens.global);
-    var kanbanTok = document.getElementById('kanban-token-stat');
-    if (kanbanTok && state.projectId && state.projectsById[state.projectId]) kanbanTok.textContent = tokenSummary(state.projectsById[state.projectId].tokens);
+    var usageSection = document.getElementById('usage-section');
+    if (usageSection) usageSection.innerHTML = buildUsageSectionInnerHTML();
     var detailTok = document.getElementById('detail-token-line');
     if (detailTok && state.taskId && state.tasksById[state.taskId]) detailTok.textContent = tokenSummary(state.tasksById[state.taskId].tokens);
   }

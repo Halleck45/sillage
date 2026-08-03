@@ -182,20 +182,29 @@ func (s *Store) ensureMaps() {
 func (s *Store) initEmpty() {
 	s.ensureMaps()
 	s.NextRef = 100
+	// Les agents par défaut ne ciblent plus des rôles distincts (backend,
+	// produit, infra) : Bolt, Muse, Otto et Fably reçoivent tous le même
+	// contexte générique. Écho (agent de test local, fake) garde son texte.
+	const defaultContextPrompt = "You are a pragmatic developer, focused on quality and simplicity."
 	s.Agents["bolt"] = Agent{
 		ID: "bolt", Name: "Bolt", Emoji: "🐝", Color: "#f2b705",
 		Model: "claude-sonnet-5", Cli: "claude",
-		ContextPrompt: "You are a pragmatic backend developer, focused on quality and simplicity.",
+		ContextPrompt: defaultContextPrompt,
 	}
 	s.Agents["muse"] = Agent{
 		ID: "muse", Name: "Muse", Emoji: "🦊", Color: "#d0662f",
 		Model: "claude-opus-5", Cli: "claude",
-		ContextPrompt: "You are a product owner: specs, documentation, functional clarity.",
+		ContextPrompt: defaultContextPrompt,
 	}
 	s.Agents["otto"] = Agent{
 		ID: "otto", Name: "Otto", Emoji: "🦉", Color: "#4f7d2f",
 		Model: "", Cli: "codex",
-		ContextPrompt: "You are an infrastructure engineer: CI, deployment, tooling.",
+		ContextPrompt: defaultContextPrompt,
+	}
+	s.Agents["fably"] = Agent{
+		ID: "fably", Name: "Fably", Emoji: "🪶", Color: "#6b4fbb",
+		Model: "claude-fable-5", Cli: "claude",
+		ContextPrompt: defaultContextPrompt,
 	}
 	s.Agents["echo"] = Agent{
 		ID: "echo", Name: "Écho", Emoji: "🧪", Color: "#777777",
