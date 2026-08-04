@@ -14,6 +14,7 @@
 - A server that stays alive and a script that finishes go through the same path: the panel streams stdout and stderr as they arrive, shows a clickable URL when the repository declares one, and reports "finished (exit 0)" otherwise. Web and non-web projects are covered by the same code, with no command type to choose.
 - Starting a preview replaces the one already running in that worktree, and everything is killed when Sillage stops (`SIGINT`/`SIGTERM`), process groups included, so no forgotten server keeps a port. A counter at the bottom of the sidebar always says how many previews are running.
 - With no command configured, the panel still shows the worktree path with a copy button: previewing works on every project without any setup.
+- A conflict with the workstream branch, whether at accept time or during the automatic sibling rebase, no longer just leaves a note in the thread for a human to notice: the agent is immediately asked to rebase onto the workstream branch and resolve it, so the task goes back to "running" on its own instead of sitting stuck in review.
 
 ## v0.5.0 (2026-08-03)
 
