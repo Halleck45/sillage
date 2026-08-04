@@ -3,28 +3,28 @@
 class Sillage < Formula
   desc "Calm web dashboard to pilot AI coding agents across your projects"
   homepage "https://github.com/Halleck45/sillage"
-  version "0.8.0"
+  version "0.9.0"
   license "MIT"
 
   on_macos do
     on_arm do
-      url "https://github.com/Halleck45/sillage/releases/download/v0.8.0/sillage_darwin_arm64"
-      sha256 "c6c38174434d6aa8ae359276cfa553993afc4ef1a8989e950a05c018238e2065"
+      url "https://github.com/Halleck45/sillage/releases/download/v0.9.0/sillage_darwin_arm64"
+      sha256 "bc677a7adf40f6b073f20f27d9331bc1c40bf7795a93fc71dad234d886f98504"
     end
     on_intel do
-      url "https://github.com/Halleck45/sillage/releases/download/v0.8.0/sillage_darwin_amd64"
-      sha256 "483750a8253a96af55b21337afd77cd1a96fcf9d65b56389331d2d630a3b8fa1"
+      url "https://github.com/Halleck45/sillage/releases/download/v0.9.0/sillage_darwin_amd64"
+      sha256 "664747339514b0f614bb2120549472686a14c0c20eb400847b7284910732c077"
     end
   end
 
   on_linux do
     on_arm do
-      url "https://github.com/Halleck45/sillage/releases/download/v0.8.0/sillage_linux_arm64"
-      sha256 "4cc4726c933870465c5f899bd21c96aa8d6459dbf5ac1f16e132e483c4876dd0"
+      url "https://github.com/Halleck45/sillage/releases/download/v0.9.0/sillage_linux_arm64"
+      sha256 "b24d3f666d0599ea9274b3478c8c1c9a9b7cbe6eb305485d16146ea0969f1425"
     end
     on_intel do
-      url "https://github.com/Halleck45/sillage/releases/download/v0.8.0/sillage_linux_amd64"
-      sha256 "fcc396f9f61b939cc1230bd2c3137d10417be1ef7e7c8582cf06f11b68f50de4"
+      url "https://github.com/Halleck45/sillage/releases/download/v0.9.0/sillage_linux_amd64"
+      sha256 "ff745d6d80db03b37f9ec646f8ff40ae5fa61eb02ba5775c3f1776c2defcfa51"
     end
   end
 
