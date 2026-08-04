@@ -13,8 +13,8 @@ Mono-utilisateur : un seul mot de passe partagé (pas de comptes, pas de rôles)
 ```jsonc
 Tokens  { "input": 0, "output": 0, "costUsd": 0.0 }
 
-Repo    { "name": "api", "path": "/abs/path", "previewCmd": "make serve PORT=$((4000 + SILLAGE_N))",
-          "previewUrl": "http://127.0.0.1:$((4000 + SILLAGE_N))" }
+Repo    { "name": "api", "path": "/abs/path", "previewCmd": "make serve PORT=$SILLAGE_PORT",
+          "previewUrl": "http://127.0.0.1:$SILLAGE_PORT" }
           // name court et unique dans le projet.
           // previewCmd : commande de recette manuelle, lancée dans le worktree d'un chantier
           // ou d'une tâche (voir "Recette manuelle"). Vide = pas de recette pour ce dépôt.
@@ -325,11 +325,12 @@ Sillage ne sait rien des stacks : il exécute la commande de recette d'un dépô
   | Variable | Valeur | Pour |
   | --- | --- | --- |
   | `SILLAGE_ID` | `ws-<cardRef>` ou `t-<taskRef>` | noms : base de données, conteneur, répertoire |
-  | `SILLAGE_N` | `<cardRef>` ou `<taskRef>` | arithmétique : `PORT=$((4000 + SILLAGE_N))` |
+  | `SILLAGE_N` | `<cardRef>` ou `<taskRef>` | arithmétique explicite : `PORT=$((4000 + SILLAGE_N))` |
+  | `SILLAGE_PORT` | `4000 + SILLAGE_N` | port prêt à l'emploi : `PORT=$SILLAGE_PORT` |
   | `SILLAGE_DIR` | le worktree (aussi le répertoire courant) | chemins absolus |
   | `SILLAGE_BRANCH` | la branche recettée | affichage, bannière de debug |
 
-  `SILLAGE_ID`/`SILLAGE_N` dérivent de `Card.ref` et `Task.ref` : petits, **stables dans le temps** (la base de recette et son contenu survivent entre deux sessions) et uniques dans un projet, puisque le compteur de références est partagé entre chantiers et tâches. Aucun état nouveau n'est persisté pour ça : ni allocateur, ni table de slots. À charge du projet d'écrire une commande idempotente (créer-si-absent).
+  `SILLAGE_ID`/`SILLAGE_N` dérivent de `Card.ref` et `Task.ref` : petits, **stables dans le temps** (la base de recette et son contenu survivent entre deux sessions) et uniques dans un projet, puisque le compteur de références est partagé entre chantiers et tâches. Aucun état nouveau n'est persisté pour ça : ni allocateur, ni table de slots. À charge du projet d'écrire une commande idempotente (créer-si-absent). `SILLAGE_PORT` existe parce qu'une référence assez petite (`SILLAGE_N=118`) rend l'arithmétique `$((4000 + SILLAGE_N))` facile à oublier dans la commande ; l'oubli retombe alors sur un port privilégié (< 1024) qui refuse de se lier (`bind: permission denied`, sans autre explication). `SILLAGE_PORT` n'est rien de plus que ce décalage précalculé : toujours dérivé de `SILLAGE_N`, sans allocateur ni sonde de disponibilité (voir `docs/SPEC-RECETTE.md` §5).
 - **`previewUrl`** est développée par le shell dans le même environnement que la commande : elle accepte donc exactement la même syntaxe, arithmétique comprise. Elle est validée à l'enregistrement (`http(s)` uniquement, parce qu'elle devient un lien cliquable) et rendue dans `PreviewRun.url` une fois substituée. Pas de sonde de disponibilité : le lien est cliquable dès le lancement.
 - **Journal** : tampon circulaire en mémoire de 2000 lignes, stdout et stderr mêlés dans l'ordre d'arrivée. Lu une fois à l'ouverture (`GET /api/previews/{id}/log`), puis complété ligne à ligne par l'événement SSE `previewLog`. Jamais écrit sur disque.
 - **Rien ne survit à l'arrêt du serveur** : SIGINT/SIGTERM déclenche l'arrêt de tous les runs (SIGINT au groupe, SIGKILL après 5 s) avant la fermeture du serveur HTTP. Il n'y a **ni plafond ni TTL d'inactivité** : à la place, l'interface affiche en permanence le nombre de recettes en cours, et c'est l'humain qui arrête (un TTL qui coupe un serveur pendant qu'on s'en sert est plus agaçant qu'utile).
