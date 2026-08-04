@@ -15,6 +15,9 @@
 - Starting a preview replaces the one already running in that worktree, and everything is killed when Sillage stops (`SIGINT`/`SIGTERM`), process groups included, so no forgotten server keeps a port. A counter at the bottom of the sidebar always says how many previews are running.
 - With no command configured, the panel still shows the worktree path with a copy button: previewing works on every project without any setup.
 - A conflict with the workstream branch, whether at accept time or during the automatic sibling rebase, no longer just leaves a note in the thread for a human to notice: the agent is immediately asked to rebase onto the workstream branch and resolve it, so the task goes back to "running" on its own instead of sitting stuck in review.
+- New preview variable `$SILLAGE_PORT` (`4000 + $SILLAGE_N`, precomputed): a small workstream or task reference (e.g. 118) written directly as a port, or with the `$((4000 + SILLAGE_N))` offset forgotten, lands on a privileged port that refuses to bind (`permission denied`) with no clue why. `$SILLAGE_PORT` removes the arithmetic from the command entirely.
+- The preview panel now links straight to the project's settings when a repository has no preview command configured, instead of only describing where to go look for it.
+- The preview variables reminder next to the command field is now a row of chips (one per variable, with what it's for) plus a worked example, `python3 -m http.server $SILLAGE_PORT`, instead of one dense sentence listing all five.
 
 ## v0.5.0 (2026-08-03)
 

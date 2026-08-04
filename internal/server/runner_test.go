@@ -1,8 +1,12 @@
 package server
 
 import (
+	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 // TestParseCodexTokenStreamKeepsLastCumulativeTotal reproduit le bug réel :
@@ -51,6 +55,115 @@ func TestParseCodexTokenStreamNoEvent(t *testing.T) {
 	tok, found := parseCodexTokenStream(lines)
 	if found {
 		t.Fatalf("aucun événement de tokens ne devrait être trouvé, reçu %+v", tok)
+	}
+}
+
+// TestParseCodexRateLimits couvre le seul endroit où codex publie le quota de
+// compte (fichier de session, jamais le flux --json) : deux fenêtres,
+// primaire (5h) et secondaire (hebdomadaire).
+func TestParseCodexRateLimits(t *testing.T) {
+	var generic map[string]any
+	raw := `{"type":"event_msg","payload":{"type":"token_count","info":{},"rate_limits":{
+		"primary":{"used_percent":44.0,"window_minutes":300,"resets_at":1771005432},
+		"secondary":{"used_percent":49.0,"window_minutes":10080,"resets_at":1771409457}}}}`
+	if err := json.Unmarshal([]byte(raw), &generic); err != nil {
+		t.Fatalf("fixture JSON invalide : %v", err)
+	}
+	windows, ok := parseCodexRateLimits(generic)
+	if !ok {
+		t.Fatalf("rate_limits aurait dû être détecté")
+	}
+	if len(windows) != 2 {
+		t.Fatalf("attendu 2 fenêtres, reçu %d : %+v", len(windows), windows)
+	}
+	if windows[0].Label != "5h" || windows[0].UsedPercent != 44.0 {
+		t.Fatalf("fenêtre primaire inattendue : %+v", windows[0])
+	}
+	if windows[1].Label != "week" || windows[1].UsedPercent != 49.0 {
+		t.Fatalf("fenêtre secondaire inattendue : %+v", windows[1])
+	}
+}
+
+// TestParseCodexRateLimitsIgnoresOtherEvents vérifie qu'un événement sans
+// rate_limits (message, token_count sans compte, autre type) ne renvoie rien.
+func TestParseCodexRateLimitsIgnoresOtherEvents(t *testing.T) {
+	cases := []string{
+		`{"type":"event_msg","payload":{"type":"agent_message","message":"bonjour"}}`,
+		`{"type":"event_msg","payload":{"type":"token_count","info":{}}}`,
+		`{"msg":{"type":"agent_message"}}`,
+	}
+	for _, raw := range cases {
+		var generic map[string]any
+		if err := json.Unmarshal([]byte(raw), &generic); err != nil {
+			t.Fatalf("fixture JSON invalide : %v", err)
+		}
+		if windows, ok := parseCodexRateLimits(generic); ok {
+			t.Fatalf("aucune fenêtre attendue pour %q, reçu %+v", raw, windows)
+		}
+	}
+}
+
+// TestQuotaWindowLabel couvre les deux fenêtres connues et le repli générique.
+func TestQuotaWindowLabel(t *testing.T) {
+	if got := quotaWindowLabel(300); got != "5h" {
+		t.Fatalf("attendu \"5h\", reçu %q", got)
+	}
+	if got := quotaWindowLabel(10080); got != "week" {
+		t.Fatalf("attendu \"week\", reçu %q", got)
+	}
+	if got := quotaWindowLabel(60); got != "60m" {
+		t.Fatalf("attendu un repli générique \"60m\", reçu %q", got)
+	}
+}
+
+// TestReadCodexRateLimits couvre la localisation du fichier de session par
+// thread_id (structure sessions/AAAA/MM/JJ/rollout-...-<threadID>.jsonl) et
+// la lecture du dernier instantané de quota qu'il contient.
+func TestReadCodexRateLimits(t *testing.T) {
+	root := t.TempDir()
+	oldDir := codexSessionsDir
+	codexSessionsDir = func() string { return root }
+	defer func() { codexSessionsDir = oldDir }()
+
+	dayDir := filepath.Join(root, "2026", "08", "04")
+	if err := os.MkdirAll(dayDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll : %v", err)
+	}
+	threadID := "019fcb94-5cf5-72c1-a18f-05fc099ddeae"
+	sessionPath := filepath.Join(dayDir, "rollout-2026-08-04T09-02-05-"+threadID+".jsonl")
+	content := strings.Join([]string{
+		`{"type":"event_msg","payload":{"type":"token_count","info":{},"rate_limits":{"primary":{"used_percent":22.0,"window_minutes":10080,"resets_at":1786296634}}}}`,
+		`{"type":"event_msg","payload":{"type":"token_count","info":{},"rate_limits":{"primary":{"used_percent":23.0,"window_minutes":10080,"resets_at":1786296634}}}}`,
+	}, "\n")
+	if err := os.WriteFile(sessionPath, []byte(content+"\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile : %v", err)
+	}
+
+	windows, ok := readCodexRateLimits(threadID)
+	if !ok {
+		t.Fatalf("un instantané aurait dû être trouvé")
+	}
+	if len(windows) != 1 || windows[0].UsedPercent != 23.0 {
+		t.Fatalf("attendu le DERNIER instantané (23%%), reçu %+v", windows)
+	}
+	if !windows[0].ResetsAt.Equal(time.Unix(1786296634, 0)) {
+		t.Fatalf("resetsAt inattendu : %v", windows[0].ResetsAt)
+	}
+}
+
+// TestReadCodexRateLimitsMissingFile vérifie qu'un thread_id sans fichier de
+// session correspondant ne fait pas planter le best-effort.
+func TestReadCodexRateLimitsMissingFile(t *testing.T) {
+	root := t.TempDir()
+	oldDir := codexSessionsDir
+	codexSessionsDir = func() string { return root }
+	defer func() { codexSessionsDir = oldDir }()
+
+	if windows, ok := readCodexRateLimits("unknown-thread"); ok {
+		t.Fatalf("aucun instantané attendu, reçu %+v", windows)
+	}
+	if windows, ok := readCodexRateLimits(""); ok {
+		t.Fatalf("thread_id vide : aucun instantané attendu, reçu %+v", windows)
 	}
 }
 
@@ -131,5 +244,111 @@ func TestBuildTranscript(t *testing.T) {
 	}
 	if buildTranscript(nil) != "" {
 		t.Fatalf("transcript vide attendu pour aucun message")
+	}
+}
+
+// Le socle doit rester agnostique : y remettre une commande de langage ferait
+// hériter tout projet d'une allowlist écrite pour un autre (voir
+// Project.AllowedTools). Ce test est le garde-fou de cette règle.
+func TestClaudeSocleStaysLanguageAgnostic(t *testing.T) {
+	for _, forbidden := range []string{"go build", "go test", "go vet", "gofmt", "npm", "pytest", "cargo", "node"} {
+		if strings.Contains(claudeAllowedTools, forbidden) {
+			t.Fatalf("le socle contient %q : les commandes de langage vont dans Project.AllowedTools", forbidden)
+		}
+	}
+	// Le git du socle est en lecture seule : aucune sous-commande qui écrive.
+	for _, forbidden := range []string{"git push", "git commit", "git merge", "git rebase", "Bash(git:*)"} {
+		if strings.Contains(claudeAllowedTools, forbidden) {
+			t.Fatalf("le socle contient %q : le git du socle est en lecture seule", forbidden)
+		}
+	}
+}
+
+// Invariant 1 : rien de capable de pousser, ni dans le socle ni hors du refus
+// figé. Un agent qui pourrait écrire .claude/settings.json s'accorderait de
+// nouveaux droits au run suivant, d'où sa présence dans le refus.
+func TestClaudeDeniedToolsCoversOutboundAndSelfEscalation(t *testing.T) {
+	for _, required := range []string{"git push", "gh", "glab", ".claude/settings"} {
+		if !strings.Contains(claudeDeniedTools, required) {
+			t.Fatalf("le refus figé ne couvre pas %q (invariant 1)", required)
+		}
+	}
+	if strings.Contains(claudeAllowedTools, "push") {
+		t.Fatalf("le socle ne doit jamais contenir d'entrée capable de pousser")
+	}
+}
+
+func TestClaudeToolsAppendsProjectTools(t *testing.T) {
+	if got := claudeTools(nil); got != claudeAllowedTools {
+		t.Fatalf("sans outil de projet, la liste doit être le socle seul ; reçu %q", got)
+	}
+	// Les entrées vides viennent d'un champ saisi une ligne par outil.
+	got := claudeTools([]string{" Bash(pytest:*) ", "", "Bash(ruff:*)"})
+	want := claudeAllowedTools + ",Bash(pytest:*),Bash(ruff:*)"
+	if got != want {
+		t.Fatalf("liste attendue %q, reçue %q", want, got)
+	}
+}
+
+// Le contenu d'un tool_result arrive tantôt en chaîne, tantôt en liste de blocs
+// typés selon l'appel : les deux formes doivent rendre le même texte, sinon un
+// refus de permission passe inaperçu et le marqueur n'est jamais posé.
+func TestClaudeToolResultText(t *testing.T) {
+	const denial = "Claude requested permissions to use Bash"
+	if got := claudeToolResultText(json.RawMessage(`"` + denial + `"`)); got != denial {
+		t.Fatalf("forme chaîne : attendu %q, reçu %q", denial, got)
+	}
+	blocks := json.RawMessage(`[{"type":"text","text":"` + denial + `"}]`)
+	if got := claudeToolResultText(blocks); got != denial {
+		t.Fatalf("forme liste de blocs : attendu %q, reçu %q", denial, got)
+	}
+	// Contenu absent ou forme inattendue : pas de texte, donc pas de marqueur.
+	if got := claudeToolResultText(nil); got != "" {
+		t.Fatalf("contenu absent : attendu vide, reçu %q", got)
+	}
+	if got := claudeToolResultText(json.RawMessage(`{"unexpected":1}`)); got != "" {
+		t.Fatalf("forme inconnue : attendu vide, reçu %q", got)
+	}
+}
+
+// Un marqueur de refus est une ligne système, pas un tour de conversation : il
+// ne doit pas être rejoué au CLI quand la session est repartie de zéro (codex,
+// tâche réassignée), sinon l'agent lit ses propres refus comme du contexte.
+func TestBuildTranscriptExcludesToolDeniedMarker(t *testing.T) {
+	got := buildTranscript([]Message{
+		{Author: "agent", AuthorName: "", Text: "[tool-denied:Bash · pytest -q]"},
+		{Author: "agent", AuthorName: "Bolt", Text: "je contourne autrement"},
+	})
+	if strings.Contains(got, "tool-denied") {
+		t.Fatalf("le marqueur de refus ne doit pas être rejoué : %q", got)
+	}
+	if !strings.Contains(got, "je contourne autrement") {
+		t.Fatalf("transcript incomplet : %q", got)
+	}
+}
+
+// Un test rouge ou un fichier absent font partie du travail de l'agent : seul
+// un refus de permission mérite un marqueur dans le fil.
+func TestIsPermissionDenial(t *testing.T) {
+	denied := []string{
+		"Claude requested permissions to write to .claude/skills/x/SKILL.md, but you haven't granted it yet",
+		"Claude requested permissions to use Bash",
+		"Agent does not have permission to use Bash(pytest:*)",
+	}
+	for _, text := range denied {
+		if !isPermissionDenial(text) {
+			t.Fatalf("refus de permission non détecté : %q", text)
+		}
+	}
+	ordinary := []string{
+		"FAIL github.com/org/repo 0.12s",
+		"cat: /tmp/nope: No such file or directory",
+		"exit status 1",
+		"",
+	}
+	for _, text := range ordinary {
+		if isPermissionDenial(text) {
+			t.Fatalf("erreur d'exécution ordinaire prise pour un refus : %q", text)
+		}
 	}
 }

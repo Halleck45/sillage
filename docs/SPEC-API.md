@@ -13,8 +13,8 @@ Mono-utilisateur : un seul mot de passe partagé (pas de comptes, pas de rôles)
 ```jsonc
 Tokens  { "input": 0, "output": 0, "costUsd": 0.0 }
 
-Repo    { "name": "api", "path": "/abs/path", "previewCmd": "make serve PORT=$((4000 + SILLAGE_N))",
-          "previewUrl": "http://127.0.0.1:$((4000 + SILLAGE_N))" }
+Repo    { "name": "api", "path": "/abs/path", "previewCmd": "make serve PORT=$SILLAGE_PORT",
+          "previewUrl": "http://127.0.0.1:$SILLAGE_PORT" }
           // name court et unique dans le projet.
           // previewCmd : commande de recette manuelle, lancée dans le worktree d'un chantier
           // ou d'une tâche (voir "Recette manuelle"). Vide = pas de recette pour ce dépôt.
@@ -38,8 +38,11 @@ Delivery { "mode": "pr|push|merge|merge-push", "target": "main", "stackedPrs": f
 Project { "id": "p1", "name": "sillage", "description": "...", "repos": [Repo, ...],
           "links": [Link, ...], "unread": 2,
           "tokens": Tokens, "checkCmd": "go test ./...", "contextPrompt": "...",
+          "allowedTools": ["Bash(pytest:*)", "Bash(ruff:*)"],
           "delivery": Delivery, "deliveryWarning": "..." }
           // description : une phrase, affichée sous le nom. checkCmd/contextPrompt/description peuvent être vides.
+          // allowedTools : outils supplémentaires accordés aux agents de ce projet, en plus
+          // du socle du binaire (voir "Outils autorisés aux agents"). Vide par défaut.
           // links : au plus 12, http(s) uniquement (voir "Liens épinglés" ci-dessous).
           // deliveryWarning : calculé à chaque lecture (jamais persisté), vide si tout va
           // bien ; voir "Santé de la livraison" ci-dessous.
@@ -65,10 +68,12 @@ Card    { "id": "c1", "projectId": "p1", "ref": 101, "column": "soon|doing|done"
 
 Agent   { "id": "bolt", "name": "Bolt", "emoji": "🐝", "color": "#f2b705",
           "model": "claude-sonnet-5", "cli": "claude", "contextPrompt": "...",
-          "active": true, "warning": "..." }
+          "active": true, "warning": "...", "quota": null }
           // active = une tâche running lui est assignée. warning : calculé à chaque
           // liste d'agents (jamais persisté dans state.json), vide si tout va bien ;
-          // voir "Santé des agents" ci-dessous.
+          // voir "Santé des agents" ci-dessous. quota : voir "Quota des agents"
+          // ci-dessous, absent/null pour cli ∈ {claude, fake} et pour un agent
+          // codex sans exécution encore observée.
 
 Task    { "id": "t1", "cardId": "c1", "projectId": "p1", "ref": 482, "title": "...",
           "agentId": "bolt", "repoName": "api", "branch": "sillage/482-slug",
@@ -76,6 +81,7 @@ Task    { "id": "t1", "cardId": "c1", "projectId": "p1", "ref": 482, "title": ".
           "messagesCount": 5, "filesCount": 3, "docsCount": 1, "commitsCount": 2,
           "checks": [ { "label": "go test", "ok": true } ],   // [] si aucun
           "liveActivity": "Edit · internal/server/store.go" | null,
+          "commandLog": [ { "text": "Edit · internal/server/store.go", "at": "..." } ],
           "unread": true, "updatedAt": "2026-08-02T10:00:00Z", "tokens": Tokens,
           "rebasing": false }
           // repoName : nom du Repo du projet utilisé pour le worktree
@@ -84,6 +90,10 @@ Task    { "id": "t1", "cardId": "c1", "projectId": "p1", "ref": 482, "title": ".
           // rebasing : un rebase automatique de cette tâche est en cours (voir
           //   "Rebase automatique après une acceptation"). État volatile, remis à false au
           //   chargement de state.json. N'affecte jamais updatedAt.
+          // commandLog : historique des commandes jouées par l'agent (tool_use, alimenté
+          //   uniquement par l'adaptateur claude), les plus anciennes tombant au-delà de 500
+          //   entrées. [] si aucune. Contrairement à liveActivity (remis à null en fin
+          //   d'exécution), persiste : c'est l'onglet "Historique" du panneau de tâche.
 
 Message { "id": "m1", "taskId": "t1", "author": "user|agent", "authorName": "Bolt",
           "text": "markdown...", "createdAt": "..." }
@@ -137,8 +147,9 @@ PreviewRun { "id": "pv1", "projectId": "p1", "cardId": "c1", "taskId": "",
 | PATCH | `/api/agents/{id}` | mêmes champs, tous optionnels | Agent |
 | DELETE | `/api/agents/{id}` | | 204 (400 si une tâche référence encore l'agent) |
 | POST | `/api/projects` | `{name?, path}` ou `{name?, repos:[{name?,path}, ...], description?, contextPrompt?, links?:[{url,title?}, ...], delivery?}` | Project (400 si aucun dépôt, un path invalide/pas un dépôt git, noms de repo dupliqués, mode de livraison inconnu, ou lien invalide/en trop grand nombre). Seul le chemin d'un dépôt est requis : `name` absent ou vide = basename du premier dépôt, `delivery` absent = déduit des remotes des dépôts (voir « Livraison d'un chantier ») |
-| PATCH | `/api/projects/{id}` | `{name?, description?, checkCmd?, contextPrompt?, repos?, links?, delivery?}` | Project (repos/links, si fournis, remplacent la liste entière ; retirer un repo ne casse pas les tâches existantes ; `previewCmd`/`previewUrl` se posent sur chaque Repo, et une `previewUrl` non http(s) est refusée en 400) |
+| PATCH | `/api/projects/{id}` | `{name?, description?, checkCmd?, contextPrompt?, allowedTools?, repos?, links?, delivery?}` | Project (repos/links/allowedTools, si fournis, remplacent la liste entière ; retirer un repo ne casse pas les tâches existantes ; `previewCmd`/`previewUrl` se posent sur chaque Repo, et une `previewUrl` non http(s) est refusée en 400) |
 | DELETE | `/api/projects/{id}` | `{confirm:true}` | 204 (voir « Suppressions » ci-dessous). **Validation humaine obligatoire** : refus 400 sans `confirm` |
+| POST | `/api/projects/{id}/mark-all-read` | | 204 (marque `unread=false` sur toutes les tâches non lues du projet, ne modifie jamais `updatedAt` : même règle que `/api/tasks/{id}/read`). **Aucune confirmation** : action locale et réversible |
 | POST | `/api/cards` | `{projectId, title, column?, contextPrompt?}` | Card. `column`, si fourni, doit valoir `"soon"` (400 `"cards are created in the soon column"` sinon) : les cartes se créent toujours dans "Bientôt" |
 | PATCH | `/api/cards/{id}` | `{column?, title?, contextPrompt?}` | Card. `title`, si fourni, doit être non vide. Le déplacement manuel de colonne (toutes colonnes acceptées) reste indépendant de l'auto-déplacement (voir plus bas) |
 | DELETE | `/api/cards/{id}` | `{confirm:true}` | 204 (voir « Suppressions » ci-dessous). **Validation humaine obligatoire** : refus 400 sans `confirm` |
@@ -185,11 +196,27 @@ Après chaque changement de statut de tâche, la carte est automatiquement repla
 
 ### Lecture d'une tâche : `updatedAt` inchangé
 
-`POST /api/tasks/{id}/read` (ouverture d'une tâche) ne met jamais à jour `updatedAt` (variante dédiée `Store.MarkTaskRead`, distincte de la mutation générique `UpdateTask` utilisée par toutes les autres actions) : une liste de tâches triée par `updatedAt` ne doit pas se réordonner sous le curseur quand on ouvre simplement une tâche pour la lire.
+`POST /api/tasks/{id}/read` (ouverture d'une tâche) ne met jamais à jour `updatedAt` (variante dédiée `Store.MarkTaskRead`, distincte de la mutation générique `UpdateTask` utilisée par toutes les autres actions) : une liste de tâches triée par `updatedAt` ne doit pas se réordonner sous le curseur quand on ouvre simplement une tâche pour la lire. Même règle pour `POST /api/projects/{id}/mark-all-read` (`Store.MarkAllTasksReadForProject`) : le menu « ... » d'un projet dans la sidebar, pour débloquer un badge non lu resté bloqué (une tâche déjà ouverte peut redevenir non lue côté serveur si l'agent termine pendant qu'elle est affichée).
 
 ### Liens épinglés de projet
 
 `Project.links` : au plus 12 liens, http(s) uniquement (400 sinon, `file://` et tout autre schéma refusés). Pour chaque lien envoyé sans `title`, le serveur tente de récupérer le `<title>` de la page à l'enregistrement (POST ou PATCH) : GET avec timeout global de 5 s, lecture plafonnée à 64 Ko, redirections suivies uniquement si elles restent en http(s) (au plus 5). Cette récupération est best-effort et ne bloque ni n'échoue jamais l'enregistrement : en cas d'échec (timeout, erreur HTTP, page sans `<title>`, hôte injoignable...), `title` devient le nom d'hôte de l'URL.
+
+### Outils autorisés aux agents
+
+Un agent claude tourne avec une liste d'outils autorisés : tout ce qui n'y figure pas est refusé, sans invite possible puisque le CLI tourne en mode non interactif. Cette liste se compose de trois couches, dans cet ordre.
+
+1. **Le socle**, figé dans le binaire : lecture et écriture de fichiers, recherche, `WebFetch`, les commandes shell de base et le git en lecture seule (`status`, `diff`, `log`, `show`). Ce socle ne contient que ce qui ne dépend d'aucun langage : git n'est pas un choix de stack ici mais le modèle même du produit, où toute tâche vit dans un worktree. Aucune commande de build, de test ou de format n'y figure, quel que soit le langage : elles vont toutes dans la couche 2.
+2. **`Project.allowedTools`**, saisi par l'humain dans les réglages du projet : tout ce qui dépend du stack (`go test`, `pytest`, `cargo build`, `npm run lint`...). Sillage ne devine pas cette liste et ne la lit jamais depuis un fichier du dépôt : ces fichiers sont écrits par les agents, et les y lire ferait d'une branche un vecteur d'exécution (même règle et même niveau de confiance que `checkCmd` et `previewCmd`, voir l'invariant 5 de `CONTRIBUTING.md`).
+3. **Le refus figé**, également dans le binaire et appliqué après les deux autres couches : tout ce qui peut pousser (`git push`, `gh`, `glab`) et l'édition des fichiers qui pilotent l'agent lui-même (`.claude/settings*.json`, hooks). Le refus l'emporte toujours sur l'autorisation, donc aucune saisie dans `allowedTools` ne peut ouvrir ces portes.
+
+Cette dernière couche est ce qui rend le champ défendable : elle attrape la maladresse, pas la détermination (une entrée `Bash(sh:*)` contournerait tout). Le confinement réel reste inchangé : worktree dédié, branche jetable, revue humaine, et `Ship` comme unique action sortante.
+
+Migration : les projets antérieurs au champ (`allowedTools` absent du `state.json`) reçoivent au chargement la chaîne Go qui vivait dans le socle (`go build`, `go test`, `go vet`), pour garder exactement leur comportement d'avant la mise à jour. Une liste vide mais présente est un choix de l'utilisateur et n'est jamais réamorcée. Un projet créé après la mise à jour démarre donc à vide, et déclare ses commandes au premier refus.
+
+Quand un outil est refusé, un Message marqueur est ajouté au fil de la tâche (`author="agent"`, `authorName=""`, texte figé `"[tool-denied:<outil demandé>]"`), suivi de l'événement SSE `message`. Sans lui, un refus reste invisible : l'agent s'excuse, contourne, et l'humain constate seulement une tâche qui a pris trois tours de plus. Le frontend affiche une ligne système localisée qui nomme l'outil et renvoie vers les réglages du projet. C'est ce marqueur qui apprend à l'utilisateur quoi mettre dans `allowedTools` ; sans lui, le champ n'est découvrable qu'en lisant un transcript.
+
+Les agents `codex` ne sont pas concernés : ils n'ont pas d'allowlist mais un sandbox (`--sandbox`, voir `SPEC-BACKEND.md`). `allowedTools` est ignoré pour eux, et le champ le dit dans l'UI.
 
 ### Réassignation d'une tâche à un autre agent
 
@@ -212,6 +239,16 @@ Actions destructives, jamais déclenchées depuis les listes : confirmation doub
 - `cli=codex` : si `/proc/sys/kernel/apparmor_restrict_unprivileged_userns` vaut `1` et que `SILLAGE_CODEX_SANDBOX` n'est pas définie → `"codex sandbox is blocked on this machine (AppArmor); see README (SILLAGE_CODEX_SANDBOX)"`.
 - `cli=codex` ou `cli=claude` : si le binaire correspondant est introuvable dans le PATH → `"<cli> CLI not found in PATH"`.
 - Sinon (ou `cli=fake`) : chaîne vide.
+
+### Quota des agents
+
+`Agent.quota` (dans `AgentOut`, jamais persisté) reflète le dernier instantané de quota connu chez le fournisseur du cli, quand ce dernier le publie :
+
+- `cli=codex` : après chaque exécution, Sillage lit le fichier de session que codex écrit de son côté (`~/.codex/sessions/AAAA/MM/JJ/rollout-...-<thread_id>.jsonl`, même en mode `codex exec --json` qui ne porte pas cette info sur son flux stdout) et en extrait le dernier `rate_limits` vu : deux fenêtres glissantes, `"5h"` (300 min) et `"week"` (10080 min), chacune avec `usedPercent` et `resetsAt`. C'est un quota de compte OpenAI, donc identique pour tous les agents `cli=codex` (`Store.CodexQuota`, un seul instantané partagé). `quota` reste `null` tant qu'aucune tâche codex n'a encore tourné sur cette instance.
+- `cli=claude` : `quota` est toujours `null`. Le CLI claude ne publie aucune information de quota exploitable (ni commande dédiée, ni champ dans son flux JSON ou ses fichiers de session) ; l'UI affiche un message "non disponible" plutôt que d'inventer une donnée.
+- `cli=fake` : toujours `null`.
+
+Forme de `quota` quand non nul : `{ "updatedAt": "...", "windows": [ { "label": "5h", "usedPercent": 44.0, "resetsAt": "..." }, { "label": "week", "usedPercent": 49.0, "resetsAt": "..." } ] }`.
 
 ### Livraison d'un chantier
 
@@ -327,11 +364,12 @@ Sillage ne sait rien des stacks : il exécute la commande de recette d'un dépô
   | Variable | Valeur | Pour |
   | --- | --- | --- |
   | `SILLAGE_ID` | `ws-<cardRef>` ou `t-<taskRef>` | noms : base de données, conteneur, répertoire |
-  | `SILLAGE_N` | `<cardRef>` ou `<taskRef>` | arithmétique : `PORT=$((4000 + SILLAGE_N))` |
+  | `SILLAGE_N` | `<cardRef>` ou `<taskRef>` | arithmétique explicite : `PORT=$((4000 + SILLAGE_N))` |
+  | `SILLAGE_PORT` | `4000 + SILLAGE_N` | port prêt à l'emploi : `PORT=$SILLAGE_PORT` |
   | `SILLAGE_DIR` | le worktree (aussi le répertoire courant) | chemins absolus |
   | `SILLAGE_BRANCH` | la branche recettée | affichage, bannière de debug |
 
-  `SILLAGE_ID`/`SILLAGE_N` dérivent de `Card.ref` et `Task.ref` : petits, **stables dans le temps** (la base de recette et son contenu survivent entre deux sessions) et uniques dans un projet, puisque le compteur de références est partagé entre chantiers et tâches. Aucun état nouveau n'est persisté pour ça : ni allocateur, ni table de slots. À charge du projet d'écrire une commande idempotente (créer-si-absent).
+  `SILLAGE_ID`/`SILLAGE_N` dérivent de `Card.ref` et `Task.ref` : petits, **stables dans le temps** (la base de recette et son contenu survivent entre deux sessions) et uniques dans un projet, puisque le compteur de références est partagé entre chantiers et tâches. Aucun état nouveau n'est persisté pour ça : ni allocateur, ni table de slots. À charge du projet d'écrire une commande idempotente (créer-si-absent). `SILLAGE_PORT` existe parce qu'une référence assez petite (`SILLAGE_N=118`) rend l'arithmétique `$((4000 + SILLAGE_N))` facile à oublier dans la commande ; l'oubli retombe alors sur un port privilégié (< 1024) qui refuse de se lier (`bind: permission denied`, sans autre explication). `SILLAGE_PORT` n'est rien de plus que ce décalage précalculé : toujours dérivé de `SILLAGE_N`, sans allocateur ni sonde de disponibilité (voir `docs/SPEC-RECETTE.md` §5).
 - **`previewUrl`** est développée par le shell dans le même environnement que la commande : elle accepte donc exactement la même syntaxe, arithmétique comprise. Elle est validée à l'enregistrement (`http(s)` uniquement, parce qu'elle devient un lien cliquable) et rendue dans `PreviewRun.url` une fois substituée. Pas de sonde de disponibilité : le lien est cliquable dès le lancement.
 - **Journal** : tampon circulaire en mémoire de 2000 lignes, stdout et stderr mêlés dans l'ordre d'arrivée. Lu une fois à l'ouverture (`GET /api/previews/{id}/log`), puis complété ligne à ligne par l'événement SSE `previewLog`. Jamais écrit sur disque.
 - **Rien ne survit à l'arrêt du serveur** : SIGINT/SIGTERM déclenche l'arrêt de tous les runs (SIGINT au groupe, SIGKILL après 5 s) avant la fermeture du serveur HTTP. Il n'y a **ni plafond ni TTL d'inactivité** : à la place, l'interface affiche en permanence le nombre de recettes en cours, et c'est l'humain qui arrête (un TTL qui coupe un serveur pendant qu'on s'en sert est plus agaçant qu'utile).
@@ -363,7 +401,7 @@ Sillage ne sait rien des stacks : il exécute la commande de recette d'un dépô
 - `activity` : `{taskId, line}` : ligne d'activité live (peut être `null` = terminé).
 - `tokens` : `{global: Tokens, projects: {projectId: Tokens}, tasks: {taskId: Tokens}}`.
 - `cards` : liste des Cards recalculées du projet touché.
-- `agents` : liste des Agents (pour l'indicateur d'activité, et après chaque mutation CRUD).
+- `agents` : liste des Agents (pour l'indicateur d'activité, après chaque mutation CRUD, et après chaque exécution codex ayant révélé un nouvel instantané de quota, voir "Quota des agents").
 - `project` : Project complet (après PATCH `/api/projects/{id}`).
 - `workspace` : WorkspaceStatus (après setup, changement de remote/autoSync, sync manuelle, ou tick d'auto-sync).
 - `settings` : Settings (après PATCH `/api/settings`).
@@ -381,6 +419,8 @@ Le frontend maintient son état en mémoire à partir de `/api/state` + SSE ; re
 - Accepter ou refuser une tâche s'obtient en un clic depuis la liste de tâches (boutons révélés au survol d'une tâche à relire) : ces actions sont locales et réversibles (`/reopen`), donc sans confirmation. L'état de chaque tâche (acceptée, refusée) est lisible dans la liste sans ouvrir la tâche.
 - Recette manuelle : le bouton « Recette » est présent dans l'en-tête du chantier (avant « Livrer » : on éprouve, puis on livre) et dans le panneau de détail d'une tâche (action secondaire, la principale reste « Accepter »). Il est **toujours affiché**, même sans commande configurée : le panneau propose alors le chemin du worktree à copier. Lancer et arrêter sont des actions locales, sans confirmation. Une pastille verte sur le bouton, et un compteur en bas de sidebar, disent ce qui tourne.
 - Tokens : jamais affichés dans le flux de travail (kanban, détail de tâche, liste des projets), pour ne pas ajouter de charge mentale. Seul endroit visible : Réglages > onglet Statistiques, consommation par projet, sans prix.
+- Un outil refusé à un agent s'affiche dans le fil comme une ligne système, qui nomme l'outil demandé et pointe vers les réglages du projet (voir « Outils autorisés aux agents »). Un refus silencieux se paie en tours d'agent que personne ne sait expliquer.
+- Le champ `allowedTools` est une entrée par ligne, avec un exemple en placeholder et une aide courte : c'est la seule saisie du produit où l'utilisateur doit connaître une syntaxe qui n'est pas la sienne mais celle du CLI. Vide par défaut, et vide reste un état normal : le socle suffit à lire, écrire et chercher.
 - Une tâche s'ouvre → POST `/read`.
 
 ### Créer un projet : une seule question
@@ -397,7 +437,7 @@ L'édition d'un projet est une modale à navigation latérale, pas une colonne d
 |---|---|
 | Général | nom, description, branche de base (`delivery.target`) |
 | Dépôts | les lignes nom + chemin, « + dépôt » |
-| Instructions | `contextPrompt` en grand (≥ 12 lignes), puis `checkCmd` |
+| Instructions | `contextPrompt` en grand (≥ 12 lignes), puis `checkCmd`, puis `allowedTools` |
 | Livraison | les quatre modes en cartes à cocher, plus l'avertissement de santé s'il y en a un |
 | Liens | les liens épinglés |
 | Supprimer | conséquences chiffrées, puis le bouton de suppression en deux temps |

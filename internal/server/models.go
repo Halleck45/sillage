@@ -77,6 +77,14 @@ type Project struct {
 	// ajouté au system prompt claude, préfixe du prompt codex, ignoré par fake).
 	ContextPrompt string `json:"contextPrompt"`
 
+	// AllowedTools accorde aux agents claude de ce projet des outils en plus du
+	// socle du binaire (typiquement la chaîne du langage : "Bash(pytest:*)").
+	// Saisi par l'humain dans les réglages, jamais lu depuis un fichier du dépôt
+	// (invariant 5 de CONTRIBUTING.md) : ces fichiers sont écrits par les agents.
+	// Le refus figé (claudeDeniedTools) l'emporte sur toute entrée d'ici.
+	// Ignoré par codex (sandbox) et par fake.
+	AllowedTools []string `json:"allowedTools"`
+
 	// Delivery définit ce que livrer veut dire pour ce projet (voir Delivery).
 	Delivery Delivery `json:"delivery"`
 }
@@ -156,7 +164,27 @@ type Agent struct {
 // n'a pas ce champ, donc rien à vider à l'écriture disque).
 type AgentOut struct {
 	Agent
-	Warning string `json:"warning"`
+	Warning string      `json:"warning"`
+	Quota   *AgentQuota `json:"quota,omitempty"`
+}
+
+// AgentQuotaWindow est une fenêtre glissante de consommation de quota chez le
+// fournisseur du cli (ex : 5h, hebdomadaire).
+type AgentQuotaWindow struct {
+	Label       string    `json:"label"` // "5h"|"week"|"<n>m" (fenêtre inattendue)
+	UsedPercent float64   `json:"usedPercent"`
+	ResetsAt    time.Time `json:"resetsAt"`
+}
+
+// AgentQuota est le dernier instantané connu de consommation de quota pour un
+// fournisseur cli. Seul codex publie cette information (voir runner.go
+// readCodexRateLimits, lue dans le fichier de session codex après chaque
+// exécution : le flux `codex exec --json` ne la porte pas). C'est un quota de
+// compte OpenAI, donc partagé par tous les agents cli=codex, jamais calculé
+// par agent. claude et fake n'ont pas de source : AgentOut.Quota reste nil.
+type AgentQuota struct {
+	UpdatedAt time.Time          `json:"updatedAt"`
+	Windows   []AgentQuotaWindow `json:"windows"`
 }
 
 // Check est le résultat d'une vérification projet (ex : go test) pour une tâche.
@@ -165,26 +193,41 @@ type Check struct {
 	Ok    bool   `json:"ok"`
 }
 
+// CommandLogEntry est une commande jouée par l'agent (tool_use), horodatée.
+// Alimente l'onglet « Historique » du panneau de tâche (débogage de ce que
+// l'agent a réellement exécuté) ; contrairement à Task.LiveActivity, persiste
+// au-delà de l'exécution en cours.
+type CommandLogEntry struct {
+	Text string    `json:"text"`
+	At   time.Time `json:"at"`
+}
+
 // Task est une tâche assignée à un agent, exécutée dans un worktree git dédié.
 type Task struct {
-	ID            string    `json:"id"`
-	CardID        string    `json:"cardId"`
-	ProjectID     string    `json:"projectId"`
-	Ref           int       `json:"ref"`
-	Title         string    `json:"title"`
-	AgentID       string    `json:"agentId"`
-	RepoName      string    `json:"repoName"` // dépôt du projet utilisé pour le worktree
-	Branch        string    `json:"branch"`
-	Status        string    `json:"status"` // running|review|accepted|cancelled
-	MessagesCount int       `json:"messagesCount"`
-	FilesCount    int       `json:"filesCount"`
-	DocsCount     int       `json:"docsCount"`
-	CommitsCount  int       `json:"commitsCount"` // commits de base..branche, recalculé à chaque fin d'exécution
-	Checks        []Check   `json:"checks"`
-	LiveActivity  *string   `json:"liveActivity"`
-	Unread        bool      `json:"unread"`
-	UpdatedAt     time.Time `json:"updatedAt"`
-	Tokens        Tokens    `json:"tokens"`
+	ID            string  `json:"id"`
+	CardID        string  `json:"cardId"`
+	ProjectID     string  `json:"projectId"`
+	Ref           int     `json:"ref"`
+	Title         string  `json:"title"`
+	AgentID       string  `json:"agentId"`
+	RepoName      string  `json:"repoName"` // dépôt du projet utilisé pour le worktree
+	Branch        string  `json:"branch"`
+	Status        string  `json:"status"` // running|review|accepted|cancelled
+	MessagesCount int     `json:"messagesCount"`
+	FilesCount    int     `json:"filesCount"`
+	DocsCount     int     `json:"docsCount"`
+	CommitsCount  int     `json:"commitsCount"` // commits de base..branche, recalculé à chaque fin d'exécution
+	Checks        []Check `json:"checks"`
+	LiveActivity  *string `json:"liveActivity"`
+
+	// CommandLog conserve les commandes jouées par l'agent (tool_use), les plus
+	// récentes en dernier, plafonné à commandLogLimit entrées (runner.go) : un
+	// historique de débogage, pas un audit exhaustif.
+	CommandLog []CommandLogEntry `json:"commandLog"`
+
+	Unread    bool      `json:"unread"`
+	UpdatedAt time.Time `json:"updatedAt"`
+	Tokens    Tokens    `json:"tokens"`
 
 	// Rebasing indique qu'un rebase automatique de cette tâche est en cours sur
 	// la branche de son chantier (voir Server.rebaseSiblingTasks) : le frontend

@@ -257,6 +257,93 @@ func TestMarkTaskReadDoesNotBumpUpdatedAt(t *testing.T) {
 	}
 }
 
+// --- Tout marquer comme lu (menu "..." d'un projet) ---
+
+func TestMarkAllTasksReadForProject(t *testing.T) {
+	dir := t.TempDir()
+	s, err := NewStore(dir)
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+	project, err := s.AddProject("p", "", "", []Repo{{Path: "/tmp/p"}}, nil, nil)
+	if err != nil {
+		t.Fatalf("AddProject: %v", err)
+	}
+	other, err := s.AddProject("q", "", "", []Repo{{Path: "/tmp/q"}}, nil, nil)
+	if err != nil {
+		t.Fatalf("AddProject: %v", err)
+	}
+	card, err := s.AddCard(project.ID, "Carte", "", "")
+	if err != nil {
+		t.Fatalf("AddCard: %v", err)
+	}
+	otherCard, err := s.AddCard(other.ID, "Autre carte", "", "")
+	if err != nil {
+		t.Fatalf("AddCard: %v", err)
+	}
+
+	mkTask := func(cardID, projectID string, unread bool) (Task, time.Time) {
+		id, ref := s.ReserveTaskID()
+		task, err := s.CreateTask(id, ref, cardID, projectID, "T", "echo", "sillage/"+id, "main", "/tmp/wt", "p")
+		if err != nil {
+			t.Fatalf("CreateTask: %v", err)
+		}
+		task, err = s.UpdateTask(id, func(tk *Task) { tk.Unread = unread })
+		if err != nil {
+			t.Fatalf("UpdateTask: %v", err)
+		}
+		return task, task.UpdatedAt
+	}
+
+	unreadTask, beforeUnread := mkTask(card.ID, project.ID, true)
+	readTask, beforeRead := mkTask(card.ID, project.ID, false)
+	otherProjectTask, beforeOther := mkTask(otherCard.ID, other.ID, true)
+
+	time.Sleep(2 * time.Millisecond) // rend un éventuel bump de UpdatedAt détectable
+
+	changed, err := s.MarkAllTasksReadForProject(project.ID)
+	if err != nil {
+		t.Fatalf("MarkAllTasksReadForProject: %v", err)
+	}
+	if len(changed) != 1 || changed[0].ID != unreadTask.ID {
+		t.Fatalf("attendu une seule tâche modifiée (%s), reçu %+v", unreadTask.ID, changed)
+	}
+	if changed[0].Unread {
+		t.Fatalf("la tâche non lue devrait passer à Unread=false")
+	}
+	if !changed[0].UpdatedAt.Equal(beforeUnread) {
+		t.Fatalf("UpdatedAt ne devrait pas changer : avant=%v après=%v", beforeUnread, changed[0].UpdatedAt)
+	}
+
+	stillRead, ok := s.GetTask(readTask.ID)
+	if !ok || stillRead.Unread || !stillRead.UpdatedAt.Equal(beforeRead) {
+		t.Fatalf("la tâche déjà lue ne devrait pas être touchée : %+v", stillRead)
+	}
+	untouched, ok := s.GetTask(otherProjectTask.ID)
+	if !ok || !untouched.Unread || !untouched.UpdatedAt.Equal(beforeOther) {
+		t.Fatalf("la tâche d'un autre projet ne devrait pas être touchée : %+v", untouched)
+	}
+
+	updatedProject, ok := s.GetProject(project.ID)
+	if !ok || updatedProject.Unread != 0 {
+		t.Fatalf("project.Unread attendu 0, reçu %+v", updatedProject)
+	}
+	updatedOther, ok := s.GetProject(other.ID)
+	if !ok || updatedOther.Unread != 1 {
+		t.Fatalf("l'autre projet devrait garder son unread : %+v", updatedOther)
+	}
+
+	// Rien à marquer : pas d'erreur, tranche vide.
+	changed, err = s.MarkAllTasksReadForProject(project.ID)
+	if err != nil || len(changed) != 0 {
+		t.Fatalf("attendu aucune tâche modifiée au second appel, reçu %+v (err=%v)", changed, err)
+	}
+
+	if _, err := s.MarkAllTasksReadForProject("inconnu"); err == nil {
+		t.Fatalf("un projet inconnu devrait renvoyer une erreur")
+	}
+}
+
 func TestSlugify(t *testing.T) {
 	cases := map[string]string{
 		"Ajouter le bouton Ship": "ajouter-le-bouton-ship",
@@ -344,7 +431,7 @@ func TestUpdateProjectFields(t *testing.T) {
 
 	name := "Nouveau nom"
 	checkCmd := "go test ./..."
-	updated, err := s.UpdateProject(p.ID, &name, nil, &checkCmd, nil, nil, nil, nil)
+	updated, err := s.UpdateProject(p.ID, &name, nil, &checkCmd, nil, nil, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("UpdateProject: %v", err)
 	}
@@ -356,7 +443,7 @@ func TestUpdateProjectFields(t *testing.T) {
 	}
 
 	newRepos := []Repo{{Name: "a", Path: "/tmp/a"}, {Name: "b", Path: "/tmp/b"}}
-	updated, err = s.UpdateProject(p.ID, nil, nil, nil, nil, &newRepos, nil, nil)
+	updated, err = s.UpdateProject(p.ID, nil, nil, nil, nil, nil, &newRepos, nil, nil)
 	if err != nil {
 		t.Fatalf("UpdateProject (repos): %v", err)
 	}
@@ -381,7 +468,7 @@ func TestUpdateProjectDescriptionAndContextPrompt(t *testing.T) {
 
 	desc := "Nouvelle description"
 	ctx := "Nouveau contexte"
-	updated, err := s.UpdateProject(p.ID, nil, &desc, nil, &ctx, nil, nil, nil)
+	updated, err := s.UpdateProject(p.ID, nil, &desc, nil, &ctx, nil, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("UpdateProject: %v", err)
 	}
@@ -973,6 +1060,55 @@ func TestListAgentsExposesWarningNotPersisted(t *testing.T) {
 	}
 }
 
+// TestSetCodexQuotaExposedOnlyOnCodexAgents vérifie que le quota codex,
+// une fois défini, est attaché à tous les agents cli=codex (quota de compte,
+// pas par agent) et à eux seuls, et qu'il survit à un rechargement disque.
+func TestSetCodexQuotaExposedOnlyOnCodexAgents(t *testing.T) {
+	dir := t.TempDir()
+	s, err := NewStore(dir)
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+
+	windows := []AgentQuotaWindow{
+		{Label: "5h", UsedPercent: 42, ResetsAt: time.Unix(1771005432, 0)},
+		{Label: "week", UsedPercent: 48, ResetsAt: time.Unix(1771409457, 0)},
+	}
+	if err := s.SetCodexQuota(windows); err != nil {
+		t.Fatalf("SetCodexQuota: %v", err)
+	}
+
+	agents := s.ListAgents()
+	for _, a := range agents {
+		if a.Cli == "codex" {
+			if a.Quota == nil || len(a.Quota.Windows) != 2 {
+				t.Fatalf("agent codex %q devrait porter le quota, reçu %+v", a.ID, a.Quota)
+			}
+		} else if a.Quota != nil {
+			t.Fatalf("agent %q (cli=%s) ne devrait pas porter de quota, reçu %+v", a.ID, a.Cli, a.Quota)
+		}
+	}
+
+	// Persisté : un rechargement depuis disque garde l'instantané.
+	s2, err := NewStore(dir)
+	if err != nil {
+		t.Fatalf("NewStore (reload): %v", err)
+	}
+	reloaded := s2.ListAgents()
+	found := false
+	for _, a := range reloaded {
+		if a.Cli == "codex" {
+			found = true
+			if a.Quota == nil || len(a.Quota.Windows) != 2 {
+				t.Fatalf("quota codex non persisté après rechargement, reçu %+v", a.Quota)
+			}
+		}
+	}
+	if !found {
+		t.Fatalf("aucun agent codex trouvé après rechargement")
+	}
+}
+
 // --- Rappel de contexte au départ frais (v0.3.2 section 1) ---
 
 func TestContextualizeCliInput(t *testing.T) {
@@ -1104,5 +1240,89 @@ func TestProjectCascadeDeletesCardsAndTasks(t *testing.T) {
 	}
 	if _, ok := s.GetTask(t2); ok {
 		t.Fatalf("la tâche %s devrait avoir été supprimée par la cascade du projet", t2)
+	}
+}
+
+func TestNormalizeAllowedTools(t *testing.T) {
+	got := NormalizeAllowedTools([]string{"  Bash(pytest:*)  ", "", "   ", "Bash(ruff:*)"})
+	if len(got) != 2 || got[0] != "Bash(pytest:*)" || got[1] != "Bash(ruff:*)" {
+		t.Fatalf("liste nettoyée attendue [Bash(pytest:*) Bash(ruff:*)], reçue %v", got)
+	}
+	// Non nulle même vide : nil est réservé aux projets antérieurs au champ,
+	// que migrateProjectAllowedTools amorce au chargement.
+	if empty := NormalizeAllowedTools(nil); empty == nil {
+		t.Fatalf("une liste vide doit rester non nulle pour ne pas être prise pour un projet à migrer")
+	}
+}
+
+// Un projet antérieur au champ récupère la chaîne Go qui vivait dans le socle,
+// pour garder exactement son comportement d'avant la mise à jour. Un projet qui
+// a explicitement vidé sa liste n'est pas réamorcé à chaque démarrage.
+func TestMigrateProjectAllowedTools(t *testing.T) {
+	s := &Store{
+		Projects: map[string]Project{
+			"p1": {ID: "p1"},                              // antérieur au champ
+			"p2": {ID: "p2", AllowedTools: []string{}},    // vidé volontairement
+			"p3": {ID: "p3", AllowedTools: []string{"X"}}, // déjà réglé
+		},
+	}
+	migrateProjectAllowedTools(s)
+
+	if got := s.Projects["p1"].AllowedTools; len(got) != len(legacyGoAllowedTools) {
+		t.Fatalf("projet antérieur : chaîne Go attendue %v, reçue %v", legacyGoAllowedTools, got)
+	}
+	if got := s.Projects["p2"].AllowedTools; len(got) != 0 {
+		t.Fatalf("une liste vidée volontairement ne doit pas être réamorcée, reçue %v", got)
+	}
+	if got := s.Projects["p3"].AllowedTools; len(got) != 1 || got[0] != "X" {
+		t.Fatalf("une liste déjà réglée ne doit pas bouger, reçue %v", got)
+	}
+
+	// Idempotence : un second chargement ne doit rien réécrire.
+	migrateProjectAllowedTools(s)
+	if got := s.Projects["p1"].AllowedTools; len(got) != len(legacyGoAllowedTools) {
+		t.Fatalf("migration non idempotente, reçue %v", got)
+	}
+}
+
+func TestUpdateProjectAllowedTools(t *testing.T) {
+	s, err := NewStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+	p, err := s.AddProject("demo", "", "", []Repo{{Name: "demo", Path: "/tmp/demo"}}, nil, nil)
+	if err != nil {
+		t.Fatalf("AddProject: %v", err)
+	}
+	if p.AllowedTools == nil {
+		t.Fatalf("un projet neuf doit avoir une liste vide non nulle, pas nil")
+	}
+
+	tools := []string{"Bash(pytest:*)", "  "}
+	updated, err := s.UpdateProject(p.ID, nil, nil, nil, nil, &tools, nil, nil, nil)
+	if err != nil {
+		t.Fatalf("UpdateProject: %v", err)
+	}
+	if len(updated.AllowedTools) != 1 || updated.AllowedTools[0] != "Bash(pytest:*)" {
+		t.Fatalf("outils attendus [Bash(pytest:*)], reçus %v", updated.AllowedTools)
+	}
+
+	// nil (champ non fourni) ne touche pas à la liste existante.
+	updated, err = s.UpdateProject(p.ID, nil, nil, nil, nil, nil, nil, nil, nil)
+	if err != nil {
+		t.Fatalf("UpdateProject (sans allowedTools): %v", err)
+	}
+	if len(updated.AllowedTools) != 1 {
+		t.Fatalf("la liste ne devait pas changer, reçue %v", updated.AllowedTools)
+	}
+
+	// Liste vide fournie : l'utilisateur retire tout, et ça se persiste.
+	none := []string{}
+	updated, err = s.UpdateProject(p.ID, nil, nil, nil, nil, &none, nil, nil, nil)
+	if err != nil {
+		t.Fatalf("UpdateProject (liste vide): %v", err)
+	}
+	if len(updated.AllowedTools) != 0 {
+		t.Fatalf("liste vide attendue, reçue %v", updated.AllowedTools)
 	}
 }

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"syscall"
 	"testing"
@@ -115,23 +116,42 @@ func TestPreviewRunCapturesStderr(t *testing.T) {
 	}
 }
 
-// Les quatre variables de recette, et le répertoire d'exécution : le worktree du
+// Les cinq variables de recette, et le répertoire d'exécution : le worktree du
 // chantier, jamais le dépôt du projet.
 func TestPreviewInjectsVariablesAndRunsInWorktree(t *testing.T) {
 	f := newDeliveryFixture(t, Delivery{Mode: "merge", Target: "main"})
 	_, cb := f.addTask(t, "Recette", "a.txt", "a")
-	f.setPreviewCmd(t, `echo "$SILLAGE_ID|$SILLAGE_N|$SILLAGE_DIR|$SILLAGE_BRANCH|$(pwd)"`, "")
+	f.setPreviewCmd(t, `echo "$SILLAGE_ID|$SILLAGE_N|$SILLAGE_PORT|$SILLAGE_DIR|$SILLAGE_BRANCH|$(pwd)"`, "")
 
 	run := f.startCardPreview(t)
 	waitPreviewStatus(t, f.srv.previews, run.ID)
 	log := strings.TrimSpace(previewLogText(t, f.srv.previews, run.ID))
 
-	want := fmt.Sprintf("ws-%d|%d|%s|%s|%s", f.card.Ref, f.card.Ref, cb.WorktreeDir, cb.Branch, cb.WorktreeDir)
+	want := fmt.Sprintf("ws-%d|%d|%d|%s|%s|%s", f.card.Ref, f.card.Ref, previewPortBase+f.card.Ref, cb.WorktreeDir, cb.Branch, cb.WorktreeDir)
 	if log != want {
 		t.Errorf("variables = %q, attendu %q", log, want)
 	}
 	if run.Dir == f.repo {
 		t.Error("une recette ne doit jamais tourner dans le dépôt de travail de l'utilisateur")
+	}
+}
+
+// SILLAGE_PORT reste au-dessus de la plage privilégiée (< 1024) même pour une
+// référence minuscule : c'est tout le problème que la variable résout (un
+// $((4000 + SILLAGE_N)) oublié dans la commande retombe sur un port qui exige
+// les droits root).
+func TestPreviewPortStaysAboveBase(t *testing.T) {
+	f := newDeliveryFixture(t, Delivery{Mode: "merge", Target: "main"})
+	f.addTask(t, "Recette", "a.txt", "a")
+	f.setPreviewCmd(t, `echo "$SILLAGE_PORT"`, "")
+
+	run := f.startCardPreview(t)
+	waitPreviewStatus(t, f.srv.previews, run.ID)
+	log := strings.TrimSpace(previewLogText(t, f.srv.previews, run.ID))
+
+	want := strconv.Itoa(previewPortBase + f.card.Ref)
+	if log != want {
+		t.Errorf("SILLAGE_PORT = %q, attendu %q", log, want)
 	}
 }
 
