@@ -73,7 +73,7 @@
       'project.removeRepo': 'Retirer',
       'project.previewCmdPlaceholder': 'Commande de recette (optionnelle)',
       'project.previewUrlPlaceholder': 'URL à ouvrir (optionnelle)',
-      'project.previewHint': 'Recette manuelle : la commande est lancée dans le worktree du chantier ou de la tâche. Variables disponibles : $SILLAGE_ID (ws-107, t-482), $SILLAGE_N (107), $SILLAGE_DIR, $SILLAGE_BRANCH.',
+      'project.previewHint': 'Recette manuelle : la commande est lancée dans le worktree du chantier ou de la tâche. Variables disponibles : $SILLAGE_ID (ws-107, t-482), $SILLAGE_N (107), $SILLAGE_PORT (4107, sans arithmétique à écrire), $SILLAGE_DIR, $SILLAGE_BRANCH.',
       'project.errorNameRequired': 'Le nom est requis.',
       'project.errorReposRequired': 'Au moins un dépôt est requis.',
       'project.errorSaveFailed': 'Erreur lors de l\'enregistrement.',
@@ -188,6 +188,7 @@
       'preview.showLog': 'Journal',
       'preview.noCmd': 'Pas de commande de recette',
       'preview.noCmdHint': 'Ajoutez-la dans les réglages du projet, dépôt par dépôt. En attendant, le chemin du worktree est juste là.',
+      'preview.openSettings': 'Ouvrir les réglages du projet',
       'preview.noBranch': 'Aucune branche de chantier pour l\'instant : créez une tâche d\'abord.',
       'preview.worktree': 'Worktree',
       'preview.copyPath': 'Copier le chemin',
@@ -428,7 +429,7 @@
       'project.removeRepo': 'Remove',
       'project.previewCmdPlaceholder': 'Preview command (optional)',
       'project.previewUrlPlaceholder': 'URL to open (optional)',
-      'project.previewHint': 'Manual preview: the command runs in the workstream or task worktree. Available variables: $SILLAGE_ID (ws-107, t-482), $SILLAGE_N (107), $SILLAGE_DIR, $SILLAGE_BRANCH.',
+      'project.previewHint': 'Manual preview: the command runs in the workstream or task worktree. Available variables: $SILLAGE_ID (ws-107, t-482), $SILLAGE_N (107), $SILLAGE_PORT (4107, no arithmetic to write), $SILLAGE_DIR, $SILLAGE_BRANCH.',
       'project.errorNameRequired': 'Name is required.',
       'project.errorReposRequired': 'At least one repository is required.',
       'project.errorSaveFailed': 'Failed to save.',
@@ -543,6 +544,7 @@
       'preview.showLog': 'Log',
       'preview.noCmd': 'No preview command',
       'preview.noCmdHint': 'Add one in the project settings, per repository. In the meantime, the worktree path is right here.',
+      'preview.openSettings': 'Open project settings',
       'preview.noBranch': 'No workstream branch yet: create a task first.',
       'preview.worktree': 'Worktree',
       'preview.copyPath': 'Copy path',
@@ -2302,7 +2304,10 @@
       hint = '<div class="modal-note">' + escapeHtml(t('preview.noBranch')) + '</div>';
     }
     var missingCmd = targets.some(function (x) { return !x.cmd; });
-    var cmdHint = missingCmd ? '<div class="modal-note">' + escapeHtml(t('preview.noCmdHint')) + '</div>' : '';
+    var cmdHint = missingCmd
+      ? '<div class="modal-note">' + escapeHtml(t('preview.noCmdHint')) + ' ' +
+        '<button class="detail-link" data-action="open-preview-settings">' + escapeHtml(t('preview.openSettings')) + '</button></div>'
+      : '';
 
     return '<div class="modal modal-lg">' +
       '<div class="modal-head"><span class="modal-title">' + escapeHtml(previewScopeTitle(scope)) + '</span>' +
@@ -2325,6 +2330,27 @@
     openModal(buildPreviewModalHTML(scope));
     state.previewScope = scope; // après openModal, qui remet la portée à zéro
     if (scope.runId) loadPreviewLog(scope.runId);
+  }
+
+  // Lien « Ouvrir les réglages du projet » du panneau de recette, quand un dépôt
+  // n'a pas de commande : on retrouve le projet depuis la portée du panneau
+  // (un chantier ou une tâche, jamais la portée « all ») et on ouvre directement
+  // l'onglet Dépôts, où la commande se déclare.
+  function openPreviewSettings() {
+    var scope = state.previewScope;
+    if (!scope) return;
+    var projectId = null;
+    if (scope.kind === 'card') {
+      var card = state.cardsById[scope.id];
+      projectId = card && card.projectId;
+    } else if (scope.kind === 'task') {
+      var task = state.tasksById[scope.id];
+      projectId = task && task.projectId;
+    }
+    if (!projectId) return;
+    state.projectId = projectId;
+    openEditProjectModal();
+    setProjectTab('repos');
   }
 
   // Rafraîchit le panneau sans le rouvrir : les lignes et leurs boutons, pas le
@@ -4703,6 +4729,7 @@
       case 'start-task-preview': startTaskPreview(el.getAttribute('data-task-id')); break;
       case 'stop-preview': stopPreview(el.getAttribute('data-run-id')); break;
       case 'show-preview-log': showPreviewLog(el.getAttribute('data-run-id')); break;
+      case 'open-preview-settings': openPreviewSettings(); break;
       case 'copy-path': copyPathToClipboard(el.getAttribute('data-path'), el); break;
       case 'catch-up-ask-agent':
         askAgentToCatchUp(el.getAttribute('data-card-id'), el.getAttribute('data-target'), el.getAttribute('data-files'));

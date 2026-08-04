@@ -19,6 +19,13 @@ import (
 // disque (voir docs/SPEC-RECETTE.md §3).
 const previewLogLines = 2000
 
+// previewPortBase fixe le port de départ de $SILLAGE_PORT (voir previewEnv) :
+// au-dessus de la plage privilégiée (< 1024, réservée au superutilisateur sur
+// Linux) et des ports enregistrés IANA usuels, pour qu'une référence de
+// chantier ou de tâche, aussi petite soit-elle, ne retombe jamais sur un port
+// qui exigerait les droits root ou entrerait en conflit avec un service connu.
+const previewPortBase = 4000
+
 // PreviewSupervisor lance les recettes manuelles : la commande d'un dépôt
 // (Repo.PreviewCmd) exécutée dans le worktree d'un chantier ou d'une tâche. Un
 // seul run par worktree à la fois ; relancer arrête le précédent.
@@ -66,7 +73,7 @@ type previewTarget struct {
 	url    string
 
 	id string // SILLAGE_ID : ws-107 (chantier) ou t-482 (tâche)
-	n  int    // SILLAGE_N : la référence courte, pour l'arithmétique de port
+	n  int    // SILLAGE_N : la référence courte ; SILLAGE_PORT en dérive (previewEnv)
 }
 
 // Start lance (ou relance) la recette d'une cible. Le run précédent du même
@@ -309,14 +316,18 @@ func sortPreviewRuns(runs []PreviewRun) {
 }
 
 // previewEnv construit l'environnement du run : celui de Sillage, plus les
-// quatre variables de recette. SILLAGE_ID et SILLAGE_N dérivent de la référence
+// cinq variables de recette. SILLAGE_ID et SILLAGE_N dérivent de la référence
 // courte du chantier ou de la tâche : stables dans le temps (la base de recette
 // survit entre deux sessions) et uniques dans un projet (le compteur de
-// références est partagé entre chantiers et tâches).
+// références est partagé entre chantiers et tâches). SILLAGE_PORT est
+// `previewPortBase + SILLAGE_N` précalculé : la commande de recette peut
+// écrire `PORT=$SILLAGE_PORT` sans refaire l'arithmétique elle-même, et donc
+// sans risquer d'oublier le décalage et de retomber sur un port privilégié.
 func previewEnv(target previewTarget) []string {
 	return append(os.Environ(),
 		"SILLAGE_ID="+target.id,
 		"SILLAGE_N="+strconv.Itoa(target.n),
+		"SILLAGE_PORT="+strconv.Itoa(previewPortBase+target.n),
 		"SILLAGE_DIR="+target.dir,
 		"SILLAGE_BRANCH="+target.branch,
 	)
