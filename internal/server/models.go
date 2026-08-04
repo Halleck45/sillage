@@ -193,25 +193,40 @@ type Check struct {
 	Ok    bool   `json:"ok"`
 }
 
+// CommandLogEntry est une commande jouée par l'agent (tool_use), horodatée.
+// Alimente l'onglet « Historique » du panneau de tâche (débogage de ce que
+// l'agent a réellement exécuté) ; contrairement à Task.LiveActivity, persiste
+// au-delà de l'exécution en cours.
+type CommandLogEntry struct {
+	Text string    `json:"text"`
+	At   time.Time `json:"at"`
+}
+
 // Task est une tâche assignée à un agent, exécutée dans un worktree git dédié.
 type Task struct {
-	ID            string    `json:"id"`
-	CardID        string    `json:"cardId"`
-	ProjectID     string    `json:"projectId"`
-	Ref           int       `json:"ref"`
-	Title         string    `json:"title"`
-	AgentID       string    `json:"agentId"`
-	RepoName      string    `json:"repoName"` // dépôt du projet utilisé pour le worktree
-	Branch        string    `json:"branch"`
-	Status        string    `json:"status"` // running|review|accepted|cancelled
-	MessagesCount int       `json:"messagesCount"`
-	FilesCount    int       `json:"filesCount"`
-	DocsCount     int       `json:"docsCount"`
-	Checks        []Check   `json:"checks"`
-	LiveActivity  *string   `json:"liveActivity"`
-	Unread        bool      `json:"unread"`
-	UpdatedAt     time.Time `json:"updatedAt"`
-	Tokens        Tokens    `json:"tokens"`
+	ID            string  `json:"id"`
+	CardID        string  `json:"cardId"`
+	ProjectID     string  `json:"projectId"`
+	Ref           int     `json:"ref"`
+	Title         string  `json:"title"`
+	AgentID       string  `json:"agentId"`
+	RepoName      string  `json:"repoName"` // dépôt du projet utilisé pour le worktree
+	Branch        string  `json:"branch"`
+	Status        string  `json:"status"` // running|review|accepted|cancelled
+	MessagesCount int     `json:"messagesCount"`
+	FilesCount    int     `json:"filesCount"`
+	DocsCount     int     `json:"docsCount"`
+	Checks        []Check `json:"checks"`
+	LiveActivity  *string `json:"liveActivity"`
+
+	// CommandLog conserve les commandes jouées par l'agent (tool_use), les plus
+	// récentes en dernier, plafonné à commandLogLimit entrées (runner.go) : un
+	// historique de débogage, pas un audit exhaustif.
+	CommandLog []CommandLogEntry `json:"commandLog"`
+
+	Unread    bool      `json:"unread"`
+	UpdatedAt time.Time `json:"updatedAt"`
+	Tokens    Tokens    `json:"tokens"`
 
 	// Rebasing indique qu'un rebase automatique de cette tâche est en cours sur
 	// la branche de son chantier (voir Server.rebaseSiblingTasks) : le frontend

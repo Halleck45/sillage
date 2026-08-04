@@ -53,6 +53,20 @@ func claudeTools(projectTools []string) string {
 	return claudeAllowedTools + "," + strings.Join(extra, ",")
 }
 
+// commandLogLimit plafonne Task.CommandLog : un historique de débogage, pas
+// un audit exhaustif, donc les entrées les plus anciennes tombent en premier.
+const commandLogLimit = 500
+
+// appendCommandLog ajoute une commande (déjà résumée par summarizeToolUse) à
+// l'historique d'une tâche, plafonné à commandLogLimit.
+func appendCommandLog(log []CommandLogEntry, text string) []CommandLogEntry {
+	log = append(log, CommandLogEntry{Text: text, At: time.Now().UTC()})
+	if len(log) > commandLogLimit {
+		log = log[len(log)-commandLogLimit:]
+	}
+	return log
+}
+
 // procHandle représente un processus (ou une simulation) en cours pour une tâche.
 type procHandle struct {
 	cmd         *exec.Cmd
@@ -843,7 +857,10 @@ func (r *Runner) runClaude(task *Task, agent Agent, project Project, card Card, 
 					if block.ID != "" {
 						pendingTools[block.ID] = line
 					}
-					if t, err := r.store.UpdateTask(task.ID, func(t *Task) { t.LiveActivity = &line }); err == nil {
+					if t, err := r.store.UpdateTask(task.ID, func(t *Task) {
+						t.LiveActivity = &line
+						t.CommandLog = appendCommandLog(t.CommandLog, line)
+					}); err == nil {
 						*task = t
 						r.publishActivity(task.ID, &line)
 						r.publishTask(*task)
