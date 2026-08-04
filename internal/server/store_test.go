@@ -257,6 +257,93 @@ func TestMarkTaskReadDoesNotBumpUpdatedAt(t *testing.T) {
 	}
 }
 
+// --- Tout marquer comme lu (menu "..." d'un projet) ---
+
+func TestMarkAllTasksReadForProject(t *testing.T) {
+	dir := t.TempDir()
+	s, err := NewStore(dir)
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+	project, err := s.AddProject("p", "", "", []Repo{{Path: "/tmp/p"}}, nil, nil)
+	if err != nil {
+		t.Fatalf("AddProject: %v", err)
+	}
+	other, err := s.AddProject("q", "", "", []Repo{{Path: "/tmp/q"}}, nil, nil)
+	if err != nil {
+		t.Fatalf("AddProject: %v", err)
+	}
+	card, err := s.AddCard(project.ID, "Carte", "", "")
+	if err != nil {
+		t.Fatalf("AddCard: %v", err)
+	}
+	otherCard, err := s.AddCard(other.ID, "Autre carte", "", "")
+	if err != nil {
+		t.Fatalf("AddCard: %v", err)
+	}
+
+	mkTask := func(cardID, projectID string, unread bool) (Task, time.Time) {
+		id, ref := s.ReserveTaskID()
+		task, err := s.CreateTask(id, ref, cardID, projectID, "T", "echo", "sillage/"+id, "main", "/tmp/wt", "p")
+		if err != nil {
+			t.Fatalf("CreateTask: %v", err)
+		}
+		task, err = s.UpdateTask(id, func(tk *Task) { tk.Unread = unread })
+		if err != nil {
+			t.Fatalf("UpdateTask: %v", err)
+		}
+		return task, task.UpdatedAt
+	}
+
+	unreadTask, beforeUnread := mkTask(card.ID, project.ID, true)
+	readTask, beforeRead := mkTask(card.ID, project.ID, false)
+	otherProjectTask, beforeOther := mkTask(otherCard.ID, other.ID, true)
+
+	time.Sleep(2 * time.Millisecond) // rend un éventuel bump de UpdatedAt détectable
+
+	changed, err := s.MarkAllTasksReadForProject(project.ID)
+	if err != nil {
+		t.Fatalf("MarkAllTasksReadForProject: %v", err)
+	}
+	if len(changed) != 1 || changed[0].ID != unreadTask.ID {
+		t.Fatalf("attendu une seule tâche modifiée (%s), reçu %+v", unreadTask.ID, changed)
+	}
+	if changed[0].Unread {
+		t.Fatalf("la tâche non lue devrait passer à Unread=false")
+	}
+	if !changed[0].UpdatedAt.Equal(beforeUnread) {
+		t.Fatalf("UpdatedAt ne devrait pas changer : avant=%v après=%v", beforeUnread, changed[0].UpdatedAt)
+	}
+
+	stillRead, ok := s.GetTask(readTask.ID)
+	if !ok || stillRead.Unread || !stillRead.UpdatedAt.Equal(beforeRead) {
+		t.Fatalf("la tâche déjà lue ne devrait pas être touchée : %+v", stillRead)
+	}
+	untouched, ok := s.GetTask(otherProjectTask.ID)
+	if !ok || !untouched.Unread || !untouched.UpdatedAt.Equal(beforeOther) {
+		t.Fatalf("la tâche d'un autre projet ne devrait pas être touchée : %+v", untouched)
+	}
+
+	updatedProject, ok := s.GetProject(project.ID)
+	if !ok || updatedProject.Unread != 0 {
+		t.Fatalf("project.Unread attendu 0, reçu %+v", updatedProject)
+	}
+	updatedOther, ok := s.GetProject(other.ID)
+	if !ok || updatedOther.Unread != 1 {
+		t.Fatalf("l'autre projet devrait garder son unread : %+v", updatedOther)
+	}
+
+	// Rien à marquer : pas d'erreur, tranche vide.
+	changed, err = s.MarkAllTasksReadForProject(project.ID)
+	if err != nil || len(changed) != 0 {
+		t.Fatalf("attendu aucune tâche modifiée au second appel, reçu %+v (err=%v)", changed, err)
+	}
+
+	if _, err := s.MarkAllTasksReadForProject("inconnu"); err == nil {
+		t.Fatalf("un projet inconnu devrait renvoyer une erreur")
+	}
+}
+
 func TestSlugify(t *testing.T) {
 	cases := map[string]string{
 		"Ajouter le bouton Ship": "ajouter-le-bouton-ship",

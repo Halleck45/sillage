@@ -1324,6 +1324,42 @@ func (s *Store) MarkTaskRead(id string) (Task, error) {
 	return s.updateTask(id, func(t *Task) { t.Unread = false }, false)
 }
 
+// MarkAllTasksReadForProject marque comme lues toutes les tâches non lues
+// d'un projet (menu "..." d'un projet dans la sidebar), sans toucher à
+// UpdatedAt pour la même raison que MarkTaskRead. Renvoie les tâches
+// effectivement modifiées, pour que l'appelant publie leurs événements SSE.
+func (s *Store) MarkAllTasksReadForProject(projectID string) ([]Task, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.Projects[projectID]; !ok {
+		return nil, fmt.Errorf("project not found")
+	}
+	var changed []Task
+	for id, t := range s.Tasks {
+		if t.ProjectID == projectID && t.Unread {
+			t.Unread = false
+			s.Tasks[id] = t
+			changed = append(changed, t)
+		}
+	}
+	if len(changed) == 0 {
+		return nil, nil
+	}
+	for _, t := range changed {
+		s.recomputeCard(t.CardID)
+		s.recomputeAgent(t.AgentID)
+	}
+	s.recomputeProject(projectID)
+	if err := s.save(); err != nil {
+		return nil, err
+	}
+	result := make([]Task, len(changed))
+	for i, t := range changed {
+		result[i] = s.Tasks[t.ID]
+	}
+	return result, nil
+}
+
 // updateTask est l'implémentation commune de UpdateTask/MarkTaskRead.
 // bumpUpdatedAt contrôle si UpdatedAt est rafraîchi après fn.
 func (s *Store) updateTask(id string, fn func(t *Task), bumpUpdatedAt bool) (Task, error) {
