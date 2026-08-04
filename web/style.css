@@ -583,10 +583,16 @@ button, input, textarea { font-family: inherit; }
   flex: none; display: flex; align-items: center; gap: 12px; padding: 10px 20px;
   border-bottom: 1px solid var(--border-2); background: #fbfaf7;
 }
+/* Rien à signaler (chantier prêt, ou déjà livré sans lien à montrer) : le
+   nœud reste dans le DOM (refreshShipBar le retrouve tel quel) mais ne prend
+   plus de place, plutôt qu'une bande vide en permanence. */
+.ship-bar-empty { display: none; }
+/* Un avertissement est le contenu le plus grave qu'affiche la barre : elle
+   se teinte pour se faire remarquer, plutôt que de se fondre dans le reste. */
+.ship-bar-warn { background: var(--amber-bg); border-bottom-color: #f0dcae; }
 .ship-bar-state { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .ship-bar-counts { font-size: 12.5px; font-weight: 600; color: var(--text-2); }
 .ship-bar-sub { font-size: 12px; color: var(--muted-2); line-height: 1.35; }
-.ship-bar-sub[title] { cursor: help; }
 /* Nombre de commits de la branche du chantier, dans l'esprit d'un badge GitHub :
    dans l'en-tête, à côté du bouton de livraison ou de l'ancre « déjà arrivé »
    (voir .ship-anchored, .ship-slot). */
@@ -866,7 +872,14 @@ button, input, textarea { font-family: inherit; }
    avertissement, variante verte pour une confirmation d'action réussie. */
 .modal-note { margin-top: 7px; font-size: 11.5px; line-height: 1.4; color: var(--muted-3); }
 .modal-note-warning { color: var(--amber); }
+.modal-note-warning a { color: inherit; text-decoration: underline; }
 .modal-note-success { color: var(--green); }
+/* Conflits de rattrapage : un bloc par dépôt en conflit, chacun avec son
+   propre bouton « Confier à un agent » (une tâche = un seul worktree). */
+.catchup-conflict-item { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border-2); }
+.catchup-conflict-item:first-child { margin-top: 0; padding-top: 0; border-top: none; }
+.catchup-conflict-repo { font-size: 11.5px; font-weight: 600; color: var(--text-2); }
+.catchup-conflict-item .btn-green { margin-top: 9px; height: 32px; }
 .modal-foot { display: flex; align-items: center; gap: 9px; margin-top: 18px; flex-wrap: wrap; }
 .modal-hint { font-size: 12px; color: var(--muted-3); }
 .modal-foot .btn-outline, .modal-foot .btn-green { margin-left: auto; height: 32px; }
