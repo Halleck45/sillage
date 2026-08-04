@@ -1875,8 +1875,12 @@
   function buildShipLinksHTML(prev) {
     // La pull request reste affichée même après l'arrivée de travail nouveau
     // (elle existe toujours, et la prochaine livraison la mettra à jour) ; la
-    // mention « poussée » ou « fusionnée » ne s'affiche que si tout est livré.
-    var shipped = (prev.repos || []).filter(function (r) { return r.shippedAt || r.prUrl; });
+    // mention « poussée » ou « fusionnée » ne s'affiche que si tout est livré,
+    // et seulement si le chantier n'est pas déjà « arrivé » : l'ancre de
+    // l'en-tête le dit déjà (voir buildShipButtonHTML), et un simple texte ne
+    // vaut pas le doublon, contrairement à un lien cliquable.
+    var anchored = shipAlreadyOnTarget(prev);
+    var shipped = (prev.repos || []).filter(function (r) { return r.prUrl || (r.shippedAt && !anchored); });
     if (!shipped.length) return '';
     var items = shipped.map(function (r) {
       if (r.prUrl) {
