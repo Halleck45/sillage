@@ -27,6 +27,7 @@ These are the product's security promises. PRs that weaken them will not be merg
 2. Shipping requires an explicit human confirmation (`{"confirm": true}`) on an authenticated request. Shipping a workstream is the only outbound action in the product.
 3. Merge delivery is fast-forward only, never switches branches in your working repository, and fast-forwards nothing but the target branch. The `merge` mode never pushes at all; `merge-push` pushes the target branch and nothing else, never with `--force`, and refuses (before writing anything) when the target has really diverged from `origin`. Which of the two applies is a per-project setting the human made, not a default.
 4. The server must stay safe to run on a laptop: localhost by default, hashed password, rate-limited login.
+5. Manual preview commands come from the project settings only, typed by the human (same trust level as `checkCmd`). No command is ever read from a repository file, because repository files are written by agents: that would turn a branch into an execution vector triggered by a human who believes they are just launching their app. Preview runs happen in a Sillage worktree, never in your own working repository, and none of them survives the server: SIGINT/SIGTERM stops them all.
 
 ## Style
 

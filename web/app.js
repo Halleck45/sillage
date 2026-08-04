@@ -71,6 +71,9 @@
       'project.repoPath': 'Chemin',
       'project.addRepo': '+ dépôt',
       'project.removeRepo': 'Retirer',
+      'project.previewCmdPlaceholder': 'Commande de recette (optionnelle)',
+      'project.previewUrlPlaceholder': 'URL à ouvrir (optionnelle)',
+      'project.previewHint': 'Recette manuelle : la commande est lancée dans le worktree du chantier ou de la tâche. Variables disponibles : $SILLAGE_ID (ws-107, t-482), $SILLAGE_N (107), $SILLAGE_DIR, $SILLAGE_BRANCH.',
       'project.errorNameRequired': 'Le nom est requis.',
       'project.errorReposRequired': 'Au moins un dépôt est requis.',
       'project.errorSaveFailed': 'Erreur lors de l\'enregistrement.',
@@ -165,6 +168,33 @@
       'ship.mergedPushed': 'Fusionné dans {base} et poussé',
       'ship.pushedBranch': 'Branche {branch} poussée',
       'ship.errorFailed': 'Échec de la livraison.',
+      'preview.button': 'Recette',
+      'preview.tooltip': 'Lancer ce chantier pour s\'en servir',
+      'preview.taskTooltip': 'Lancer cette tâche pour s\'en servir',
+      'preview.cardTitle': 'Recette : {title}',
+      'preview.taskTitle': 'Recette de la tâche #{ref}',
+      'preview.allTitle': 'Recettes en cours',
+      'preview.taskScope': 'Vous recettez la tâche #{ref}, pas le chantier.',
+      'preview.statusRunning': 'en cours',
+      'preview.statusStopped': 'arrêtée',
+      'preview.statusExited': 'terminé (code {code})',
+      'preview.statusFailed': 'échec du lancement',
+      'preview.statusIdle': 'jamais lancée',
+      'preview.start': 'Lancer',
+      'preview.stop': 'Arrêter',
+      'preview.restart': 'Relancer',
+      'preview.showLog': 'Journal',
+      'preview.noCmd': 'Pas de commande de recette',
+      'preview.noCmdHint': 'Ajoutez-la dans les réglages du projet, dépôt par dépôt. En attendant, le chemin du worktree est juste là.',
+      'preview.noBranch': 'Aucune branche de chantier pour l\'instant : créez une tâche d\'abord.',
+      'preview.worktree': 'Worktree',
+      'preview.copyPath': 'Copier le chemin',
+      'preview.copied': 'Copié',
+      'preview.logEmpty': 'Aucune sortie pour le moment.',
+      'preview.errorStartFailed': 'Le lancement a échoué.',
+      'preview.errorStopFailed': 'L\'arrêt a échoué.',
+      'preview.running.one': '{n} recette en cours',
+      'preview.running.other': '{n} recettes en cours',
       'delivery.label': 'Livrer veut dire',
       'delivery.modePr': 'Ouvrir une pull request',
       'delivery.modePush': 'Pousser la branche',
@@ -394,6 +424,9 @@
       'project.repoPath': 'Path',
       'project.addRepo': '+ repo',
       'project.removeRepo': 'Remove',
+      'project.previewCmdPlaceholder': 'Preview command (optional)',
+      'project.previewUrlPlaceholder': 'URL to open (optional)',
+      'project.previewHint': 'Manual preview: the command runs in the workstream or task worktree. Available variables: $SILLAGE_ID (ws-107, t-482), $SILLAGE_N (107), $SILLAGE_DIR, $SILLAGE_BRANCH.',
       'project.errorNameRequired': 'Name is required.',
       'project.errorReposRequired': 'At least one repository is required.',
       'project.errorSaveFailed': 'Failed to save.',
@@ -488,6 +521,33 @@
       'ship.mergedPushed': 'Merged into {base} and pushed',
       'ship.pushedBranch': 'Branch {branch} pushed',
       'ship.errorFailed': 'Failed to ship.',
+      'preview.button': 'Preview',
+      'preview.tooltip': 'Run this workstream to try it out',
+      'preview.taskTooltip': 'Run this task to try it out',
+      'preview.cardTitle': 'Preview: {title}',
+      'preview.taskTitle': 'Preview of task #{ref}',
+      'preview.allTitle': 'Running previews',
+      'preview.taskScope': 'You are previewing task #{ref}, not the workstream.',
+      'preview.statusRunning': 'running',
+      'preview.statusStopped': 'stopped',
+      'preview.statusExited': 'finished (exit {code})',
+      'preview.statusFailed': 'failed to start',
+      'preview.statusIdle': 'never started',
+      'preview.start': 'Start',
+      'preview.stop': 'Stop',
+      'preview.restart': 'Restart',
+      'preview.showLog': 'Log',
+      'preview.noCmd': 'No preview command',
+      'preview.noCmdHint': 'Add one in the project settings, per repository. In the meantime, the worktree path is right here.',
+      'preview.noBranch': 'No workstream branch yet: create a task first.',
+      'preview.worktree': 'Worktree',
+      'preview.copyPath': 'Copy path',
+      'preview.copied': 'Copied',
+      'preview.logEmpty': 'No output yet.',
+      'preview.errorStartFailed': 'Failed to start.',
+      'preview.errorStopFailed': 'Failed to stop.',
+      'preview.running.one': '{n} preview running',
+      'preview.running.other': '{n} previews running',
       'delivery.label': 'Shipping means',
       'delivery.modePr': 'Open a pull request',
       'delivery.modePush': 'Push the branch',
@@ -712,6 +772,9 @@
     messagesByTask: {}, diffByTask: {}, deliverablesByTask: {},
     activeDiffFile: {},
     detailErrorByTask: {},
+    previews: [], // runs de recette en cours ou terminés (jamais persistés côté serveur)
+    previewLogByRun: {}, // journal par run : tampon initial (GET) + lignes SSE
+    previewScope: null, // { kind: 'card'|'task'|'all', id, runId } quand le panneau est ouvert
     deliveryByCard: {}, // aperçu de livraison (GET /api/cards/{id}/delivery), non persisté
     shipResultByCard: {}, // dernier résultat de livraison, affiché dans la modale
     catchUpErrorByCard: {}, // échec de rattrapage hors conflit, affiché dans la barre
@@ -901,6 +964,7 @@
     state.tasks = data.tasks || [];
     state.agents = data.agents || [];
     state.tokens = data.tokens || { global: { input: 0, output: 0, costUsd: 0 } };
+    state.previews = data.previews || [];
     state.workspace = data.workspace || state.workspace || null;
     state.settings = data.settings || state.settings || { displayName: '', lang: '' };
     if (state.settings.lang) {
@@ -1176,6 +1240,17 @@
       '</div>';
   }
 
+  // Compteur des recettes en cours : la seule protection contre les serveurs
+  // oubliés. Pas de TTL qui coupe un serveur pendant qu'on s'en sert ; on rend
+  // visible ce qui tourne, et on laisse l'humain arrêter.
+  function buildPreviewCounterHTML() {
+    var running = previewRunning();
+    if (running.length === 0) return '';
+    return '<button class="preview-counter" data-action="open-all-previews">' +
+      '<span class="preview-dot preview-dot-on"></span>' +
+      escapeHtml(tCount('preview.running', running.length)) + '</button>';
+  }
+
   function buildSidebarHTML() {
     var navItems = [
       { key: 'inbox', icon: '⌂', label: t('nav.inbox'), action: 'nav-inbox' },
@@ -1228,6 +1303,7 @@
       '<button class="icon-btn-sm" data-action="open-new-agent" title="' + escapeHtml(t('sidebar.newAgentTooltip')) + '" aria-label="' + escapeHtml(t('sidebar.newAgentTooltip')) + '">+</button></div>' +
       '<div class="agent-list">' + (agentsHTML || '<div class="empty-note-sm">' + escapeHtml(t('sidebar.noAgents')) + '</div>') + '</div>' +
       '<div class="sidebar-footer">' +
+        buildPreviewCounterHTML() +
         '<button class="settings-btn" data-action="open-workspace-modal">⚙ ' + escapeHtml(t('sidebar.settingsButton')) + '</button>' +
         '<div class="sidebar-footer-actions">' +
           '<a class="icon-link" href="https://github.com/Halleck45/sillage" target="_blank" rel="noopener noreferrer" title="' + escapeHtml(t('sidebar.repoTooltip')) + '" aria-label="' + escapeHtml(t('sidebar.repoTooltip')) + '">' + repoIconHTML() + '</a>' +
@@ -1272,7 +1348,10 @@
       sub = pr ? '<span class="crumb-sub">' + escapeHtml(pr.name) + '</span>' : '';
       if (c) {
         editBtn = '<button class="icon-btn" data-action="open-edit-card" title="' + escapeHtml(t('workstream.editTooltip')) + '" aria-label="' + escapeHtml(t('workstream.editTooltip')) + '">✎</button>';
-        actions = buildShipButtonHTML(c);
+        // Recette avant Livrer : on éprouve, puis on livre. Le bouton est
+        // toujours là, même sans commande configurée (le panneau propose alors
+        // le chemin du worktree).
+        actions = buildPreviewButtonHTML(c) + buildShipButtonHTML(c);
       }
     }
     var hamburger = '<button class="icon-btn hamburger-btn" data-action="toggle-sidebar" aria-label="' + escapeHtml(t('aria.menu')) + '">☰</button>';
@@ -2014,6 +2093,327 @@
     }, 0);
   }
 
+  // ---------------------------------------------------------------------
+  // Recette manuelle (panneau, runs, journal)
+  // ---------------------------------------------------------------------
+
+  // Une recette est la commande d'un dépôt (Repo.previewCmd) lancée par Sillage
+  // dans le worktree d'un chantier ou d'une tâche. Le panneau montre une ligne
+  // par dépôt, le journal en direct, et toujours le chemin du worktree : sans
+  // commande configurée, ce chemin est le seul repli, et il suffit.
+
+  function upsertPreview(run) {
+    if (!run || !run.id) return;
+    var i = state.previews.findIndex(function (x) { return x.id === run.id; });
+    if (i >= 0) state.previews[i] = run; else state.previews.push(run);
+    // Un seul run par worktree côté serveur : le frontend applique la même
+    // règle, sinon un ancien run resterait affiché à côté de son remplaçant.
+    state.previews = state.previews.filter(function (x) {
+      return x.id === run.id || x.dir !== run.dir;
+    });
+  }
+
+  function previewRunning() {
+    return state.previews.filter(function (r) { return r.status === 'running'; });
+  }
+
+  // Le run d'un worktree donné : c'est le worktree qui identifie une recette,
+  // pas le chantier (une tâche du même chantier a le sien).
+  function previewRunForDir(dir) {
+    if (!dir) return null;
+    var found = null;
+    state.previews.forEach(function (r) { if (r.dir === dir) found = r; });
+    return found;
+  }
+
+  function previewStatusLabel(run) {
+    if (!run) return t('preview.statusIdle');
+    if (run.status === 'running') return t('preview.statusRunning');
+    if (run.status === 'stopped') return t('preview.statusStopped');
+    if (run.status === 'failed') return t('preview.statusFailed');
+    return t('preview.statusExited', { code: run.exitCode });
+  }
+
+  // Les cibles recettables du panneau : une par dépôt du chantier, ou la seule
+  // du worktree d'une tâche. Chacune porte sa commande (celle de son dépôt) et
+  // le run en cours s'il y en a un.
+  function previewTargets(scope) {
+    if (!scope) return [];
+    if (scope.kind === 'task') {
+      var task = state.tasksById[scope.id];
+      if (!task) return [];
+      var project = state.projectsById[task.projectId] || {};
+      var repo = (project.repos || []).filter(function (r) { return r.name === task.repoName; })[0] || {};
+      return [{
+        repoName: task.repoName, dir: task.worktreeDir, cmd: repo.previewCmd || '',
+        run: previewRunForDir(task.worktreeDir), taskId: task.id
+      }];
+    }
+    if (scope.kind === 'card') {
+      var card = state.cardsById[scope.id];
+      if (!card) return [];
+      var proj = state.projectsById[card.projectId] || {};
+      return (card.branches || []).map(function (b) {
+        var r = (proj.repos || []).filter(function (x) { return x.name === b.repoName; })[0] || {};
+        return {
+          repoName: b.repoName, dir: b.worktreeDir, cmd: r.previewCmd || '',
+          run: previewRunForDir(b.worktreeDir), cardId: card.id
+        };
+      });
+    }
+    // Portée « tout » (compteur de la sidebar) : les runs en cours, sans dépôt
+    // sans run, puisqu'on vient y chercher ce qui tourne.
+    return previewRunning().map(function (run) {
+      return { repoName: run.repoName, dir: run.dir, cmd: run.cmd, run: run, cardId: run.cardId, taskId: run.taskId };
+    });
+  }
+
+  // Bouton de l'en-tête de chantier. Une pastille apparaît quand une recette de
+  // ce chantier tourne : c'est l'information qu'on cherche des yeux en revenant
+  // sur l'écran.
+  function buildPreviewButtonHTML(card) {
+    var running = previewRunning().some(function (r) { return r.cardId === card.id; });
+    return '<button class="btn-outline preview-btn' + (running ? ' preview-btn-on' : '') + '"' +
+      ' data-action="open-card-preview" data-card-id="' + card.id + '"' +
+      ' title="' + escapeHtml(t('preview.tooltip')) + '">' +
+      (running ? '<span class="preview-dot preview-dot-on"></span>' : '') +
+      escapeHtml(t('preview.button')) + '</button>';
+  }
+
+  // Bouton du panneau de détail : la recette d'une tâche tourne dans le worktree
+  // de la tâche, donc sur son incrément, avant l'acceptation.
+  function buildTaskPreviewButtonHTML(task) {
+    if (!task.worktreeDir) return '';
+    var run = previewRunForDir(task.worktreeDir);
+    var running = !!run && run.status === 'running';
+    // Secondaire, à largeur fixe : l'action principale d'une tâche reste
+    // Accepter, la recette est ce qui aide à en décider.
+    return '<button class="btn-neutral preview-task-btn' + (running ? ' preview-btn-on' : '') + '"' +
+      ' data-action="open-task-preview" data-task-id="' + task.id + '"' +
+      ' title="' + escapeHtml(t('preview.taskTooltip')) + '">' +
+      (running ? '<span class="preview-dot preview-dot-on"></span>' : '') +
+      escapeHtml(t('preview.button')) + '</button>';
+  }
+
+  function buildPreviewRowHTML(target) {
+    var run = target.run;
+    var running = !!run && run.status === 'running';
+    var dotClass = running ? 'preview-dot-on' : (run && run.status === 'failed' ? 'preview-dot-fail' : '');
+    var startAction = target.taskId
+      ? 'data-action="start-task-preview" data-task-id="' + target.taskId + '"'
+      : 'data-action="start-card-preview" data-card-id="' + target.cardId + '" data-repo-name="' + escapeHtml(target.repoName) + '"';
+
+    var right;
+    if (!target.cmd) {
+      right = '<span class="preview-none">' + escapeHtml(t('preview.noCmd')) + '</span>';
+    } else if (running) {
+      right = '<button class="btn-outline btn-sm" data-action="stop-preview" data-run-id="' + run.id + '">' +
+        escapeHtml(t('preview.stop')) + '</button>';
+    } else {
+      right = '<button class="btn-outline btn-sm" ' + startAction + '>' +
+        escapeHtml(run ? t('preview.restart') : t('preview.start')) + '</button>';
+    }
+
+    var middle = '<span class="preview-status">' + escapeHtml(previewStatusLabel(run)) + '</span>';
+    if (running && run.url) {
+      middle = '<a class="preview-url mono" href="' + escapeHtml(run.url) + '" target="_blank" rel="noopener">' +
+        escapeHtml(run.url) + '</a>';
+    }
+    var logBtn = run
+      ? '<button class="detail-link" data-action="show-preview-log" data-run-id="' + run.id + '">' + escapeHtml(t('preview.showLog')) + '</button>'
+      : '';
+
+    return '<div class="preview-row">' +
+      '<span class="preview-dot ' + dotClass + '"></span>' +
+      '<span class="repo-chip">' + escapeHtml(target.repoName || '') + '</span>' +
+      middle + logBtn +
+      '<span class="preview-row-actions">' + right + '</span>' +
+      '</div>' +
+      buildPreviewWorktreeHTML(target.dir);
+  }
+
+  // Le chemin du worktree, toujours affiché : c'est le repli universel de la
+  // recette, celui qui marche sans aucune configuration.
+  function buildPreviewWorktreeHTML(dir) {
+    if (!dir) return '';
+    return '<div class="preview-worktree">' +
+      '<span class="preview-worktree-label">' + escapeHtml(t('preview.worktree')) + '</span>' +
+      '<code class="mono preview-worktree-path">' + escapeHtml(dir) + '</code>' +
+      '<button class="detail-link" data-action="copy-path" data-path="' + escapeHtml(dir) + '">' +
+      escapeHtml(t('preview.copyPath')) + '</button>' +
+      '</div>';
+  }
+
+  function previewScopeTitle(scope) {
+    if (scope.kind === 'task') {
+      var task = state.tasksById[scope.id];
+      return t('preview.taskTitle', { ref: task ? task.ref : '' });
+    }
+    if (scope.kind === 'card') {
+      var card = state.cardsById[scope.id];
+      return t('preview.cardTitle', { title: card ? card.title : '' });
+    }
+    return t('preview.allTitle');
+  }
+
+  function buildPreviewLogHTML(scope) {
+    var lines = (scope.runId && state.previewLogByRun[scope.runId]) || [];
+    var body = lines.length
+      ? lines.map(function (l) { return escapeHtml(l); }).join('\n')
+      : '<span class="preview-log-empty">' + escapeHtml(t('preview.logEmpty')) + '</span>';
+    return '<pre class="preview-log" id="preview-log">' + body + '</pre>';
+  }
+
+  function buildPreviewModalHTML(scope) {
+    var targets = previewTargets(scope);
+    var hint = '';
+    if (scope.kind === 'task') {
+      var task = state.tasksById[scope.id];
+      hint = '<div class="modal-note">' + escapeHtml(t('preview.taskScope', { ref: task ? task.ref : '' })) + '</div>';
+    } else if (scope.kind === 'card' && targets.length === 0) {
+      hint = '<div class="modal-note">' + escapeHtml(t('preview.noBranch')) + '</div>';
+    }
+    var missingCmd = targets.some(function (x) { return !x.cmd; });
+    var cmdHint = missingCmd ? '<div class="modal-note">' + escapeHtml(t('preview.noCmdHint')) + '</div>' : '';
+
+    return '<div class="modal modal-lg">' +
+      '<div class="modal-head"><span class="modal-title">' + escapeHtml(previewScopeTitle(scope)) + '</span>' +
+      '<button class="icon-btn" data-action="close-modal" aria-label="' + escapeHtml(t('common.close')) + '">✕</button></div>' +
+      hint +
+      '<div class="preview-rows">' + targets.map(buildPreviewRowHTML).join('') + '</div>' +
+      cmdHint +
+      '<div id="preview-modal-error" class="modal-error hidden"></div>' +
+      buildPreviewLogHTML(scope) +
+      '<div class="modal-foot"><button class="btn-outline" data-action="close-modal">' + escapeHtml(t('common.close')) + '</button></div>' +
+      '</div>';
+  }
+
+  function openPreviewModal(kind, id) {
+    var scope = { kind: kind, id: id, runId: null };
+    var targets = previewTargets(scope);
+    // Journal ouvert d'office sur le run en cours : c'est ce qu'on vient voir.
+    var withRun = targets.filter(function (x) { return x.run; })[0];
+    if (withRun) scope.runId = withRun.run.id;
+    openModal(buildPreviewModalHTML(scope));
+    state.previewScope = scope; // après openModal, qui remet la portée à zéro
+    if (scope.runId) loadPreviewLog(scope.runId);
+  }
+
+  // Rafraîchit le panneau sans le rouvrir : les lignes et leurs boutons, pas le
+  // journal (qui reçoit ses lignes une par une, voir appendPreviewLogLine).
+  function refreshPreviewModal() {
+    var scope = state.previewScope;
+    if (!scope || !state.modal) return;
+    var rows = document.querySelector('.preview-rows');
+    if (!rows) return;
+    rows.innerHTML = previewTargets(scope).map(buildPreviewRowHTML).join('');
+  }
+
+  function previewError(message) {
+    var el = document.getElementById('preview-modal-error');
+    if (!el) return;
+    el.textContent = message;
+    el.classList.remove('hidden');
+  }
+
+  function startCardPreview(cardId, repoName) {
+    api('/api/cards/' + cardId + '/preview', { method: 'POST', body: { repoName: repoName || '' } })
+      .then(onPreviewStarted)
+      .catch(function (e) { previewError((e instanceof ApiError && e.message) || t('preview.errorStartFailed')); });
+  }
+
+  function startTaskPreview(taskId) {
+    api('/api/tasks/' + taskId + '/preview', { method: 'POST', body: {} })
+      .then(onPreviewStarted)
+      .catch(function (e) { previewError((e instanceof ApiError && e.message) || t('preview.errorStartFailed')); });
+  }
+
+  function onPreviewStarted(run) {
+    if (!run) return;
+    upsertPreview(run);
+    // Un nouveau run repart d'un journal vide : celui du run précédent ne
+    // raconte plus ce qui se passe.
+    state.previewLogByRun[run.id] = [];
+    if (state.previewScope) state.previewScope.runId = run.id;
+    refreshPreviewModal();
+    renderPreviewLog();
+    renderSidebar();
+  }
+
+  function stopPreview(runId) {
+    api('/api/previews/' + runId + '/stop', { method: 'POST', body: {} })
+      .catch(function (e) { previewError((e instanceof ApiError && e.message) || t('preview.errorStopFailed')); });
+  }
+
+  function showPreviewLog(runId) {
+    if (!state.previewScope) return;
+    state.previewScope.runId = runId;
+    refreshPreviewModal();
+    renderPreviewLog();
+    loadPreviewLog(runId);
+  }
+
+  function loadPreviewLog(runId) {
+    api('/api/previews/' + runId + '/log').then(function (data) {
+      if (!data) return;
+      state.previewLogByRun[runId] = data.lines || [];
+      if (state.previewScope && state.previewScope.runId === runId) renderPreviewLog();
+    }).catch(function () {});
+  }
+
+  function renderPreviewLog() {
+    var scope = state.previewScope;
+    var el = document.getElementById('preview-log');
+    if (!scope || !el) return;
+    var wrapper = document.createElement('div');
+    wrapper.innerHTML = buildPreviewLogHTML(scope);
+    var fresh = wrapper.firstElementChild;
+    if (fresh) {
+      el.replaceWith(fresh);
+      fresh.scrollTop = fresh.scrollHeight;
+    }
+  }
+
+  // Une ligne de journal arrive : append pur, jamais de reconstruction. Une
+  // installation de dépendances en produit des milliers.
+  function appendPreviewLogLine(runId, line) {
+    var buffer = state.previewLogByRun[runId] || (state.previewLogByRun[runId] = []);
+    buffer.push(line);
+    if (buffer.length > 2000) buffer.splice(0, buffer.length - 2000);
+    if (!state.previewScope || state.previewScope.runId !== runId) return;
+    var el = document.getElementById('preview-log');
+    if (!el) return;
+    var atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
+    var empty = el.querySelector('.preview-log-empty');
+    if (empty) el.textContent = '';
+    el.appendChild(document.createTextNode((el.textContent ? '\n' : '') + line));
+    if (atBottom) el.scrollTop = el.scrollHeight;
+  }
+
+  function copyPathToClipboard(path, el) {
+    var done = function () {
+      if (!el) return;
+      var before = el.textContent;
+      el.textContent = t('preview.copied');
+      setTimeout(function () { el.textContent = before; }, 1200);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(path).then(done).catch(function () {});
+      return;
+    }
+    // Repli pour les contextes non sécurisés (http sur une IP de réseau local),
+    // où l'API clipboard n'existe pas.
+    var ta = document.createElement('textarea');
+    ta.value = path;
+    ta.setAttribute('readonly', 'readonly');
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand('copy'); done(); } catch (e) {}
+    document.body.removeChild(ta);
+  }
+
   // Contexte de liste courant (carte ou boîte de réception), utilisé à la fois
   // par le rendu complet et par le rafraîchissement ciblé sur événement SSE.
   function currentTaskListContext() {
@@ -2245,6 +2645,7 @@
         buildStatusBadgeHTML(task) +
         behindRow +
         '<div class="action-row">' + primaryBtnHTML +
+          buildTaskPreviewButtonHTML(task) +
           '<span class="checks">' + renderChecks(task.checks) + '</span>' +
         '</div>' +
         linksRow +
@@ -2846,12 +3247,16 @@
 
   function openModal(html) {
     state.modal = true;
+    // Le panneau de recette est une modale comme les autres : ouvrir autre chose
+    // ferme sa portée, sinon les rafraîchissements SSE viseraient un DOM parti.
+    state.previewScope = null;
     var root = document.getElementById('modal-root');
     root.innerHTML = '<div class="modal-overlay" id="modal-overlay">' + html + '</div>';
     document.getElementById('modal-overlay').addEventListener('click', overlayBgCloseModal);
   }
   function closeModal() {
     state.modal = null;
+    state.previewScope = null;
     var root = document.getElementById('modal-root');
     root.innerHTML = '';
   }
@@ -3037,20 +3442,32 @@
   function buildRepoRowsHTML() {
     return modalRepos.map(function (r, i) {
       var canRemove = modalRepos.length > 1;
-      return '<div class="repo-row">' +
-        '<input class="modal-input repo-row-name" placeholder="' + escapeHtml(t('project.repoNamePlaceholder')) + '" value="' + escapeHtml(r.name) + '">' +
-        '<input class="modal-input mono repo-row-path" placeholder="' + escapeHtml(t('newProject.pathPlaceholder')) + '" value="' + escapeHtml(r.path) + '">' +
-        (canRemove ? '<button class="icon-btn repo-row-remove" data-action="remove-repo-row" data-index="' + i + '" aria-label="' + escapeHtml(t('project.removeRepo')) + '">✕</button>' : '') +
+      return '<div class="repo-block">' +
+        '<div class="repo-row">' +
+          '<input class="modal-input repo-row-name" placeholder="' + escapeHtml(t('project.repoNamePlaceholder')) + '" value="' + escapeHtml(r.name) + '">' +
+          '<input class="modal-input mono repo-row-path" placeholder="' + escapeHtml(t('newProject.pathPlaceholder')) + '" value="' + escapeHtml(r.path) + '">' +
+          (canRemove ? '<button class="icon-btn repo-row-remove" data-action="remove-repo-row" data-index="' + i + '" aria-label="' + escapeHtml(t('project.removeRepo')) + '">✕</button>' : '') +
+        '</div>' +
+        '<div class="repo-preview-row">' +
+          '<input class="modal-input mono repo-row-preview-cmd" placeholder="' + escapeHtml(t('project.previewCmdPlaceholder')) + '" value="' + escapeHtml(r.previewCmd || '') + '">' +
+          '<input class="modal-input mono repo-row-preview-url" placeholder="' + escapeHtml(t('project.previewUrlPlaceholder')) + '" value="' + escapeHtml(r.previewUrl || '') + '">' +
+        '</div>' +
         '</div>';
     }).join('');
   }
   function captureRepoRowsFromDOM() {
     var nameInputs = document.querySelectorAll('.repo-row-name');
     var pathInputs = document.querySelectorAll('.repo-row-path');
+    var cmdInputs = document.querySelectorAll('.repo-row-preview-cmd');
+    var urlInputs = document.querySelectorAll('.repo-row-preview-url');
     if (pathInputs.length === 0) return;
     if (nameInputs.length === pathInputs.length) {
       modalRepos = Array.prototype.map.call(pathInputs, function (input, i) {
-        return { name: nameInputs[i].value, path: input.value };
+        return {
+          name: nameInputs[i].value, path: input.value,
+          previewCmd: cmdInputs[i] ? cmdInputs[i].value : '',
+          previewUrl: urlInputs[i] ? urlInputs[i].value : ''
+        };
       });
     } else {
       modalRepos = [{ name: modalRepos[0] ? modalRepos[0].name : '', path: pathInputs[0].value }];
@@ -3062,7 +3479,7 @@
   }
   function addRepoRow() {
     captureRepoRowsFromDOM();
-    modalRepos.push({ name: '', path: '' });
+    modalRepos.push({ name: '', path: '', previewCmd: '', previewUrl: '' });
     refreshRepoRowsUI();
   }
   function removeRepoRow(index) {
@@ -3083,20 +3500,28 @@
           '<span class="repo-row-path">' + escapeHtml(t('project.repoPath')) + '</span>' +
         '</div>'
       : '<div class="modal-section-hint">' + escapeHtml(t('project.reposHint')) + '</div>';
+    // Le rappel des variables de recette est ici, à côté du champ où l'on écrit
+    // la commande : c'est le seul endroit où l'on en a besoin.
     return head +
       '<div id="repo-rows">' + buildRepoRowsHTML() + '</div>' +
-      '<button class="add-repo-link" data-action="add-repo-row">' + escapeHtml(t('project.addRepo')) + '</button>';
+      '<button class="add-repo-link" data-action="add-repo-row">' + escapeHtml(t('project.addRepo')) + '</button>' +
+      '<div class="modal-section-hint">' + escapeHtml(t('project.previewHint')) + '</div>';
   }
   function collectReposForSubmit() {
     captureRepoRowsFromDOM();
     return modalRepos.map(function (r) {
-      return { name: (r.name || '').trim(), path: (r.path || '').trim() };
+      return {
+        name: (r.name || '').trim(), path: (r.path || '').trim(),
+        previewCmd: (r.previewCmd || '').trim(), previewUrl: (r.previewUrl || '').trim()
+      };
     }).filter(function (r) { return r.path; });
   }
   function reposToBody(repos) {
     return repos.map(function (r) {
       var o = { path: r.path };
       if (r.name) o.name = r.name;
+      if (r.previewCmd) o.previewCmd = r.previewCmd;
+      if (r.previewUrl) o.previewUrl = r.previewUrl;
       return o;
     });
   }
@@ -3577,7 +4002,12 @@
       mode: (project.delivery && project.delivery.mode) || 'pr'
     };
     var repos = (project.repos && project.repos.length) ? project.repos : [{ name: '', path: '' }];
-    modalRepos = repos.map(function (r) { return { name: r.name || '', path: r.path || '' }; });
+    modalRepos = repos.map(function (r) {
+      return {
+        name: r.name || '', path: r.path || '',
+        previewCmd: r.previewCmd || '', previewUrl: r.previewUrl || ''
+      };
+    });
     modalLinks = (project.links || []).map(function (l) { return { url: l.url || '', title: l.title || '' }; });
     openModal(buildProjectModalHTML(project));
     setTimeout(function () { var el = document.getElementById('project-edit-name'); if (el) el.focus(); }, 0);
@@ -4068,6 +4498,34 @@
     }
   }
 
+  // Recette : l'état d'un run change (démarré, terminé, arrêté). Le panneau et
+  // les boutons se mettent à jour sans rendu complet ; le journal, lui, reçoit
+  // ses lignes une par une (onPreviewLogEvent).
+  function onPreviewEvent(run) {
+    upsertPreview(run);
+    refreshPreviewModal();
+    renderSidebar();
+    if (state.screen === 'work') refreshPreviewButton();
+    if (state.taskId) patchDetailHead(state.taskId);
+  }
+
+  function onPreviewLogEvent(payload) {
+    if (!payload || !payload.runId) return;
+    appendPreviewLogLine(payload.runId, payload.line);
+  }
+
+  // Le bouton Recette de l'en-tête porte la pastille « une recette tourne » :
+  // remplacé seul, pour ne pas reconstruire l'écran à chaque événement.
+  function refreshPreviewButton() {
+    var card = state.cardsById[state.cardId];
+    var btn = document.querySelector('.topbar-actions .preview-btn');
+    if (!card || !btn) return;
+    var wrapper = document.createElement('div');
+    wrapper.innerHTML = buildPreviewButtonHTML(card);
+    var fresh = wrapper.firstElementChild;
+    if (fresh) btn.replaceWith(fresh);
+  }
+
   function onSettingsEvent(settings) {
     state.settings = settings || state.settings;
     refreshWorkspaceModalBody();
@@ -4123,6 +4581,8 @@
     es.addEventListener('project', function (e) { try { onProjectEvent(JSON.parse(e.data)); } catch (er) {} });
     es.addEventListener('workspace', function (e) { try { onWorkspaceEvent(JSON.parse(e.data)); } catch (er) {} });
     es.addEventListener('settings', function (e) { try { onSettingsEvent(JSON.parse(e.data)); } catch (er) {} });
+    es.addEventListener('preview', function (e) { try { onPreviewEvent(JSON.parse(e.data)); } catch (er) {} });
+    es.addEventListener('previewLog', function (e) { try { onPreviewLogEvent(JSON.parse(e.data)); } catch (er) {} });
     es.addEventListener('taskDeleted', function (e) { try { onTaskDeletedEvent(JSON.parse(e.data)); } catch (er) {} });
     es.addEventListener('cardDeleted', function (e) { try { onCardDeletedEvent(JSON.parse(e.data)); } catch (er) {} });
     es.addEventListener('projectDeleted', function (e) { try { onProjectDeletedEvent(JSON.parse(e.data)); } catch (er) {} });
@@ -4204,6 +4664,16 @@
       case 'open-ship-modal': openShipModal(el.getAttribute('data-card-id')); break;
       case 'submit-ship': submitShip(el.getAttribute('data-card-id')); break;
       case 'catch-up-card': catchUpCard(el.getAttribute('data-card-id')); break;
+      case 'open-card-preview': openPreviewModal('card', el.getAttribute('data-card-id')); break;
+      case 'open-task-preview': openPreviewModal('task', el.getAttribute('data-task-id')); break;
+      case 'open-all-previews': openPreviewModal('all', null); break;
+      case 'start-card-preview':
+        startCardPreview(el.getAttribute('data-card-id'), el.getAttribute('data-repo-name'));
+        break;
+      case 'start-task-preview': startTaskPreview(el.getAttribute('data-task-id')); break;
+      case 'stop-preview': stopPreview(el.getAttribute('data-run-id')); break;
+      case 'show-preview-log': showPreviewLog(el.getAttribute('data-run-id')); break;
+      case 'copy-path': copyPathToClipboard(el.getAttribute('data-path'), el); break;
       case 'catch-up-ask-agent':
         askAgentToCatchUp(el.getAttribute('data-card-id'), el.getAttribute('data-target'), el.getAttribute('data-files'));
         break;

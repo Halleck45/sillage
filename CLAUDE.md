@@ -42,6 +42,7 @@ Ce sont les promesses de sécurité du produit (voir `CONTRIBUTING.md`) :
 
 - `docs/SPEC-API.md` : contrat HTTP/JSON/SSE complet (modèles, endpoints, cycle de vie des tâches, événements SSE, règles UI). **À lire avant toute modification de l'API et à mettre à jour dans le même commit** si le contrat change.
 - `docs/SPEC-BACKEND.md` : internes (store, auth, SSE, git, adaptateurs d'agents, seed).
+- `docs/SPEC-RECETTE.md` : spec de fournée de la recette manuelle (une commande par dépôt, lancée dans le worktree d'un chantier ou d'une tâche, journal en direct). Le lot 1 est implémenté ; le contrat courant est SPEC-API.md §« Recette manuelle ». Le §5 garde la trace des pistes écartées.
 - `docs/SPEC-LIVRAISON.md` : spec de fournée du modèle de livraison (chantier = branche de feature, acceptation, Ship de chantier, réglage de livraison). Contexte du « pourquoi » et lots restants ; le contrat courant reste SPEC-API.md.
 
 ## Architecture
@@ -55,6 +56,8 @@ internal/server/
   store.go                  état en mémoire + persistance atomique + compteurs dérivés
   handlers.go               routage (net/http ServeMux avec patterns méthode+chemin), middlewares
   runner.go                 adaptateurs claude / codex / fake, un process max par tâche
+  preview.go                recette manuelle : un process par worktree, journal en mémoire
+  preview_handlers.go       routes de recette (lancer, arrêter, journal)
   git.go                    worktrees (chantier + tâche), parser de diff unifié, commits, fusions
                             (MergeBranch, MergeLocal, MergeAndPush), pushBranch + SyncPush
                             (les deux seuls push), Ship, OpenPR (gh/glab)

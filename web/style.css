@@ -868,6 +868,13 @@ button, input, textarea { font-family: inherit; }
 .repo-row-name { flex: 0 0 140px; }
 .repo-row-path { flex: 1; min-width: 0; }
 .repo-row-remove { flex: none; }
+/* Recette d'un dépôt : commande et URL, sous le chemin auquel elles
+   s'appliquent, en retrait pour rester secondaires. */
+.repo-block + .repo-block { margin-top: 12px; }
+.repo-preview-row { display: flex; align-items: center; gap: 8px; margin: 4px 0 0 12px; }
+.repo-preview-row .modal-input { margin-top: 0; font-size: 12px; }
+.repo-row-preview-cmd { flex: 1; min-width: 0; }
+.repo-row-preview-url { flex: 0 0 200px; min-width: 0; }
 .add-repo-link {
   display: block; margin-top: 8px; border: 0; background: transparent; color: var(--muted-3);
   font-size: 12px; cursor: pointer; padding: 4px 2px;
@@ -888,6 +895,51 @@ button, input, textarea { font-family: inherit; }
   font-size: 11px; color: var(--muted-2); background: var(--bg); padding: 2px 7px; border-radius: 6px;
   white-space: nowrap;
 }
+
+/* Recette manuelle (voir docs/SPEC-RECETTE.md) : une ligne par dépôt, le
+   journal en direct, et toujours le chemin du worktree. */
+.preview-btn { display: inline-flex; align-items: center; gap: 6px; }
+.preview-task-btn {
+  flex: none; height: 40px; padding: 0 14px; border-radius: 10px; font-size: 14px; font-weight: 600;
+  display: inline-flex; align-items: center; gap: 6px;
+}
+.preview-btn-on { border-color: var(--green); color: var(--green); }
+.preview-dot {
+  flex: none; width: 7px; height: 7px; border-radius: 50%;
+  background: var(--muted-5); display: inline-block;
+}
+.preview-dot-on { background: var(--green-live); box-shadow: 0 0 0 3px var(--green-bg); }
+.preview-dot-fail { background: var(--red); }
+.preview-counter {
+  display: inline-flex; align-items: center; gap: 6px; border: 0; background: transparent;
+  color: var(--green); font-size: 12px; font-weight: 600; cursor: pointer; padding: 2px 2px;
+}
+.preview-counter:hover { text-decoration: underline; }
+
+.preview-rows { display: flex; flex-direction: column; gap: 2px; margin-top: 12px; }
+.preview-row { display: flex; align-items: center; gap: 10px; padding: 6px 0; }
+.preview-row-actions { margin-left: auto; flex: none; }
+.preview-status { font-size: 12.5px; color: var(--muted-2); }
+.preview-none { font-size: 12.5px; color: var(--muted-3); font-style: italic; }
+.preview-url { font-size: 12.5px; color: var(--accent); text-decoration: none; }
+.preview-url:hover { text-decoration: underline; }
+.preview-worktree {
+  display: flex; align-items: center; gap: 8px; padding: 0 0 8px 17px;
+  border-bottom: 1px solid var(--border-2);
+}
+.preview-worktree-label { font-size: 11px; color: var(--muted-3); text-transform: uppercase; letter-spacing: 0.04em; }
+.preview-worktree-path {
+  flex: 1; min-width: 0; font-size: 11.5px; color: var(--text-3);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.preview-log {
+  margin-top: 14px; max-height: 320px; overflow: auto; padding: 10px 12px;
+  background: #1c1b19; color: #e8e6df; border-radius: 8px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; line-height: 1.5;
+  white-space: pre-wrap; word-break: break-word;
+}
+.preview-log-empty { color: var(--muted-3); font-style: italic; }
+.btn-sm { padding: 4px 10px; font-size: 12px; }
 
 .onboarding-intro { margin-top: 6px; font-size: 12.5px; color: var(--muted); }
 .onboarding-cards { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }

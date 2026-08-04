@@ -21,6 +21,7 @@ type Server struct {
 	store        *Store
 	hub          *Hub
 	runner       *Runner
+	previews     *PreviewSupervisor
 	sessions     *SessionManager
 	loginLimiter *LoginLimiter
 	dataDir      string
@@ -62,6 +63,7 @@ func NewServer(store *Store, passwordHash, dataDir string, webFS fs.FS) *Server 
 		store:        store,
 		hub:          hub,
 		runner:       NewRunner(store, hub),
+		previews:     NewPreviewSupervisor(hub),
 		sessions:     NewSessionManager(),
 		loginLimiter: NewLoginLimiter(),
 		passwordHash: passwordHash,
@@ -72,6 +74,15 @@ func NewServer(store *Store, passwordHash, dataDir string, webFS fs.FS) *Server 
 		s.startAutoSync()
 	}
 	return s
+}
+
+// Shutdown arrête ce qui tourne pour le compte de Sillage : les recettes
+// manuelles (voir docs/SPEC-RECETTE.md §3, rien ne survit à la fermeture) et la
+// synchronisation automatique de l'espace de travail. Les agents ne sont pas
+// interrompus : leur travail est dans un worktree, il survit au redémarrage.
+func (s *Server) Shutdown() {
+	s.previews.StopAll()
+	s.stopAutoSync()
 }
 
 // staticWithRevalidation ajoute un ETag (empreinte du contenu embarqué) et
@@ -156,6 +167,10 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/tasks/{id}/read", s.handleRead)
 	mux.HandleFunc("GET /api/tasks/{id}/diff", s.handleDiff)
 	mux.HandleFunc("GET /api/tasks/{id}/deliverables", s.handleDeliverables)
+	mux.HandleFunc("POST /api/cards/{id}/preview", s.handleCardPreview)
+	mux.HandleFunc("POST /api/tasks/{id}/preview", s.handleTaskPreview)
+	mux.HandleFunc("POST /api/previews/{id}/stop", s.handlePreviewStop)
+	mux.HandleFunc("GET /api/previews/{id}/log", s.handlePreviewLog)
 	mux.HandleFunc("GET /api/events", s.hub.ServeSSE)
 	mux.Handle("/", s.static)
 
@@ -278,6 +293,7 @@ func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 	state := s.store.Snapshot()
 	state.Workspace = s.workspaceStatus()
+	state.Previews = s.previews.List()
 	writeJSON(w, http.StatusOK, state)
 }
 

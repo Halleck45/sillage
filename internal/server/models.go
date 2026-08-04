@@ -15,6 +15,15 @@ type Tokens struct {
 type Repo struct {
 	Name string `json:"name"`
 	Path string `json:"path"`
+
+	// PreviewCmd est la commande de recette manuelle du dépôt, lancée par
+	// Sillage dans le worktree d'un chantier ou d'une tâche (voir
+	// docs/SPEC-RECETTE.md). Vide = pas de recette pour ce dépôt.
+	PreviewCmd string `json:"previewCmd"`
+
+	// PreviewURL est l'adresse à ouvrir quand la commande tourne (optionnelle).
+	// Elle accepte les mêmes variables que la commande.
+	PreviewURL string `json:"previewUrl"`
 }
 
 // Link est une URL épinglée sur un projet (site, dépôt, dashboard...). Title
@@ -194,6 +203,36 @@ type Task struct {
 // le nom de l'agent pour author="agent" ; pour author="user", c'est le
 // displayName des Settings (vide si non renseigné, le frontend affiche alors
 // "Vous"/"You").
+// PreviewRun est une exécution de recette manuelle : la commande d'un dépôt
+// lancée dans le worktree d'un chantier ou d'une tâche. Jamais persisté (le
+// champ ne figure pas dans Store) : les runs et leur journal vivent en mémoire
+// le temps de la session du serveur.
+type PreviewRun struct {
+	ID        string `json:"id"`
+	ProjectID string `json:"projectId"`
+	CardID    string `json:"cardId"`
+	TaskID    string `json:"taskId"` // vide pour un run de chantier
+	RepoName  string `json:"repoName"`
+
+	Cmd string `json:"cmd"` // la commande telle qu'elle a été lancée
+	URL string `json:"url"` // previewUrl du dépôt, variables substituées
+	Dir string `json:"dir"` // worktree d'exécution, jamais le dépôt du projet
+
+	Status   string `json:"status"` // running|exited|stopped|failed
+	ExitCode int    `json:"exitCode"`
+	Error    string `json:"error"` // renseigné quand le lancement a échoué
+
+	StartedAt time.Time  `json:"startedAt"`
+	EndedAt   *time.Time `json:"endedAt"`
+}
+
+// PreviewLogEvent est le contenu de l'événement SSE "previewLog" : une ligne de
+// sortie d'un run de recette.
+type PreviewLogEvent struct {
+	RunID string `json:"runId"`
+	Line  string `json:"line"`
+}
+
 type Message struct {
 	ID         string    `json:"id"`
 	TaskID     string    `json:"taskId"`
@@ -252,6 +291,7 @@ type State struct {
 	Agents    []AgentOut      `json:"agents"`
 	Workspace WorkspaceStatus `json:"workspace"`
 	Settings  Settings        `json:"settings"`
+	Previews  []PreviewRun    `json:"previews"`
 	Tokens    struct {
 		Global Tokens `json:"global"`
 	} `json:"tokens"`

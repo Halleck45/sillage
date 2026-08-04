@@ -441,18 +441,29 @@ func (r *Runner) DeleteProject(projectID string) error {
 
 func killProcessGroup(handle *procHandle) {
 	if handle.cmd != nil && handle.cmd.Process != nil {
-		pid := handle.cmd.Process.Pid
-		_ = syscall.Kill(-pid, syscall.SIGINT)
-		select {
-		case <-handle.done:
-			return
-		case <-time.After(5 * time.Second):
-			_ = syscall.Kill(-pid, syscall.SIGKILL)
-		}
+		killGroup(handle.cmd, handle.done)
 		return
 	}
 	if handle.cancel != nil {
 		handle.cancel()
+	}
+}
+
+// killGroup envoie SIGINT au groupe de process d'une commande, puis SIGKILL si
+// elle n'a pas rendu la main au bout de 5 s. done doit être fermé quand le
+// process est réellement mort. Partagé par les agents (procHandle) et les
+// recettes manuelles (voir preview.go) : c'est le même geste, et il doit viser
+// le groupe, pas le seul shell lancé par Sillage.
+func killGroup(cmd *exec.Cmd, done <-chan struct{}) {
+	if cmd == nil || cmd.Process == nil {
+		return
+	}
+	pid := cmd.Process.Pid
+	_ = syscall.Kill(-pid, syscall.SIGINT)
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		_ = syscall.Kill(-pid, syscall.SIGKILL)
 	}
 }
 
