@@ -1331,7 +1331,7 @@
   }
 
   function buildHeaderHTML() {
-    var back = '', title = '', sub = '', actions = '', editBtn = '';
+    var back = '', title = '', branchHTML = '', sub = '', actions = '', editBtn = '';
     if (state.screen === 'inbox') {
       title = t('nav.inbox');
     } else if (state.screen === 'projects') {
@@ -1347,6 +1347,11 @@
       title = c ? c.title : '';
       sub = pr ? '<span class="crumb-sub">' + escapeHtml(pr.name) + '</span>' : '';
       if (c) {
+        // Toutes les CardBranch d'un chantier partagent le même nom de branche
+        // (dérivé de card.Ref + card.Title, indépendant du dépôt) : une seule
+        // suffit à l'afficher, absente tant qu'aucune tâche n'a créé la branche.
+        var branchName = c.branches && c.branches.length ? c.branches[0].branch : '';
+        if (branchName) branchHTML = '<span class="crumb-branch mono">' + escapeHtml(branchName) + '</span>';
         editBtn = '<button class="icon-btn" data-action="open-edit-card" title="' + escapeHtml(t('workstream.editTooltip')) + '" aria-label="' + escapeHtml(t('workstream.editTooltip')) + '">✎</button>';
         // Recette avant Livrer : on éprouve, puis on livre. Le bouton est
         // toujours là, même sans commande configurée (le panneau propose alors
@@ -1355,7 +1360,8 @@
       }
     }
     var hamburger = '<button class="icon-btn hamburger-btn" data-action="toggle-sidebar" aria-label="' + escapeHtml(t('aria.menu')) + '">☰</button>';
-    return '<header class="topbar">' + hamburger + back + '<span class="crumb-title">' + escapeHtml(title) + '</span>' + editBtn + sub +
+    return '<header class="topbar">' + hamburger + back +
+      '<div class="crumb-title-wrap"><span class="crumb-title">' + escapeHtml(title) + '</span>' + branchHTML + '</div>' + editBtn + sub +
       '<div class="topbar-actions">' + actions + '</div></header>';
   }
 
