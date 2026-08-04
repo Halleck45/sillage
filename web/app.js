@@ -298,6 +298,16 @@
       'agent.warning.codexSandboxFallback': 'Vous pouvez aussi contourner le problème en lançant Sillage avec la variable d\'environnement SILLAGE_CODEX_SANDBOX=danger-full-access ; le confinement restant est alors celui de Sillage (worktree dédié, pas de push par l\'agent).',
       'agent.warning.codexSandboxLink': 'En savoir plus (documentation OpenAI Codex)',
       'agent.warning.cliNotFound': 'CLI {cli} introuvable dans le PATH.',
+      'agent.quotaTitle': 'Quota',
+      'agent.quotaWindow5h': '5 heures',
+      'agent.quotaWindowWeek': 'Semaine',
+      'agent.quotaUsedPercent': '{percent}% utilisé',
+      'agent.quotaResetsIn': 'réinitialisation {time}',
+      'agent.quotaUpdatedAt': 'Mis à jour : {time}',
+      'agent.quotaUnavailable': 'Quotas non disponibles pour cet agent (le CLI {cli} ne les expose pas).',
+      'time.inMin': 'dans {n} min',
+      'time.inHour': 'dans {n} h',
+      'time.inDay': 'dans {n} j',
       'reassign.tooltip': 'Réassigner la tâche',
       'chat.reassignedTo': 'Tâche réassignée à {name}',
       'errors.reassignFailed': 'Échec de la réassignation.',
@@ -657,6 +667,16 @@
       'agent.warning.codexSandboxFallback': 'You can also work around this by starting Sillage with the SILLAGE_CODEX_SANDBOX=danger-full-access environment variable; the remaining containment is then Sillage\'s own (dedicated worktree, no push from the agent).',
       'agent.warning.codexSandboxLink': 'Learn more (OpenAI Codex documentation)',
       'agent.warning.cliNotFound': '{cli} CLI not found in PATH.',
+      'agent.quotaTitle': 'Quota',
+      'agent.quotaWindow5h': '5 hours',
+      'agent.quotaWindowWeek': 'Week',
+      'agent.quotaUsedPercent': '{percent}% used',
+      'agent.quotaResetsIn': 'resets {time}',
+      'agent.quotaUpdatedAt': 'Updated: {time}',
+      'agent.quotaUnavailable': 'Quotas unavailable for this agent (the {cli} CLI doesn\'t expose them).',
+      'time.inMin': 'in {n} min',
+      'time.inHour': 'in {n} h',
+      'time.inDay': 'in {n} d',
       'reassign.tooltip': 'Reassign the task',
       'chat.reassignedTo': 'Task reassigned to {name}',
       'errors.reassignFailed': 'Failed to reassign.',
@@ -883,6 +903,21 @@
     if (month < 12) return t('time.month', { n: month });
     var year = Math.round(day / 365);
     return tCount('time.year', year);
+  }
+
+  // formatResetCountdown : durée avant iso (futur), pour l'heure de
+  // réinitialisation d'une fenêtre de quota. Contrepartie de timeAgo (passé).
+  function formatResetCountdown(iso) {
+    if (!iso) return '';
+    var then = new Date(iso).getTime();
+    if (isNaN(then)) return '';
+    var diff = Math.max(0, Math.round((then - Date.now()) / 1000));
+    var min = Math.max(1, Math.round(diff / 60));
+    if (min < 60) return t('time.inMin', { n: min });
+    var hr = Math.round(min / 60);
+    if (hr < 24) return t('time.inHour', { n: hr });
+    var day = Math.round(hr / 24);
+    return t('time.inDay', { n: day });
   }
 
   function formatTime(iso) {
@@ -3859,6 +3894,32 @@
     return '<datalist id="agent-emoji-options">' + options + '</datalist>';
   }
 
+  // buildAgentQuotaHTML : quota du fournisseur cli de l'agent (voir
+  // AgentOut.quota côté serveur). Seul codex publie cette info ; claude et
+  // fake affichent un message "non disponible" plutôt qu'une donnée inventée.
+  function buildAgentQuotaHTML(agent) {
+    var windowLabel = function (w) {
+      if (w.label === '5h') return t('agent.quotaWindow5h');
+      if (w.label === 'week') return t('agent.quotaWindowWeek');
+      return w.label;
+    };
+    var body;
+    if (agent.quota && agent.quota.windows && agent.quota.windows.length) {
+      var rows = agent.quota.windows.map(function (w) {
+        return '<div class="agent-quota-row">' +
+          '<span class="agent-quota-window">' + escapeHtml(windowLabel(w)) + '</span>' +
+          '<span class="agent-quota-percent">' + escapeHtml(t('agent.quotaUsedPercent', { percent: Math.round(w.usedPercent) })) + '</span>' +
+          '<span class="agent-quota-resets">' + escapeHtml(t('agent.quotaResetsIn', { time: formatResetCountdown(w.resetsAt) })) + '</span>' +
+          '</div>';
+      }).join('');
+      body = '<div class="agent-quota-box">' + rows + '</div>' +
+        '<div class="modal-note">' + escapeHtml(t('agent.quotaUpdatedAt', { time: timeAgo(agent.quota.updatedAt) })) + '</div>';
+    } else {
+      body = '<div class="modal-note">' + escapeHtml(t('agent.quotaUnavailable', { cli: agent.cli })) + '</div>';
+    }
+    return '<div class="modal-label">' + escapeHtml(t('agent.quotaTitle')) + '</div>' + body;
+  }
+
   function buildAgentModalHTML(agent) {
     var isEdit = !!agent;
     var title = isEdit ? t('agent.editTitle') : t('agent.newTitle');
@@ -3877,9 +3938,11 @@
     }
     var warningExtras = agent ? agentWarningExtrasHTML(agent.warning) : '';
     var warningBanner = (agent && agent.warning) ? '<div class="agent-warning-banner">⚠ ' + escapeHtml(agentWarningText(agent.warning)) + warningExtras + '</div>' : '';
+    var quotaSection = isEdit ? buildAgentQuotaHTML(agent) : '';
     return '<div class="modal">' +
       '<div class="modal-head"><span class="modal-title">' + escapeHtml(title) + '</span><button class="icon-btn" data-action="close-modal" aria-label="' + escapeHtml(t('common.close')) + '">✕</button></div>' +
       warningBanner +
+      quotaSection +
       '<div class="modal-label">' + escapeHtml(t('agent.name')) + '</div><input id="agent-name" class="modal-input" value="' + (agent ? escapeHtml(agent.name) : '') + '">' +
       '<div class="agent-form-row">' +
         '<div><div class="modal-label">' + escapeHtml(t('agent.emoji')) + '</div><input id="agent-emoji" class="modal-input agent-emoji-input" maxlength="4" list="agent-emoji-options" value="' + (agent ? escapeHtml(agent.emoji || '') : '') + '">' + buildAgentEmojiDatalistHTML() + '</div>' +

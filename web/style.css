@@ -833,6 +833,13 @@ button, input, textarea { font-family: inherit; }
 .modal-label-row { display: flex; align-items: baseline; gap: 8px; }
 .modal-label-hint { margin-left: auto; font-weight: 400; font-size: 11px; color: var(--muted-4); }
 
+.agent-quota-box { margin-top: 8px; border: 1px solid var(--border-3); border-radius: 10px; padding: 4px 12px; }
+.agent-quota-row { display: flex; align-items: center; gap: 10px; padding: 7px 0; font-size: 12.5px; }
+.agent-quota-row + .agent-quota-row { border-top: 1px solid var(--border-3); }
+.agent-quota-window { flex: 0 0 auto; font-weight: 600; color: var(--text); }
+.agent-quota-percent { color: var(--text-2); }
+.agent-quota-resets { margin-left: auto; color: var(--muted-3); }
+
 /* Aide des raccourcis clavier */
 .shortcut-row { display: flex; align-items: baseline; gap: 10px; padding: 5px 0; font-size: 12.5px; color: var(--text-2); }
 .shortcut-keys { flex: none; display: flex; gap: 4px; min-width: 104px; }

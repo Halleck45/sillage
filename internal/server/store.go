@@ -30,6 +30,12 @@ type Store struct {
 	Workspace Workspace
 	Settings  Settings
 
+	// CodexQuota est le dernier instantané de quota codex connu (voir
+	// AgentQuota), mis à jour en best-effort après chaque exécution codex
+	// (runner.go readCodexRateLimits). Nil tant qu'aucune tâche codex n'a
+	// encore tourné, ou si le fichier de session ne portait pas l'info.
+	CodexQuota *AgentQuota
+
 	NextProjectN int
 	NextCardN    int
 	NextTaskN    int
@@ -606,11 +612,16 @@ func sortedAgents(m map[string]Agent) []Agent {
 // avertissement de santé calculé (voir agentWarning). Coûteux (LookPath,
 // lecture /proc) : à n'appeler qu'à la liste des agents (ListAgents/Snapshot),
 // jamais depuis recomputeAgent/recomputeAll qui tournent à chaque mutation.
-func sortedAgentsWithWarnings(m map[string]Agent) []AgentOut {
+// codexQuota est le dernier instantané connu (Store.CodexQuota), attaché aux
+// seuls agents cli=codex : c'est un quota de compte, partagé entre eux.
+func sortedAgentsWithWarnings(m map[string]Agent, codexQuota *AgentQuota) []AgentOut {
 	sorted := sortedAgents(m)
 	out := make([]AgentOut, len(sorted))
 	for i, a := range sorted {
 		out[i] = AgentOut{Agent: a, Warning: agentWarning(a)}
+		if a.Cli == "codex" {
+			out[i].Quota = codexQuota
+		}
 	}
 	return out
 }
@@ -672,7 +683,7 @@ func (s *Store) Snapshot() State {
 		Projects: sortedProjectsWithWarnings(s.Projects),
 		Cards:    sortedCards(s.Cards),
 		Tasks:    sortedTasks(s.Tasks),
-		Agents:   sortedAgentsWithWarnings(s.Agents),
+		Agents:   sortedAgentsWithWarnings(s.Agents, s.CodexQuota),
 		Settings: s.Settings,
 	}
 	st.Tokens.Global = global
@@ -704,7 +715,19 @@ func (s *Store) ListAgents() []AgentOut {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.recomputeAll()
-	return sortedAgentsWithWarnings(s.Agents)
+	return sortedAgentsWithWarnings(s.Agents, s.CodexQuota)
+}
+
+// SetCodexQuota met à jour l'instantané de quota codex (voir AgentQuota),
+// partagé par tous les agents cli=codex. Appelé en best-effort après chaque
+// exécution codex (runner.go readCodexRateLimits) : windows vide n'efface pas
+// un instantané précédent, l'appelant ne l'invoque que s'il a trouvé quelque
+// chose.
+func (s *Store) SetCodexQuota(windows []AgentQuotaWindow) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.CodexQuota = &AgentQuota{UpdatedAt: time.Now(), Windows: windows}
+	return s.save()
 }
 
 // CardsByProject retourne les cartes d'un projet, recalculées.

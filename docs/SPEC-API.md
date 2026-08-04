@@ -65,10 +65,12 @@ Card    { "id": "c1", "projectId": "p1", "ref": 101, "column": "soon|doing|done"
 
 Agent   { "id": "bolt", "name": "Bolt", "emoji": "🐝", "color": "#f2b705",
           "model": "claude-sonnet-5", "cli": "claude", "contextPrompt": "...",
-          "active": true, "warning": "..." }
+          "active": true, "warning": "...", "quota": null }
           // active = une tâche running lui est assignée. warning : calculé à chaque
           // liste d'agents (jamais persisté dans state.json), vide si tout va bien ;
-          // voir "Santé des agents" ci-dessous.
+          // voir "Santé des agents" ci-dessous. quota : voir "Quota des agents"
+          // ci-dessous, absent/null pour cli ∈ {claude, fake} et pour un agent
+          // codex sans exécution encore observée.
 
 Task    { "id": "t1", "cardId": "c1", "projectId": "p1", "ref": 482, "title": "...",
           "agentId": "bolt", "repoName": "api", "branch": "sillage/482-slug",
@@ -210,6 +212,16 @@ Actions destructives, jamais déclenchées depuis les listes : confirmation doub
 - `cli=codex` : si `/proc/sys/kernel/apparmor_restrict_unprivileged_userns` vaut `1` et que `SILLAGE_CODEX_SANDBOX` n'est pas définie → `"codex sandbox is blocked on this machine (AppArmor); see README (SILLAGE_CODEX_SANDBOX)"`.
 - `cli=codex` ou `cli=claude` : si le binaire correspondant est introuvable dans le PATH → `"<cli> CLI not found in PATH"`.
 - Sinon (ou `cli=fake`) : chaîne vide.
+
+### Quota des agents
+
+`Agent.quota` (dans `AgentOut`, jamais persisté) reflète le dernier instantané de quota connu chez le fournisseur du cli, quand ce dernier le publie :
+
+- `cli=codex` : après chaque exécution, Sillage lit le fichier de session que codex écrit de son côté (`~/.codex/sessions/AAAA/MM/JJ/rollout-...-<thread_id>.jsonl`, même en mode `codex exec --json` qui ne porte pas cette info sur son flux stdout) et en extrait le dernier `rate_limits` vu : deux fenêtres glissantes, `"5h"` (300 min) et `"week"` (10080 min), chacune avec `usedPercent` et `resetsAt`. C'est un quota de compte OpenAI, donc identique pour tous les agents `cli=codex` (`Store.CodexQuota`, un seul instantané partagé). `quota` reste `null` tant qu'aucune tâche codex n'a encore tourné sur cette instance.
+- `cli=claude` : `quota` est toujours `null`. Le CLI claude ne publie aucune information de quota exploitable (ni commande dédiée, ni champ dans son flux JSON ou ses fichiers de session) ; l'UI affiche un message "non disponible" plutôt que d'inventer une donnée.
+- `cli=fake` : toujours `null`.
+
+Forme de `quota` quand non nul : `{ "updatedAt": "...", "windows": [ { "label": "5h", "usedPercent": 44.0, "resetsAt": "..." }, { "label": "week", "usedPercent": 49.0, "resetsAt": "..." } ] }`.
 
 ### Livraison d'un chantier
 
@@ -362,7 +374,7 @@ Sillage ne sait rien des stacks : il exécute la commande de recette d'un dépô
 - `activity` : `{taskId, line}` : ligne d'activité live (peut être `null` = terminé).
 - `tokens` : `{global: Tokens, projects: {projectId: Tokens}, tasks: {taskId: Tokens}}`.
 - `cards` : liste des Cards recalculées du projet touché.
-- `agents` : liste des Agents (pour l'indicateur d'activité, et après chaque mutation CRUD).
+- `agents` : liste des Agents (pour l'indicateur d'activité, après chaque mutation CRUD, et après chaque exécution codex ayant révélé un nouvel instantané de quota, voir "Quota des agents").
 - `project` : Project complet (après PATCH `/api/projects/{id}`).
 - `workspace` : WorkspaceStatus (après setup, changement de remote/autoSync, sync manuelle, ou tick d'auto-sync).
 - `settings` : Settings (après PATCH `/api/settings`).
