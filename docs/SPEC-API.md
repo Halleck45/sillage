@@ -78,13 +78,15 @@ Agent   { "id": "bolt", "name": "Bolt", "emoji": "🐝", "color": "#f2b705",
 Task    { "id": "t1", "cardId": "c1", "projectId": "p1", "ref": 482, "title": "...",
           "agentId": "bolt", "repoName": "api", "branch": "sillage/482-slug",
           "status": "running|review|accepted|cancelled",
-          "messagesCount": 5, "filesCount": 3, "docsCount": 1,
+          "messagesCount": 5, "filesCount": 3, "docsCount": 1, "commitsCount": 2,
           "checks": [ { "label": "go test", "ok": true } ],   // [] si aucun
           "liveActivity": "Edit · internal/server/store.go" | null,
           "commandLog": [ { "text": "Edit · internal/server/store.go", "at": "..." } ],
           "unread": true, "updatedAt": "2026-08-02T10:00:00Z", "tokens": Tokens,
           "rebasing": false }
           // repoName : nom du Repo du projet utilisé pour le worktree
+          // commitsCount : commits de base..branche, recalculé à la fin de chaque exécution
+          //   (comme filesCount/docsCount) ; pas de recalcul entre-temps
           // rebasing : un rebase automatique de cette tâche est en cours (voir
           //   "Rebase automatique après une acceptation"). État volatile, remis à false au
           //   chargement de state.json. N'affecte jamais updatedAt.

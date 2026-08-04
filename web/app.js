@@ -1625,7 +1625,9 @@
         '</div>' +
       '</div>' +
       buildTaskRowStateHTML(t) +
-      '<div class="task-counts"><span>◆ ' + (t.filesCount || 0) + '</span><span>💬 ' + (t.messagesCount || 0) + '</span></div>' +
+      '<div class="task-counts"><span>◆ ' + (t.filesCount || 0) + '</span>' +
+        '<span>' + escapeHtml(tCount('ship.commits', t.commitsCount || 0)) + '</span>' +
+        '<span>💬 ' + (t.messagesCount || 0) + '</span></div>' +
       '</div>';
   }
 
@@ -1924,6 +1926,20 @@
       '</svg>';
   }
 
+  // Total de commits de la branche du chantier (base..branche), tous dépôts
+  // confondus : un chantier multi-dépôts en a une somme, pas une liste.
+  function deliveryTotalCommits(prev) {
+    var repos = (prev && prev.repos) || [];
+    return repos.reduce(function (sum, r) { return sum + (r.commits || 0); }, 0);
+  }
+
+  // Chip « N commits », dans l'esprit d'un badge GitHub : à côté du bouton de
+  // livraison ou de l'ancre « déjà arrivé », peu importe l'état du chantier.
+  function buildCommitsChipHTML(prev) {
+    if (!prev || !prev.repos || !prev.repos.length) return '';
+    return '<span class="ship-commit-chip">' + escapeHtml(tCount('ship.commits', deliveryTotalCommits(prev))) + '</span>';
+  }
+
   // Chantier entièrement arrivé dans sa branche de destination : plus rien à
   // livrer, ni par Sillage ni à la main (voir mergedIntoTarget côté serveur).
   function shipAlreadyOnTarget(prev) {
@@ -1958,7 +1974,7 @@
       var base = prev.target || (prev.repos[0] && prev.repos[0].base) || '';
       var label = t('ship.alreadyOnTarget', { base: base });
       return '<span class="ship-slot"><span class="ship-anchored" title="' + escapeHtml(label) + '">' +
-        anchorIconHTML() + escapeHtml(label) + '</span></span>';
+        anchorIconHTML() + escapeHtml(label) + '</span>' + buildCommitsChipHTML(prev) + '</span>';
     }
     if (prev && shipNeedsRebase(prev)) {
       sub = t('ship.blocked.behindTarget', { base: catchUpTarget(prev) });
@@ -2025,7 +2041,10 @@
     // les portent déjà (« Toutes 7 · À relire 0 · Traitées 7 »).
     return '<div class="ship-bar">' +
         '<div class="ship-bar-state">' +
-          '<span class="ship-bar-sub"' + (subTitle ? ' title="' + escapeHtml(subTitle) + '"' : '') + '>' + escapeHtml(sub) + '</span>' +
+          '<span class="ship-bar-sub-row">' +
+            '<span class="ship-bar-sub"' + (subTitle ? ' title="' + escapeHtml(subTitle) + '"' : '') + '>' + escapeHtml(sub) + '</span>' +
+            buildCommitsChipHTML(prev) +
+          '</span>' +
           partialHTML +
           warnings +
           buildCardBehindHTML(prev) +
@@ -2800,6 +2819,7 @@
               buildAgentChipHTML(task, agent, soft) +
               '<span class="mono">' + escapeHtml(task.branch || '') + '</span>' +
               (multiRepo && task.repoName ? '<span class="repo-chip">' + escapeHtml(task.repoName) + '</span>' : '') +
+              (task.commitsCount ? '<span class="repo-chip">' + escapeHtml(tCount('ship.commits', task.commitsCount)) + '</span>' : '') +
             '</div>' +
           '</div>' +
           '<button class="icon-btn" data-action="toggle-panel-expand" aria-label="' + escapeHtml(state.panelExpanded ? t('panel.collapse') : t('panel.expand')) + '" title="' + escapeHtml(state.panelExpanded ? t('panel.collapse') : t('panel.expand')) + '">' + (state.panelExpanded ? '⤡' : '⤢') + '</button>' +
