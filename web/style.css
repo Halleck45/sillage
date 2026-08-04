@@ -258,7 +258,7 @@ button, input, textarea { font-family: inherit; }
 /* ---------- Topbar ---------- */
 
 .topbar {
-  height: 52px;
+  min-height: 52px;
   flex: none;
   display: flex;
   align-items: center;
@@ -273,7 +273,9 @@ button, input, textarea { font-family: inherit; }
 .icon-btn:hover { background: #f4f2ee; }
 .icon-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .hamburger-btn { display: none; }
+.crumb-title-wrap { display: flex; flex-direction: column; justify-content: center; min-width: 0; gap: 1px; }
 .crumb-title { font-size: 14.5px; font-weight: 600; letter-spacing: -0.015em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.crumb-branch { font-size: 11.5px; color: var(--muted-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .crumb-sub { flex: none; font-size: 12.5px; color: var(--muted-3); }
 .topbar-actions { margin-left: auto; display: flex; align-items: center; gap: 8px; }
 
