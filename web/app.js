@@ -1468,7 +1468,11 @@
       }
     }
     var hamburger = '<button class="icon-btn hamburger-btn" data-action="toggle-sidebar" aria-label="' + escapeHtml(t('aria.menu')) + '">☰</button>';
-    return '<header class="topbar">' + hamburger + back +
+    // Sur le kanban, la barre du haut n'a plus rien à montrer (le titre du
+    // projet est déjà le gros titre de buildKanbanHTML) : elle ne reste
+    // visible que sur mobile, pour le hamburger d'ouverture de la sidebar.
+    var topbarClass = state.screen === 'kanban' ? 'topbar topbar-empty-desktop' : 'topbar';
+    return '<header class="' + topbarClass + '">' + hamburger + back +
       '<div class="crumb-title-wrap"><span class="crumb-title">' + escapeHtml(title) + '</span>' + branchHTML + '</div>' + editBtn +
       '<div class="topbar-actions">' + actions + '</div></header>';
   }
