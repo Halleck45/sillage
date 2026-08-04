@@ -300,7 +300,9 @@
       'agent.errorSaveFailed': 'Erreur lors de l\'enregistrement.',
       'agent.errorDeleteFailed': 'Erreur lors de la suppression.',
       'agent.warning.codexSandbox': 'Codex a besoin des espaces de noms utilisateur non privilégiés pour son bac à sable, et AppArmor les bloque sur cette machine. Les tâches confiées à cet agent ne peuvent pas démarrer tant que ce n\'est pas résolu.',
-      'agent.warning.codexSandboxLink': 'Comment résoudre ça (SILLAGE_CODEX_SANDBOX)',
+      'agent.warning.copyCmd': 'Copier la commande',
+      'agent.warning.codexSandboxFallback': 'Vous pouvez aussi contourner le problème en lançant Sillage avec la variable d\'environnement SILLAGE_CODEX_SANDBOX=danger-full-access ; le confinement restant est alors celui de Sillage (worktree dédié, pas de push par l\'agent).',
+      'agent.warning.codexSandboxLink': 'En savoir plus (documentation OpenAI Codex)',
       'agent.warning.cliNotFound': 'CLI {cli} introuvable dans le PATH.',
       'reassign.tooltip': 'Réassigner la tâche',
       'chat.reassignedTo': 'Tâche réassignée à {name}',
@@ -663,7 +665,9 @@
       'agent.errorSaveFailed': 'Failed to save.',
       'agent.errorDeleteFailed': 'Failed to delete.',
       'agent.warning.codexSandbox': 'Codex needs unprivileged user namespaces for its sandbox, and AppArmor blocks them on this machine. Tasks assigned to this agent cannot start until this is resolved.',
-      'agent.warning.codexSandboxLink': 'How to fix this (SILLAGE_CODEX_SANDBOX)',
+      'agent.warning.copyCmd': 'Copy command',
+      'agent.warning.codexSandboxFallback': 'You can also work around this by starting Sillage with the SILLAGE_CODEX_SANDBOX=danger-full-access environment variable; the remaining containment is then Sillage\'s own (dedicated worktree, no push from the agent).',
+      'agent.warning.codexSandboxLink': 'Learn more (OpenAI Codex documentation)',
       'agent.warning.cliNotFound': '{cli} CLI not found in PATH.',
       'reassign.tooltip': 'Reassign the task',
       'chat.reassignedTo': 'Task reassigned to {name}',
@@ -2595,14 +2599,19 @@
     return warning;
   }
 
-  // Lien cliquable complétant agentWarningText() : uniquement pour la
-  // bannière d'avertissement (le title d'un tooltip ne peut pas contenir de HTML).
-  function agentWarningLinkHTML(warning) {
-    if (warning && warning.indexOf('codex sandbox is blocked') !== -1) {
-      return '<a class="agent-warning-link" href="https://github.com/Halleck45/sillage#security-model" target="_blank" rel="noopener noreferrer">' +
-        escapeHtml(t('agent.warning.codexSandboxLink')) + '</a>';
-    }
-    return '';
+  // Complète agentWarningText() : commande de contournement copiable et lien
+  // vers la doc OpenAI. Uniquement pour la bannière d'avertissement (le title
+  // d'un tooltip ne peut contenir ni HTML ni bouton).
+  var CODEX_SANDBOX_FIX_CMD = 'sudo sysctl kernel.apparmor_restrict_unprivileged_userns=0';
+  function agentWarningExtrasHTML(warning) {
+    if (!warning || warning.indexOf('codex sandbox is blocked') === -1) return '';
+    return '<div class="agent-warning-cmd">' +
+      '<code class="mono">' + escapeHtml(CODEX_SANDBOX_FIX_CMD) + '</code>' +
+      '<button data-action="copy-path" data-path="' + escapeHtml(CODEX_SANDBOX_FIX_CMD) + '">' + escapeHtml(t('agent.warning.copyCmd')) + '</button>' +
+      '</div>' +
+      '<div class="agent-warning-fallback">' + escapeHtml(t('agent.warning.codexSandboxFallback')) + '</div>' +
+      '<a class="agent-warning-link" href="https://developers.openai.com/codex/concepts/sandboxing" target="_blank" rel="noopener noreferrer">' +
+      escapeHtml(t('agent.warning.codexSandboxLink')) + '</a>';
   }
 
   function buildReassignMenuHTML(task) {
@@ -3905,8 +3914,8 @@
         '<button class="delete-link" data-action="confirm-click" data-confirm-key="' + delKey + '" data-confirm-action="agent-delete" data-confirm-id="' + agent.id + '" data-default-label="' + escapeHtml(t('agent.delete')) + '" data-confirm-label="' + escapeHtml(t('agent.deleteConfirm')) + '">' + escapeHtml(delLabel) + '</button>' +
         '</div>';
     }
-    var warningLink = agent ? agentWarningLinkHTML(agent.warning) : '';
-    var warningBanner = (agent && agent.warning) ? '<div class="agent-warning-banner">⚠ ' + escapeHtml(agentWarningText(agent.warning)) + (warningLink ? '<br>' + warningLink : '') + '</div>' : '';
+    var warningExtras = agent ? agentWarningExtrasHTML(agent.warning) : '';
+    var warningBanner = (agent && agent.warning) ? '<div class="agent-warning-banner">⚠ ' + escapeHtml(agentWarningText(agent.warning)) + warningExtras + '</div>' : '';
     return '<div class="modal">' +
       '<div class="modal-head"><span class="modal-title">' + escapeHtml(title) + '</span><button class="icon-btn" data-action="close-modal" aria-label="' + escapeHtml(t('common.close')) + '">✕</button></div>' +
       warningBanner +
