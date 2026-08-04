@@ -1973,7 +1973,8 @@
     if (prev && shipAlreadyOnTarget(prev)) {
       var base = prev.target || (prev.repos[0] && prev.repos[0].base) || '';
       var label = t('ship.alreadyOnTarget', { base: base });
-      return '<span class="ship-slot"><span class="ship-anchored" title="' + escapeHtml(label) + '">' +
+      var tip = t('ship.alreadyOnTargetSub', { base: base });
+      return '<span class="ship-slot"><span class="ship-anchored" title="' + escapeHtml(tip) + '">' +
         anchorIconHTML() + escapeHtml(label) + '</span>' + buildCommitsChipHTML(prev) + '</span>';
     }
     if (prev && shipNeedsRebase(prev)) {
@@ -2015,11 +2016,13 @@
   function buildShipBarHTML(card) {
     var prev = state.deliveryByCard[card.id];
     var blocked = !card.shipReady;
-    var sub, subTitle = '';
-    if (prev && shipAlreadyOnTarget(prev)) {
-      var base = prev.target || (prev.repos[0] && prev.repos[0].base) || '';
-      sub = t('ship.alreadyOnTarget', { base: base });
-      subTitle = t('ship.alreadyOnTargetSub', { base: base });
+    var anchored = !!(prev && shipAlreadyOnTarget(prev));
+    var sub = '', subTitle = '';
+    // Déjà arrivé : l'ancre de l'en-tête le dit déjà (voir buildShipButtonHTML),
+    // et buildShipLinksHTML donne le détail par dépôt plus bas. Répéter la même
+    // phrase ici ferait un troisième doublon.
+    if (anchored) {
+      // sub reste vide.
     } else if (blocked) sub = shipBlockerLabel(card.shipBlocker);
     else if (prev && shipNeedsRebase(prev)) {
       sub = t('ship.blocked.behindTarget', { base: prev.target || (deliverableRepos(prev)[0] || {}).base || '' });
@@ -2041,9 +2044,12 @@
     // les portent déjà (« Toutes 7 · À relire 0 · Traitées 7 »). Pas de puce de
     // commits non plus : elle est déjà dans l'en-tête, à côté du bouton (voir
     // buildShipButtonHTML) ; la répéter ici ferait doublon.
+    var subHTML = sub
+      ? '<span class="ship-bar-sub"' + (subTitle ? ' title="' + escapeHtml(subTitle) + '"' : '') + '>' + escapeHtml(sub) + '</span>'
+      : '';
     return '<div class="ship-bar">' +
         '<div class="ship-bar-state">' +
-          '<span class="ship-bar-sub"' + (subTitle ? ' title="' + escapeHtml(subTitle) + '"' : '') + '>' + escapeHtml(sub) + '</span>' +
+          subHTML +
           partialHTML +
           warnings +
           buildCardBehindHTML(prev) +
