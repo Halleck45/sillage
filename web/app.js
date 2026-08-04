@@ -4456,6 +4456,13 @@
     // l'aperçu (qui porte les compteurs de retard) n'est plus à jour.
     var rebaseFinished = !!(previous && previous.rebasing && !task.rebasing);
     upsertTask(task);
+    // Une tâche déjà ouverte peut redevenir "non lue" côté serveur (fin
+    // d'exécution d'agent, voir finalize() dans runner.go) : la remarquer
+    // lue immédiatement, sinon le badge reste bloqué à 1 sans raison visible.
+    if (state.taskId === task.id && task.unread) {
+      task.unread = false;
+      api('/api/tasks/' + task.id + '/read', { method: 'POST' }).catch(function () {});
+    }
     refreshTaskListAndFilters();
     if (state.taskId === task.id) {
       patchDetailHead(task.id);
