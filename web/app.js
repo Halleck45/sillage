@@ -2790,7 +2790,6 @@
             '<div class="detail-title">' + escapeHtml(task.title) + '</div>' +
             '<div class="detail-meta">' +
               buildAgentChipHTML(task, agent, soft) +
-              '<span class="mono">' + escapeHtml(agent.model || '') + '</span>' +
               '<span class="mono">' + escapeHtml(task.branch || '') + '</span>' +
               (multiRepo && task.repoName ? '<span class="repo-chip">' + escapeHtml(task.repoName) + '</span>' : '') +
             '</div>' +
