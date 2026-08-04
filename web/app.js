@@ -172,8 +172,8 @@
       'ship.modalConfirm': 'Livrer',
       'ship.repoNothing': 'Rien à livrer',
       'ship.repoShipped': 'Déjà livré',
-      'ship.commits.one': '{n} commit',
-      'ship.commits.other': '{n} commits',
+      'ship.commits.one': '{n} nouveau commit',
+      'ship.commits.other': '{n} nouveaux commits',
       'ship.files.one': '{n} fichier',
       'ship.files.other': '{n} fichiers',
       'ship.prLink': 'Voir la pull request',
@@ -555,8 +555,8 @@
       'ship.modalConfirm': 'Ship',
       'ship.repoNothing': 'Nothing to ship',
       'ship.repoShipped': 'Already shipped',
-      'ship.commits.one': '{n} commit',
-      'ship.commits.other': '{n} commits',
+      'ship.commits.one': '{n} new commit',
+      'ship.commits.other': '{n} new commits',
       'ship.files.one': '{n} file',
       'ship.files.other': '{n} files',
       'ship.prLink': 'View the pull request',
@@ -1992,7 +1992,7 @@
     return '<span class="ship-slot">' + catchUp +
       '<button class="btn-green ship-btn" ' + (ready ? '' : 'disabled title="' + escapeHtml(sub) + '"') +
       ' data-action="open-ship-modal" data-card-id="' + card.id + '">' +
-      shipIconHTML() + escapeHtml(t('ship.button')) + '</button></span>';
+      shipIconHTML() + escapeHtml(t('ship.button')) + '</button>' + buildCommitsChipHTML(prev) + '</span>';
   }
 
   // Un chantier a besoin d'être rattrapé dès que sa destination a avancé sans
@@ -2038,13 +2038,12 @@
         escapeHtml(tCount('ship.partial', partial)) + '</span>'
       : '';
     // Pas de compteurs de tâches ici : les filtres de la liste juste en dessous
-    // les portent déjà (« Toutes 7 · À relire 0 · Traitées 7 »).
+    // les portent déjà (« Toutes 7 · À relire 0 · Traitées 7 »). Pas de puce de
+    // commits non plus : elle est déjà dans l'en-tête, à côté du bouton (voir
+    // buildShipButtonHTML) ; la répéter ici ferait doublon.
     return '<div class="ship-bar">' +
         '<div class="ship-bar-state">' +
-          '<span class="ship-bar-sub-row">' +
-            '<span class="ship-bar-sub"' + (subTitle ? ' title="' + escapeHtml(subTitle) + '"' : '') + '>' + escapeHtml(sub) + '</span>' +
-            buildCommitsChipHTML(prev) +
-          '</span>' +
+          '<span class="ship-bar-sub"' + (subTitle ? ' title="' + escapeHtml(subTitle) + '"' : '') + '>' + escapeHtml(sub) + '</span>' +
           partialHTML +
           warnings +
           buildCardBehindHTML(prev) +

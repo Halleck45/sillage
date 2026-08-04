@@ -585,12 +585,11 @@ button, input, textarea { font-family: inherit; }
 }
 .ship-bar-state { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .ship-bar-counts { font-size: 12.5px; font-weight: 600; color: var(--text-2); }
-.ship-bar-sub-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .ship-bar-sub { font-size: 12px; color: var(--muted-2); line-height: 1.35; }
 .ship-bar-sub[title] { cursor: help; }
 /* Nombre de commits de la branche du chantier, dans l'esprit d'un badge GitHub :
-   à côté du sous-texte de la barre, et à côté de l'ancre « déjà arrivé » dans
-   l'en-tête (voir .ship-anchored). */
+   dans l'en-tête, à côté du bouton de livraison ou de l'ancre « déjà arrivé »
+   (voir .ship-anchored, .ship-slot). */
 .ship-commit-chip {
   flex: none; display: inline-flex; align-items: center; height: 22px; padding: 0 8px;
   border-radius: 6px; background: var(--bg); color: var(--muted-2);
