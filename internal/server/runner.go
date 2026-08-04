@@ -814,6 +814,7 @@ func (r *Runner) runCodex(task *Task, agent Agent, project Project, card Card, h
 
 	parsedAny := false
 	var tokenAcc codexTokenAccumulator
+	var threadID string
 	scanner := bufio.NewScanner(stdout)
 	scanner.Buffer(make([]byte, 0, 64*1024), 10*1024*1024)
 	for scanner.Scan() {
@@ -842,12 +843,26 @@ func (r *Runner) runCodex(task *Task, agent Agent, project Project, card Card, h
 		if tokenAcc.observe(generic) {
 			parsedAny = true
 		}
+		if generic["type"] == "thread.started" {
+			if id, ok := generic["thread_id"].(string); ok {
+				threadID = id
+			}
+		}
 	}
 
 	scanErr := scanner.Err()
 	waitErr := cmd.Wait()
 	if waitErr == nil && scanErr != nil {
 		waitErr = scanErr
+	}
+	// Le quota de compte (rate_limits) n'est pas porté par le flux --json,
+	// seulement par le fichier de session que codex écrit de son côté (même
+	// en mode exec) : voir readCodexRateLimits. Best-effort, ne bloque jamais
+	// la tâche.
+	if windows, ok := readCodexRateLimits(threadID); ok {
+		if err := r.store.SetCodexQuota(windows); err == nil {
+			r.publishAgents()
+		}
 	}
 	if tokenAcc.found {
 		if t, err := r.store.UpdateTask(task.ID, func(t *Task) {
@@ -965,6 +980,110 @@ func parseCodexTokenStream(lines []string) (Tokens, bool) {
 		acc.observe(m)
 	}
 	return acc.last, acc.found
+}
+
+// quotaWindowLabel nomme une fenêtre de quota codex d'après sa durée en
+// minutes : 300 = 5h, 10080 = une semaine (7*24*60). Toute autre valeur
+// (changement côté OpenAI) retombe sur une étiquette générique plutôt que de
+// perdre l'information.
+func quotaWindowLabel(minutes int) string {
+	switch minutes {
+	case 300:
+		return "5h"
+	case 10080:
+		return "week"
+	default:
+		return fmt.Sprintf("%dm", minutes)
+	}
+}
+
+// parseCodexRateLimits extrait les fenêtres de quota d'un événement JSONL du
+// fichier de session codex, de la forme :
+//
+//	{"type":"event_msg","payload":{"type":"token_count","rate_limits":{
+//	  "primary":{"used_percent":44.0,"window_minutes":300,"resets_at":1771005432},
+//	  "secondary":{"used_percent":49.0,"window_minutes":10080,"resets_at":1771409457}}}}
+//
+// Fonction pure, sans I/O, pour tester le parsing indépendamment du disque.
+func parseCodexRateLimits(m map[string]any) ([]AgentQuotaWindow, bool) {
+	payload, ok := m["payload"].(map[string]any)
+	if !ok || payload["type"] != "token_count" {
+		return nil, false
+	}
+	rl, ok := payload["rate_limits"].(map[string]any)
+	if !ok {
+		return nil, false
+	}
+	var windows []AgentQuotaWindow
+	for _, key := range []string{"primary", "secondary"} {
+		w, ok := rl[key].(map[string]any)
+		if !ok {
+			continue
+		}
+		used, _ := w["used_percent"].(float64)
+		minutes, _ := w["window_minutes"].(float64)
+		resets, _ := w["resets_at"].(float64)
+		windows = append(windows, AgentQuotaWindow{
+			Label:       quotaWindowLabel(int(minutes)),
+			UsedPercent: used,
+			ResetsAt:    time.Unix(int64(resets), 0),
+		})
+	}
+	if len(windows) == 0 {
+		return nil, false
+	}
+	return windows, true
+}
+
+// codexSessionsDir est le répertoire des fichiers de session codex, une
+// indirection testable (évite de dépendre de $HOME dans les tests).
+var codexSessionsDir = func() string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(home, ".codex", "sessions")
+}
+
+// readCodexRateLimits localise le fichier de session écrit par codex pour
+// threadID (structure sessions/AAAA/MM/JJ/rollout-...-<threadID>.jsonl,
+// écrite par codex lui-même, y compris en mode `exec --json`) et en extrait
+// le dernier instantané de quota connu. Ce n'est PAS porté par le flux --json
+// que Sillage lit déjà pour les tokens (voir extractCodexTokens) : seul le
+// fichier de session le contient. Best-effort : ok=false si le fichier est
+// introuvable ou ne portait encore aucun rate_limits.
+func readCodexRateLimits(threadID string) ([]AgentQuotaWindow, bool) {
+	if threadID == "" {
+		return nil, false
+	}
+	dir := codexSessionsDir()
+	if dir == "" {
+		return nil, false
+	}
+	matches, err := filepath.Glob(filepath.Join(dir, "*", "*", "*", "rollout-*-"+threadID+".jsonl"))
+	if err != nil || len(matches) == 0 {
+		return nil, false
+	}
+	f, err := os.Open(matches[0])
+	if err != nil {
+		return nil, false
+	}
+	defer f.Close()
+
+	var last []AgentQuotaWindow
+	scanner := bufio.NewScanner(f)
+	scanner.Buffer(make([]byte, 0, 64*1024), 10*1024*1024)
+	for scanner.Scan() {
+		var generic map[string]any
+		if err := json.Unmarshal(scanner.Bytes(), &generic); err != nil {
+			continue
+		}
+		if windows, ok := parseCodexRateLimits(generic); ok {
+			last = windows
+		}
+	}
+	_ = scanner.Err() // best-effort : une lecture tronquée garde le dernier instantané trouvé
+	return last, last != nil
 }
 
 // --- Adaptateur fake (test/démo, sans exec) ---
