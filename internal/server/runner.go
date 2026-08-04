@@ -532,6 +532,10 @@ func (r *Runner) finalize(taskID string) {
 			}
 		}
 	}
+	commitsCount := 0
+	if commits, err := Commits(task.WorktreeDir, task.Base); err == nil {
+		commitsCount = len(commits)
+	}
 
 	updated, err := r.store.UpdateTask(taskID, func(t *Task) {
 		if t.Status == "running" {
@@ -542,6 +546,7 @@ func (r *Runner) finalize(taskID string) {
 		t.Checks = checks
 		t.FilesCount = filesCount
 		t.DocsCount = docsCount
+		t.CommitsCount = commitsCount
 	})
 	if err != nil {
 		return

@@ -179,6 +179,7 @@ type Task struct {
 	MessagesCount int       `json:"messagesCount"`
 	FilesCount    int       `json:"filesCount"`
 	DocsCount     int       `json:"docsCount"`
+	CommitsCount  int       `json:"commitsCount"` // commits de base..branche, recalculé à chaque fin d'exécution
 	Checks        []Check   `json:"checks"`
 	LiveActivity  *string   `json:"liveActivity"`
 	Unread        bool      `json:"unread"`
