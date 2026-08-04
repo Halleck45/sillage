@@ -3455,23 +3455,25 @@
         '</div>';
     }).join('');
   }
+  // Une ligne est lue bloc par bloc (`.repo-block`), jamais champ par champ à
+  // l'échelle du document : l'en-tête des colonnes porte les mêmes classes
+  // `repo-row-name`/`repo-row-path` sur des <span>, et une lecture globale le
+  // comptait comme une ligne, décalant d'un cran la commande et l'URL de recette
+  // (la dernière ligne perdait les siennes à chaque enregistrement).
   function captureRepoRowsFromDOM() {
-    var nameInputs = document.querySelectorAll('.repo-row-name');
-    var pathInputs = document.querySelectorAll('.repo-row-path');
-    var cmdInputs = document.querySelectorAll('.repo-row-preview-cmd');
-    var urlInputs = document.querySelectorAll('.repo-row-preview-url');
-    if (pathInputs.length === 0) return;
-    if (nameInputs.length === pathInputs.length) {
-      modalRepos = Array.prototype.map.call(pathInputs, function (input, i) {
-        return {
-          name: nameInputs[i].value, path: input.value,
-          previewCmd: cmdInputs[i] ? cmdInputs[i].value : '',
-          previewUrl: urlInputs[i] ? urlInputs[i].value : ''
-        };
-      });
-    } else {
-      modalRepos = [{ name: modalRepos[0] ? modalRepos[0].name : '', path: pathInputs[0].value }];
-    }
+    var blocks = document.querySelectorAll('#repo-rows .repo-block');
+    if (blocks.length === 0) return;
+    modalRepos = Array.prototype.map.call(blocks, function (block) {
+      function val(selector) {
+        var el = block.querySelector(selector);
+        return el ? el.value : '';
+      }
+      return {
+        name: val('input.repo-row-name'), path: val('input.repo-row-path'),
+        previewCmd: val('input.repo-row-preview-cmd'),
+        previewUrl: val('input.repo-row-preview-url')
+      };
+    });
   }
   function refreshRepoRowsUI() {
     var container = document.getElementById('repo-rows');
