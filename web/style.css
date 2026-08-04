@@ -300,10 +300,18 @@ button, input, textarea { font-family: inherit; }
 .icon-btn:hover { background: #f4f2ee; }
 .icon-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .hamburger-btn { display: none; }
+.back-crumb {
+  flex: none; display: flex; align-items: center; gap: 6px;
+  height: 30px; padding: 0 10px 0 7px; border: 0; border-radius: 8px;
+  background: transparent; color: var(--muted-3); cursor: pointer;
+}
+.back-crumb:hover { background: #f4f2ee; color: var(--text-2); }
+.back-crumb:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.back-chevron { flex: none; }
+.back-crumb-project { font-size: 13px; font-weight: 500; max-width: 22vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .crumb-title-wrap { display: flex; flex-direction: column; justify-content: center; min-width: 0; gap: 1px; }
 .crumb-title { font-size: 14.5px; font-weight: 600; letter-spacing: -0.015em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .crumb-branch { font-size: 11.5px; color: var(--muted-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.crumb-sub { flex: none; font-size: 12.5px; color: var(--muted-3); }
 .topbar-actions { margin-left: auto; display: flex; align-items: center; gap: 8px; }
 
 .btn-primary, .btn-green, .btn-outline, .btn-neutral {

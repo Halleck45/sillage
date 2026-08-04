@@ -1432,7 +1432,7 @@
   }
 
   function buildHeaderHTML() {
-    var back = '', title = '', branchHTML = '', sub = '', actions = '', editBtn = '';
+    var back = '', title = '', branchHTML = '', actions = '', editBtn = '';
     if (state.screen === 'inbox') {
       title = t('nav.inbox');
     } else if (state.screen === 'projects') {
@@ -1442,11 +1442,16 @@
       var p = state.projectsById[state.projectId];
       title = p ? p.name : '';
     } else if (state.screen === 'work') {
-      back = '<button class="icon-btn" data-action="go-back" aria-label="' + escapeHtml(t('nav.back')) + '">←</button>';
       var c = state.cardsById[state.cardId];
       var pr = state.projectsById[state.projectId];
+      // Le nom du projet vient se poser contre la flèche : cliquer n'importe où
+      // dans ce groupe ramène au même endroit (goBack), donc les deux ne font
+      // qu'un plutôt que d'écarteler le projet à droite du titre du chantier.
+      back = '<button class="back-crumb" data-action="go-back" aria-label="' + escapeHtml(t('nav.back')) + (pr ? ' : ' + escapeHtml(pr.name) : '') + '">' +
+        '<svg class="back-chevron" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/></svg>' +
+        (pr ? '<span class="back-crumb-project">' + escapeHtml(pr.name) + '</span>' : '') +
+        '</button>';
       title = c ? c.title : '';
-      sub = pr ? '<span class="crumb-sub">' + escapeHtml(pr.name) + '</span>' : '';
       if (c) {
         // Toutes les CardBranch d'un chantier partagent le même nom de branche
         // (dérivé de card.Ref + card.Title, indépendant du dépôt) : une seule
@@ -1462,7 +1467,7 @@
     }
     var hamburger = '<button class="icon-btn hamburger-btn" data-action="toggle-sidebar" aria-label="' + escapeHtml(t('aria.menu')) + '">☰</button>';
     return '<header class="topbar">' + hamburger + back +
-      '<div class="crumb-title-wrap"><span class="crumb-title">' + escapeHtml(title) + '</span>' + branchHTML + '</div>' + editBtn + sub +
+      '<div class="crumb-title-wrap"><span class="crumb-title">' + escapeHtml(title) + '</span>' + branchHTML + '</div>' + editBtn +
       '<div class="topbar-actions">' + actions + '</div></header>';
   }
 
