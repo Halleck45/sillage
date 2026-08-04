@@ -487,17 +487,33 @@ func TestShipPartialWorkstream(t *testing.T) {
 }
 
 // TestAcceptConflictKeepsTaskInReview : deux tâches du même chantier qui
-// touchent la même ligne. La seconde acceptation échoue en 409, la tâche RESTE
-// en revue, et un message marqueur de conflit est ajouté au fil.
+// touchent la même ligne. "Seconde" est occupée (agent en cours, simulé sans
+// process réel) au moment de la première acceptation, donc le rebase
+// automatique des tâches sœurs (rebaseSiblingTasks) la laisse de côté : c'est
+// seulement à sa propre acceptation, une fois libérée, que la fusion directe
+// (MergeBranch dans acceptTaskInto) découvre le conflit. Elle échoue en 409,
+// la tâche RESTE en revue le temps de répondre, un message marqueur de
+// conflit est ajouté au fil, ET l'agent reçoit aussitôt l'instruction de
+// reprendre la base (conflictRebasePrompt) : le conflit se règle donc tout
+// seul, sans attendre que l'humain remarque le marqueur.
 func TestAcceptConflictKeepsTaskInReview(t *testing.T) {
 	f := newDeliveryFixture(t, Delivery{Mode: "pr"})
 
 	first, _ := f.addTask(t, "Première", "README.md", "# projet\n\nversion A\n")
-	second, _ := f.addTask(t, "Seconde", "README.md", "# projet\n\nversion B\n")
+	second, cb := f.addTask(t, "Seconde", "README.md", "# projet\n\nversion B\n")
+
+	f.srv.runner.mu.Lock()
+	f.srv.runner.procs[second] = &procHandle{done: make(chan struct{})}
+	f.srv.runner.mu.Unlock()
 
 	if w := f.accept(t, first); w.Code != http.StatusOK {
 		t.Fatalf("première acceptation : attendu 200, reçu %d (%s)", w.Code, w.Body.String())
 	}
+
+	f.srv.runner.mu.Lock()
+	delete(f.srv.runner.procs, second)
+	f.srv.runner.mu.Unlock()
+
 	w := f.accept(t, second)
 	if w.Code != http.StatusConflict {
 		t.Fatalf("seconde acceptation : attendu 409, reçu %d (%s)", w.Code, w.Body.String())
@@ -506,19 +522,25 @@ func TestAcceptConflictKeepsTaskInReview(t *testing.T) {
 		t.Fatalf("message de conflit attendu, reçu %q", w.Body.String())
 	}
 	task, _ := f.srv.store.GetTask(second)
-	if task.Status != "review" {
-		t.Fatalf("la tâche en conflit doit rester en revue, reçu %q", task.Status)
+	if task.Status != "running" {
+		t.Fatalf("le conflit doit relancer l'agent (running), reçu %q", task.Status)
 	}
 	msgs := f.srv.store.GetMessages(second)
-	last := msgs[len(msgs)-1]
-	if !strings.HasPrefix(last.Text, "[merge-conflict:") || !strings.Contains(last.Text, "README.md") {
-		t.Fatalf("message marqueur de conflit inattendu : %+v", last)
+	if len(msgs) < 2 || !strings.HasPrefix(msgs[len(msgs)-2].Text, "[merge-conflict:") || !strings.Contains(msgs[len(msgs)-2].Text, "README.md") {
+		t.Fatalf("message marqueur de conflit inattendu : %+v", msgs)
+	}
+	if last := msgs[len(msgs)-1]; !strings.Contains(last.Text, cb.Branch) {
+		t.Fatalf("l'agent devrait recevoir la branche du chantier comme instruction, reçu %q", last.Text)
 	}
 	// L'arbre du chantier est intact (merge --abort) : le travail de la première
-	// tâche reste livrable, malgré la seconde encore en revue.
+	// tâche reste livrable, malgré la seconde encore en cours.
 	card, _ := f.srv.store.GetCard(f.card.ID)
 	if !card.ShipReady {
 		t.Fatalf("chantier attendu livrable malgré la tâche en conflit, blocage %q", card.ShipBlocker)
+	}
+
+	if _, err := f.srv.runner.Interrupt(second); err != nil {
+		t.Fatalf("interrupt: %v", err)
 	}
 }
 
@@ -816,10 +838,13 @@ func TestAcceptRebasesSiblingTasks(t *testing.T) {
 	}
 }
 
-// TestAcceptRebaseConflictLeavesTaskIntact : un rebase automatique qui
-// conflicte est annulé (worktree intact, branche inchangée) et posé au fil comme
-// tel. La reprise reste du ressort de l'agent.
-func TestAcceptRebaseConflictLeavesTaskIntact(t *testing.T) {
+// TestAcceptRebaseConflictAsksAgentToRebase : un rebase automatique qui
+// conflicte est annulé (worktree intact, branche inchangée), posé au fil comme
+// tel, ET envoyé aussitôt à l'agent comme instruction (voir
+// conflictRebasePrompt) : lui seul sait reprendre la base, la tâche repart
+// donc "running" au lieu de rester plantée en revue avec un marqueur que
+// personne ne lit.
+func TestAcceptRebaseConflictAsksAgentToRebase(t *testing.T) {
 	f := newDeliveryFixture(t, Delivery{Mode: "pr"})
 
 	// Les deux tâches touchent le même fichier, avec un contenu différent.
@@ -843,12 +868,19 @@ func TestAcceptRebaseConflictLeavesTaskIntact(t *testing.T) {
 		t.Fatalf("le travail de la tâche doit être intact, reçu %q (err %v)", content, err)
 	}
 	msgs := f.srv.store.GetMessages(secondID)
-	last := msgs[len(msgs)-1]
-	if last.Text != "[rebase-conflict:partage.txt]" {
-		t.Fatalf("marqueur de conflit de rebase attendu, reçu %q", last.Text)
+	if len(msgs) < 2 || msgs[len(msgs)-2].Text != "[rebase-conflict:partage.txt]" {
+		t.Fatalf("marqueur de conflit de rebase attendu avant l'instruction, reçu %+v", msgs)
 	}
-	if task, _ := f.srv.store.GetTask(secondID); task.Rebasing || task.Status != "review" {
-		t.Fatalf("tâche attendue en revue sans rebase en cours, reçu status=%q rebasing=%v", task.Status, task.Rebasing)
+	last := msgs[len(msgs)-1]
+	if !strings.Contains(last.Text, cb.Branch) {
+		t.Fatalf("l'agent devrait recevoir la branche du chantier comme instruction, reçu %q", last.Text)
+	}
+	if task, _ := f.srv.store.GetTask(secondID); task.Rebasing || task.Status != "running" {
+		t.Fatalf("tâche attendue relancée (running) après le conflit, reçu status=%q rebasing=%v", task.Status, task.Rebasing)
+	}
+
+	if _, err := f.srv.runner.Interrupt(secondID); err != nil {
+		t.Fatalf("interrupt: %v", err)
 	}
 }
 

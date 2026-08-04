@@ -1033,6 +1033,10 @@ func (s *Server) acceptTaskInto(w http.ResponseWriter, task Task, cardBranch Car
 				s.runner.publishTask(updated)
 				s.runner.publishMessage(msg)
 			}
+			// L'agent reprend la main tout de suite avec l'instruction de rebase :
+			// le conflit se résout souvent tout seul, sans attendre que l'humain
+			// remarque le marqueur et clique sur « Demander le rebase ».
+			_, _ = s.runner.Message(task.ID, conflictRebasePrompt(cardBranch.Branch, conflicts))
 			writeJSON(w, http.StatusConflict, map[string]string{
 				"error":             "merge conflict with the workstream branch",
 				"conflictFilePaths": strings.Join(conflicts, " "),
@@ -1150,6 +1154,23 @@ func (s *Server) rebaseOneTask(task Task, cardBranch CardBranch) {
 	s.runner.publishTask(updated)
 	s.runner.publishMessage(msg)
 	s.runner.publishCards(updated.ProjectID)
+	if err != nil {
+		// Même logique qu'à l'acceptation (voir acceptTaskInto) : l'agent
+		// reprend la main avec l'instruction de rebase plutôt que d'attendre
+		// que l'humain remarque le marqueur.
+		_, _ = s.runner.Message(task.ID, conflictRebasePrompt(cardBranch.Branch, conflicts))
+	}
+}
+
+// conflictRebasePrompt construit l'instruction envoyée à l'agent après un
+// conflit de fusion ou de rebase : Sillage n'en résout jamais un à sa place
+// (voir MergeBranch/RebaseOnto dans git.go), seul l'agent sait reprendre la
+// base et régler les conflits.
+func conflictRebasePrompt(branch string, conflicts []string) string {
+	return fmt.Sprintf(
+		"Your branch conflicts with %s on: %s. Rebase your branch onto %s, resolve the conflicts, then rerun the project checks.",
+		branch, strings.Join(conflicts, ", "), branch,
+	)
 }
 
 // autoAcceptMergedTasks marque « acceptées » les tâches en revue dont la
