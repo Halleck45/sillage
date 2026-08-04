@@ -121,6 +121,17 @@ button, input, textarea { font-family: inherit; }
   background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cpath fill='%23122220' d='M4.4 0h11.2A4.4 4.4 0 0 1 20 4.4v11.2a4.4 4.4 0 0 1-4.4 4.4H4.4A4.4 4.4 0 0 1 0 15.6V4.4A4.4 4.4 0 0 1 4.4 0Z'/%3E%3Cg clip-path='url(%23c)'%3E%3Cpath fill='%23f0eae1' d='M9 2h1v1h-1z'/%3E%3Cpath fill='%23f0eae1' d='M9 3h2v1h-2z'/%3E%3Cpath fill='%23f0eae1' d='M9 4h3v1h-3z'/%3E%3Cpath fill='%23f0eae1' d='M9 5h4v1h-4z'/%3E%3Cpath fill='%23f0eae1' d='M9 6h5v1h-5z'/%3E%3Cpath fill='%23f0eae1' d='M9 7h6v1h-6z'/%3E%3Cpath fill='%23789799' d='M1 8h1v1h-1z'/%3E%3Cpath fill='%23f0eae1' d='M9 8h1v1h-1z'/%3E%3Cpath fill='%23789799' d='M18 8h1v1h-1z'/%3E%3Cpath fill='%23789799' d='M1 9h2v1h-2z'/%3E%3Cpath fill='%23f0eae1' d='M7 9h6v1h-6z'/%3E%3Cpath fill='%23789799' d='M17 9h2v1h-2z'/%3E%3Cpath fill='%23789799' d='M1 10h3v1h-3z'/%3E%3Cpath fill='%23f0eae1' d='M6 10h8v1h-8z'/%3E%3Cpath fill='%23789799' d='M16 10h3v1h-3z'/%3E%3Cpath fill='%23789799' d='M2 11h3v1h-3z'/%3E%3Cpath fill='%23f0eae1' d='M7 11h6v2h-6z'/%3E%3Cpath fill='%23789799' d='M15 11h3v1h-3z'/%3E%3Cpath fill='%23789799' d='M2 12h4v1h-4z'/%3E%3Cpath fill='%23789799' d='M14 12h4v1h-4z'/%3E%3Cpath fill='%23789799' d='M3 13h4v1h-4z'/%3E%3Cpath fill='%23789799' d='M13 13h4v1h-4z'/%3E%3Cpath fill='%23789799' d='M3 14h5v1h-5z'/%3E%3Cpath fill='%23789799' d='M12 14h5v1h-5z'/%3E%3Cpath fill='%23789799' d='M4 15h5v1h-5z'/%3E%3Cpath fill='%23789799' d='M11 15h5v1h-5z'/%3E%3Cpath fill='%23789799' d='M5 16h10v1h-10z'/%3E%3Cpath fill='%23789799' d='M6 17h8v1h-8z'/%3E%3Cpath fill='%23789799' d='M7 18h6v1h-6z'/%3E%3Cpath fill='%23789799' d='M8 19h4v1h-4z'/%3E%3C/g%3E%3CclipPath id='c'%3E%3Cpath d='M4.4 0h11.2A4.4 4.4 0 0 1 20 4.4v11.2a4.4 4.4 0 0 1-4.4 4.4H4.4A4.4 4.4 0 0 1 0 15.6V4.4A4.4 4.4 0 0 1 4.4 0Z'/%3E%3C/clipPath%3E%3C/svg%3E") center/contain no-repeat;
 }
 .brand-name { font-size: 14px; font-weight: 600; letter-spacing: -0.015em; }
+.sidebar-shortcuts-link {
+  margin-left: auto;
+  border: 0;
+  background: transparent;
+  color: var(--muted-3);
+  font-size: 11.5px;
+  cursor: pointer;
+  padding: 2px 4px;
+  white-space: nowrap;
+}
+.sidebar-shortcuts-link:hover { color: var(--text-2); text-decoration: underline; }
 
 .sidebar-search-wrap { padding: 4px 12px 12px; }
 .search-btn {
@@ -236,6 +247,9 @@ button, input, textarea { font-family: inherit; }
 .sidebar-footer-actions { margin-left: auto; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .logout-link { border: 0; background: transparent; color: var(--muted-3); font-size: 11.5px; cursor: pointer; padding: 2px 4px; }
 .logout-link:hover { color: var(--text-2); text-decoration: underline; }
+.icon-link { display: inline-flex; align-items: center; justify-content: center; color: var(--muted-3); padding: 2px; }
+.icon-link:hover { color: var(--text-2); }
+.icon-link-svg { display: block; }
 .lang-switch { display: flex; align-items: center; gap: 4px; }
 .lang-btn { border: 0; background: transparent; color: var(--muted-3); cursor: pointer; padding: 2px 3px; font-size: 11px; font-weight: 600; }
 .lang-btn.active { color: var(--text-2); }

@@ -15,6 +15,7 @@
       'nav.back': 'Retour',
       'common.projects': 'Projets',
       'common.tasksWord': 'Tâches',
+      'common.workstreamsWord': 'Chantiers',
       'common.close': 'Fermer',
       'common.cancel': 'Annuler',
       'panel.expand': 'Agrandir le panneau',
@@ -324,6 +325,8 @@
       'preferences.langLabel': 'Langue',
       'preferences.errorSaveFailed': 'Échec de l\'enregistrement.',
       'sidebar.settingsButton': 'Réglages',
+      'sidebar.repoTooltip': 'Voir le dépôt sur GitHub',
+      'sidebar.sponsorTooltip': 'Sponsoriser le projet',
       'settings.tabGeneral': 'Général',
       'settings.tabStats': 'Statistiques',
       'usage.empty': 'Aucun projet.'
@@ -335,6 +338,7 @@
       'nav.back': 'Back',
       'common.projects': 'Projects',
       'common.tasksWord': 'Tasks',
+      'common.workstreamsWord': 'Workstreams',
       'common.close': 'Close',
       'common.cancel': 'Cancel',
       'panel.expand': 'Expand panel',
@@ -644,6 +648,8 @@
       'preferences.langLabel': 'Language',
       'preferences.errorSaveFailed': 'Failed to save.',
       'sidebar.settingsButton': 'Settings',
+      'sidebar.repoTooltip': 'View the repository on GitHub',
+      'sidebar.sponsorTooltip': 'Sponsor the project',
       'settings.tabGeneral': 'General',
       'settings.tabStats': 'Statistics',
       'usage.empty': 'No projects yet.'
@@ -1206,7 +1212,10 @@
     }).join('');
 
     return '' +
-      '<div class="sidebar-brand"><span class="brand-mark"></span><span class="brand-name">Sillage</span></div>' +
+      '<div class="sidebar-brand">' +
+        '<span class="brand-mark"></span><span class="brand-name">Sillage</span>' +
+        '<button class="sidebar-shortcuts-link" data-action="open-shortcuts" title="' + escapeHtml(t('shortcuts.title')) + '">' + escapeHtml(t('shortcuts.hint')) + '</button>' +
+      '</div>' +
       '<div class="sidebar-search-wrap">' +
         '<button class="search-btn" data-action="open-search"><span>⌕</span><span class="search-btn-label">' + escapeHtml(t('search.buttonLabel')) + '</span>' +
         '<span class="kbd">' + (isMac() ? '⌘K' : 'Ctrl+K') + '</span></button>' +
@@ -1221,8 +1230,8 @@
       '<div class="sidebar-footer">' +
         '<button class="settings-btn" data-action="open-workspace-modal">⚙ ' + escapeHtml(t('sidebar.settingsButton')) + '</button>' +
         '<div class="sidebar-footer-actions">' +
-          '<button class="logout-link" data-action="open-shortcuts" title="' + escapeHtml(t('shortcuts.title')) + '">' + escapeHtml(t('shortcuts.hint')) + '</button>' +
-          '<button class="logout-link" data-action="logout">' + escapeHtml(t('nav.logout')) + '</button>' +
+          '<a class="icon-link" href="https://github.com/Halleck45/sillage" target="_blank" rel="noopener noreferrer" title="' + escapeHtml(t('sidebar.repoTooltip')) + '" aria-label="' + escapeHtml(t('sidebar.repoTooltip')) + '">' + repoIconHTML() + '</a>' +
+          '<a class="icon-link" href="https://github.com/sponsors/Halleck45/" target="_blank" rel="noopener noreferrer" title="' + escapeHtml(t('sidebar.sponsorTooltip')) + '" aria-label="' + escapeHtml(t('sidebar.sponsorTooltip')) + '">' + sponsorIconHTML() + '</a>' +
         '</div>' +
       '</div>';
   }
@@ -1686,6 +1695,18 @@
   // taille, et dessiné différemment par chaque système) et plutôt qu'une police
   // d'icônes (le frontend n'a aucune dépendance et reste embarqué). Grand-voile,
   // foc et coque, en currentColor : l'icône suit la couleur du bouton.
+  function repoIconHTML() {
+    return '<svg class="icon-link-svg" viewBox="0 0 16 16" width="15" height="15" aria-hidden="true" focusable="false">' +
+      '<path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/>' +
+      '</svg>';
+  }
+
+  function sponsorIconHTML() {
+    return '<svg class="icon-link-svg" viewBox="0 0 16 16" width="15" height="15" aria-hidden="true" focusable="false">' +
+      '<path fill="currentColor" d="M4.25 2.5c-1.336 0-2.75 1.164-2.75 3 0 2.15 1.58 4.144 3.365 5.682A20.565 20.565 0 0 0 8 13.393a20.561 20.561 0 0 0 3.135-2.211C12.92 9.644 14.5 7.65 14.5 5.5c0-1.836-1.414-3-2.75-3-1.373 0-2.609.986-3.029 2.456a.75.75 0 0 1-1.442 0C6.859 3.486 5.623 2.5 4.25 2.5Z"/>' +
+      '</svg>';
+  }
+
   function shipIconHTML() {
     return '<svg class="btn-icon" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false">' +
       '<path fill="currentColor" d="M7.6 1.5a.5.5 0 0 1 .95-.2l3.2 6.4a.5.5 0 0 1-.45.72H8.1a.5.5 0 0 1-.5-.5V1.5Z"/>' +
@@ -2697,18 +2718,54 @@
 
   function overlayBgCloseSearch(e) { if (e.target === e.currentTarget) closeSearch(); }
 
+  // Score de pertinence d'un texte pour une requête déjà connue « contenue » :
+  // correspondance exacte ou en tête > en tête de mot > au milieu d'un mot.
+  // Permet de faire remonter les meilleurs résultats plutôt que de garder
+  // l'ordre de création des entités.
+  function searchTextScore(text, query) {
+    var idx = text.toLowerCase().indexOf(query);
+    if (idx === -1) return -1;
+    if (idx === 0) return text.length === query.length ? 3 : 2;
+    if (/[^a-z0-9]/i.test(text.charAt(idx - 1))) return 1;
+    return 0;
+  }
+  function searchRefScore(ref, query, isNumericQuery) {
+    if (!isNumericQuery) return -1;
+    var s = String(ref);
+    if (s === query) return 5;
+    if (s.indexOf(query) === 0) return 4;
+    return -1;
+  }
+  function rankSearchResults(list, query, isNumericQuery, textOf, refOf, limit) {
+    var scored = [];
+    list.forEach(function (item) {
+      var score = searchTextScore(textOf(item), query);
+      if (refOf) score = Math.max(score, searchRefScore(refOf(item), query, isNumericQuery));
+      if (score > -1) scored.push({ item: item, score: score });
+    });
+    scored.sort(function (a, b) { return b.score - a.score; });
+    return scored.slice(0, limit).map(function (x) { return x.item; });
+  }
+
   function buildSearchResultsHTML(q) {
     var query = q.trim().toLowerCase();
     if (!query) return '<div class="empty-note">' + escapeHtml(t('search.typeToSearch')) + '</div>';
-    var projects = state.projects.filter(function (p) { return p.name.toLowerCase().indexOf(query) !== -1; });
-    var tasks = state.tasks.filter(function (t) {
-      return t.title.toLowerCase().indexOf(query) !== -1 || String(t.ref).indexOf(query) !== -1;
-    }).slice(0, 20);
-    if (!projects.length && !tasks.length) return '<div class="empty-note">' + escapeHtml(t('search.noResults')) + '</div>';
+    var isNumericQuery = /^\d+$/.test(query);
+    var projects = rankSearchResults(state.projects, query, isNumericQuery, function (p) { return p.name; }, null, 20);
+    var cards = rankSearchResults(state.cards, query, isNumericQuery, function (c) { return c.title; }, function (c) { return c.ref; }, 20);
+    var tasks = rankSearchResults(state.tasks, query, isNumericQuery, function (t) { return t.title; }, function (t) { return t.ref; }, 20);
+    if (!projects.length && !cards.length && !tasks.length) return '<div class="empty-note">' + escapeHtml(t('search.noResults')) + '</div>';
     var html = '';
     if (projects.length) {
       html += '<div class="search-group-label">' + escapeHtml(t('common.projects')) + '</div>' + projects.map(function (p) {
         return '<button class="search-result" data-action="search-goto-project" data-project-id="' + p.id + '"><span class="hash">#</span>' + escapeHtml(p.name) + '</button>';
+      }).join('');
+    }
+    if (cards.length) {
+      html += '<div class="search-group-label">' + escapeHtml(t('common.workstreamsWord')) + '</div>' + cards.map(function (c) {
+        var p = state.projectsById[c.projectId];
+        return '<button class="search-result" data-action="search-goto-card" data-card-id="' + c.id + '"><span class="mono">#' + c.ref + '</span> ' +
+          escapeHtml(c.title) + '<span class="muted-sm">' + (p ? escapeHtml(p.name) : '') + '</span></button>';
       }).join('');
     }
     if (tasks.length) {
@@ -3764,7 +3821,9 @@
         '<span>' + escapeHtml(t('workspace.lastCommit', { time: lastCommit })) + '</span>' +
         '<span>' + escapeHtml(t('workspace.lastSync', { time: lastSync })) + '</span>' +
       '</div>' +
-      dirtyNote;
+      dirtyNote +
+      '<div class="preferences-divider"></div>' +
+      '<button class="btn-outline btn-block" data-action="logout">' + escapeHtml(t('nav.logout')) + '</button>';
   }
   function buildWorkspaceModalBodyHTML() {
     var inner = settingsModalTab === 'stats' ? buildStatsSectionHTML() : buildSettingsGeneralHTML();
@@ -4153,6 +4212,7 @@
       case 'send-message': sendMessage(el.getAttribute('data-task-id')); break;
       case 'open-search': openSearch(); break;
       case 'search-goto-project': closeSearch(); goProject(el.getAttribute('data-project-id')); break;
+      case 'search-goto-card': closeSearch(); goCard(el.getAttribute('data-card-id')); break;
       case 'search-goto-task': closeSearch(); openTaskFromSearch(el.getAttribute('data-task-id')); break;
       case 'logout': doLogout(); break;
       case 'toggle-sidebar': toggleSidebarDrawer(); break;
