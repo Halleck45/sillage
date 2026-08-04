@@ -146,8 +146,6 @@
       'ship.subtext.mergePush': 'Fusionne {branch} dans {base}, puis pousse {base}',
       'ship.subtext.repos': '{n} dépôts concernés',
       'ship.subtext.nothing': 'Rien à livrer pour l\'instant',
-      'ship.subtext.pending.one': '↑ 1 commit vers {base}',
-      'ship.subtext.pending.other': '↑ {n} commits vers {base}',
       'ship.partial.one': 'Livraison partielle : 1 tâche n\'est pas encore acceptée',
       'ship.partial.other': 'Livraison partielle : {n} tâches ne sont pas encore acceptées',
       'ship.partialNote.one': '1 tâche est encore en cours ou à relire : seul le travail accepté part maintenant. Vous pourrez livrer le reste ensuite.',
@@ -163,6 +161,7 @@
       'catchUp.done': 'Chantier remis à jour depuis {base}.',
       'catchUp.upToDate': 'Le chantier était déjà à jour.',
       'catchUp.conflictTitle': 'Conflit avec {base}',
+      'catchUp.conflictTitleMulti': 'Conflits de rattrapage',
       'catchUp.conflictBody': 'Fusionner {base} dans le chantier bute sur {files}. Rien n\'a été modifié : le chantier est intact. Un agent peut reprendre la base et régler les conflits dans une tâche dédiée.',
       'catchUp.askAgent': 'Confier à un agent',
       'catchUp.errorFailed': 'Le rattrapage a échoué.',
@@ -220,7 +219,9 @@
       'delivery.prNote': 'La branche du chantier est poussée, puis la pull request (ou merge request) est ouverte.',
       'delivery.pushNote': 'La branche du chantier est poussée sur origin. Rien n\'est ouvert, rien n\'est fusionné.',
       'delivery.warning.ghMissing': 'gh introuvable dans le PATH : repli sur une URL de pull request pré-remplie.',
+      'delivery.warning.ghInstallLink': 'Installer le CLI GitHub',
       'delivery.warning.glabMissing': 'glab introuvable dans le PATH : repli sur une URL de merge request pré-remplie.',
+      'delivery.warning.glabInstallLink': 'Installer le CLI GitLab',
       'delivery.warning.noRemote': 'Un dépôt du projet n\'a pas de remote « origin » : rien ne peut être poussé.',
       'delivery.warning.unknownForge': 'Forge inconnue : la branche sera poussée sans ouvrir de pull request.',
       'tabs.conversation': 'Conversation',
@@ -529,8 +530,6 @@
       'ship.subtext.mergePush': 'Merges {branch} into {base}, then pushes {base}',
       'ship.subtext.repos': '{n} repositories involved',
       'ship.subtext.nothing': 'Nothing to ship yet',
-      'ship.subtext.pending.one': '↑ 1 commit to {base}',
-      'ship.subtext.pending.other': '↑ {n} commits to {base}',
       'ship.partial.one': 'Partial delivery: 1 task is not accepted yet',
       'ship.partial.other': 'Partial delivery: {n} tasks are not accepted yet',
       'ship.partialNote.one': '1 task is still running or waiting for review: only accepted work ships now. You will be able to ship the rest later.',
@@ -546,6 +545,7 @@
       'catchUp.done': 'Workstream caught up with {base}.',
       'catchUp.upToDate': 'The workstream was already up to date.',
       'catchUp.conflictTitle': 'Conflict with {base}',
+      'catchUp.conflictTitleMulti': 'Catch-up conflicts',
       'catchUp.conflictBody': 'Merging {base} into the workstream clashes on {files}. Nothing was changed: the workstream is intact. An agent can pick up the new base and settle the conflicts in a dedicated task.',
       'catchUp.askAgent': 'Hand it to an agent',
       'catchUp.errorFailed': 'Catching up failed.',
@@ -603,7 +603,9 @@
       'delivery.prNote': 'The workstream branch is pushed, then the pull request (or merge request) is opened.',
       'delivery.pushNote': 'The workstream branch is pushed to origin. Nothing is opened, nothing is merged.',
       'delivery.warning.ghMissing': 'gh not found in PATH: falling back to a prefilled pull request URL.',
+      'delivery.warning.ghInstallLink': 'Install the GitHub CLI',
       'delivery.warning.glabMissing': 'glab not found in PATH: falling back to a prefilled merge request URL.',
+      'delivery.warning.glabInstallLink': 'Install the GitLab CLI',
       'delivery.warning.noRemote': 'One repository has no "origin" remote: nothing can be pushed.',
       'delivery.warning.unknownForge': 'Unknown forge: the branch will be pushed without opening a pull request.',
       'tabs.conversation': 'Conversation',
@@ -1853,20 +1855,6 @@
     return t('ship.subtext.unknownForge', { branch: r.branch });
   }
 
-  // Version courte de deliveryActionLabel, pour la barre de livraison : ce qui
-  // compte au premier coup d'œil, c'est que le chantier n'est pas encore dans
-  // la base, pas le détail du mécanisme (poussée, PR, fusion...). Ce détail
-  // reste disponible en infobulle (deliveryActionLabel) et dans la modale de
-  // livraison, qui sert elle de confirmation avant de cliquer.
-  function deliveryActionShortLabel(prev) {
-    var repos = deliverableRepos(prev);
-    if (!repos.length) return t('ship.subtext.nothing');
-    if (repos.length > 1) return t('ship.subtext.repos', { n: repos.length });
-    var r = repos[0];
-    var base = prev.target || r.base;
-    return tCount('ship.subtext.pending', r.pending, { base: base });
-  }
-
   function deliveryWarningText(warning) {
     var w = String(warning || '');
     if (w.indexOf('gh not found') === 0) return t('delivery.warning.ghMissing');
@@ -1874,6 +1862,18 @@
     if (w.indexOf('no \'origin\' remote') === 0) return t('delivery.warning.noRemote');
     if (w.indexOf('unknown forge') === 0) return t('delivery.warning.unknownForge');
     return w;
+  }
+
+  // Lien d'installation à côté de l'avertissement, dans les réglages du projet
+  // (voir buildDeliveryPanelHTML) : le CLI manquant se règle une fois, pas par
+  // un rappel silencieux qu'on ne peut pas suivre.
+  var CLI_DOC_LINKS = { gh: 'https://cli.github.com/', glab: 'https://gitlab.com/gitlab-org/cli' };
+  function deliveryWarningLinkHTML(warning) {
+    var s = String(warning || '');
+    var cli = s.indexOf('gh not found') === 0 ? 'gh' : (s.indexOf('glab not found') === 0 ? 'glab' : '');
+    if (!cli) return '';
+    return ' <a href="' + CLI_DOC_LINKS[cli] + '" target="_blank" rel="noopener noreferrer">' +
+      escapeHtml(t('delivery.warning.' + cli + 'InstallLink')) + '</a>';
   }
 
   // buildShipLinksHTML : ce qui est déjà livré (une ligne par dépôt).
@@ -2015,31 +2015,42 @@
     return prev.target || (repos[0] && repos[0].base) || '';
   }
 
-  // buildShipBarHTML : l'aperçu de livraison (compteurs, état, avertissements,
-  // liens déjà livrés) ; le bouton lui-même est dans l'en-tête, voir
-  // buildShipButtonHTML.
+  // Le CLI de la forge (gh/glab) manquant est un problème d'environnement, pas
+  // du chantier ouvert : il est identique sur toutes les cartes du projet, et se
+  // règle une fois pour toutes (voir buildDeliveryPanelHTML, réglages du
+  // projet). L'annoncer ici en plus ferait doublon sans rien apporter.
+  function isCliMissingWarning(w) {
+    var s = String(w || '');
+    return s.indexOf('gh not found') === 0 || s.indexOf('glab not found') === 0;
+  }
+
+  // buildShipBarHTML : l'aperçu de livraison (compteurs, avertissements, liens
+  // déjà livrés) ; le bouton lui-même et le mode de livraison sont dans
+  // l'en-tête et la modale Ship (voir buildShipButtonHTML, buildShipModalHTML).
+  // N'affiche rien (bandeau invisible, mais toujours présent dans le DOM pour
+  // que refreshShipBar retrouve son nœud) tant qu'il n'y a rien à signaler.
   function buildShipBarHTML(card) {
     var prev = state.deliveryByCard[card.id];
     var blocked = !card.shipReady;
     var anchored = !!(prev && shipAlreadyOnTarget(prev));
-    var sub = '', subTitle = '';
-    // Déjà arrivé : l'ancre de l'en-tête le dit déjà (voir buildShipButtonHTML),
-    // et buildShipLinksHTML donne le détail par dépôt plus bas. Répéter la même
-    // phrase ici ferait un troisième doublon.
-    if (anchored) {
-      // sub reste vide.
-    } else if (blocked) sub = shipBlockerLabel(card.shipBlocker);
-    else if (prev && shipNeedsRebase(prev)) {
-      sub = t('ship.blocked.behindTarget', { base: prev.target || (deliverableRepos(prev)[0] || {}).base || '' });
-    } else if (prev) {
-      sub = deliveryActionShortLabel(prev);
-      subTitle = deliveryActionLabel(prev);
-    } else sub = t('common.loading');
-    var warnings = (prev && prev.warnings ? prev.warnings : []).map(function (w) {
+    var sub = '';
+    // Le bouton désactivé porte déjà la raison en infobulle (voir
+    // buildShipButtonHTML) : la répéter ici la rend visible sans avoir à
+    // survoler, ce qui reste utile pour "bloqué" et "en retard". "Déjà arrivé"
+    // et "prêt à livrer" ont chacun leur propre annonce ailleurs (l'ancre, la
+    // modale Ship) : rien à répéter ici.
+    if (!anchored) {
+      if (blocked) sub = shipBlockerLabel(card.shipBlocker);
+      else if (prev && shipNeedsRebase(prev)) {
+        sub = t('ship.blocked.behindTarget', { base: prev.target || (deliverableRepos(prev)[0] || {}).base || '' });
+      }
+    }
+    var warningsList = (prev && prev.warnings ? prev.warnings : []).filter(function (w) { return !isCliMissingWarning(w); });
+    var warningsHTML = warningsList.map(function (w) {
       return '<div class="ship-bar-warning">⚠ ' + escapeHtml(deliveryWarningText(w)) + '</div>';
     }).join('');
     var catchUpError = state.catchUpErrorByCard[card.id];
-    if (catchUpError) warnings += '<div class="ship-bar-warning">⚠ ' + escapeHtml(catchUpError) + '</div>';
+    if (catchUpError) warningsHTML += '<div class="ship-bar-warning">⚠ ' + escapeHtml(catchUpError) + '</div>';
     var partial = partialTaskCount(prev);
     var partialHTML = partial > 0
       ? '<span class="ship-bar-partial" title="' + escapeHtml(tCount('ship.partialNote', partial)) + '">' +
@@ -2049,16 +2060,19 @@
     // les portent déjà (« Toutes 7 · À relire 0 · Traitées 7 »). Pas de puce de
     // commits non plus : elle est déjà dans l'en-tête, à côté du bouton (voir
     // buildShipButtonHTML) ; la répéter ici ferait doublon.
-    var subHTML = sub
-      ? '<span class="ship-bar-sub"' + (subTitle ? ' title="' + escapeHtml(subTitle) + '"' : '') + '>' + escapeHtml(sub) + '</span>'
-      : '';
-    return '<div class="ship-bar">' +
+    var subHTML = sub ? '<span class="ship-bar-sub">' + escapeHtml(sub) + '</span>' : '';
+    var behindHTML = buildCardBehindHTML(prev);
+    var linksHTML = prev ? buildShipLinksHTML(prev) : '';
+    var hasContent = !!(subHTML || partialHTML || warningsHTML || behindHTML || linksHTML);
+    var hasWarning = !!(warningsHTML);
+    var cls = 'ship-bar' + (hasContent ? (hasWarning ? ' ship-bar-warn' : '') : ' ship-bar-empty');
+    return '<div class="' + cls + '">' +
         '<div class="ship-bar-state">' +
           subHTML +
           partialHTML +
-          warnings +
-          buildCardBehindHTML(prev) +
-          (prev ? buildShipLinksHTML(prev) : '') +
+          warningsHTML +
+          behindHTML +
+          linksHTML +
         '</div>' +
       '</div>';
   }
@@ -2202,7 +2216,6 @@
   // dans le cas courant ; quand il conflicte, rien n'est modifié et c'est là
   // qu'un agent est utile, pas avant.
   function catchUpCard(cardId) {
-    var target = catchUpTarget(state.deliveryByCard[cardId] || {});
     delete state.catchUpErrorByCard[cardId];
     api('/api/cards/' + cardId + '/catch-up', { method: 'POST', body: {} }).then(function (res) {
       if (res && res.card) upsertCard(res.card);
@@ -2212,7 +2225,10 @@
       // Succès : rien à annoncer, l'écran le dit déjà (le bouton disparaît, le
       // retard tombe, la livraison s'active). loadDelivery redessine la barre.
       loadDelivery(cardId);
-      if (conflicted.length) openModal(buildCatchUpConflictHTML(cardId, target, conflicted));
+      // Chaque dépôt a sa propre cible et ses propres fichiers en conflit : un
+      // chantier multi-dépôts peut buter sur plusieurs à la fois, chacun réglé
+      // par sa propre tâche (une tâche = un worktree = un dépôt).
+      if (conflicted.length) openModal(buildCatchUpConflictHTML(cardId, conflicted));
     }).catch(function (e) {
       state.catchUpErrorByCard[cardId] = (e instanceof ApiError && e.message) || t('catchUp.errorFailed');
       refreshShipBar(cardId);
@@ -2220,29 +2236,41 @@
   }
 
   // Conflit de rattrapage : dire quels fichiers, rappeler que rien n'a bougé, et
-  // proposer le seul chemin qui reste (une tâche d'agent sur ce conflit).
-  function buildCatchUpConflictHTML(cardId, target, conflicted) {
-    var files = conflicted.map(function (r) { return r.conflictFilePaths.split(' ').join(', '); }).join(', ');
+  // proposer le seul chemin qui reste (une tâche d'agent par dépôt en conflit).
+  function buildCatchUpConflictHTML(cardId, conflicted) {
+    var multi = conflicted.length > 1;
+    var title = multi ? t('catchUp.conflictTitleMulti') : t('catchUp.conflictTitle', { base: conflicted[0].target });
+    var itemsHTML = conflicted.map(function (r) {
+      var files = r.conflictFilePaths.split(' ').join(', ');
+      var repoLabel = multi ? '<div class="catchup-conflict-repo mono">' + escapeHtml(r.repoName) + '</div>' : '';
+      return '<div class="catchup-conflict-item">' + repoLabel +
+        '<div class="modal-note">' + escapeHtml(t('catchUp.conflictBody', { base: r.target, files: files })) + '</div>' +
+        '<button class="btn-green" data-action="catch-up-ask-agent" data-card-id="' + cardId + '"' +
+        ' data-repo-name="' + escapeHtml(r.repoName) + '" data-target="' + escapeHtml(r.target) + '" data-files="' + escapeHtml(files) + '">' +
+        escapeHtml(t('catchUp.askAgent')) + (multi ? ' (' + escapeHtml(r.repoName) + ')' : '') + '</button>' +
+        '</div>';
+    }).join('');
     return '<div class="modal modal-sm">' +
-      '<div class="modal-head"><span class="modal-title">' + escapeHtml(t('catchUp.conflictTitle', { base: target })) + '</span>' +
+      '<div class="modal-head"><span class="modal-title">' + escapeHtml(title) + '</span>' +
       '<button class="icon-btn" data-action="close-modal" aria-label="' + escapeHtml(t('common.close')) + '">✕</button></div>' +
-      '<div class="modal-note">' + escapeHtml(t('catchUp.conflictBody', { base: target, files: files })) + '</div>' +
-      '<div class="modal-foot"><button class="btn-outline" data-action="close-modal">' + escapeHtml(t('common.cancel')) + '</button>' +
-      '<button class="btn-green" data-action="catch-up-ask-agent" data-card-id="' + cardId + '"' +
-      ' data-target="' + escapeHtml(target) + '" data-files="' + escapeHtml(files) + '">' +
-      escapeHtml(t('catchUp.askAgent')) + '</button></div>' +
+      itemsHTML +
+      '<div class="modal-foot"><button class="btn-outline" data-action="close-modal">' + escapeHtml(t('common.cancel')) + '</button></div>' +
       '</div>';
   }
 
-  // Confier le conflit à un agent : la modale de création de tâche, pré-remplie.
-  // L'humain garde la main sur l'agent choisi et sur le texte avant d'envoyer.
-  function askAgentToCatchUp(cardId, target, files) {
+  // Confier le conflit d'un dépôt à un agent : la modale de création de tâche,
+  // pré-remplie et pré-choisie sur ce dépôt (une tâche ne travaille que dans un
+  // seul worktree). L'humain garde la main sur l'agent choisi et sur le texte
+  // avant d'envoyer.
+  function askAgentToCatchUp(cardId, repoName, target, files) {
     openNewTaskModal(cardId);
     setTimeout(function () {
       var titleEl = document.getElementById('new-task-title');
       var promptEl = document.getElementById('new-task-prompt');
+      var repoEl = document.getElementById('new-task-repo');
       if (titleEl) titleEl.value = t('catchUp.taskTitle', { base: target });
       if (promptEl) promptEl.value = t('catchUp.taskPrompt', { base: target, files: files });
+      if (repoEl && repoName) repoEl.value = repoName;
       if (promptEl) promptEl.focus();
     }, 0);
   }
@@ -3808,7 +3836,8 @@
         '</label>';
     }).join('');
     var warning = project.deliveryWarning
-      ? '<div class="modal-note modal-note-warning">⚠ ' + escapeHtml(deliveryWarningText(project.deliveryWarning)) + '</div>'
+      ? '<div class="modal-note modal-note-warning">⚠ ' + escapeHtml(deliveryWarningText(project.deliveryWarning)) +
+        deliveryWarningLinkHTML(project.deliveryWarning) + '</div>'
       : '';
     return '<div class="modal-section-hint">' + escapeHtml(t('delivery.label')) + '</div>' +
       '<div class="choice-cards" role="radiogroup">' + cards + '</div>' +
@@ -4979,7 +5008,7 @@
       case 'open-preview-settings': openPreviewSettings(); break;
       case 'copy-path': copyPathToClipboard(el.getAttribute('data-path'), el); break;
       case 'catch-up-ask-agent':
-        askAgentToCatchUp(el.getAttribute('data-card-id'), el.getAttribute('data-target'), el.getAttribute('data-files'));
+        askAgentToCatchUp(el.getAttribute('data-card-id'), el.getAttribute('data-repo-name'), el.getAttribute('data-target'), el.getAttribute('data-files'));
         break;
       case 'confirm-click': handleConfirmClickDispatch(el); break;
       case 'select-diff-file': selectDiffFile(el.getAttribute('data-task-id'), el.getAttribute('data-path')); break;
