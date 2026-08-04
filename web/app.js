@@ -223,6 +223,7 @@
       'tabs.conversation': 'Conversation',
       'tabs.diff': 'Diff',
       'tabs.deliverables': 'Livrables',
+      'tabs.history': 'Historique',
       'chat.you': 'Vous',
       'chat.placeholder': 'Répondre à {name}…',
       'chat.send': 'Envoyer ⏎',
@@ -237,6 +238,7 @@
       'deliverables.docs': 'Documents',
       'deliverables.images': 'Captures',
       'deliverables.empty': 'Aucun élément.',
+      'history.empty': 'Aucune commande pour l\'instant.',
       'newTask.title': 'Nouvelle tâche',
       'newTask.titlePlaceholder': 'Que doit faire l\'agent ?',
       'newTask.promptPlaceholder': 'Description ou instructions détaillées (optionnel)',
@@ -600,6 +602,7 @@
       'tabs.conversation': 'Conversation',
       'tabs.diff': 'Diff',
       'tabs.deliverables': 'Deliverables',
+      'tabs.history': 'History',
       'chat.you': 'You',
       'chat.placeholder': 'Reply to {name}…',
       'chat.send': 'Send ⏎',
@@ -614,6 +617,7 @@
       'deliverables.docs': 'Documents',
       'deliverables.images': 'Screenshots',
       'deliverables.empty': 'No items.',
+      'history.empty': 'No commands yet.',
       'newTask.title': 'New task',
       'newTask.titlePlaceholder': 'What should the agent do?',
       'newTask.promptPlaceholder': 'Description or detailed instructions (optional)',
@@ -1216,7 +1220,7 @@
     state.taskId = route.taskId || null;
     if (state.cardId !== prevCardId) state.taskFilter = 'all';
     if (state.taskId) {
-      state.panelTab = route.tab === 'diff' ? 'diff' : (route.tab === 'deliverables' ? 'files' : 'chat');
+      state.panelTab = route.tab === 'diff' ? 'diff' : (route.tab === 'deliverables' ? 'files' : (route.tab === 'history' ? 'history' : 'chat'));
       if (state.taskId !== prevTaskId) {
         state.panelExpanded = false;
         var t = state.tasksById[state.taskId];
@@ -1263,6 +1267,7 @@
     var h = '#/p/' + encodeURIComponent(state.projectId) + '/c/' + encodeURIComponent(state.cardId) + '/t/' + encodeURIComponent(state.taskId);
     if (tabKey === 'diff') h += '?tab=diff';
     else if (tabKey === 'files') h += '?tab=deliverables';
+    else if (tabKey === 'history') h += '?tab=history';
     navigateTo(h);
   }
 
@@ -2730,10 +2735,10 @@
     var taskProject = state.projectsById[task.projectId];
     var multiRepo = !!(taskProject && taskProject.repos && taskProject.repos.length > 1);
     var action = primaryActionInfo(task);
-    var tabs = ['chat', 'diff', 'files'];
-    var tabLabels = { chat: t('tabs.conversation'), diff: t('tabs.diff'), files: t('tabs.deliverables') };
-    var tabCounts = { chat: task.messagesCount || 0, diff: task.filesCount || 0, files: (task.docsCount || 0) + (task.filesCount || 0) };
-    var tabDataAttr = { chat: 'conversation', diff: 'diff', files: 'deliverables' };
+    var tabs = ['chat', 'diff', 'files', 'history'];
+    var tabLabels = { chat: t('tabs.conversation'), diff: t('tabs.diff'), files: t('tabs.deliverables'), history: t('tabs.history') };
+    var tabCounts = { chat: task.messagesCount || 0, diff: task.filesCount || 0, files: (task.docsCount || 0) + (task.filesCount || 0), history: (task.commandLog || []).length };
+    var tabDataAttr = { chat: 'conversation', diff: 'diff', files: 'deliverables', history: 'history' };
 
     var tabsHTML = tabs.map(function (tk) {
       var active = state.panelTab === tk;
@@ -2812,6 +2817,7 @@
     if (state.panelTab === 'chat') bodyHTML = buildConversationHTML(task, agent);
     else if (state.panelTab === 'diff') bodyHTML = buildDiffHTML(task);
     else if (state.panelTab === 'files') bodyHTML = buildDeliverablesHTML(task);
+    else if (state.panelTab === 'history') bodyHTML = buildHistoryHTML(task);
 
     return '<aside class="detail-panel">' +
       (err ? '<div class="detail-error">' + escapeHtml(err) + '</div>' : '') +
@@ -3131,6 +3137,25 @@
       return '<section class="deliv-group"><div class="deliv-group-label">' + escapeHtml(g.label) + '</div>' + itemsHTML + '</section>';
     }).join('');
     return '<div class="deliverables">' + html + '</div>';
+  }
+
+  // ---------------------------------------------------------------------
+  // Onglet Historique
+  // ---------------------------------------------------------------------
+
+  // Commandes jouées par l'agent (tool_use), déjà portées par task.commandLog :
+  // pas de chargement asynchrone, contrairement à Diff/Livrables. Les plus
+  // récentes en premier, pour repérer tout de suite ce que l'agent vient de faire.
+  function buildHistoryHTML(task) {
+    var log = task.commandLog || [];
+    if (!log.length) {
+      return '<div class="empty-note">' + escapeHtml(t('history.empty')) + '</div>';
+    }
+    var items = log.slice().reverse().map(function (e) {
+      return '<div class="history-item"><span class="history-time mono">' + escapeHtml(formatTime(e.at)) + '</span>' +
+        '<span class="history-text mono">' + escapeHtml(e.text) + '</span></div>';
+    }).join('');
+    return '<div class="history-list">' + items + '</div>';
   }
 
   // ---------------------------------------------------------------------
