@@ -106,6 +106,8 @@ Jamais de `--dangerously-skip-permissions`. Jamais `git push` dans allowedTools.
 `codex exec --json -C <worktree> [--model <model>] <texte>` ; parser plusieurs formes de JSONL :
 `{"msg":{"type":"agent_message","message":"..."}}`, `{"type":"item.completed","item":{"type":"agent_message","text":"..."}}`, `token_count` → usage si présent. En cas d'échec de parsing, capturer stdout brut en un Message final. Pas de resume en v1 (chaque message relance `codex exec` avec le dernier texte).
 
+Le quota de compte (`rate_limits`) n'est PAS porté par ce flux stdout, seulement par le fichier de session que codex écrit de son côté même en mode `exec` (`~/.codex/sessions/AAAA/MM/JJ/rollout-...-<thread_id>.jsonl`) : `readCodexRateLimits` retrouve ce fichier via le `thread_id` capturé sur l'événement `thread.started` du flux, lit son dernier `rate_limits` et met à jour `Store.CodexQuota` (best-effort, jamais bloquant). Voir SPEC-API.md « Quota des agents ».
+
 ### Adaptateur fake (`cli:"fake"`)
 
 Sans exec : goroutine qui simule ~3 s de travail : 3 lignes d'activité espacées, écrit/complète un fichier `SILLAGE-TEST.md` dans le worktree (contenu horodaté), un Message agent de synthèse, usage fictif `{input:1200, output:340, costUsd:0.004}`. Sert aux tests et à la démo sans coût.

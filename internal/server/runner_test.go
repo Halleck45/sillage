@@ -1,8 +1,12 @@
 package server
 
 import (
+	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 // TestParseCodexTokenStreamKeepsLastCumulativeTotal reproduit le bug réel :
@@ -51,6 +55,115 @@ func TestParseCodexTokenStreamNoEvent(t *testing.T) {
 	tok, found := parseCodexTokenStream(lines)
 	if found {
 		t.Fatalf("aucun événement de tokens ne devrait être trouvé, reçu %+v", tok)
+	}
+}
+
+// TestParseCodexRateLimits couvre le seul endroit où codex publie le quota de
+// compte (fichier de session, jamais le flux --json) : deux fenêtres,
+// primaire (5h) et secondaire (hebdomadaire).
+func TestParseCodexRateLimits(t *testing.T) {
+	var generic map[string]any
+	raw := `{"type":"event_msg","payload":{"type":"token_count","info":{},"rate_limits":{
+		"primary":{"used_percent":44.0,"window_minutes":300,"resets_at":1771005432},
+		"secondary":{"used_percent":49.0,"window_minutes":10080,"resets_at":1771409457}}}}`
+	if err := json.Unmarshal([]byte(raw), &generic); err != nil {
+		t.Fatalf("fixture JSON invalide : %v", err)
+	}
+	windows, ok := parseCodexRateLimits(generic)
+	if !ok {
+		t.Fatalf("rate_limits aurait dû être détecté")
+	}
+	if len(windows) != 2 {
+		t.Fatalf("attendu 2 fenêtres, reçu %d : %+v", len(windows), windows)
+	}
+	if windows[0].Label != "5h" || windows[0].UsedPercent != 44.0 {
+		t.Fatalf("fenêtre primaire inattendue : %+v", windows[0])
+	}
+	if windows[1].Label != "week" || windows[1].UsedPercent != 49.0 {
+		t.Fatalf("fenêtre secondaire inattendue : %+v", windows[1])
+	}
+}
+
+// TestParseCodexRateLimitsIgnoresOtherEvents vérifie qu'un événement sans
+// rate_limits (message, token_count sans compte, autre type) ne renvoie rien.
+func TestParseCodexRateLimitsIgnoresOtherEvents(t *testing.T) {
+	cases := []string{
+		`{"type":"event_msg","payload":{"type":"agent_message","message":"bonjour"}}`,
+		`{"type":"event_msg","payload":{"type":"token_count","info":{}}}`,
+		`{"msg":{"type":"agent_message"}}`,
+	}
+	for _, raw := range cases {
+		var generic map[string]any
+		if err := json.Unmarshal([]byte(raw), &generic); err != nil {
+			t.Fatalf("fixture JSON invalide : %v", err)
+		}
+		if windows, ok := parseCodexRateLimits(generic); ok {
+			t.Fatalf("aucune fenêtre attendue pour %q, reçu %+v", raw, windows)
+		}
+	}
+}
+
+// TestQuotaWindowLabel couvre les deux fenêtres connues et le repli générique.
+func TestQuotaWindowLabel(t *testing.T) {
+	if got := quotaWindowLabel(300); got != "5h" {
+		t.Fatalf("attendu \"5h\", reçu %q", got)
+	}
+	if got := quotaWindowLabel(10080); got != "week" {
+		t.Fatalf("attendu \"week\", reçu %q", got)
+	}
+	if got := quotaWindowLabel(60); got != "60m" {
+		t.Fatalf("attendu un repli générique \"60m\", reçu %q", got)
+	}
+}
+
+// TestReadCodexRateLimits couvre la localisation du fichier de session par
+// thread_id (structure sessions/AAAA/MM/JJ/rollout-...-<threadID>.jsonl) et
+// la lecture du dernier instantané de quota qu'il contient.
+func TestReadCodexRateLimits(t *testing.T) {
+	root := t.TempDir()
+	oldDir := codexSessionsDir
+	codexSessionsDir = func() string { return root }
+	defer func() { codexSessionsDir = oldDir }()
+
+	dayDir := filepath.Join(root, "2026", "08", "04")
+	if err := os.MkdirAll(dayDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll : %v", err)
+	}
+	threadID := "019fcb94-5cf5-72c1-a18f-05fc099ddeae"
+	sessionPath := filepath.Join(dayDir, "rollout-2026-08-04T09-02-05-"+threadID+".jsonl")
+	content := strings.Join([]string{
+		`{"type":"event_msg","payload":{"type":"token_count","info":{},"rate_limits":{"primary":{"used_percent":22.0,"window_minutes":10080,"resets_at":1786296634}}}}`,
+		`{"type":"event_msg","payload":{"type":"token_count","info":{},"rate_limits":{"primary":{"used_percent":23.0,"window_minutes":10080,"resets_at":1786296634}}}}`,
+	}, "\n")
+	if err := os.WriteFile(sessionPath, []byte(content+"\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile : %v", err)
+	}
+
+	windows, ok := readCodexRateLimits(threadID)
+	if !ok {
+		t.Fatalf("un instantané aurait dû être trouvé")
+	}
+	if len(windows) != 1 || windows[0].UsedPercent != 23.0 {
+		t.Fatalf("attendu le DERNIER instantané (23%%), reçu %+v", windows)
+	}
+	if !windows[0].ResetsAt.Equal(time.Unix(1786296634, 0)) {
+		t.Fatalf("resetsAt inattendu : %v", windows[0].ResetsAt)
+	}
+}
+
+// TestReadCodexRateLimitsMissingFile vérifie qu'un thread_id sans fichier de
+// session correspondant ne fait pas planter le best-effort.
+func TestReadCodexRateLimitsMissingFile(t *testing.T) {
+	root := t.TempDir()
+	oldDir := codexSessionsDir
+	codexSessionsDir = func() string { return root }
+	defer func() { codexSessionsDir = oldDir }()
+
+	if windows, ok := readCodexRateLimits("unknown-thread"); ok {
+		t.Fatalf("aucun instantané attendu, reçu %+v", windows)
+	}
+	if windows, ok := readCodexRateLimits(""); ok {
+		t.Fatalf("thread_id vide : aucun instantané attendu, reçu %+v", windows)
 	}
 }
 

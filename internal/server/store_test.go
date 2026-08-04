@@ -973,6 +973,55 @@ func TestListAgentsExposesWarningNotPersisted(t *testing.T) {
 	}
 }
 
+// TestSetCodexQuotaExposedOnlyOnCodexAgents vérifie que le quota codex,
+// une fois défini, est attaché à tous les agents cli=codex (quota de compte,
+// pas par agent) et à eux seuls, et qu'il survit à un rechargement disque.
+func TestSetCodexQuotaExposedOnlyOnCodexAgents(t *testing.T) {
+	dir := t.TempDir()
+	s, err := NewStore(dir)
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+
+	windows := []AgentQuotaWindow{
+		{Label: "5h", UsedPercent: 42, ResetsAt: time.Unix(1771005432, 0)},
+		{Label: "week", UsedPercent: 48, ResetsAt: time.Unix(1771409457, 0)},
+	}
+	if err := s.SetCodexQuota(windows); err != nil {
+		t.Fatalf("SetCodexQuota: %v", err)
+	}
+
+	agents := s.ListAgents()
+	for _, a := range agents {
+		if a.Cli == "codex" {
+			if a.Quota == nil || len(a.Quota.Windows) != 2 {
+				t.Fatalf("agent codex %q devrait porter le quota, reçu %+v", a.ID, a.Quota)
+			}
+		} else if a.Quota != nil {
+			t.Fatalf("agent %q (cli=%s) ne devrait pas porter de quota, reçu %+v", a.ID, a.Cli, a.Quota)
+		}
+	}
+
+	// Persisté : un rechargement depuis disque garde l'instantané.
+	s2, err := NewStore(dir)
+	if err != nil {
+		t.Fatalf("NewStore (reload): %v", err)
+	}
+	reloaded := s2.ListAgents()
+	found := false
+	for _, a := range reloaded {
+		if a.Cli == "codex" {
+			found = true
+			if a.Quota == nil || len(a.Quota.Windows) != 2 {
+				t.Fatalf("quota codex non persisté après rechargement, reçu %+v", a.Quota)
+			}
+		}
+	}
+	if !found {
+		t.Fatalf("aucun agent codex trouvé après rechargement")
+	}
+}
+
 // --- Rappel de contexte au départ frais (v0.3.2 section 1) ---
 
 func TestContextualizeCliInput(t *testing.T) {

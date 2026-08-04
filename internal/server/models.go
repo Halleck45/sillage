@@ -156,7 +156,27 @@ type Agent struct {
 // n'a pas ce champ, donc rien à vider à l'écriture disque).
 type AgentOut struct {
 	Agent
-	Warning string `json:"warning"`
+	Warning string      `json:"warning"`
+	Quota   *AgentQuota `json:"quota,omitempty"`
+}
+
+// AgentQuotaWindow est une fenêtre glissante de consommation de quota chez le
+// fournisseur du cli (ex : 5h, hebdomadaire).
+type AgentQuotaWindow struct {
+	Label       string    `json:"label"` // "5h"|"week"|"<n>m" (fenêtre inattendue)
+	UsedPercent float64   `json:"usedPercent"`
+	ResetsAt    time.Time `json:"resetsAt"`
+}
+
+// AgentQuota est le dernier instantané connu de consommation de quota pour un
+// fournisseur cli. Seul codex publie cette information (voir runner.go
+// readCodexRateLimits, lue dans le fichier de session codex après chaque
+// exécution : le flux `codex exec --json` ne la porte pas). C'est un quota de
+// compte OpenAI, donc partagé par tous les agents cli=codex, jamais calculé
+// par agent. claude et fake n'ont pas de source : AgentOut.Quota reste nil.
+type AgentQuota struct {
+	UpdatedAt time.Time          `json:"updatedAt"`
+	Windows   []AgentQuotaWindow `json:"windows"`
 }
 
 // Check est le résultat d'une vérification projet (ex : go test) pour une tâche.
