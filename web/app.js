@@ -1441,8 +1441,8 @@
       title = t('nav.allProjects');
       actions = buildCreateButtonHTML('open-new-project', t('header.newProject'), t('header.newProjectTooltip'), 'btn-outline');
     } else if (state.screen === 'kanban') {
-      var p = state.projectsById[state.projectId];
-      title = p ? p.name : '';
+      // Le nom du projet est déjà affiché en grand titre (avec bouton edit)
+      // dans buildKanbanHTML : pas besoin de le répéter dans la barre du haut.
     } else if (state.screen === 'work') {
       var c = state.cardsById[state.cardId];
       var pr = state.projectsById[state.projectId];
