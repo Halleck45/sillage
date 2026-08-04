@@ -65,6 +65,9 @@
       'project.baseBranch': 'Branche de base',
       'project.baseBranchHint': 'Les chantiers partent de cette branche et y retournent à la livraison. Vide : branche par défaut du dépôt.',
       'project.checkCmd': 'Commande de vérification',
+      'project.allowedTools': 'Outils autorisés aux agents',
+      'project.allowedToolsPlaceholder': 'Bash(go test:*)\nBash(gofmt:*)',
+      'project.allowedToolsHint': 'Une entrée par ligne, dans la syntaxe du CLI. Les agents savent déjà lire, écrire, chercher et consulter l\'historique git : ajoutez ici les commandes de votre langage (tests, build, format). Rien qui puisse pousser ne sera accepté.',
       'project.reposHint': 'Chemins locaux des dépôts git de ce projet.',
       'project.repoNamePlaceholder': 'Nom du dépôt',
       'project.repoName': 'Nom',
@@ -229,6 +232,7 @@
       'chat.mergeConflict': 'Conflit avec la branche du chantier sur {files} : demandez à l\'agent de reprendre la base.',
       'chat.rebased': 'Rebasée automatiquement sur {branch} : cette tâche repart du travail accepté.',
       'chat.rebaseConflict': 'Rebase automatique impossible sur {files} (rien n\'a été modifié) : demandez à l\'agent de reprendre la base.',
+      'chat.toolDenied': 'Outil refusé à l\'agent : {tool}. Pour l\'autoriser, ajoutez-le aux outils autorisés dans les réglages du projet.',
       'conversation.empty': 'Aucun message pour l\'instant.',
       'diff.empty': 'Aucune modification.',
       'deliverables.code': 'Code',
@@ -440,6 +444,9 @@
       'project.baseBranch': 'Base branch',
       'project.baseBranchHint': 'Workstreams branch off this branch and ship back into it. Empty: the repository default branch.',
       'project.checkCmd': 'Check command',
+      'project.allowedTools': 'Tools allowed to agents',
+      'project.allowedToolsPlaceholder': 'Bash(go test:*)\nBash(gofmt:*)',
+      'project.allowedToolsHint': 'One entry per line, in the CLI syntax. Agents can already read, write, search and read git history: add your language\'s commands here (tests, build, format). Nothing able to push will ever be accepted.',
       'project.reposHint': 'Local paths of this project\'s git repositories.',
       'project.repoNamePlaceholder': 'Repository name',
       'project.repoName': 'Name',
@@ -604,6 +611,7 @@
       'chat.mergeConflict': 'Conflict with the workstream branch on {files}: ask the agent to rebase on it.',
       'chat.rebased': 'Rebased automatically onto {branch}: this task now starts from the accepted work.',
       'chat.rebaseConflict': 'Automatic rebase not possible on {files} (nothing was changed): ask the agent to rebase on the workstream branch.',
+      'chat.toolDenied': 'Tool denied to the agent: {tool}. To allow it, add it to the allowed tools in the project settings.',
       'conversation.empty': 'No messages yet.',
       'diff.empty': 'No changes.',
       'deliverables.code': 'Code',
@@ -2871,6 +2879,12 @@
     if (rebaseConflictFiles) {
       return '<div class="msg-system msg-system-warning">' + escapeHtml(t('chat.rebaseConflict', { files: rebaseConflictFiles.split(' ').join(', ') })) + '</div>';
     }
+    // Outil refusé à l'agent : sans cette ligne, le refus ne se voit nulle part
+    // et la tâche prend des tours que personne ne sait expliquer.
+    var deniedTool = parseMarker('tool-denied', m.text);
+    if (deniedTool) {
+      return '<div class="msg-system msg-system-warning">' + escapeHtml(t('chat.toolDenied', { tool: deniedTool })) + '</div>';
+    }
     var isUser = m.author === 'user';
     var emoji = isUser ? '🙂' : (agent.emoji || '');
     var bg = isUser ? '#eeece6' : softColor(agent.color);
@@ -4087,7 +4101,10 @@
     return '<div class="modal-section-hint">' + escapeHtml(t('project.instructionsHint')) + '</div>' +
       '<textarea id="project-context-prompt" class="modal-textarea modal-textarea-tall" rows="12" placeholder="' + escapeHtml(t('project.contextPromptPlaceholder')) + '">' + escapeHtml(projectDraft.contextPrompt) + '</textarea>' +
       '<label class="modal-label" for="project-edit-checkcmd">' + escapeHtml(t('project.checkCmd')) + '</label>' +
-      '<input id="project-edit-checkcmd" class="modal-input mono" placeholder="go test ./..." value="' + escapeHtml(projectDraft.checkCmd) + '">';
+      '<input id="project-edit-checkcmd" class="modal-input mono" placeholder="go test ./..." value="' + escapeHtml(projectDraft.checkCmd) + '">' +
+      '<label class="modal-label" for="project-allowed-tools">' + escapeHtml(t('project.allowedTools')) + '</label>' +
+      '<textarea id="project-allowed-tools" class="modal-textarea mono" rows="4" placeholder="' + escapeHtml(t('project.allowedToolsPlaceholder')) + '">' + escapeHtml(projectDraft.allowedTools) + '</textarea>' +
+      '<div class="modal-note">' + escapeHtml(t('project.allowedToolsHint')) + '</div>';
   }
 
   function buildProjectDangerPanelHTML(project) {
@@ -4138,6 +4155,15 @@
       '</div>';
   }
 
+  // splitAllowedTools : une entrée par ligne côté saisie, une liste côté API.
+  // Le serveur retire de toute façon les vides et les espaces superflus
+  // (NormalizeAllowedTools), on ne duplique pas la validation ici.
+  function splitAllowedTools(value) {
+    return String(value || '').split('\n').map(function (line) {
+      return line.trim();
+    }).filter(function (line) { return line !== ''; });
+  }
+
   // Le brouillon retient les champs simples pendant qu'on navigue d'un panneau à
   // l'autre : seul le panneau visible existe dans le DOM.
   function captureProjectDraftFromDOM() {
@@ -4147,7 +4173,8 @@
       'project-description': 'description',
       'project-delivery-target': 'target',
       'project-context-prompt': 'contextPrompt',
-      'project-edit-checkcmd': 'checkCmd'
+      'project-edit-checkcmd': 'checkCmd',
+      'project-allowed-tools': 'allowedTools'
     };
     Object.keys(fields).forEach(function (id) {
       var el = document.getElementById(id);
@@ -4179,6 +4206,8 @@
       target: (project.delivery && project.delivery.target) || '',
       contextPrompt: project.contextPrompt || '',
       checkCmd: project.checkCmd || '',
+      // Une entrée par ligne dans le champ, une liste côté API.
+      allowedTools: (project.allowedTools || []).join('\n'),
       mode: (project.delivery && project.delivery.mode) || 'pr'
     };
     var repos = (project.repos && project.repos.length) ? project.repos : [{ name: '', path: '' }];
@@ -4224,6 +4253,7 @@
     var body = {
       name: name, checkCmd: projectDraft.checkCmd.trim(), repos: reposToBody(repos),
       description: projectDraft.description.trim(), contextPrompt: projectDraft.contextPrompt.trim(),
+      allowedTools: splitAllowedTools(projectDraft.allowedTools),
       links: linksToBody(links),
       delivery: { mode: projectDraft.mode, target: projectDraft.target.trim() }
     };

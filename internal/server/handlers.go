@@ -643,6 +643,7 @@ func (s *Server) handleUpdateProject(w http.ResponseWriter, r *http.Request) {
 		Description   *string   `json:"description"`
 		CheckCmd      *string   `json:"checkCmd"`
 		ContextPrompt *string   `json:"contextPrompt"`
+		AllowedTools  *[]string `json:"allowedTools"`
 		Repos         *[]Repo   `json:"repos"`
 		Links         *[]Link   `json:"links"`
 		Delivery      *Delivery `json:"delivery"`
@@ -674,7 +675,7 @@ func (s *Server) handleUpdateProject(w http.ResponseWriter, r *http.Request) {
 		links = fillMissingLinkTitles(links)
 		body.Links = &links
 	}
-	project, err := s.store.UpdateProject(id, body.Name, body.Description, body.CheckCmd, body.ContextPrompt, body.Repos, body.Links, body.Delivery)
+	project, err := s.store.UpdateProject(id, body.Name, body.Description, body.CheckCmd, body.ContextPrompt, body.AllowedTools, body.Repos, body.Links, body.Delivery)
 	if err != nil {
 		writeError(w, statusForStoreError(err), err.Error())
 		return

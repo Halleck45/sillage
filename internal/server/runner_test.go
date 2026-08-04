@@ -246,3 +246,109 @@ func TestBuildTranscript(t *testing.T) {
 		t.Fatalf("transcript vide attendu pour aucun message")
 	}
 }
+
+// Le socle doit rester agnostique : y remettre une commande de langage ferait
+// hériter tout projet d'une allowlist écrite pour un autre (voir
+// Project.AllowedTools). Ce test est le garde-fou de cette règle.
+func TestClaudeSocleStaysLanguageAgnostic(t *testing.T) {
+	for _, forbidden := range []string{"go build", "go test", "go vet", "gofmt", "npm", "pytest", "cargo", "node"} {
+		if strings.Contains(claudeAllowedTools, forbidden) {
+			t.Fatalf("le socle contient %q : les commandes de langage vont dans Project.AllowedTools", forbidden)
+		}
+	}
+	// Le git du socle est en lecture seule : aucune sous-commande qui écrive.
+	for _, forbidden := range []string{"git push", "git commit", "git merge", "git rebase", "Bash(git:*)"} {
+		if strings.Contains(claudeAllowedTools, forbidden) {
+			t.Fatalf("le socle contient %q : le git du socle est en lecture seule", forbidden)
+		}
+	}
+}
+
+// Invariant 1 : rien de capable de pousser, ni dans le socle ni hors du refus
+// figé. Un agent qui pourrait écrire .claude/settings.json s'accorderait de
+// nouveaux droits au run suivant, d'où sa présence dans le refus.
+func TestClaudeDeniedToolsCoversOutboundAndSelfEscalation(t *testing.T) {
+	for _, required := range []string{"git push", "gh", "glab", ".claude/settings"} {
+		if !strings.Contains(claudeDeniedTools, required) {
+			t.Fatalf("le refus figé ne couvre pas %q (invariant 1)", required)
+		}
+	}
+	if strings.Contains(claudeAllowedTools, "push") {
+		t.Fatalf("le socle ne doit jamais contenir d'entrée capable de pousser")
+	}
+}
+
+func TestClaudeToolsAppendsProjectTools(t *testing.T) {
+	if got := claudeTools(nil); got != claudeAllowedTools {
+		t.Fatalf("sans outil de projet, la liste doit être le socle seul ; reçu %q", got)
+	}
+	// Les entrées vides viennent d'un champ saisi une ligne par outil.
+	got := claudeTools([]string{" Bash(pytest:*) ", "", "Bash(ruff:*)"})
+	want := claudeAllowedTools + ",Bash(pytest:*),Bash(ruff:*)"
+	if got != want {
+		t.Fatalf("liste attendue %q, reçue %q", want, got)
+	}
+}
+
+// Le contenu d'un tool_result arrive tantôt en chaîne, tantôt en liste de blocs
+// typés selon l'appel : les deux formes doivent rendre le même texte, sinon un
+// refus de permission passe inaperçu et le marqueur n'est jamais posé.
+func TestClaudeToolResultText(t *testing.T) {
+	const denial = "Claude requested permissions to use Bash"
+	if got := claudeToolResultText(json.RawMessage(`"` + denial + `"`)); got != denial {
+		t.Fatalf("forme chaîne : attendu %q, reçu %q", denial, got)
+	}
+	blocks := json.RawMessage(`[{"type":"text","text":"` + denial + `"}]`)
+	if got := claudeToolResultText(blocks); got != denial {
+		t.Fatalf("forme liste de blocs : attendu %q, reçu %q", denial, got)
+	}
+	// Contenu absent ou forme inattendue : pas de texte, donc pas de marqueur.
+	if got := claudeToolResultText(nil); got != "" {
+		t.Fatalf("contenu absent : attendu vide, reçu %q", got)
+	}
+	if got := claudeToolResultText(json.RawMessage(`{"unexpected":1}`)); got != "" {
+		t.Fatalf("forme inconnue : attendu vide, reçu %q", got)
+	}
+}
+
+// Un marqueur de refus est une ligne système, pas un tour de conversation : il
+// ne doit pas être rejoué au CLI quand la session est repartie de zéro (codex,
+// tâche réassignée), sinon l'agent lit ses propres refus comme du contexte.
+func TestBuildTranscriptExcludesToolDeniedMarker(t *testing.T) {
+	got := buildTranscript([]Message{
+		{Author: "agent", AuthorName: "", Text: "[tool-denied:Bash · pytest -q]"},
+		{Author: "agent", AuthorName: "Bolt", Text: "je contourne autrement"},
+	})
+	if strings.Contains(got, "tool-denied") {
+		t.Fatalf("le marqueur de refus ne doit pas être rejoué : %q", got)
+	}
+	if !strings.Contains(got, "je contourne autrement") {
+		t.Fatalf("transcript incomplet : %q", got)
+	}
+}
+
+// Un test rouge ou un fichier absent font partie du travail de l'agent : seul
+// un refus de permission mérite un marqueur dans le fil.
+func TestIsPermissionDenial(t *testing.T) {
+	denied := []string{
+		"Claude requested permissions to write to .claude/skills/x/SKILL.md, but you haven't granted it yet",
+		"Claude requested permissions to use Bash",
+		"Agent does not have permission to use Bash(pytest:*)",
+	}
+	for _, text := range denied {
+		if !isPermissionDenial(text) {
+			t.Fatalf("refus de permission non détecté : %q", text)
+		}
+	}
+	ordinary := []string{
+		"FAIL github.com/org/repo 0.12s",
+		"cat: /tmp/nope: No such file or directory",
+		"exit status 1",
+		"",
+	}
+	for _, text := range ordinary {
+		if isPermissionDenial(text) {
+			t.Fatalf("erreur d'exécution ordinaire prise pour un refus : %q", text)
+		}
+	}
+}
