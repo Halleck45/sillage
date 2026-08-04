@@ -73,7 +73,13 @@
       'project.removeRepo': 'Retirer',
       'project.previewCmdPlaceholder': 'Commande de recette (optionnelle)',
       'project.previewUrlPlaceholder': 'URL à ouvrir (optionnelle)',
-      'project.previewHint': 'Recette manuelle : la commande est lancée dans le worktree du chantier ou de la tâche. Variables disponibles : $SILLAGE_ID (ws-107, t-482), $SILLAGE_N (107), $SILLAGE_PORT (4107, sans arithmétique à écrire), $SILLAGE_DIR, $SILLAGE_BRANCH.',
+      'project.previewHintIntro': 'Recette manuelle : la commande est lancée dans le worktree du chantier ou de la tâche.',
+      'project.previewVarIdDesc': 'noms : base de données, conteneur, répertoire',
+      'project.previewVarNDesc': 'arithmétique explicite',
+      'project.previewVarPortDesc': 'port prêt à l\'emploi, sans calcul à écrire',
+      'project.previewVarDirDesc': 'chemins absolus',
+      'project.previewVarBranchDesc': 'affichage, debug',
+      'project.previewExampleLabel': 'Par exemple, lancer un serveur Python :',
       'project.errorNameRequired': 'Le nom est requis.',
       'project.errorReposRequired': 'Au moins un dépôt est requis.',
       'project.errorSaveFailed': 'Erreur lors de l\'enregistrement.',
@@ -442,7 +448,13 @@
       'project.removeRepo': 'Remove',
       'project.previewCmdPlaceholder': 'Preview command (optional)',
       'project.previewUrlPlaceholder': 'URL to open (optional)',
-      'project.previewHint': 'Manual preview: the command runs in the workstream or task worktree. Available variables: $SILLAGE_ID (ws-107, t-482), $SILLAGE_N (107), $SILLAGE_PORT (4107, no arithmetic to write), $SILLAGE_DIR, $SILLAGE_BRANCH.',
+      'project.previewHintIntro': 'Manual preview: the command runs in the workstream or task worktree.',
+      'project.previewVarIdDesc': 'names: database, container, directory',
+      'project.previewVarNDesc': 'explicit arithmetic',
+      'project.previewVarPortDesc': 'ready-to-use port, no arithmetic to write',
+      'project.previewVarDirDesc': 'absolute paths',
+      'project.previewVarBranchDesc': 'display, debugging',
+      'project.previewExampleLabel': 'For example, to launch a Python server:',
       'project.errorNameRequired': 'Name is required.',
       'project.errorReposRequired': 'At least one repository is required.',
       'project.errorSaveFailed': 'Failed to save.',
@@ -3600,6 +3612,33 @@
     modalRepos.splice(index, 1);
     refreshRepoRowsUI();
   }
+  // Variables de recette : une puce par variable (nom + à quoi elle sert),
+  // plus un exemple concret. Un bloc à part de `.modal-section-hint` pour
+  // pouvoir mettre `$SILLAGE_PORT` en avant visuellement (code), là où la
+  // phrase unique d'origine le noyait dans du texte.
+  var PREVIEW_VARS = [
+    ['SILLAGE_ID', 'project.previewVarIdDesc'],
+    ['SILLAGE_N', 'project.previewVarNDesc'],
+    ['SILLAGE_PORT', 'project.previewVarPortDesc'],
+    ['SILLAGE_DIR', 'project.previewVarDirDesc'],
+    ['SILLAGE_BRANCH', 'project.previewVarBranchDesc']
+  ];
+  function buildPreviewHintHTML() {
+    var vars = PREVIEW_VARS.map(function (v) {
+      return '<li class="preview-hint-var">' +
+        '<code>$' + v[0] + '</code>' +
+        '<span>' + escapeHtml(t(v[1])) + '</span>' +
+        '</li>';
+    }).join('');
+    return '<div class="modal-section-hint preview-hint">' +
+      '<div>' + escapeHtml(t('project.previewHintIntro')) + '</div>' +
+      '<ul class="preview-hint-vars">' + vars + '</ul>' +
+      '<div class="preview-hint-example">' +
+        escapeHtml(t('project.previewExampleLabel')) +
+        ' <code>python3 -m http.server $SILLAGE_PORT</code>' +
+      '</div>' +
+    '</div>';
+  }
   // L'aide ne s'affiche que quand la liste est vide : une fois les chemins
   // saisis, ils se lisent seuls et la phrase n'est plus que du bruit. Les deux
   // colonnes portent alors un en-tête, sans quoi une ligne remplie ne dit plus
@@ -3617,7 +3656,7 @@
     return head +
       '<div id="repo-rows">' + buildRepoRowsHTML() + '</div>' +
       '<button class="add-repo-link" data-action="add-repo-row">' + escapeHtml(t('project.addRepo')) + '</button>' +
-      '<div class="modal-section-hint">' + escapeHtml(t('project.previewHint')) + '</div>';
+      buildPreviewHintHTML();
   }
   function collectReposForSubmit() {
     captureRepoRowsFromDOM();
