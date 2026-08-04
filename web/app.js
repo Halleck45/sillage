@@ -31,6 +31,8 @@
       'sidebar.projectsHeading': 'Projets',
       'sidebar.newProjectTooltip': 'Nouveau projet',
       'sidebar.noProjects': 'Aucun projet',
+      'sidebar.projectMenuTooltip': 'Actions du projet',
+      'sidebar.markAllRead': 'Tout marquer comme lu',
       'sidebar.agentsHeading': 'Agents',
       'sidebar.newAgentTooltip': 'Nouvel agent',
       'sidebar.noAgents': 'Aucun agent',
@@ -406,6 +408,8 @@
       'sidebar.projectsHeading': 'Projects',
       'sidebar.newProjectTooltip': 'New project',
       'sidebar.noProjects': 'No projects',
+      'sidebar.projectMenuTooltip': 'Project actions',
+      'sidebar.markAllRead': 'Mark all as read',
       'sidebar.agentsHeading': 'Agents',
       'sidebar.newAgentTooltip': 'New agent',
       'sidebar.noAgents': 'No agents',
@@ -1329,10 +1333,16 @@
       var hashHTML = projectHasRunningTask(p.id)
         ? '<span class="task-spinner project-item-spinner" title="' + escapeHtml(t('status.running')) + '"></span>'
         : '<span class="hash">#</span>';
-      return '<button class="project-item ' + (active ? 'active' : '') + '" data-action="nav-project" data-project-id="' + p.id + '">' +
-        hashHTML + '<span class="project-name">' + escapeHtml(p.name) + '</span>' +
-        (unread ? '<span class="badge-unread">' + unread + '</span>' : '') +
-        '</button>';
+      return '<div class="project-item-wrap">' +
+        '<button class="project-item ' + (active ? 'active' : '') + '" data-action="nav-project" data-project-id="' + p.id + '">' +
+          hashHTML + '<span class="project-name">' + escapeHtml(p.name) + '</span>' +
+          (unread ? '<span class="badge-unread">' + unread + '</span>' : '') +
+        '</button>' +
+        '<button class="project-menu-btn" data-action="toggle-project-menu" data-project-id="' + p.id + '" title="' + escapeHtml(t('sidebar.projectMenuTooltip')) + '" aria-label="' + escapeHtml(t('sidebar.projectMenuTooltip')) + '">⋯</button>' +
+        '<div class="project-menu hidden" data-project-menu="' + p.id + '">' +
+          '<button class="project-menu-item" data-action="mark-project-read" data-project-id="' + p.id + '">' + escapeHtml(t('sidebar.markAllRead')) + '</button>' +
+        '</div>' +
+      '</div>';
     }).join('');
 
     var agentsHTML = state.agents.map(function (a) {
@@ -1374,6 +1384,25 @@
   function renderSidebar() {
     var el = document.getElementById('sidebar');
     if (el) el.innerHTML = buildSidebarHTML();
+  }
+
+  function closeAllProjectMenus() {
+    document.querySelectorAll('.project-menu').forEach(function (m) { m.classList.add('hidden'); });
+  }
+  function toggleProjectMenu(projectId) {
+    var el = document.querySelector('.project-menu[data-project-menu="' + projectId + '"]');
+    if (!el) return;
+    var willOpen = el.classList.contains('hidden');
+    closeAllProjectMenus();
+    if (willOpen) el.classList.remove('hidden');
+  }
+  // Optimiste : les tâches locales passent lues tout de suite, l'appel serveur
+  // suit sans bloquer (comme markTaskRead sur l'ouverture d'une tâche).
+  function markProjectAllRead(projectId) {
+    closeAllProjectMenus();
+    state.tasks.forEach(function (t) { if (t.projectId === projectId) t.unread = false; });
+    render();
+    api('/api/projects/' + projectId + '/mark-all-read', { method: 'POST' }).catch(function () {});
   }
 
   // ---------------------------------------------------------------------
@@ -4802,10 +4831,11 @@
 
   function onGlobalClick(e) {
     var el = e.target.closest('[data-action]');
-    if (!el) { closeAllCardMenus(); closeAllReassignMenus(); return; }
+    if (!el) { closeAllCardMenus(); closeAllReassignMenus(); closeAllProjectMenus(); return; }
     var action = el.getAttribute('data-action');
     if (action !== 'toggle-card-menu') closeAllCardMenus();
     if (action !== 'toggle-reassign-menu') closeAllReassignMenus();
+    if (action !== 'toggle-project-menu') closeAllProjectMenus();
     switch (action) {
       case 'nav-inbox': goInbox(); break;
       case 'nav-projects': goAllProjects(); break;
@@ -4820,6 +4850,8 @@
       case 'toggle-card-menu': toggleCardMenu(el.getAttribute('data-card-id')); break;
       case 'toggle-reassign-menu': toggleReassignMenu(el.getAttribute('data-task-id')); break;
       case 'reassign-task': doReassignTask(el.getAttribute('data-task-id'), el.getAttribute('data-agent-id')); break;
+      case 'toggle-project-menu': toggleProjectMenu(el.getAttribute('data-project-id')); break;
+      case 'mark-project-read': markProjectAllRead(el.getAttribute('data-project-id')); break;
       case 'move-card': moveCard(el.getAttribute('data-card-id'), el.getAttribute('data-column')); break;
       case 'open-new-card': openNewCardModal(); break;
       case 'open-new-task': if (state.cardId) openNewTaskModal(state.cardId); break;
