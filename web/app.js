@@ -135,6 +135,8 @@
       'ship.subtext.mergePush': 'Fusionne {branch} dans {base}, puis pousse {base}',
       'ship.subtext.repos': '{n} dépôts concernés',
       'ship.subtext.nothing': 'Rien à livrer pour l\'instant',
+      'ship.subtext.pending.one': '↑ 1 commit vers {base}',
+      'ship.subtext.pending.other': '↑ {n} commits vers {base}',
       'ship.partial.one': 'Livraison partielle : 1 tâche n\'est pas encore acceptée',
       'ship.partial.other': 'Livraison partielle : {n} tâches ne sont pas encore acceptées',
       'ship.partialNote.one': '1 tâche est encore en cours ou à relire : seul le travail accepté part maintenant. Vous pourrez livrer le reste ensuite.',
@@ -488,6 +490,8 @@
       'ship.subtext.mergePush': 'Merges {branch} into {base}, then pushes {base}',
       'ship.subtext.repos': '{n} repositories involved',
       'ship.subtext.nothing': 'Nothing to ship yet',
+      'ship.subtext.pending.one': '↑ 1 commit to {base}',
+      'ship.subtext.pending.other': '↑ {n} commits to {base}',
       'ship.partial.one': 'Partial delivery: 1 task is not accepted yet',
       'ship.partial.other': 'Partial delivery: {n} tasks are not accepted yet',
       'ship.partialNote.one': '1 task is still running or waiting for review: only accepted work ships now. You will be able to ship the rest later.',
@@ -1745,6 +1749,20 @@
     return t('ship.subtext.unknownForge', { branch: r.branch });
   }
 
+  // Version courte de deliveryActionLabel, pour la barre de livraison : ce qui
+  // compte au premier coup d'œil, c'est que le chantier n'est pas encore dans
+  // la base, pas le détail du mécanisme (poussée, PR, fusion...). Ce détail
+  // reste disponible en infobulle (deliveryActionLabel) et dans la modale de
+  // livraison, qui sert elle de confirmation avant de cliquer.
+  function deliveryActionShortLabel(prev) {
+    var repos = deliverableRepos(prev);
+    if (!repos.length) return t('ship.subtext.nothing');
+    if (repos.length > 1) return t('ship.subtext.repos', { n: repos.length });
+    var r = repos[0];
+    var base = prev.target || r.base;
+    return tCount('ship.subtext.pending', r.pending, { base: base });
+  }
+
   function deliveryWarningText(warning) {
     var w = String(warning || '');
     if (w.indexOf('gh not found') === 0) return t('delivery.warning.ghMissing');
@@ -1884,14 +1902,18 @@
   function buildShipBarHTML(card) {
     var prev = state.deliveryByCard[card.id];
     var blocked = !card.shipReady;
-    var sub;
+    var sub, subTitle = '';
     if (prev && shipAlreadyOnTarget(prev)) {
-      sub = t('ship.alreadyOnTargetSub', { base: prev.target || (prev.repos[0] && prev.repos[0].base) || '' });
+      var base = prev.target || (prev.repos[0] && prev.repos[0].base) || '';
+      sub = t('ship.alreadyOnTarget', { base: base });
+      subTitle = t('ship.alreadyOnTargetSub', { base: base });
     } else if (blocked) sub = shipBlockerLabel(card.shipBlocker);
     else if (prev && shipNeedsRebase(prev)) {
       sub = t('ship.blocked.behindTarget', { base: prev.target || (deliverableRepos(prev)[0] || {}).base || '' });
-    } else if (prev) sub = deliveryActionLabel(prev);
-    else sub = t('common.loading');
+    } else if (prev) {
+      sub = deliveryActionShortLabel(prev);
+      subTitle = deliveryActionLabel(prev);
+    } else sub = t('common.loading');
     var warnings = (prev && prev.warnings ? prev.warnings : []).map(function (w) {
       return '<div class="ship-bar-warning">⚠ ' + escapeHtml(deliveryWarningText(w)) + '</div>';
     }).join('');
@@ -1906,7 +1928,7 @@
     // les portent déjà (« Toutes 7 · À relire 0 · Traitées 7 »).
     return '<div class="ship-bar">' +
         '<div class="ship-bar-state">' +
-          '<span class="ship-bar-sub">' + escapeHtml(sub) + '</span>' +
+          '<span class="ship-bar-sub"' + (subTitle ? ' title="' + escapeHtml(subTitle) + '"' : '') + '>' + escapeHtml(sub) + '</span>' +
           partialHTML +
           warnings +
           buildCardBehindHTML(prev) +
