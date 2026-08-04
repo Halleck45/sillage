@@ -13,7 +13,12 @@ Mono-utilisateur : un seul mot de passe partagé (pas de comptes, pas de rôles)
 ```jsonc
 Tokens  { "input": 0, "output": 0, "costUsd": 0.0 }
 
-Repo    { "name": "api", "path": "/abs/path" }   // name court et unique dans le projet
+Repo    { "name": "api", "path": "/abs/path", "previewCmd": "make serve PORT=$((4000 + SILLAGE_N))",
+          "previewUrl": "http://127.0.0.1:$((4000 + SILLAGE_N))" }
+          // name court et unique dans le projet.
+          // previewCmd : commande de recette manuelle, lancée dans le worktree d'un chantier
+          // ou d'une tâche (voir "Recette manuelle"). Vide = pas de recette pour ce dépôt.
+          // previewUrl : optionnelle, http(s) uniquement, mêmes variables que la commande.
 
 Link    { "url": "https://github.com/org/repo", "title": "org/repo" }
           // title fourni par l'utilisateur, ou récupéré best-effort (voir plus bas), ou nom d'hôte.
@@ -91,6 +96,18 @@ WorkspaceStatus { "setupDone": true, "gitEnabled": true, "remote": "git@host:org
                   // "Synchronisation automatique" ci-dessous.
 
 Settings { "displayName": "Ada", "lang": "fr" }   // lang : ""|"fr"|"en"
+
+PreviewRun { "id": "pv1", "projectId": "p1", "cardId": "c1", "taskId": "",
+             "repoName": "api", "cmd": "make serve PORT=4101",
+             "url": "http://127.0.0.1:4101", "dir": ".../worktrees/ws-c1-api",
+             "status": "running|exited|stopped|failed", "exitCode": 0, "error": "",
+             "startedAt": "...", "endedAt": null }
+          // Une exécution de recette manuelle (voir "Recette manuelle" ci-dessous).
+          // taskId vide = run de chantier. cmd et url sont ce qui a réellement été lancé et
+          // affiché (variables substituées). status : exited = sortie naturelle (exitCode),
+          // stopped = arrêt humain, failed = n'a pas démarré (error).
+          // JAMAIS persisté : ni dans state.json, ni dans l'espace de travail git. Un
+          // redémarrage du serveur ne laisse ni process ni run.
 ```
 
 `Card.progress` = tasksDone/tasksTotal en % (0 si vide). Les compteurs de Card sont calculés côté serveur. `tasksDone` = tâches `accepted`. `reviewCount` = tâches `review`. Les tâches `cancelled` (refusées) sont exclues de `tasksTotal`/`tasksDone`/`progress`, mais comptent comme terminales pour l'auto-déplacement de carte (voir plus bas).
@@ -108,7 +125,7 @@ Settings { "displayName": "Ada", "lang": "fr" }   // lang : ""|"fr"|"en"
 |---|---|---|---|
 | POST | `/api/login` | `{password}` | 204 ou 401 `{error}` |
 | POST | `/api/logout` | | 204 |
-| GET | `/api/state` | | `{projects, cards, tasks, agents, workspace, settings, tokens:{global:Tokens}}` |
+| GET | `/api/state` | | `{projects, cards, tasks, agents, workspace, settings, previews, tokens:{global:Tokens}}` |
 | GET | `/api/workspace` | | WorkspaceStatus |
 | POST | `/api/workspace/setup` | `{mode:"local"\|"init"\|"clone", remote?}` | WorkspaceStatus (voir ci-dessous) |
 | PATCH | `/api/workspace` | `{remote?, autoSync?}` | WorkspaceStatus (au moins un des deux champs requis ; `remote` définit/remplace origin, 400 si git non initialisé ; `autoSync:true` exige git initialisé ET un remote déjà défini, celui fourni dans le même appel compte, 400 sinon ; voir "Synchronisation automatique" ci-dessous) |
@@ -118,7 +135,7 @@ Settings { "displayName": "Ada", "lang": "fr" }   // lang : ""|"fr"|"en"
 | PATCH | `/api/agents/{id}` | mêmes champs, tous optionnels | Agent |
 | DELETE | `/api/agents/{id}` | | 204 (400 si une tâche référence encore l'agent) |
 | POST | `/api/projects` | `{name?, path}` ou `{name?, repos:[{name?,path}, ...], description?, contextPrompt?, links?:[{url,title?}, ...], delivery?}` | Project (400 si aucun dépôt, un path invalide/pas un dépôt git, noms de repo dupliqués, mode de livraison inconnu, ou lien invalide/en trop grand nombre). Seul le chemin d'un dépôt est requis : `name` absent ou vide = basename du premier dépôt, `delivery` absent = déduit des remotes des dépôts (voir « Livraison d'un chantier ») |
-| PATCH | `/api/projects/{id}` | `{name?, description?, checkCmd?, contextPrompt?, repos?, links?, delivery?}` | Project (repos/links, si fournis, remplacent la liste entière ; retirer un repo ne casse pas les tâches existantes) |
+| PATCH | `/api/projects/{id}` | `{name?, description?, checkCmd?, contextPrompt?, repos?, links?, delivery?}` | Project (repos/links, si fournis, remplacent la liste entière ; retirer un repo ne casse pas les tâches existantes ; `previewCmd`/`previewUrl` se posent sur chaque Repo, et une `previewUrl` non http(s) est refusée en 400) |
 | DELETE | `/api/projects/{id}` | `{confirm:true}` | 204 (voir « Suppressions » ci-dessous). **Validation humaine obligatoire** : refus 400 sans `confirm` |
 | POST | `/api/cards` | `{projectId, title, column?, contextPrompt?}` | Card. `column`, si fourni, doit valoir `"soon"` (400 `"cards are created in the soon column"` sinon) : les cartes se créent toujours dans "Bientôt" |
 | PATCH | `/api/cards/{id}` | `{column?, title?, contextPrompt?}` | Card. `title`, si fourni, doit être non vide. Le déplacement manuel de colonne (toutes colonnes acceptées) reste indépendant de l'auto-déplacement (voir plus bas) |
@@ -138,6 +155,10 @@ Settings { "displayName": "Ada", "lang": "fr" }   // lang : ""|"fr"|"en"
 | POST | `/api/tasks/{id}/read` | | 204 (unread=false, ne modifie jamais `updatedAt` : voir plus bas) |
 | GET | `/api/tasks/{id}/diff` | | voir ci-dessous |
 | GET | `/api/tasks/{id}/deliverables` | | voir ci-dessous |
+| POST | `/api/cards/{id}/preview` | `{repoName?}` | PreviewRun : lance la recette dans le worktree de la branche de chantier. `repoName` optionnel si le chantier n'a qu'une branche ; 400 `"repoName is required"` sinon, 400 si aucune branche de chantier ou aucune commande configurée. **Aucune confirmation** : local et réversible |
+| POST | `/api/tasks/{id}/preview` | | PreviewRun : même chose dans le worktree de la tâche |
+| POST | `/api/previews/{id}/stop` | | 204 (SIGINT au groupe de process, SIGKILL après 5 s). 404 si le run est inconnu ; sans effet si déjà terminé |
+| GET | `/api/previews/{id}/log` | | `{runId, lines: ["..."]}` : le tampon du journal (2000 dernières lignes), la suite arrive en SSE |
 | GET | `/api/events` | | SSE |
 
 ### Cycle de vie des tâches et auto-déplacement de carte
@@ -292,6 +313,28 @@ Le répertoire de données (dataDir) peut devenir un dépôt git optionnel, pour
   - **Conflit** (`ErrSyncConflict`) : `lastSyncError` est renseigné, l'événement SSE `workspace` est republié, et la synchronisation automatique **se met en pause** : `autoSync` reste `true`, mais les ticks suivants ne tentent plus rien tant que `lastSyncError` signale ce conflit. Seule une synchronisation manuelle réussie (`POST /api/workspace/sync`) efface l'erreur et relance l'auto-sync au tick suivant.
 - `lastSyncError` n'est jamais persisté : un redémarrage du serveur repart avec `lastSyncError` vide (mais respecte `autoSync` s'il était actif).
 
+### Recette manuelle
+
+Sillage ne sait rien des stacks : il exécute la commande de recette d'un dépôt (`Repo.previewCmd`, écrite par l'humain dans les réglages du projet) dans le worktree de ce qu'on veut éprouver. Voir `docs/SPEC-RECETTE.md` pour le « pourquoi » et les pistes écartées.
+
+- **Exécution** : `sh -c <previewCmd>`, répertoire courant = le worktree du chantier (`CardBranch.worktreeDir`) ou de la tâche (`Task.worktreeDir`), **jamais le dépôt de travail de l'utilisateur**. Le process est lancé dans son propre groupe (`Setpgid`) pour que l'arrêt tue aussi ses enfants (un `npm run dev` qui lance node, un `make` qui lance un serveur).
+- **Un seul run par worktree** : relancer arrête le précédent et attend sa mort avant de démarrer le nouveau (deux serveurs sur le même port ne servent à personne).
+- **Pas de genre de commande** : un serveur qui reste en vie et un script qui finit passent par le même chemin. Le statut dit lequel c'était (`running`, puis `exited` avec son `exitCode`).
+- **Variables injectées** dans l'environnement, en plus de celui du serveur :
+
+  | Variable | Valeur | Pour |
+  | --- | --- | --- |
+  | `SILLAGE_ID` | `ws-<cardRef>` ou `t-<taskRef>` | noms : base de données, conteneur, répertoire |
+  | `SILLAGE_N` | `<cardRef>` ou `<taskRef>` | arithmétique : `PORT=$((4000 + SILLAGE_N))` |
+  | `SILLAGE_DIR` | le worktree (aussi le répertoire courant) | chemins absolus |
+  | `SILLAGE_BRANCH` | la branche recettée | affichage, bannière de debug |
+
+  `SILLAGE_ID`/`SILLAGE_N` dérivent de `Card.ref` et `Task.ref` : petits, **stables dans le temps** (la base de recette et son contenu survivent entre deux sessions) et uniques dans un projet, puisque le compteur de références est partagé entre chantiers et tâches. Aucun état nouveau n'est persisté pour ça : ni allocateur, ni table de slots. À charge du projet d'écrire une commande idempotente (créer-si-absent).
+- **`previewUrl`** est développée par le shell dans le même environnement que la commande : elle accepte donc exactement la même syntaxe, arithmétique comprise. Elle est validée à l'enregistrement (`http(s)` uniquement, parce qu'elle devient un lien cliquable) et rendue dans `PreviewRun.url` une fois substituée. Pas de sonde de disponibilité : le lien est cliquable dès le lancement.
+- **Journal** : tampon circulaire en mémoire de 2000 lignes, stdout et stderr mêlés dans l'ordre d'arrivée. Lu une fois à l'ouverture (`GET /api/previews/{id}/log`), puis complété ligne à ligne par l'événement SSE `previewLog`. Jamais écrit sur disque.
+- **Rien ne survit à l'arrêt du serveur** : SIGINT/SIGTERM déclenche l'arrêt de tous les runs (SIGINT au groupe, SIGKILL après 5 s) avant la fermeture du serveur HTTP. Il n'y a **ni plafond ni TTL d'inactivité** : à la place, l'interface affiche en permanence le nombre de recettes en cours, et c'est l'humain qui arrête (un TTL qui coupe un serveur pendant qu'on s'en sert est plus agaçant qu'utile).
+- **Sans commande configurée**, il n'y a rien à lancer : l'interface affiche le chemin du worktree avec un bouton de copie. Ce repli est le minimum garanti, disponible sur 100 % des projets sans configuration.
+
 ### Diff
 
 ```jsonc
@@ -322,6 +365,8 @@ Le répertoire de données (dataDir) peut devenir un dépôt git optionnel, pour
 - `project` : Project complet (après PATCH `/api/projects/{id}`).
 - `workspace` : WorkspaceStatus (après setup, changement de remote/autoSync, sync manuelle, ou tick d'auto-sync).
 - `settings` : Settings (après PATCH `/api/settings`).
+- `preview` : PreviewRun (lancement, sortie, arrêt d'une recette manuelle).
+- `previewLog` : `{runId, line}` : une ligne de sortie d'un run de recette.
 - `taskDeleted` : `{taskId, cardId, projectId}` (après `DELETE /api/tasks/{id}`, une fois par tâche supprimée y compris en cascade).
 - `cardDeleted` : `{cardId, projectId}` (après `DELETE /api/cards/{id}`).
 - `projectDeleted` : `{projectId}` (après `DELETE /api/projects/{id}` ; le frontend recharge l'état complet plutôt que de rejouer la cascade).
@@ -332,6 +377,7 @@ Le frontend maintient son état en mémoire à partir de `/api/state` + SSE ; re
 
 - Push / livraison uniquement via le bouton « Livrer » de l'en-tête du chantier, en deux clics : le bouton ouvre un récapitulatif (mode, dépôts, branche → base, commits, fichiers, avertissements) dont le bouton d'action **est** la confirmation (`{"confirm":true}`). Jamais automatique. Le bouton est grisé, avec la raison en infobulle, tant que `card.shipReady` est faux ou qu'il n'y a rien à livrer. Il reste actif quand des tâches sont encore en cours ou à relire : le récapitulatif annonce alors la livraison partielle (« n tâches ne sont pas encore acceptées ») plutôt que d'interdire d'envoyer ce qui est prêt. Même règle de confirmation explicite pour la synchronisation de l'espace de travail (`/api/workspace/sync`).
 - Accepter ou refuser une tâche s'obtient en un clic depuis la liste de tâches (boutons révélés au survol d'une tâche à relire) : ces actions sont locales et réversibles (`/reopen`), donc sans confirmation. L'état de chaque tâche (acceptée, refusée) est lisible dans la liste sans ouvrir la tâche.
+- Recette manuelle : le bouton « Recette » est présent dans l'en-tête du chantier (avant « Livrer » : on éprouve, puis on livre) et dans le panneau de détail d'une tâche (action secondaire, la principale reste « Accepter »). Il est **toujours affiché**, même sans commande configurée : le panneau propose alors le chemin du worktree à copier. Lancer et arrêter sont des actions locales, sans confirmation. Une pastille verte sur le bouton, et un compteur en bas de sidebar, disent ce qui tourne.
 - Tokens : jamais affichés dans le flux de travail (kanban, détail de tâche, liste des projets), pour ne pas ajouter de charge mentale. Seul endroit visible : Réglages > onglet Statistiques, consommation par projet, sans prix.
 - Une tâche s'ouvre → POST `/read`.
 

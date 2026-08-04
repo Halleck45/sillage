@@ -2,13 +2,18 @@
 package main
 
 import (
+	"context"
 	"embed"
+	"errors"
 	"flag"
 	"io/fs"
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
 	"path/filepath"
+	"syscall"
+	"time"
 
 	"github.com/Halleck45/sillage/internal/server"
 )
@@ -44,9 +49,25 @@ func main() {
 	}
 
 	srv := server.NewServer(store, hash, *dataDir, webContent)
+	httpSrv := &http.Server{Addr: *addr, Handler: srv.Handler()}
+
+	// Arrêt propre : les recettes manuelles lancées par Sillage (serveurs de
+	// dev, scripts) sont tuées avec lui. Sans ce passage, un Ctrl+C laisserait
+	// des process en vie sur leurs ports, invisibles depuis l'interface.
+	ctx, stopSignals := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stopSignals()
+	go func() {
+		<-ctx.Done()
+		stopSignals() // un second Ctrl+C reprend son comportement par défaut
+		log.Print("Sillage shutting down: stopping previews")
+		srv.Shutdown()
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = httpSrv.Shutdown(shutdownCtx)
+	}()
 
 	log.Printf("Sillage listening on %s (data: %s)", *addr, *dataDir)
-	if err := http.ListenAndServe(*addr, srv.Handler()); err != nil {
+	if err := httpSrv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		log.Fatalf("server stopped: %v", err)
 	}
 }

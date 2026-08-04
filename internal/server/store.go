@@ -852,7 +852,20 @@ func NormalizeRepos(repos []Repo) ([]Repo, error) {
 			return nil, fmt.Errorf("duplicate repository name: %s", name)
 		}
 		seen[name] = true
-		out[i] = Repo{Name: name, Path: path}
+		previewURL := strings.TrimSpace(r.PreviewURL)
+		// L'URL de recette devient un lien cliquable dans l'interface : seuls
+		// http(s) sont acceptés, comme pour les liens épinglés. Elle n'est pas
+		// validée par url.Parse, parce que c'est un gabarit qui contient encore
+		// ses variables (http://127.0.0.1:$((4000 + SILLAGE_N))).
+		if previewURL != "" && !strings.HasPrefix(previewURL, "http://") && !strings.HasPrefix(previewURL, "https://") {
+			return nil, fmt.Errorf("invalid preview url %q: only http(s) URLs are allowed", previewURL)
+		}
+		out[i] = Repo{
+			Name:       name,
+			Path:       path,
+			PreviewCmd: strings.TrimSpace(r.PreviewCmd),
+			PreviewURL: previewURL,
+		}
 	}
 	return out, nil
 }

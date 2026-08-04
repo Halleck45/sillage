@@ -9,6 +9,11 @@
 - The target branch moved to General under its real name, "Base branch": Sillage also uses it as the branch workstreams start from, so it is the project's reference branch, not a delivery sub-setting.
 - Deleting a project moved out of an always-visible red block into its own panel at the bottom of the navigation. It keeps its two-step confirmation.
 - Pressing `Enter` in the "add a link" field now adds the link instead of saving the project and dropping the URL you had just typed.
+- Manual preview: a "Preview" button on a workstream and on a task runs the project in the matching worktree, so trying the software out no longer means opening a terminal and remembering the command. Sillage knows nothing about stacks; it runs one command per repository, written in the project settings.
+- That command receives four variables, so a project can isolate itself without Sillage knowing what a database or a container is: `$SILLAGE_ID` (`ws-107`, `t-482`) for names, `$SILLAGE_N` (`107`) for arithmetic such as `PORT=$((4000 + SILLAGE_N))`, plus `$SILLAGE_DIR` and `$SILLAGE_BRANCH`. They derive from the workstream and task reference numbers: small, stable over time (so a preview database survives between sessions) and unique within a project, with no new state to allocate or persist.
+- A server that stays alive and a script that finishes go through the same path: the panel streams stdout and stderr as they arrive, shows a clickable URL when the repository declares one, and reports "finished (exit 0)" otherwise. Web and non-web projects are covered by the same code, with no command type to choose.
+- Starting a preview replaces the one already running in that worktree, and everything is killed when Sillage stops (`SIGINT`/`SIGTERM`), process groups included, so no forgotten server keeps a port. A counter at the bottom of the sidebar always says how many previews are running.
+- With no command configured, the panel still shows the worktree path with a copy button: previewing works on every project without any setup.
 
 ## v0.5.0 (2026-08-03)
 

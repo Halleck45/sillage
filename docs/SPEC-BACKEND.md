@@ -14,6 +14,8 @@ internal/server/
   sse.go                     // Hub SSE
   git.go                     // worktrees, diff parse, commits, push
   runner.go                  // adaptateurs claude / codex / fake
+  preview.go                 // superviseur des recettes manuelles (process + journal)
+  preview_handlers.go        // routes de recette
   handlers.go                // REST
   store_test.go, git_test.go // tests unitaires
 ```
@@ -108,6 +110,18 @@ Jamais de `--dangerously-skip-permissions`. Jamais `git push` dans allowedTools.
 
 Sans exec : goroutine qui simule ~3 s de travail : 3 lignes d'activité espacées, écrit/complète un fichier `SILLAGE-TEST.md` dans le worktree (contenu horodaté), un Message agent de synthèse, usage fictif `{input:1200, output:340, costUsd:0.004}`. Sert aux tests et à la démo sans coût.
 
+## Superviseur de recette (preview.go)
+
+Voir `docs/SPEC-RECETTE.md` pour le « pourquoi », SPEC-API.md §« Recette manuelle » pour le contrat.
+
+- `PreviewSupervisor` : `map[worktreeDir]*previewProc` protégée par un mutex, plus un compteur de runs (`pv1`, `pv2`, ...). Vit dans `Server`, **rien dans `Store`** : aucun run, aucun journal n'atteint `state.json`.
+- `Start(previewTarget)` : arrête d'abord le run du même worktree et **attend sa mort** (le port doit être libre), puis `sh -c <cmd>` avec `Dir` = le worktree, `Setpgid: true`, et l'environnement du serveur enrichi des quatre variables (`previewEnv`). Un échec de `cmd.Start()` n'est pas une erreur HTTP : le run est enregistré en `failed` avec son message, parce que c'est une information de recette (binaire absent, droits), pas une panne du produit.
+- Un seul tuyau (`os.Pipe`) pour stdout **et** stderr : les erreurs doivent apparaître dans l'ordre où elles arrivent. Une goroutine (`pump`) scanne les lignes, remplit le tampon circulaire (2000 lignes) et publie `previewLog`. Le hub SSE abandonne les événements des clients lents, donc une commande très bavarde ne bloque jamais le process recetté.
+- `wait` distingue l'arrêt humain (`stopped`, drapeau atomique posé par `Stop`) de la sortie naturelle (`exited` + `exitCode`), puis publie `preview`.
+- `expandPreviewURL` développe `Repo.previewUrl` en lançant `printf '%s' "<gabarit>"` dans le même environnement : le gabarit accepte donc la même syntaxe que la commande, `$(( ))` compris, sans réimplémenter l'arithmétique du shell en Go. `shellDoubleQuote` échappe `"`, `\` et le backtick, mais **pas** `$` (c'est tout l'intérêt).
+- `killGroup(cmd, done)` (dans runner.go) est partagé avec l'interruption d'un agent : SIGINT au groupe, SIGKILL après 5 s. Viser le groupe et non le seul `sh` est indispensable : un `npm run dev` laisse sinon son node en vie sur le port.
+- `Server.Shutdown()` appelle `StopAll()` (en parallèle, avec attente) puis arrête l'auto-sync. `main.go` l'appelle sur SIGINT/SIGTERM avant `httpSrv.Shutdown`. Les agents, eux, ne sont pas interrompus : leur travail est dans un worktree et survit au redémarrage.
+
 ## Seed (premier lancement)
 
 Agents : Bolt 🐝 `#f2b705` claude/sonnet (contexte : dev backend pragmatique) ; Muse 🦊 `#d0662f` claude/opus (produit, specs, docs) ; Otto 🦉 `#4f7d2f` codex/(modèle vide = défaut) (infra) ; Écho 🧪 `#777` fake (agent de test local, gratuit). Pas de projets seedés.
@@ -121,6 +135,7 @@ Suivre SPEC-API.md. Points d'attention :
 - GET /cards/{id}/delivery : aucune écriture git ; commence par constater les acceptations déjà faites (`autoAcceptMergedTasks` : tâche en revue, aucun agent en cours, `filesCount > 0`, worktree propre, branche déjà contenue dans celle du chantier) avant de calculer l'aperçu. Publie `task`/`message`/`cards`/`agents` pour chaque tâche ainsi acceptée.
 - POST /cards/{id}/catch-up : pour chaque branche de chantier, `MergeBranch(worktree du chantier, destination, "Sillage: catch up with <destination>")` — donc une fusion, jamais un rebase (les branches de tâche descendent de celle du chantier). Ne fait rien si la destination y est déjà (`upToDate`), refuse si le worktree du chantier est sale, annule et rapporte les fichiers en cas de conflit. Un rattrapage réussi appelle `MarkCardBranchPending`.
 - POST /cards/{id}/ship : exiger `{"confirm":true}` sinon 400 `"confirmation required"` ; 409 si `card.shipReady` est faux (message dérivé de `shipBlocker`) ; traiter chaque dépôt indépendamment, un échec n'annule pas les autres (erreur portée par la ligne de résultat). Un dépôt dont `pending` vaut 0 est `skipped`. Une `prUrl` déjà connue est réutilisée : le push met à jour la pull request existante, aucune tentative d'en ouvrir une seconde.
+- POST /cards/{id}/preview, /tasks/{id}/preview : aucune confirmation (lancer un process local est réversible et n'a rien de sortant). Le nom de dépôt est optionnel quand le chantier n'a qu'une branche (`cardBranchByRepo`). L'identité vient de la référence courte : `ws-<card.ref>` ou `t-<task.ref>`.
 - reopen : accepted/cancelled → review.
 - Après chaque mutation : publier les SSE nécessaires (`task`, `cards`, `tokens`, `agents`).
 
@@ -128,4 +143,5 @@ Suivre SPEC-API.md. Points d'attention :
 
 - store_test.go : roundtrip save/load, compteurs dérivés.
 - git_test.go : parser de diff sur une fixture inline (2 fichiers, add/del/ctx, fichier nouveau) ; test worktree+diff sur un repo git temporaire créé dans t.TempDir().
+- preview_test.go : commande qui finit (journal, code de retour), stderr capturé, les quatre variables et le répertoire d'exécution (le worktree, jamais le dépôt du projet), identité propre d'une tâche, URL développée avec arithmétique, arrêt qui tue le groupe de process, relancement qui remplace le run, `StopAll` qui ne laisse rien vivant, refus sans commande ou sans branche de chantier, URL non http(s) refusée, tampon de journal plafonné.
 - `go vet ./...` et `go test ./...` doivent passer. `go build` doit produire le binaire.
