@@ -313,6 +313,7 @@ button, input, textarea { font-family: inherit; }
 .crumb-title { font-size: 14.5px; font-weight: 600; letter-spacing: -0.015em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .crumb-branch { font-size: 11.5px; color: var(--muted-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .topbar-actions { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+.topbar-empty-desktop { display: none; }
 
 .btn-primary, .btn-green, .btn-outline, .btn-neutral {
   flex: none; white-space: nowrap; height: 30px; padding: 0 15px; border-radius: 9px;
@@ -1139,6 +1140,7 @@ button, input, textarea { font-family: inherit; }
 
 @media (max-width: 860px) {
   .hamburger-btn { display: inline-flex; align-items: center; justify-content: center; }
+  .topbar-empty-desktop { display: flex; }
 
   .shell { position: relative; }
   .sidebar {
