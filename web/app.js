@@ -131,8 +131,11 @@
       'ship.subtext.mergePush': 'Fusionne {branch} dans {base}, puis pousse {base}',
       'ship.subtext.repos': '{n} dépôts concernés',
       'ship.subtext.nothing': 'Rien à livrer pour l\'instant',
+      'ship.partial.one': 'Livraison partielle : 1 tâche n\'est pas encore acceptée',
+      'ship.partial.other': 'Livraison partielle : {n} tâches ne sont pas encore acceptées',
+      'ship.partialNote.one': '1 tâche est encore en cours ou à relire : seul le travail accepté part maintenant. Vous pourrez livrer le reste ensuite.',
+      'ship.partialNote.other': '{n} tâches sont encore en cours ou à relire : seul le travail accepté part maintenant. Vous pourrez livrer le reste ensuite.',
       'ship.blocked.noTasks': 'Aucune tâche dans ce chantier',
-      'ship.blocked.tasksPending': 'Il reste des tâches à accepter ou refuser',
       'ship.blocked.nothingAccepted': 'Aucune tâche acceptée',
       'ship.blocked.nothingToShip': 'Aucune branche à livrer',
       'ship.blocked.behindTarget': '{base} a avancé de son côté : rattrapez-la avant de livrer (la fusion se fait en fast-forward uniquement).',
@@ -448,8 +451,11 @@
       'ship.subtext.mergePush': 'Merges {branch} into {base}, then pushes {base}',
       'ship.subtext.repos': '{n} repositories involved',
       'ship.subtext.nothing': 'Nothing to ship yet',
+      'ship.partial.one': 'Partial delivery: 1 task is not accepted yet',
+      'ship.partial.other': 'Partial delivery: {n} tasks are not accepted yet',
+      'ship.partialNote.one': '1 task is still running or waiting for review: only accepted work ships now. You will be able to ship the rest later.',
+      'ship.partialNote.other': '{n} tasks are still running or waiting for review: only accepted work ships now. You will be able to ship the rest later.',
       'ship.blocked.noTasks': 'No task in this workstream',
-      'ship.blocked.tasksPending': 'Some tasks still need to be accepted or refused',
       'ship.blocked.nothingAccepted': 'No accepted task',
       'ship.blocked.nothingToShip': 'No branch to ship',
       'ship.blocked.behindTarget': '{base} has moved on: catch up with it before shipping (merging is fast-forward only).',
@@ -1603,7 +1609,6 @@
   function shipBlockerLabel(blocker) {
     switch (blocker) {
       case 'no-tasks': return t('ship.blocked.noTasks');
-      case 'tasks-pending': return t('ship.blocked.tasksPending');
       case 'nothing-accepted': return t('ship.blocked.nothingAccepted');
       case 'nothing-to-ship': return t('ship.blocked.nothingToShip');
       default: return '';
@@ -1614,6 +1619,15 @@
   // pas encore fusionnés dans la branche de destination).
   function deliverableRepos(prev) {
     return (prev && prev.repos ? prev.repos : []).filter(function (r) { return r.pending > 0; });
+  }
+
+  // Livraison partielle : des tâches sont encore en cours ou à relire. Ce n'est
+  // pas un blocage (la branche du chantier ne contient que le travail accepté,
+  // donc rien de non relu ne peut partir), seulement ce qu'il faut savoir avant
+  // de cliquer : ce qui reste se livrera plus tard.
+  function partialTaskCount(prev) {
+    if (!prev || !deliverableRepos(prev).length) return 0;
+    return (prev.counts && prev.counts.pending) || 0;
   }
 
   // Les deux modes qui fusionnent dans la branche de destination, par
@@ -1777,11 +1791,17 @@
     }).join('');
     var catchUpError = state.catchUpErrorByCard[card.id];
     if (catchUpError) warnings += '<div class="ship-bar-warning">⚠ ' + escapeHtml(catchUpError) + '</div>';
+    var partial = partialTaskCount(prev);
+    var partialHTML = partial > 0
+      ? '<span class="ship-bar-partial" title="' + escapeHtml(tCount('ship.partialNote', partial)) + '">' +
+        escapeHtml(tCount('ship.partial', partial)) + '</span>'
+      : '';
     // Pas de compteurs de tâches ici : les filtres de la liste juste en dessous
     // les portent déjà (« Toutes 7 · À relire 0 · Traitées 7 »).
     return '<div class="ship-bar">' +
         '<div class="ship-bar-state">' +
           '<span class="ship-bar-sub">' + escapeHtml(sub) + '</span>' +
+          partialHTML +
           warnings +
           buildCardBehindHTML(prev) +
           (prev ? buildShipLinksHTML(prev) : '') +
@@ -1870,11 +1890,18 @@
     // est la confirmation, il doit dire ce qui va sortir de la machine.
     var modeNote = deliveryModeNote(prev.mode);
     var mergeNote = modeNote ? '<div class="modal-note">' + escapeHtml(modeNote) + '</div>' : '';
+    // Livraison partielle : le récapitulatif étant la confirmation, c'est ici
+    // qu'il faut dire que tout le chantier ne partira pas, et que ce n'est pas
+    // une impasse (le reste se livrera après acceptation).
+    var partial = partialTaskCount(prev);
+    var partialNote = partial > 0
+      ? '<div class="modal-note">' + escapeHtml(tCount('ship.partialNote', partial)) + '</div>'
+      : '';
     return '<div class="modal modal-sm">' +
       '<div class="modal-head"><span class="modal-title">' + escapeHtml(t('ship.modalTitle')) + '</span>' +
       '<button class="icon-btn" data-action="close-modal" aria-label="' + escapeHtml(t('common.close')) + '">✕</button></div>' +
       '<div class="ship-modal-sub">' + escapeHtml(deliveryActionLabel(prev)) + '</div>' +
-      reposHTML + mergeNote + warnings +
+      reposHTML + partialNote + mergeNote + warnings +
       buildShipResultsHTML(card.id) +
       '<div id="ship-modal-error" class="modal-error hidden"></div>' +
       '<div class="modal-foot"><button class="btn-outline" data-action="close-modal">' + escapeHtml(t('common.cancel')) + '</button>' +

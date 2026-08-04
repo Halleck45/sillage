@@ -116,11 +116,13 @@ type Card struct {
 	Branches []CardBranch `json:"branches"`
 
 	// ShipReady et ShipBlocker sont dérivés (recalculés dans recomputeCard) :
-	// le bouton de livraison n'est actif que si toutes les tâches sont
-	// acceptées ou refusées, qu'au moins une est acceptée, et qu'une branche
-	// de chantier existe. ShipBlocker nomme la raison du blocage, vide sinon.
+	// le bouton de livraison n'est actif que si le chantier a au moins une
+	// tâche, qu'au moins une est acceptée, et qu'une branche de chantier
+	// existe. Des tâches encore en cours ou à relire ne bloquent pas : on livre
+	// le travail accepté et on relivre le reste ensuite. ShipBlocker nomme la
+	// raison du blocage, vide sinon.
 	ShipReady   bool   `json:"shipReady"`
-	ShipBlocker string `json:"shipBlocker"` // ""|no-tasks|tasks-pending|nothing-accepted|nothing-to-ship
+	ShipBlocker string `json:"shipBlocker"` // ""|no-tasks|nothing-accepted|nothing-to-ship
 
 	// ContextPrompt est un texte libre transmis aux agents (voir runner.go :
 	// ajouté au system prompt claude, préfixe du prompt codex, ignoré par fake).

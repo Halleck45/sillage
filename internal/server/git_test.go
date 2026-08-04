@@ -356,8 +356,9 @@ func (f *deliveryFixture) delivery(t *testing.T) DeliveryPreview {
 
 // TestAcceptThenShipWorkstream couvre le flux complet du nouveau modèle :
 // la tâche part de la branche du chantier, l'acceptation y fusionne son
-// travail, la livraison pousse cette branche (une seule action sortante), et
-// le chantier ne devient livrable que quand tout est accepté ou refusé.
+// travail, la livraison pousse cette branche (une seule action sortante), et le
+// chantier ne devient livrable qu'à partir de la première acceptation (il n'y a
+// rien à livrer avant).
 func TestAcceptThenShipWorkstream(t *testing.T) {
 	f := newDeliveryFixture(t, Delivery{Mode: "pr"})
 
@@ -366,13 +367,14 @@ func TestAcceptThenShipWorkstream(t *testing.T) {
 		t.Fatalf("nom de branche de chantier inattendu : %q", cb.Branch)
 	}
 
-	// Tant que la tâche est en revue, la livraison est bloquée des deux côtés.
+	// Rien d'accepté : la branche du chantier est vide, la livraison est bloquée
+	// des deux côtés.
 	card, _ := f.srv.store.GetCard(f.card.ID)
-	if card.ShipReady || card.ShipBlocker != "tasks-pending" {
-		t.Fatalf("chantier attendu non livrable (tasks-pending), reçu ready=%v blocker=%q", card.ShipReady, card.ShipBlocker)
+	if card.ShipReady || card.ShipBlocker != "nothing-accepted" {
+		t.Fatalf("chantier attendu non livrable (nothing-accepted), reçu ready=%v blocker=%q", card.ShipReady, card.ShipBlocker)
 	}
 	if w := f.ship(t, `{"confirm":true}`); w.Code != http.StatusConflict {
-		t.Fatalf("livraison avec une tâche en revue : attendu 409, reçu %d (%s)", w.Code, w.Body.String())
+		t.Fatalf("livraison sans rien d'accepté : attendu 409, reçu %d (%s)", w.Code, w.Body.String())
 	}
 	if w := f.ship(t, `{"confirm":false}`); w.Code != http.StatusBadRequest {
 		t.Fatalf("livraison sans confirmation : attendu 400, reçu %d", w.Code)
@@ -426,6 +428,64 @@ func TestAcceptThenShipWorkstream(t *testing.T) {
 	}
 }
 
+// TestShipPartialWorkstream : livrer un chantier dont tout n'est pas fini. Une
+// tâche est acceptée, une autre est encore en revue : la livraison part quand
+// même, avec le travail accepté et lui seul. La carte reste en « En cours »
+// (« Terminé » veut toujours dire livré ET fini), et l'acceptation suivante
+// rouvre une livraison qui ne pousse que le neuf.
+func TestShipPartialWorkstream(t *testing.T) {
+	f := newDeliveryFixture(t, Delivery{Mode: "pr"})
+
+	first, cb := f.addTask(t, "Première", "un.txt", "un\n")
+	second, _ := f.addTask(t, "Seconde", "deux.txt", "deux\n")
+	if w := f.accept(t, first); w.Code != http.StatusOK {
+		t.Fatalf("accept: attendu 200, reçu %d (%s)", w.Code, w.Body.String())
+	}
+
+	card, _ := f.srv.store.GetCard(f.card.ID)
+	if !card.ShipReady {
+		t.Fatalf("chantier attendu livrable avec une tâche encore en revue, blocage %q", card.ShipBlocker)
+	}
+	prev := f.delivery(t)
+	if !prev.Ready || prev.Counts.Accepted != 1 || prev.Counts.Pending != 1 {
+		t.Fatalf("aperçu inattendu : ready=%v accepted=%d pending=%d", prev.Ready, prev.Counts.Accepted, prev.Counts.Pending)
+	}
+
+	if w := f.ship(t, `{"confirm":true}`); w.Code != http.StatusOK {
+		t.Fatalf("livraison partielle : attendu 200, reçu %d (%s)", w.Code, w.Body.String())
+	}
+	// Seul le travail accepté est parti : la tâche en revue n'est pas fusionnée.
+	out := runTestGit(t, f.bare, "log", "--oneline", cb.Branch)
+	if !strings.Contains(out, "Première") {
+		t.Fatalf("le travail accepté devrait être poussé, reçu : %q", out)
+	}
+	if strings.Contains(out, "Seconde") {
+		t.Fatalf("le travail non accepté ne doit jamais être poussé, reçu : %q", out)
+	}
+	card, _ = f.srv.store.GetCard(f.card.ID)
+	if card.Column != "doing" {
+		t.Fatalf("colonne attendue 'doing' (une tâche reste à relire), reçue %q", card.Column)
+	}
+	if card.Branches[0].ShippedAt == nil {
+		t.Fatalf("shippedAt devrait être renseigné après la livraison partielle")
+	}
+
+	// La suite du chantier se livre ensuite, et là seulement la carte est terminée.
+	if w := f.accept(t, second); w.Code != http.StatusOK {
+		t.Fatalf("accept (2e): attendu 200, reçu %d (%s)", w.Code, w.Body.String())
+	}
+	if w := f.ship(t, `{"confirm":true}`); w.Code != http.StatusOK {
+		t.Fatalf("seconde livraison : attendu 200, reçu %d (%s)", w.Code, w.Body.String())
+	}
+	if out := runTestGit(t, f.bare, "log", "--oneline", cb.Branch); !strings.Contains(out, "Seconde") {
+		t.Fatalf("le travail de la seconde tâche devrait être poussé, reçu : %q", out)
+	}
+	card, _ = f.srv.store.GetCard(f.card.ID)
+	if card.Column != "done" {
+		t.Fatalf("colonne attendue 'done' après la livraison complète, reçue %q", card.Column)
+	}
+}
+
 // TestAcceptConflictKeepsTaskInReview : deux tâches du même chantier qui
 // touchent la même ligne. La seconde acceptation échoue en 409, la tâche RESTE
 // en revue, et un message marqueur de conflit est ajouté au fil.
@@ -454,10 +514,11 @@ func TestAcceptConflictKeepsTaskInReview(t *testing.T) {
 	if !strings.HasPrefix(last.Text, "[merge-conflict:") || !strings.Contains(last.Text, "README.md") {
 		t.Fatalf("message marqueur de conflit inattendu : %+v", last)
 	}
-	// L'arbre du chantier est intact (merge --abort), donc livrable.
+	// L'arbre du chantier est intact (merge --abort) : le travail de la première
+	// tâche reste livrable, malgré la seconde encore en revue.
 	card, _ := f.srv.store.GetCard(f.card.ID)
-	if card.ShipBlocker != "tasks-pending" {
-		t.Fatalf("blocage attendu 'tasks-pending' (la seconde tâche est encore en revue), reçu %q", card.ShipBlocker)
+	if !card.ShipReady {
+		t.Fatalf("chantier attendu livrable malgré la tâche en conflit, blocage %q", card.ShipBlocker)
 	}
 }
 
@@ -1031,8 +1092,16 @@ func TestShipAgainAfterNewWork(t *testing.T) {
 	if card.Branches[0].ShippedAt != nil {
 		t.Fatalf("le chantier ne devrait plus être marqué livré après une nouvelle tâche")
 	}
-	if card.Column != "doing" || card.ShipBlocker != "tasks-pending" {
-		t.Fatalf("chantier attendu en cours : colonne %q, blocage %q", card.Column, card.ShipBlocker)
+	if card.Column != "doing" {
+		t.Fatalf("colonne attendue 'doing' après une nouvelle tâche, reçue %q", card.Column)
+	}
+	// La première tâche reste acceptée : le chantier reste livrable en principe,
+	// mais l'aperçu n'annonce plus rien à livrer (tout est déjà poussé).
+	if !card.ShipReady {
+		t.Fatalf("chantier attendu livrable, blocage %q", card.ShipBlocker)
+	}
+	if prev := f.delivery(t); prev.Repos[0].Pending != 0 {
+		t.Fatalf("aucun commit ne devrait rester à livrer, reçu %d", prev.Repos[0].Pending)
 	}
 
 	if w := f.accept(t, second); w.Code != http.StatusOK {
