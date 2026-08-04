@@ -81,12 +81,17 @@ Task    { "id": "t1", "cardId": "c1", "projectId": "p1", "ref": 482, "title": ".
           "messagesCount": 5, "filesCount": 3, "docsCount": 1,
           "checks": [ { "label": "go test", "ok": true } ],   // [] si aucun
           "liveActivity": "Edit · internal/server/store.go" | null,
+          "commandLog": [ { "text": "Edit · internal/server/store.go", "at": "..." } ],
           "unread": true, "updatedAt": "2026-08-02T10:00:00Z", "tokens": Tokens,
           "rebasing": false }
           // repoName : nom du Repo du projet utilisé pour le worktree
           // rebasing : un rebase automatique de cette tâche est en cours (voir
           //   "Rebase automatique après une acceptation"). État volatile, remis à false au
           //   chargement de state.json. N'affecte jamais updatedAt.
+          // commandLog : historique des commandes jouées par l'agent (tool_use, alimenté
+          //   uniquement par l'adaptateur claude), les plus anciennes tombant au-delà de 500
+          //   entrées. [] si aucune. Contrairement à liveActivity (remis à null en fin
+          //   d'exécution), persiste : c'est l'onglet "Historique" du panneau de tâche.
 
 Message { "id": "m1", "taskId": "t1", "author": "user|agent", "authorName": "Bolt",
           "text": "markdown...", "createdAt": "..." }
