@@ -344,7 +344,7 @@ func TestUpdateProjectFields(t *testing.T) {
 
 	name := "Nouveau nom"
 	checkCmd := "go test ./..."
-	updated, err := s.UpdateProject(p.ID, &name, nil, &checkCmd, nil, nil, nil, nil)
+	updated, err := s.UpdateProject(p.ID, &name, nil, &checkCmd, nil, nil, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("UpdateProject: %v", err)
 	}
@@ -356,7 +356,7 @@ func TestUpdateProjectFields(t *testing.T) {
 	}
 
 	newRepos := []Repo{{Name: "a", Path: "/tmp/a"}, {Name: "b", Path: "/tmp/b"}}
-	updated, err = s.UpdateProject(p.ID, nil, nil, nil, nil, &newRepos, nil, nil)
+	updated, err = s.UpdateProject(p.ID, nil, nil, nil, nil, nil, &newRepos, nil, nil)
 	if err != nil {
 		t.Fatalf("UpdateProject (repos): %v", err)
 	}
@@ -381,7 +381,7 @@ func TestUpdateProjectDescriptionAndContextPrompt(t *testing.T) {
 
 	desc := "Nouvelle description"
 	ctx := "Nouveau contexte"
-	updated, err := s.UpdateProject(p.ID, nil, &desc, nil, &ctx, nil, nil, nil)
+	updated, err := s.UpdateProject(p.ID, nil, &desc, nil, &ctx, nil, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("UpdateProject: %v", err)
 	}
@@ -1153,5 +1153,89 @@ func TestProjectCascadeDeletesCardsAndTasks(t *testing.T) {
 	}
 	if _, ok := s.GetTask(t2); ok {
 		t.Fatalf("la tâche %s devrait avoir été supprimée par la cascade du projet", t2)
+	}
+}
+
+func TestNormalizeAllowedTools(t *testing.T) {
+	got := NormalizeAllowedTools([]string{"  Bash(pytest:*)  ", "", "   ", "Bash(ruff:*)"})
+	if len(got) != 2 || got[0] != "Bash(pytest:*)" || got[1] != "Bash(ruff:*)" {
+		t.Fatalf("liste nettoyée attendue [Bash(pytest:*) Bash(ruff:*)], reçue %v", got)
+	}
+	// Non nulle même vide : nil est réservé aux projets antérieurs au champ,
+	// que migrateProjectAllowedTools amorce au chargement.
+	if empty := NormalizeAllowedTools(nil); empty == nil {
+		t.Fatalf("une liste vide doit rester non nulle pour ne pas être prise pour un projet à migrer")
+	}
+}
+
+// Un projet antérieur au champ récupère la chaîne Go qui vivait dans le socle,
+// pour garder exactement son comportement d'avant la mise à jour. Un projet qui
+// a explicitement vidé sa liste n'est pas réamorcé à chaque démarrage.
+func TestMigrateProjectAllowedTools(t *testing.T) {
+	s := &Store{
+		Projects: map[string]Project{
+			"p1": {ID: "p1"},                              // antérieur au champ
+			"p2": {ID: "p2", AllowedTools: []string{}},    // vidé volontairement
+			"p3": {ID: "p3", AllowedTools: []string{"X"}}, // déjà réglé
+		},
+	}
+	migrateProjectAllowedTools(s)
+
+	if got := s.Projects["p1"].AllowedTools; len(got) != len(legacyGoAllowedTools) {
+		t.Fatalf("projet antérieur : chaîne Go attendue %v, reçue %v", legacyGoAllowedTools, got)
+	}
+	if got := s.Projects["p2"].AllowedTools; len(got) != 0 {
+		t.Fatalf("une liste vidée volontairement ne doit pas être réamorcée, reçue %v", got)
+	}
+	if got := s.Projects["p3"].AllowedTools; len(got) != 1 || got[0] != "X" {
+		t.Fatalf("une liste déjà réglée ne doit pas bouger, reçue %v", got)
+	}
+
+	// Idempotence : un second chargement ne doit rien réécrire.
+	migrateProjectAllowedTools(s)
+	if got := s.Projects["p1"].AllowedTools; len(got) != len(legacyGoAllowedTools) {
+		t.Fatalf("migration non idempotente, reçue %v", got)
+	}
+}
+
+func TestUpdateProjectAllowedTools(t *testing.T) {
+	s, err := NewStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+	p, err := s.AddProject("demo", "", "", []Repo{{Name: "demo", Path: "/tmp/demo"}}, nil, nil)
+	if err != nil {
+		t.Fatalf("AddProject: %v", err)
+	}
+	if p.AllowedTools == nil {
+		t.Fatalf("un projet neuf doit avoir une liste vide non nulle, pas nil")
+	}
+
+	tools := []string{"Bash(pytest:*)", "  "}
+	updated, err := s.UpdateProject(p.ID, nil, nil, nil, nil, &tools, nil, nil, nil)
+	if err != nil {
+		t.Fatalf("UpdateProject: %v", err)
+	}
+	if len(updated.AllowedTools) != 1 || updated.AllowedTools[0] != "Bash(pytest:*)" {
+		t.Fatalf("outils attendus [Bash(pytest:*)], reçus %v", updated.AllowedTools)
+	}
+
+	// nil (champ non fourni) ne touche pas à la liste existante.
+	updated, err = s.UpdateProject(p.ID, nil, nil, nil, nil, nil, nil, nil, nil)
+	if err != nil {
+		t.Fatalf("UpdateProject (sans allowedTools): %v", err)
+	}
+	if len(updated.AllowedTools) != 1 {
+		t.Fatalf("la liste ne devait pas changer, reçue %v", updated.AllowedTools)
+	}
+
+	// Liste vide fournie : l'utilisateur retire tout, et ça se persiste.
+	none := []string{}
+	updated, err = s.UpdateProject(p.ID, nil, nil, nil, nil, &none, nil, nil, nil)
+	if err != nil {
+		t.Fatalf("UpdateProject (liste vide): %v", err)
+	}
+	if len(updated.AllowedTools) != 0 {
+		t.Fatalf("liste vide attendue, reçue %v", updated.AllowedTools)
 	}
 }

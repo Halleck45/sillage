@@ -71,7 +71,7 @@ func TestAddProjectWithLinks(t *testing.T) {
 	}
 
 	newLinks := []Link{{URL: "https://other.example"}}
-	updated, err := s.UpdateProject(p.ID, nil, nil, nil, nil, nil, &newLinks, nil)
+	updated, err := s.UpdateProject(p.ID, nil, nil, nil, nil, nil, nil, &newLinks, nil)
 	if err != nil {
 		t.Fatalf("UpdateProject: %v", err)
 	}
@@ -81,7 +81,7 @@ func TestAddProjectWithLinks(t *testing.T) {
 
 	// links=nil (non fourni) ne modifie pas la liste existante.
 	name := "demo2"
-	updated, err = s.UpdateProject(p.ID, &name, nil, nil, nil, nil, nil, nil)
+	updated, err = s.UpdateProject(p.ID, &name, nil, nil, nil, nil, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("UpdateProject (sans links): %v", err)
 	}

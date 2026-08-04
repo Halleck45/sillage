@@ -38,8 +38,11 @@ Delivery { "mode": "pr|push|merge|merge-push", "target": "main", "stackedPrs": f
 Project { "id": "p1", "name": "sillage", "description": "...", "repos": [Repo, ...],
           "links": [Link, ...], "unread": 2,
           "tokens": Tokens, "checkCmd": "go test ./...", "contextPrompt": "...",
+          "allowedTools": ["Bash(pytest:*)", "Bash(ruff:*)"],
           "delivery": Delivery, "deliveryWarning": "..." }
           // description : une phrase, affichée sous le nom. checkCmd/contextPrompt/description peuvent être vides.
+          // allowedTools : outils supplémentaires accordés aux agents de ce projet, en plus
+          // du socle du binaire (voir "Outils autorisés aux agents"). Vide par défaut.
           // links : au plus 12, http(s) uniquement (voir "Liens épinglés" ci-dessous).
           // deliveryWarning : calculé à chaque lecture (jamais persisté), vide si tout va
           // bien ; voir "Santé de la livraison" ci-dessous.
@@ -137,7 +140,7 @@ PreviewRun { "id": "pv1", "projectId": "p1", "cardId": "c1", "taskId": "",
 | PATCH | `/api/agents/{id}` | mêmes champs, tous optionnels | Agent |
 | DELETE | `/api/agents/{id}` | | 204 (400 si une tâche référence encore l'agent) |
 | POST | `/api/projects` | `{name?, path}` ou `{name?, repos:[{name?,path}, ...], description?, contextPrompt?, links?:[{url,title?}, ...], delivery?}` | Project (400 si aucun dépôt, un path invalide/pas un dépôt git, noms de repo dupliqués, mode de livraison inconnu, ou lien invalide/en trop grand nombre). Seul le chemin d'un dépôt est requis : `name` absent ou vide = basename du premier dépôt, `delivery` absent = déduit des remotes des dépôts (voir « Livraison d'un chantier ») |
-| PATCH | `/api/projects/{id}` | `{name?, description?, checkCmd?, contextPrompt?, repos?, links?, delivery?}` | Project (repos/links, si fournis, remplacent la liste entière ; retirer un repo ne casse pas les tâches existantes ; `previewCmd`/`previewUrl` se posent sur chaque Repo, et une `previewUrl` non http(s) est refusée en 400) |
+| PATCH | `/api/projects/{id}` | `{name?, description?, checkCmd?, contextPrompt?, allowedTools?, repos?, links?, delivery?}` | Project (repos/links/allowedTools, si fournis, remplacent la liste entière ; retirer un repo ne casse pas les tâches existantes ; `previewCmd`/`previewUrl` se posent sur chaque Repo, et une `previewUrl` non http(s) est refusée en 400) |
 | DELETE | `/api/projects/{id}` | `{confirm:true}` | 204 (voir « Suppressions » ci-dessous). **Validation humaine obligatoire** : refus 400 sans `confirm` |
 | POST | `/api/cards` | `{projectId, title, column?, contextPrompt?}` | Card. `column`, si fourni, doit valoir `"soon"` (400 `"cards are created in the soon column"` sinon) : les cartes se créent toujours dans "Bientôt" |
 | PATCH | `/api/cards/{id}` | `{column?, title?, contextPrompt?}` | Card. `title`, si fourni, doit être non vide. Le déplacement manuel de colonne (toutes colonnes acceptées) reste indépendant de l'auto-déplacement (voir plus bas) |
@@ -190,6 +193,22 @@ Après chaque changement de statut de tâche, la carte est automatiquement repla
 ### Liens épinglés de projet
 
 `Project.links` : au plus 12 liens, http(s) uniquement (400 sinon, `file://` et tout autre schéma refusés). Pour chaque lien envoyé sans `title`, le serveur tente de récupérer le `<title>` de la page à l'enregistrement (POST ou PATCH) : GET avec timeout global de 5 s, lecture plafonnée à 64 Ko, redirections suivies uniquement si elles restent en http(s) (au plus 5). Cette récupération est best-effort et ne bloque ni n'échoue jamais l'enregistrement : en cas d'échec (timeout, erreur HTTP, page sans `<title>`, hôte injoignable...), `title` devient le nom d'hôte de l'URL.
+
+### Outils autorisés aux agents
+
+Un agent claude tourne avec une liste d'outils autorisés : tout ce qui n'y figure pas est refusé, sans invite possible puisque le CLI tourne en mode non interactif. Cette liste se compose de trois couches, dans cet ordre.
+
+1. **Le socle**, figé dans le binaire : lecture et écriture de fichiers, recherche, `WebFetch`, les commandes shell de base et le git en lecture seule (`status`, `diff`, `log`, `show`). Ce socle ne contient que ce qui ne dépend d'aucun langage : git n'est pas un choix de stack ici mais le modèle même du produit, où toute tâche vit dans un worktree. Aucune commande de build, de test ou de format n'y figure, quel que soit le langage : elles vont toutes dans la couche 2.
+2. **`Project.allowedTools`**, saisi par l'humain dans les réglages du projet : tout ce qui dépend du stack (`go test`, `pytest`, `cargo build`, `npm run lint`...). Sillage ne devine pas cette liste et ne la lit jamais depuis un fichier du dépôt : ces fichiers sont écrits par les agents, et les y lire ferait d'une branche un vecteur d'exécution (même règle et même niveau de confiance que `checkCmd` et `previewCmd`, voir l'invariant 5 de `CONTRIBUTING.md`).
+3. **Le refus figé**, également dans le binaire et appliqué après les deux autres couches : tout ce qui peut pousser (`git push`, `gh`, `glab`) et l'édition des fichiers qui pilotent l'agent lui-même (`.claude/settings*.json`, hooks). Le refus l'emporte toujours sur l'autorisation, donc aucune saisie dans `allowedTools` ne peut ouvrir ces portes.
+
+Cette dernière couche est ce qui rend le champ défendable : elle attrape la maladresse, pas la détermination (une entrée `Bash(sh:*)` contournerait tout). Le confinement réel reste inchangé : worktree dédié, branche jetable, revue humaine, et `Ship` comme unique action sortante.
+
+Migration : les projets antérieurs au champ (`allowedTools` absent du `state.json`) reçoivent au chargement la chaîne Go qui vivait dans le socle (`go build`, `go test`, `go vet`), pour garder exactement leur comportement d'avant la mise à jour. Une liste vide mais présente est un choix de l'utilisateur et n'est jamais réamorcée. Un projet créé après la mise à jour démarre donc à vide, et déclare ses commandes au premier refus.
+
+Quand un outil est refusé, un Message marqueur est ajouté au fil de la tâche (`author="agent"`, `authorName=""`, texte figé `"[tool-denied:<outil demandé>]"`), suivi de l'événement SSE `message`. Sans lui, un refus reste invisible : l'agent s'excuse, contourne, et l'humain constate seulement une tâche qui a pris trois tours de plus. Le frontend affiche une ligne système localisée qui nomme l'outil et renvoie vers les réglages du projet. C'est ce marqueur qui apprend à l'utilisateur quoi mettre dans `allowedTools` ; sans lui, le champ n'est découvrable qu'en lisant un transcript.
+
+Les agents `codex` ne sont pas concernés : ils n'ont pas d'allowlist mais un sandbox (`--sandbox`, voir `SPEC-BACKEND.md`). `allowedTools` est ignoré pour eux, et le champ le dit dans l'UI.
 
 ### Réassignation d'une tâche à un autre agent
 
@@ -392,6 +411,8 @@ Le frontend maintient son état en mémoire à partir de `/api/state` + SSE ; re
 - Accepter ou refuser une tâche s'obtient en un clic depuis la liste de tâches (boutons révélés au survol d'une tâche à relire) : ces actions sont locales et réversibles (`/reopen`), donc sans confirmation. L'état de chaque tâche (acceptée, refusée) est lisible dans la liste sans ouvrir la tâche.
 - Recette manuelle : le bouton « Recette » est présent dans l'en-tête du chantier (avant « Livrer » : on éprouve, puis on livre) et dans le panneau de détail d'une tâche (action secondaire, la principale reste « Accepter »). Il est **toujours affiché**, même sans commande configurée : le panneau propose alors le chemin du worktree à copier. Lancer et arrêter sont des actions locales, sans confirmation. Une pastille verte sur le bouton, et un compteur en bas de sidebar, disent ce qui tourne.
 - Tokens : jamais affichés dans le flux de travail (kanban, détail de tâche, liste des projets), pour ne pas ajouter de charge mentale. Seul endroit visible : Réglages > onglet Statistiques, consommation par projet, sans prix.
+- Un outil refusé à un agent s'affiche dans le fil comme une ligne système, qui nomme l'outil demandé et pointe vers les réglages du projet (voir « Outils autorisés aux agents »). Un refus silencieux se paie en tours d'agent que personne ne sait expliquer.
+- Le champ `allowedTools` est une entrée par ligne, avec un exemple en placeholder et une aide courte : c'est la seule saisie du produit où l'utilisateur doit connaître une syntaxe qui n'est pas la sienne mais celle du CLI. Vide par défaut, et vide reste un état normal : le socle suffit à lire, écrire et chercher.
 - Une tâche s'ouvre → POST `/read`.
 
 ### Créer un projet : une seule question
@@ -408,7 +429,7 @@ L'édition d'un projet est une modale à navigation latérale, pas une colonne d
 |---|---|
 | Général | nom, description, branche de base (`delivery.target`) |
 | Dépôts | les lignes nom + chemin, « + dépôt » |
-| Instructions | `contextPrompt` en grand (≥ 12 lignes), puis `checkCmd` |
+| Instructions | `contextPrompt` en grand (≥ 12 lignes), puis `checkCmd`, puis `allowedTools` |
 | Livraison | les quatre modes en cartes à cocher, plus l'avertissement de santé s'il y en a un |
 | Liens | les liens épinglés |
 | Supprimer | conséquences chiffrées, puis le bouton de suppression en deux temps |

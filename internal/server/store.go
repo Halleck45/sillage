@@ -85,6 +85,7 @@ func loadStoreFile(dataDir string) (*Store, error) {
 	migrateLegacyWorkspace(data, s)
 	migrateTaskStatuses(s)
 	migrateLegacyDelivery(s)
+	migrateProjectAllowedTools(s)
 	migrateCardRefs(s)
 	resetTransientTaskFlags(s)
 	return s, nil
@@ -148,6 +149,26 @@ func migrateLegacyDelivery(s *Store) {
 	for id, p := range s.Projects {
 		if p.Delivery.Mode == "" {
 			p.Delivery.Mode = "pr"
+			s.Projects[id] = p
+		}
+	}
+}
+
+// legacyGoAllowedTools est la chaîne Go qui vivait dans le socle du binaire
+// avant Project.AllowedTools. Elle en est sortie : le socle ne contient que ce
+// qui ne dépend d'aucun langage, sinon tout projet Python ou Rust hérite d'une
+// allowlist écrite pour un autre. Les projets existants la récupèrent ici pour
+// garder exactement leur comportement d'avant la mise à jour.
+var legacyGoAllowedTools = []string{"Bash(go build:*)", "Bash(go test:*)", "Bash(go vet:*)"}
+
+// migrateProjectAllowedTools amorce les projets antérieurs au champ. nil veut
+// dire « antérieur » ; une liste vide non nulle est un choix explicite de
+// l'utilisateur (voir AddProject et NormalizeAllowedTools) et n'est pas
+// réamorcée à chaque démarrage.
+func migrateProjectAllowedTools(s *Store) {
+	for id, p := range s.Projects {
+		if p.AllowedTools == nil {
+			p.AllowedTools = append([]string{}, legacyGoAllowedTools...)
 			s.Projects[id] = p
 		}
 	}
@@ -963,6 +984,9 @@ func (s *Store) AddProject(name, description, contextPrompt string, repos []Repo
 		ID: fmt.Sprintf("p%d", s.NextProjectN), Name: name, Description: description,
 		ContextPrompt: contextPrompt, Repos: normalized, Links: normalizedLinks,
 		Delivery: normalizedDelivery,
+		// Liste vide non nulle : un projet neuf n'a rien à migrer, alors qu'un
+		// nil serait relu comme « antérieur au champ » au prochain démarrage.
+		AllowedTools: []string{},
 	}
 	s.Projects[p.ID] = p
 	if err := s.save(); err != nil {
@@ -971,13 +995,30 @@ func (s *Store) AddProject(name, description, contextPrompt string, repos []Repo
 	return p, nil
 }
 
+// NormalizeAllowedTools nettoie la liste saisie par l'humain : une entrée par
+// ligne dans l'UI, donc espaces superflus et lignes vides à retirer. Aucune
+// validation du contenu : c'est le refus figé passé au CLI (claudeDeniedTools)
+// qui garantit l'invariant, pas un filtre de saisie qui donnerait une fausse
+// impression de sûreté (Bash(sh:*) contournerait n'importe quelle liste noire).
+// Retourne une liste vide non nulle plutôt que nil : nil veut dire « projet
+// antérieur au champ » pour migrateProjectAllowedTools.
+func NormalizeAllowedTools(tools []string) []string {
+	out := []string{}
+	for _, tool := range tools {
+		if trimmed := strings.TrimSpace(tool); trimmed != "" {
+			out = append(out, trimmed)
+		}
+	}
+	return out
+}
+
 // UpdateProject modifie le nom, la description, la commande de vérification,
-// le contexte agent, la liste des dépôts et/ou les liens épinglés d'un
-// projet. Les champs nil ne sont pas modifiés ; repos et links, s'ils sont
-// fournis (même vides), remplacent entièrement la liste existante (mêmes
-// validations que AddProject). Retirer un repo ne casse pas les tâches
-// existantes : leur worktree déjà créé vit sa vie indépendamment.
-func (s *Store) UpdateProject(id string, name, description, checkCmd, contextPrompt *string, repos *[]Repo, links *[]Link, delivery *Delivery) (Project, error) {
+// le contexte agent, les outils autorisés, la liste des dépôts et/ou les liens
+// épinglés d'un projet. Les champs nil ne sont pas modifiés ; allowedTools,
+// repos et links, s'ils sont fournis (même vides), remplacent entièrement la
+// liste existante (mêmes validations que AddProject). Retirer un repo ne casse
+// pas les tâches existantes : leur worktree déjà créé vit sa vie indépendamment.
+func (s *Store) UpdateProject(id string, name, description, checkCmd, contextPrompt *string, allowedTools *[]string, repos *[]Repo, links *[]Link, delivery *Delivery) (Project, error) {
 	var normalized []Repo
 	if repos != nil {
 		var err error
@@ -1022,6 +1063,9 @@ func (s *Store) UpdateProject(id string, name, description, checkCmd, contextPro
 	}
 	if contextPrompt != nil {
 		p.ContextPrompt = *contextPrompt
+	}
+	if allowedTools != nil {
+		p.AllowedTools = NormalizeAllowedTools(*allowedTools)
 	}
 	if repos != nil {
 		p.Repos = normalized

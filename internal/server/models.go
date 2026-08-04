@@ -77,6 +77,14 @@ type Project struct {
 	// ajouté au system prompt claude, préfixe du prompt codex, ignoré par fake).
 	ContextPrompt string `json:"contextPrompt"`
 
+	// AllowedTools accorde aux agents claude de ce projet des outils en plus du
+	// socle du binaire (typiquement la chaîne du langage : "Bash(pytest:*)").
+	// Saisi par l'humain dans les réglages, jamais lu depuis un fichier du dépôt
+	// (invariant 5 de CONTRIBUTING.md) : ces fichiers sont écrits par les agents.
+	// Le refus figé (claudeDeniedTools) l'emporte sur toute entrée d'ici.
+	// Ignoré par codex (sandbox) et par fake.
+	AllowedTools []string `json:"allowedTools"`
+
 	// Delivery définit ce que livrer veut dire pour ce projet (voir Delivery).
 	Delivery Delivery `json:"delivery"`
 }

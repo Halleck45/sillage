@@ -18,7 +18,40 @@ import (
 
 // claudeAllowedTools est la liste figée d'outils autorisés à l'agent claude.
 // Jamais de Bash(git push:*) ici : le push n'est déclenché que par Ship (git.go).
-const claudeAllowedTools = "Read,Edit,Write,Glob,Grep,WebFetch,Bash(go build:*),Bash(go test:*),Bash(go vet:*),Bash(ls:*),Bash(cat:*),Bash(mkdir:*)"
+// Socle : uniquement ce qui ne dépend d'aucun langage. Aucune commande de
+// build, de test ou de format n'y figure, quel que soit le langage : elles
+// vont toutes dans Project.AllowedTools, sinon un projet Python hérite d'une
+// allowlist écrite pour Go. Le git est en lecture seule et reste dans le socle
+// parce qu'il est le modèle même du produit (une tâche vit dans un worktree),
+// pas un choix de stack.
+// Tout ce qui touche au push reste hors de cette liste (invariant 1) et est en
+// plus explicitement refusé par claudeDeniedTools.
+const claudeAllowedTools = "Read,Edit,Write,Glob,Grep,WebFetch," +
+	"Bash(git status:*),Bash(git diff:*),Bash(git log:*),Bash(git show:*)," +
+	"Bash(ls:*),Bash(cat:*),Bash(mkdir:*)"
+
+// claudeDeniedTools est le refus figé, passé en --disallowedTools : le refus
+// l'emporte sur l'autorisation, donc aucune entrée de Project.AllowedTools ne
+// peut ouvrir ces portes. Deux familles : ce qui peut pousser (invariant 1) et
+// les fichiers qui pilotent l'agent lui-même, qu'un agent capable de les écrire
+// utiliserait pour s'accorder de nouveaux droits au run suivant.
+// Ce refus attrape la maladresse, pas la détermination (Bash(sh:*) le
+// contournerait) : le confinement réel reste le worktree dédié, la branche
+// jetable et la revue humaine avant toute sortie. À faire grandir quand un
+// nouveau binaire sortant apparaît, jamais à réduire.
+const claudeDeniedTools = "Bash(git push:*),Bash(gh:*),Bash(glab:*)," +
+	"Edit(.claude/settings*.json),Write(.claude/settings*.json)," +
+	"Edit(.claude/hooks/**),Write(.claude/hooks/**)"
+
+// claudeTools assemble la liste d'outils réellement passée au CLI : le socle,
+// puis les outils accordés au projet par l'humain dans les réglages.
+func claudeTools(projectTools []string) string {
+	extra := NormalizeAllowedTools(projectTools)
+	if len(extra) == 0 {
+		return claudeAllowedTools
+	}
+	return claudeAllowedTools + "," + strings.Join(extra, ",")
+}
 
 // procHandle représente un processus (ou une simulation) en cours pour une tâche.
 type procHandle struct {
@@ -37,7 +70,18 @@ type Runner struct {
 	pending map[string][]string
 	store   *Store
 	hub     *Hub
+
+	// runWG compte les agents en cours. Interrompre un agent ne fait que lui
+	// demander de s'arrêter : sa goroutine peut encore écrire dans le worktree
+	// après le retour d'Interrupt. waitTasks donne aux tests le point d'attente
+	// qui manque, sans quoi t.TempDir() supprime un répertoire pendant qu'un
+	// agent y écrit encore.
+	runWG sync.WaitGroup
 }
+
+// waitTasks attend la fin des agents en cours. Réservé aux tests : en
+// production personne n'attend un agent, on l'interrompt.
+func (r *Runner) waitTasks() { r.runWG.Wait() }
 
 // NewRunner crée un runner lié à un store et un hub SSE.
 func NewRunner(store *Store, hub *Hub) *Runner {
@@ -144,6 +188,7 @@ func (r *Runner) Start(taskID string, initial bool, text string) error {
 	r.procs[taskID] = handle
 	r.mu.Unlock()
 
+	r.runWG.Add(1)
 	go r.run(task, agent, handle, cliInput)
 	return nil
 }
@@ -198,13 +243,14 @@ func (r *Runner) startQueued(taskID, text string) {
 	r.procs[taskID] = handle
 	r.mu.Unlock()
 
+	r.runWG.Add(1)
 	go r.run(task, agent, handle, r.prepareCliInput(task, text))
 }
 
 // markerPrefixes liste les préfixes des messages marqueurs posés par le
 // backend (le frontend les remplace par une ligne système localisée). Ce ne
 // sont pas des tours de conversation : ils sont exclus du transcript rejoué.
-var markerPrefixes = []string{"[reassigned:", "[accepted:", "[auto-accepted:", "[merge-conflict:"}
+var markerPrefixes = []string{"[reassigned:", "[accepted:", "[auto-accepted:", "[merge-conflict:", "[tool-denied:"}
 
 func isMarkerMessage(text string) bool {
 	for _, prefix := range markerPrefixes {
@@ -471,6 +517,11 @@ func killGroup(cmd *exec.Cmd, done <-chan struct{}) {
 // À la fin, les messages arrivés pendant l'exécution (file pending) relancent
 // automatiquement l'agent.
 func (r *Runner) run(task Task, agent Agent, handle *procHandle, cliInput string) {
+	// Déclaré en premier, donc exécuté en dernier (LIFO) : l'agent n'est compté
+	// terminé qu'une fois tout son travail écrit. Un message mis en file relance
+	// un agent depuis le defer ci-dessous, hors de ce compteur : un test qui
+	// s'appuie sur la file doit se synchroniser lui-même.
+	defer r.runWG.Done()
 	defer func() {
 		r.mu.Lock()
 		delete(r.procs, task.ID)
@@ -633,6 +684,64 @@ type claudeContentBlock struct {
 	Text  string         `json:"text"`
 	Name  string         `json:"name"`
 	Input map[string]any `json:"input"`
+
+	// Blocs tool_use / tool_result : ID identifie l'appel côté assistant,
+	// ToolUseID le rattache au résultat renvoyé dans l'enveloppe "user".
+	// Content est tantôt une chaîne, tantôt une liste de blocs (voir
+	// claudeToolResultText).
+	ID        string          `json:"id"`
+	ToolUseID string          `json:"tool_use_id"`
+	Content   json.RawMessage `json:"content"`
+	IsError   bool            `json:"is_error"`
+}
+
+// claudeToolResultText aplatit le contenu d'un tool_result, que le CLI écrit
+// soit en chaîne simple, soit en liste de blocs typés.
+func claudeToolResultText(raw json.RawMessage) string {
+	if len(raw) == 0 {
+		return ""
+	}
+	var text string
+	if err := json.Unmarshal(raw, &text); err == nil {
+		return text
+	}
+	var blocks []struct {
+		Text string `json:"text"`
+	}
+	if err := json.Unmarshal(raw, &blocks); err != nil {
+		return ""
+	}
+	var parts []string
+	for _, block := range blocks {
+		if block.Text != "" {
+			parts = append(parts, block.Text)
+		}
+	}
+	return strings.Join(parts, "\n")
+}
+
+// claudePermissionPhrases : formulations par lesquelles le CLI signale un outil
+// refusé faute d'autorisation. Le flux ne porte pas de code d'erreur dédié, la
+// détection se fait donc sur le texte du tool_result, et cette liste est à
+// revoir si le CLI reformule. Une phrase manquée ne coûte que le marqueur : le
+// refus lui-même reste appliqué par le CLI.
+var claudePermissionPhrases = []string{
+	"requested permissions",
+	"permission to use",
+	"haven't granted",
+	"have not granted",
+}
+
+// isPermissionDenial distingue un outil refusé d'une erreur d'exécution
+// ordinaire (test qui échoue, fichier absent), qui ne doit rien afficher.
+func isPermissionDenial(text string) bool {
+	lower := strings.ToLower(text)
+	for _, phrase := range claudePermissionPhrases {
+		if strings.Contains(lower, phrase) {
+			return true
+		}
+	}
+	return false
 }
 
 type claudeEnvelope struct {
@@ -657,7 +766,8 @@ func (r *Runner) runClaude(task *Task, agent Agent, project Project, card Card, 
 	args := []string{
 		"-p", "--output-format", "stream-json", "--verbose",
 		"--permission-mode", "acceptEdits",
-		"--allowedTools", claudeAllowedTools,
+		"--allowedTools", claudeTools(project.AllowedTools),
+		"--disallowedTools", claudeDeniedTools,
 	}
 	if agent.Model != "" {
 		args = append(args, "--model", agent.Model)
@@ -687,6 +797,12 @@ func (r *Runner) runClaude(task *Task, agent Agent, project Project, card Card, 
 	handle.cmd = cmd
 
 	lastAgentText := ""
+	// pendingTools rattache un tool_result à l'appel qui l'a produit : le
+	// résultat ne porte que l'identifiant, pas le nom de l'outil demandé.
+	// deniedTools garde un seul marqueur par outil et par exécution, sinon un
+	// agent qui réessaie trois fois inonde le fil.
+	pendingTools := map[string]string{}
+	deniedTools := map[string]bool{}
 	scanner := bufio.NewScanner(stdout)
 	scanner.Buffer(make([]byte, 0, 64*1024), 10*1024*1024)
 	for scanner.Scan() {
@@ -724,11 +840,42 @@ func (r *Runner) runClaude(task *Task, agent Agent, project Project, card Card, 
 					}
 				case "tool_use":
 					line := summarizeToolUse(block.Name, block.Input)
+					if block.ID != "" {
+						pendingTools[block.ID] = line
+					}
 					if t, err := r.store.UpdateTask(task.ID, func(t *Task) { t.LiveActivity = &line }); err == nil {
 						*task = t
 						r.publishActivity(task.ID, &line)
 						r.publishTask(*task)
 					}
+				}
+			}
+		case "user":
+			// Retours d'outils. Seul un refus de permission nous intéresse : une
+			// erreur d'exécution ordinaire (test rouge, fichier absent) fait
+			// partie du travail de l'agent et n'a rien à faire dans le fil.
+			if env.Message == nil {
+				continue
+			}
+			for _, block := range env.Message.Content {
+				if block.Type != "tool_result" || !block.IsError {
+					continue
+				}
+				if !isPermissionDenial(claudeToolResultText(block.Content)) {
+					continue
+				}
+				// Sans le nom de l'outil, le marqueur n'apprendrait rien à
+				// l'humain sur ce qu'il doit autoriser : mieux vaut rien.
+				denied := strings.ReplaceAll(pendingTools[block.ToolUseID], "]", "")
+				if denied == "" || deniedTools[denied] {
+					continue
+				}
+				deniedTools[denied] = true
+				msg, t, err := r.store.AddMessage(task.ID, "agent", "", "[tool-denied:"+denied+"]")
+				if err == nil {
+					r.publishMessage(msg)
+					*task = t
+					r.publishTask(*task)
 				}
 			}
 		case "result":
