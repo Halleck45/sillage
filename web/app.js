@@ -293,7 +293,8 @@
       'agent.errorNameRequired': 'Le nom est requis.',
       'agent.errorSaveFailed': 'Erreur lors de l\'enregistrement.',
       'agent.errorDeleteFailed': 'Erreur lors de la suppression.',
-      'agent.warning.codexSandbox': 'Sandbox codex bloqué sur cette machine (AppArmor). Voir le README (SILLAGE_CODEX_SANDBOX).',
+      'agent.warning.codexSandbox': 'Codex a besoin des espaces de noms utilisateur non privilégiés pour son bac à sable, et AppArmor les bloque sur cette machine. Les tâches confiées à cet agent ne peuvent pas démarrer tant que ce n\'est pas résolu.',
+      'agent.warning.codexSandboxLink': 'Comment résoudre ça (SILLAGE_CODEX_SANDBOX)',
       'agent.warning.cliNotFound': 'CLI {cli} introuvable dans le PATH.',
       'reassign.tooltip': 'Réassigner la tâche',
       'chat.reassignedTo': 'Tâche réassignée à {name}',
@@ -649,7 +650,8 @@
       'agent.errorNameRequired': 'Name is required.',
       'agent.errorSaveFailed': 'Failed to save.',
       'agent.errorDeleteFailed': 'Failed to delete.',
-      'agent.warning.codexSandbox': 'Codex sandbox is blocked on this machine (AppArmor). See the README (SILLAGE_CODEX_SANDBOX).',
+      'agent.warning.codexSandbox': 'Codex needs unprivileged user namespaces for its sandbox, and AppArmor blocks them on this machine. Tasks assigned to this agent cannot start until this is resolved.',
+      'agent.warning.codexSandboxLink': 'How to fix this (SILLAGE_CODEX_SANDBOX)',
       'agent.warning.cliNotFound': '{cli} CLI not found in PATH.',
       'reassign.tooltip': 'Reassign the task',
       'chat.reassignedTo': 'Task reassigned to {name}',
@@ -2581,6 +2583,16 @@
     return warning;
   }
 
+  // Lien cliquable complétant agentWarningText() : uniquement pour la
+  // bannière d'avertissement (le title d'un tooltip ne peut pas contenir de HTML).
+  function agentWarningLinkHTML(warning) {
+    if (warning && warning.indexOf('codex sandbox is blocked') !== -1) {
+      return '<a class="agent-warning-link" href="https://github.com/Halleck45/sillage#security-model" target="_blank" rel="noopener noreferrer">' +
+        escapeHtml(t('agent.warning.codexSandboxLink')) + '</a>';
+    }
+    return '';
+  }
+
   function buildReassignMenuHTML(task) {
     var others = state.agents.filter(function (a) { return a.id !== task.agentId; });
     var items = others.map(function (a) {
@@ -3854,7 +3866,8 @@
         '<button class="delete-link" data-action="confirm-click" data-confirm-key="' + delKey + '" data-confirm-action="agent-delete" data-confirm-id="' + agent.id + '" data-default-label="' + escapeHtml(t('agent.delete')) + '" data-confirm-label="' + escapeHtml(t('agent.deleteConfirm')) + '">' + escapeHtml(delLabel) + '</button>' +
         '</div>';
     }
-    var warningBanner = (agent && agent.warning) ? '<div class="agent-warning-banner">⚠ ' + escapeHtml(agentWarningText(agent.warning)) + '</div>' : '';
+    var warningLink = agent ? agentWarningLinkHTML(agent.warning) : '';
+    var warningBanner = (agent && agent.warning) ? '<div class="agent-warning-banner">⚠ ' + escapeHtml(agentWarningText(agent.warning)) + (warningLink ? '<br>' + warningLink : '') + '</div>' : '';
     return '<div class="modal">' +
       '<div class="modal-head"><span class="modal-title">' + escapeHtml(title) + '</span><button class="icon-btn" data-action="close-modal" aria-label="' + escapeHtml(t('common.close')) + '">✕</button></div>' +
       warningBanner +
@@ -4482,6 +4495,13 @@
     // l'aperçu (qui porte les compteurs de retard) n'est plus à jour.
     var rebaseFinished = !!(previous && previous.rebasing && !task.rebasing);
     upsertTask(task);
+    // Une tâche déjà ouverte peut redevenir "non lue" côté serveur (fin
+    // d'exécution d'agent, voir finalize() dans runner.go) : la remarquer
+    // lue immédiatement, sinon le badge reste bloqué à 1 sans raison visible.
+    if (state.taskId === task.id && task.unread) {
+      task.unread = false;
+      api('/api/tasks/' + task.id + '/read', { method: 'POST' }).catch(function () {});
+    }
     refreshTaskListAndFilters();
     if (state.taskId === task.id) {
       patchDetailHead(task.id);

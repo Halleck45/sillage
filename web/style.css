@@ -501,6 +501,7 @@ button, input, textarea { font-family: inherit; }
   margin-top: 12px; padding: 9px 12px; background: var(--amber-bg); color: var(--amber);
   border-radius: 9px; font-size: 12.5px; line-height: 1.4;
 }
+.agent-warning-link { color: inherit; text-decoration: underline; }
 .reassign-menu {
   position: absolute; top: 26px; left: 0; z-index: 6;
   background: #fff; border: 1px solid var(--border); border-radius: 10px;
