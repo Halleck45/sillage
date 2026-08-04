@@ -259,6 +259,15 @@ func newDeliveryFixture(t *testing.T, delivery Delivery) *deliveryFixture {
 	if err != nil {
 		t.Fatalf("AddCard: %v", err)
 	}
+	// Les répertoires temporaires sont supprimés à la fin du test, mais un
+	// rebase de fond ou un agent interrompu peut encore y écrire : leurs
+	// goroutines survivent au retour de la fonction qui les a lancées. Ce
+	// nettoyage est enregistré après les t.TempDir() ci-dessus, donc il s'exécute
+	// avant eux (LIFO) : on attend, puis on supprime.
+	t.Cleanup(func() {
+		srv.waitRebases()
+		srv.runner.waitTasks()
+	})
 	return &deliveryFixture{srv: srv, repo: repo, bare: bare, dataDir: dataDir, project: project, card: card}
 }
 

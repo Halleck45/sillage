@@ -46,9 +46,18 @@ nouvelle, et ça correspond exactement à `CardBranch` (une branche de chantier 
 | Variable | Valeur | Pour |
 | --- | --- | --- |
 | `SILLAGE_ID` | `ws-107` (chantier) ou `t-482` (tâche) | noms : base de données, conteneur, répertoire |
-| `SILLAGE_N` | `107` ou `482` | arithmétique : `PORT=$((4000 + SILLAGE_N))` |
+| `SILLAGE_N` | `107` ou `482` | arithmétique explicite : `PORT=$((4000 + SILLAGE_N))` |
+| `SILLAGE_PORT` | `4107` ou `4482` (`4000 + SILLAGE_N`) | port prêt à l'emploi : `PORT=$SILLAGE_PORT` |
 | `SILLAGE_DIR` | le worktree (aussi le répertoire courant) | chemins absolus dans la commande |
 | `SILLAGE_BRANCH` | la branche recettée | affichage, bannière de debug |
+
+`SILLAGE_PORT` existe parce que `SILLAGE_N` seul piège : une référence de chantier ou de
+tâche peut être petite (`SILLAGE_N=118`), et `-addr 127.0.0.1:$SILLAGE_N` écrit sans le
+décalage retombe alors sur un port privilégié (< 1024, réservé au superutilisateur sur
+Linux), avec un `bind: permission denied` qui ne dit pas pourquoi. `SILLAGE_PORT` est
+exactement `previewPortBase + SILLAGE_N` précalculé : la commande n'a plus l'arithmétique
+à écrire, donc plus à l'oublier. `SILLAGE_N` reste disponible tel quel pour tout ce qui
+n'est pas un port (noms, chemins).
 
 `SILLAGE_ID` et `SILLAGE_N` dérivent de `Card.Ref` et `Task.Ref`, qui existent déjà, sont petits,
 sont stables dans le temps, et **partagent un seul compteur par projet** (tranché dans
@@ -67,14 +76,14 @@ commande est écrite par dépôt et nomme son propre applicatif (`app_$SILLAGE_I
 
 ```sh
 # app web
-npm ci && npm run dev -- --port $((4000 + SILLAGE_N))
-# URL : http://127.0.0.1:$((4000 + SILLAGE_N))
+npm ci && npm run dev -- --port $SILLAGE_PORT
+# URL : http://127.0.0.1:$SILLAGE_PORT
 
 # API avec base isolée, idempotente
-make db-ensure DB=api_$SILLAGE_ID && make serve DB=api_$SILLAGE_ID PORT=$((4000 + SILLAGE_N))
+make db-ensure DB=api_$SILLAGE_ID && make serve DB=api_$SILLAGE_ID PORT=$SILLAGE_PORT
 
 # compose
-COMPOSE_PROJECT_NAME=app-$SILLAGE_ID PORT=$((4000 + SILLAGE_N)) docker compose up
+COMPOSE_PROJECT_NAME=app-$SILLAGE_ID PORT=$SILLAGE_PORT docker compose up
 
 # CLI : on veut juste voir la sortie
 go build -o /tmp/$SILLAGE_ID . && /tmp/$SILLAGE_ID --demo
@@ -151,9 +160,10 @@ Recette : Refonte auth
   champ. Un bouton « demander à un agent » qui pré-remplirait cette tâche est du sucre, pas de
   l'architecture (lot 2).
 - **Des genres de recette** (`service` / `run` / `manual`) : complication inutile, voir §2.
-- **Allocateur de port et sonde de disponibilité** : `SILLAGE_N` suffit à dériver un port stable,
-  et l'attente de disponibilité se remplace par un rafraîchissement. Le jour où deux chantiers
-  du même projet se battent pour un port, on saura pourquoi ajouter un allocateur.
+- **Allocateur de port et sonde de disponibilité** : `SILLAGE_N` (et son décalage précalculé
+  `SILLAGE_PORT`) suffit à dériver un port stable, et l'attente de disponibilité se remplace par
+  un rafraîchissement. Le jour où deux chantiers du même projet se battent pour un port, on
+  saura pourquoi ajouter un allocateur.
 - **`.sillage/recipes.json` dans le dépôt** : bien plus pratique (la recette suit le code), mais ce
   fichier est écrit par des agents : une branche pourrait faire exécuter une commande arbitraire
   sur le portable, déclenchée par un clic de l'humain qui croit lancer son app. Il faudrait une
@@ -173,7 +183,7 @@ conteneurs, ni cycles de vie longs.
 
 ## 6. Découpage
 
-1. **Le socle** (fait). `Repo.previewCmd` / `Repo.previewUrl`, substitution des quatre
+1. **Le socle** (fait). `Repo.previewCmd` / `Repo.previewUrl`, substitution des cinq
    variables, lancement et arrêt depuis le chantier et depuis une tâche, journal en direct,
    compteur en sidebar, repli « chemin du worktree ». Réutilise la supervision de process de
    `runner.go` (`killGroup`, partagé avec l'interruption d'un agent), plus un arrêt propre du
@@ -212,3 +222,8 @@ Notés pour que la décision reste traçable :
 - **Pas de champ de recette à la création d'un projet** : les lignes de dépôt en mode création
   n'affichent que le chemin. On ne sait pas encore comment le projet se lance ; le champ arrive
   dans les réglages, quand la question a un sens.
+- **`SILLAGE_PORT`, ajoutée après le lot 1** (issue #146) : `$((4000 + SILLAGE_N))` écrit à la
+  main s'oublie, et une référence assez petite (`SILLAGE_N=118`) transforme cet oubli en port
+  privilégié qui refuse de se lier (`bind: permission denied`, incompréhensible sans connaître
+  cette limite de Linux). `SILLAGE_PORT` précalcule le décalage : cinquième variable, pas un
+  allocateur (voir §5).

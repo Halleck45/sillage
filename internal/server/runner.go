@@ -18,7 +18,54 @@ import (
 
 // claudeAllowedTools est la liste figée d'outils autorisés à l'agent claude.
 // Jamais de Bash(git push:*) ici : le push n'est déclenché que par Ship (git.go).
-const claudeAllowedTools = "Read,Edit,Write,Glob,Grep,WebFetch,Bash(go build:*),Bash(go test:*),Bash(go vet:*),Bash(ls:*),Bash(cat:*),Bash(mkdir:*)"
+// Socle : uniquement ce qui ne dépend d'aucun langage. Aucune commande de
+// build, de test ou de format n'y figure, quel que soit le langage : elles
+// vont toutes dans Project.AllowedTools, sinon un projet Python hérite d'une
+// allowlist écrite pour Go. Le git est en lecture seule et reste dans le socle
+// parce qu'il est le modèle même du produit (une tâche vit dans un worktree),
+// pas un choix de stack.
+// Tout ce qui touche au push reste hors de cette liste (invariant 1) et est en
+// plus explicitement refusé par claudeDeniedTools.
+const claudeAllowedTools = "Read,Edit,Write,Glob,Grep,WebFetch," +
+	"Bash(git status:*),Bash(git diff:*),Bash(git log:*),Bash(git show:*)," +
+	"Bash(ls:*),Bash(cat:*),Bash(mkdir:*)"
+
+// claudeDeniedTools est le refus figé, passé en --disallowedTools : le refus
+// l'emporte sur l'autorisation, donc aucune entrée de Project.AllowedTools ne
+// peut ouvrir ces portes. Deux familles : ce qui peut pousser (invariant 1) et
+// les fichiers qui pilotent l'agent lui-même, qu'un agent capable de les écrire
+// utiliserait pour s'accorder de nouveaux droits au run suivant.
+// Ce refus attrape la maladresse, pas la détermination (Bash(sh:*) le
+// contournerait) : le confinement réel reste le worktree dédié, la branche
+// jetable et la revue humaine avant toute sortie. À faire grandir quand un
+// nouveau binaire sortant apparaît, jamais à réduire.
+const claudeDeniedTools = "Bash(git push:*),Bash(gh:*),Bash(glab:*)," +
+	"Edit(.claude/settings*.json),Write(.claude/settings*.json)," +
+	"Edit(.claude/hooks/**),Write(.claude/hooks/**)"
+
+// claudeTools assemble la liste d'outils réellement passée au CLI : le socle,
+// puis les outils accordés au projet par l'humain dans les réglages.
+func claudeTools(projectTools []string) string {
+	extra := NormalizeAllowedTools(projectTools)
+	if len(extra) == 0 {
+		return claudeAllowedTools
+	}
+	return claudeAllowedTools + "," + strings.Join(extra, ",")
+}
+
+// commandLogLimit plafonne Task.CommandLog : un historique de débogage, pas
+// un audit exhaustif, donc les entrées les plus anciennes tombent en premier.
+const commandLogLimit = 500
+
+// appendCommandLog ajoute une commande (déjà résumée par summarizeToolUse) à
+// l'historique d'une tâche, plafonné à commandLogLimit.
+func appendCommandLog(log []CommandLogEntry, text string) []CommandLogEntry {
+	log = append(log, CommandLogEntry{Text: text, At: time.Now().UTC()})
+	if len(log) > commandLogLimit {
+		log = log[len(log)-commandLogLimit:]
+	}
+	return log
+}
 
 // procHandle représente un processus (ou une simulation) en cours pour une tâche.
 type procHandle struct {
@@ -37,7 +84,18 @@ type Runner struct {
 	pending map[string][]string
 	store   *Store
 	hub     *Hub
+
+	// runWG compte les agents en cours. Interrompre un agent ne fait que lui
+	// demander de s'arrêter : sa goroutine peut encore écrire dans le worktree
+	// après le retour d'Interrupt. waitTasks donne aux tests le point d'attente
+	// qui manque, sans quoi t.TempDir() supprime un répertoire pendant qu'un
+	// agent y écrit encore.
+	runWG sync.WaitGroup
 }
+
+// waitTasks attend la fin des agents en cours. Réservé aux tests : en
+// production personne n'attend un agent, on l'interrompt.
+func (r *Runner) waitTasks() { r.runWG.Wait() }
 
 // NewRunner crée un runner lié à un store et un hub SSE.
 func NewRunner(store *Store, hub *Hub) *Runner {
@@ -144,6 +202,7 @@ func (r *Runner) Start(taskID string, initial bool, text string) error {
 	r.procs[taskID] = handle
 	r.mu.Unlock()
 
+	r.runWG.Add(1)
 	go r.run(task, agent, handle, cliInput)
 	return nil
 }
@@ -198,13 +257,14 @@ func (r *Runner) startQueued(taskID, text string) {
 	r.procs[taskID] = handle
 	r.mu.Unlock()
 
+	r.runWG.Add(1)
 	go r.run(task, agent, handle, r.prepareCliInput(task, text))
 }
 
 // markerPrefixes liste les préfixes des messages marqueurs posés par le
 // backend (le frontend les remplace par une ligne système localisée). Ce ne
 // sont pas des tours de conversation : ils sont exclus du transcript rejoué.
-var markerPrefixes = []string{"[reassigned:", "[accepted:", "[auto-accepted:", "[merge-conflict:"}
+var markerPrefixes = []string{"[reassigned:", "[accepted:", "[auto-accepted:", "[merge-conflict:", "[tool-denied:"}
 
 func isMarkerMessage(text string) bool {
 	for _, prefix := range markerPrefixes {
@@ -471,6 +531,11 @@ func killGroup(cmd *exec.Cmd, done <-chan struct{}) {
 // À la fin, les messages arrivés pendant l'exécution (file pending) relancent
 // automatiquement l'agent.
 func (r *Runner) run(task Task, agent Agent, handle *procHandle, cliInput string) {
+	// Déclaré en premier, donc exécuté en dernier (LIFO) : l'agent n'est compté
+	// terminé qu'une fois tout son travail écrit. Un message mis en file relance
+	// un agent depuis le defer ci-dessous, hors de ce compteur : un test qui
+	// s'appuie sur la file doit se synchroniser lui-même.
+	defer r.runWG.Done()
 	defer func() {
 		r.mu.Lock()
 		delete(r.procs, task.ID)
@@ -638,6 +703,64 @@ type claudeContentBlock struct {
 	Text  string         `json:"text"`
 	Name  string         `json:"name"`
 	Input map[string]any `json:"input"`
+
+	// Blocs tool_use / tool_result : ID identifie l'appel côté assistant,
+	// ToolUseID le rattache au résultat renvoyé dans l'enveloppe "user".
+	// Content est tantôt une chaîne, tantôt une liste de blocs (voir
+	// claudeToolResultText).
+	ID        string          `json:"id"`
+	ToolUseID string          `json:"tool_use_id"`
+	Content   json.RawMessage `json:"content"`
+	IsError   bool            `json:"is_error"`
+}
+
+// claudeToolResultText aplatit le contenu d'un tool_result, que le CLI écrit
+// soit en chaîne simple, soit en liste de blocs typés.
+func claudeToolResultText(raw json.RawMessage) string {
+	if len(raw) == 0 {
+		return ""
+	}
+	var text string
+	if err := json.Unmarshal(raw, &text); err == nil {
+		return text
+	}
+	var blocks []struct {
+		Text string `json:"text"`
+	}
+	if err := json.Unmarshal(raw, &blocks); err != nil {
+		return ""
+	}
+	var parts []string
+	for _, block := range blocks {
+		if block.Text != "" {
+			parts = append(parts, block.Text)
+		}
+	}
+	return strings.Join(parts, "\n")
+}
+
+// claudePermissionPhrases : formulations par lesquelles le CLI signale un outil
+// refusé faute d'autorisation. Le flux ne porte pas de code d'erreur dédié, la
+// détection se fait donc sur le texte du tool_result, et cette liste est à
+// revoir si le CLI reformule. Une phrase manquée ne coûte que le marqueur : le
+// refus lui-même reste appliqué par le CLI.
+var claudePermissionPhrases = []string{
+	"requested permissions",
+	"permission to use",
+	"haven't granted",
+	"have not granted",
+}
+
+// isPermissionDenial distingue un outil refusé d'une erreur d'exécution
+// ordinaire (test qui échoue, fichier absent), qui ne doit rien afficher.
+func isPermissionDenial(text string) bool {
+	lower := strings.ToLower(text)
+	for _, phrase := range claudePermissionPhrases {
+		if strings.Contains(lower, phrase) {
+			return true
+		}
+	}
+	return false
 }
 
 type claudeEnvelope struct {
@@ -662,7 +785,8 @@ func (r *Runner) runClaude(task *Task, agent Agent, project Project, card Card, 
 	args := []string{
 		"-p", "--output-format", "stream-json", "--verbose",
 		"--permission-mode", "acceptEdits",
-		"--allowedTools", claudeAllowedTools,
+		"--allowedTools", claudeTools(project.AllowedTools),
+		"--disallowedTools", claudeDeniedTools,
 	}
 	if agent.Model != "" {
 		args = append(args, "--model", agent.Model)
@@ -692,6 +816,12 @@ func (r *Runner) runClaude(task *Task, agent Agent, project Project, card Card, 
 	handle.cmd = cmd
 
 	lastAgentText := ""
+	// pendingTools rattache un tool_result à l'appel qui l'a produit : le
+	// résultat ne porte que l'identifiant, pas le nom de l'outil demandé.
+	// deniedTools garde un seul marqueur par outil et par exécution, sinon un
+	// agent qui réessaie trois fois inonde le fil.
+	pendingTools := map[string]string{}
+	deniedTools := map[string]bool{}
 	scanner := bufio.NewScanner(stdout)
 	scanner.Buffer(make([]byte, 0, 64*1024), 10*1024*1024)
 	for scanner.Scan() {
@@ -729,11 +859,45 @@ func (r *Runner) runClaude(task *Task, agent Agent, project Project, card Card, 
 					}
 				case "tool_use":
 					line := summarizeToolUse(block.Name, block.Input)
-					if t, err := r.store.UpdateTask(task.ID, func(t *Task) { t.LiveActivity = &line }); err == nil {
+					if block.ID != "" {
+						pendingTools[block.ID] = line
+					}
+					if t, err := r.store.UpdateTask(task.ID, func(t *Task) {
+						t.LiveActivity = &line
+						t.CommandLog = appendCommandLog(t.CommandLog, line)
+					}); err == nil {
 						*task = t
 						r.publishActivity(task.ID, &line)
 						r.publishTask(*task)
 					}
+				}
+			}
+		case "user":
+			// Retours d'outils. Seul un refus de permission nous intéresse : une
+			// erreur d'exécution ordinaire (test rouge, fichier absent) fait
+			// partie du travail de l'agent et n'a rien à faire dans le fil.
+			if env.Message == nil {
+				continue
+			}
+			for _, block := range env.Message.Content {
+				if block.Type != "tool_result" || !block.IsError {
+					continue
+				}
+				if !isPermissionDenial(claudeToolResultText(block.Content)) {
+					continue
+				}
+				// Sans le nom de l'outil, le marqueur n'apprendrait rien à
+				// l'humain sur ce qu'il doit autoriser : mieux vaut rien.
+				denied := strings.ReplaceAll(pendingTools[block.ToolUseID], "]", "")
+				if denied == "" || deniedTools[denied] {
+					continue
+				}
+				deniedTools[denied] = true
+				msg, t, err := r.store.AddMessage(task.ID, "agent", "", "[tool-denied:"+denied+"]")
+				if err == nil {
+					r.publishMessage(msg)
+					*task = t
+					r.publishTask(*task)
 				}
 			}
 		case "result":
@@ -819,6 +983,7 @@ func (r *Runner) runCodex(task *Task, agent Agent, project Project, card Card, h
 
 	parsedAny := false
 	var tokenAcc codexTokenAccumulator
+	var threadID string
 	scanner := bufio.NewScanner(stdout)
 	scanner.Buffer(make([]byte, 0, 64*1024), 10*1024*1024)
 	for scanner.Scan() {
@@ -847,12 +1012,26 @@ func (r *Runner) runCodex(task *Task, agent Agent, project Project, card Card, h
 		if tokenAcc.observe(generic) {
 			parsedAny = true
 		}
+		if generic["type"] == "thread.started" {
+			if id, ok := generic["thread_id"].(string); ok {
+				threadID = id
+			}
+		}
 	}
 
 	scanErr := scanner.Err()
 	waitErr := cmd.Wait()
 	if waitErr == nil && scanErr != nil {
 		waitErr = scanErr
+	}
+	// Le quota de compte (rate_limits) n'est pas porté par le flux --json,
+	// seulement par le fichier de session que codex écrit de son côté (même
+	// en mode exec) : voir readCodexRateLimits. Best-effort, ne bloque jamais
+	// la tâche.
+	if windows, ok := readCodexRateLimits(threadID); ok {
+		if err := r.store.SetCodexQuota(windows); err == nil {
+			r.publishAgents()
+		}
 	}
 	if tokenAcc.found {
 		if t, err := r.store.UpdateTask(task.ID, func(t *Task) {
@@ -970,6 +1149,110 @@ func parseCodexTokenStream(lines []string) (Tokens, bool) {
 		acc.observe(m)
 	}
 	return acc.last, acc.found
+}
+
+// quotaWindowLabel nomme une fenêtre de quota codex d'après sa durée en
+// minutes : 300 = 5h, 10080 = une semaine (7*24*60). Toute autre valeur
+// (changement côté OpenAI) retombe sur une étiquette générique plutôt que de
+// perdre l'information.
+func quotaWindowLabel(minutes int) string {
+	switch minutes {
+	case 300:
+		return "5h"
+	case 10080:
+		return "week"
+	default:
+		return fmt.Sprintf("%dm", minutes)
+	}
+}
+
+// parseCodexRateLimits extrait les fenêtres de quota d'un événement JSONL du
+// fichier de session codex, de la forme :
+//
+//	{"type":"event_msg","payload":{"type":"token_count","rate_limits":{
+//	  "primary":{"used_percent":44.0,"window_minutes":300,"resets_at":1771005432},
+//	  "secondary":{"used_percent":49.0,"window_minutes":10080,"resets_at":1771409457}}}}
+//
+// Fonction pure, sans I/O, pour tester le parsing indépendamment du disque.
+func parseCodexRateLimits(m map[string]any) ([]AgentQuotaWindow, bool) {
+	payload, ok := m["payload"].(map[string]any)
+	if !ok || payload["type"] != "token_count" {
+		return nil, false
+	}
+	rl, ok := payload["rate_limits"].(map[string]any)
+	if !ok {
+		return nil, false
+	}
+	var windows []AgentQuotaWindow
+	for _, key := range []string{"primary", "secondary"} {
+		w, ok := rl[key].(map[string]any)
+		if !ok {
+			continue
+		}
+		used, _ := w["used_percent"].(float64)
+		minutes, _ := w["window_minutes"].(float64)
+		resets, _ := w["resets_at"].(float64)
+		windows = append(windows, AgentQuotaWindow{
+			Label:       quotaWindowLabel(int(minutes)),
+			UsedPercent: used,
+			ResetsAt:    time.Unix(int64(resets), 0),
+		})
+	}
+	if len(windows) == 0 {
+		return nil, false
+	}
+	return windows, true
+}
+
+// codexSessionsDir est le répertoire des fichiers de session codex, une
+// indirection testable (évite de dépendre de $HOME dans les tests).
+var codexSessionsDir = func() string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(home, ".codex", "sessions")
+}
+
+// readCodexRateLimits localise le fichier de session écrit par codex pour
+// threadID (structure sessions/AAAA/MM/JJ/rollout-...-<threadID>.jsonl,
+// écrite par codex lui-même, y compris en mode `exec --json`) et en extrait
+// le dernier instantané de quota connu. Ce n'est PAS porté par le flux --json
+// que Sillage lit déjà pour les tokens (voir extractCodexTokens) : seul le
+// fichier de session le contient. Best-effort : ok=false si le fichier est
+// introuvable ou ne portait encore aucun rate_limits.
+func readCodexRateLimits(threadID string) ([]AgentQuotaWindow, bool) {
+	if threadID == "" {
+		return nil, false
+	}
+	dir := codexSessionsDir()
+	if dir == "" {
+		return nil, false
+	}
+	matches, err := filepath.Glob(filepath.Join(dir, "*", "*", "*", "rollout-*-"+threadID+".jsonl"))
+	if err != nil || len(matches) == 0 {
+		return nil, false
+	}
+	f, err := os.Open(matches[0])
+	if err != nil {
+		return nil, false
+	}
+	defer f.Close()
+
+	var last []AgentQuotaWindow
+	scanner := bufio.NewScanner(f)
+	scanner.Buffer(make([]byte, 0, 64*1024), 10*1024*1024)
+	for scanner.Scan() {
+		var generic map[string]any
+		if err := json.Unmarshal(scanner.Bytes(), &generic); err != nil {
+			continue
+		}
+		if windows, ok := parseCodexRateLimits(generic); ok {
+			last = windows
+		}
+	}
+	_ = scanner.Err() // best-effort : une lecture tronquée garde le dernier instantané trouvé
+	return last, last != nil
 }
 
 // --- Adaptateur fake (test/démo, sans exec) ---

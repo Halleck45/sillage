@@ -31,6 +31,8 @@
       'sidebar.projectsHeading': 'Projets',
       'sidebar.newProjectTooltip': 'Nouveau projet',
       'sidebar.noProjects': 'Aucun projet',
+      'sidebar.projectMenuTooltip': 'Actions du projet',
+      'sidebar.markAllRead': 'Tout marquer comme lu',
       'sidebar.agentsHeading': 'Agents',
       'sidebar.newAgentTooltip': 'Nouvel agent',
       'sidebar.noAgents': 'Aucun agent',
@@ -65,6 +67,9 @@
       'project.baseBranch': 'Branche de base',
       'project.baseBranchHint': 'Les chantiers partent de cette branche et y retournent à la livraison. Vide : branche par défaut du dépôt.',
       'project.checkCmd': 'Commande de vérification',
+      'project.allowedTools': 'Outils autorisés aux agents',
+      'project.allowedToolsPlaceholder': 'Bash(go test:*)\nBash(gofmt:*)',
+      'project.allowedToolsHint': 'Une entrée par ligne, dans la syntaxe du CLI. Les agents savent déjà lire, écrire, chercher et consulter l\'historique git : ajoutez ici les commandes de votre langage (tests, build, format). Rien qui puisse pousser ne sera accepté.',
       'project.reposHint': 'Chemins locaux des dépôts git de ce projet.',
       'project.repoNamePlaceholder': 'Nom du dépôt',
       'project.repoName': 'Nom',
@@ -73,7 +78,13 @@
       'project.removeRepo': 'Retirer',
       'project.previewCmdPlaceholder': 'Commande de recette (optionnelle)',
       'project.previewUrlPlaceholder': 'URL à ouvrir (optionnelle)',
-      'project.previewHint': 'Recette manuelle : la commande est lancée dans le worktree du chantier ou de la tâche. Variables disponibles : $SILLAGE_ID (ws-107, t-482), $SILLAGE_N (107), $SILLAGE_DIR, $SILLAGE_BRANCH.',
+      'project.previewHintIntro': 'Recette manuelle : la commande est lancée dans le worktree du chantier ou de la tâche.',
+      'project.previewVarIdDesc': 'noms : base de données, conteneur, répertoire',
+      'project.previewVarNDesc': 'arithmétique explicite',
+      'project.previewVarPortDesc': 'port prêt à l\'emploi, sans calcul à écrire',
+      'project.previewVarDirDesc': 'chemins absolus',
+      'project.previewVarBranchDesc': 'affichage, debug',
+      'project.previewExampleLabel': 'Par exemple, lancer un serveur Python :',
       'project.errorNameRequired': 'Le nom est requis.',
       'project.errorReposRequired': 'Au moins un dépôt est requis.',
       'project.errorSaveFailed': 'Erreur lors de l\'enregistrement.',
@@ -188,6 +199,7 @@
       'preview.showLog': 'Journal',
       'preview.noCmd': 'Pas de commande de recette',
       'preview.noCmdHint': 'Ajoutez-la dans les réglages du projet, dépôt par dépôt. En attendant, le chemin du worktree est juste là.',
+      'preview.openSettings': 'Ouvrir les réglages du projet',
       'preview.noBranch': 'Aucune branche de chantier pour l\'instant : créez une tâche d\'abord.',
       'preview.worktree': 'Worktree',
       'preview.copyPath': 'Copier le chemin',
@@ -214,6 +226,7 @@
       'tabs.conversation': 'Conversation',
       'tabs.diff': 'Diff',
       'tabs.deliverables': 'Livrables',
+      'tabs.history': 'Historique',
       'chat.you': 'Vous',
       'chat.placeholder': 'Répondre à {name}…',
       'chat.send': 'Envoyer ⏎',
@@ -222,12 +235,14 @@
       'chat.mergeConflict': 'Conflit avec la branche du chantier sur {files} : demandez à l\'agent de reprendre la base.',
       'chat.rebased': 'Rebasée automatiquement sur {branch} : cette tâche repart du travail accepté.',
       'chat.rebaseConflict': 'Rebase automatique impossible sur {files} (rien n\'a été modifié) : demandez à l\'agent de reprendre la base.',
+      'chat.toolDenied': 'Outil refusé à l\'agent : {tool}. Pour l\'autoriser, ajoutez-le aux outils autorisés dans les réglages du projet.',
       'conversation.empty': 'Aucun message pour l\'instant.',
       'diff.empty': 'Aucune modification.',
       'deliverables.code': 'Code',
       'deliverables.docs': 'Documents',
       'deliverables.images': 'Captures',
       'deliverables.empty': 'Aucun élément.',
+      'history.empty': 'Aucune commande pour l\'instant.',
       'newTask.title': 'Nouvelle tâche',
       'newTask.titlePlaceholder': 'Que doit faire l\'agent ?',
       'newTask.promptPlaceholder': 'Description ou instructions détaillées (optionnel)',
@@ -292,8 +307,21 @@
       'agent.errorNameRequired': 'Le nom est requis.',
       'agent.errorSaveFailed': 'Erreur lors de l\'enregistrement.',
       'agent.errorDeleteFailed': 'Erreur lors de la suppression.',
-      'agent.warning.codexSandbox': 'Sandbox codex bloqué sur cette machine (AppArmor). Voir le README (SILLAGE_CODEX_SANDBOX).',
+      'agent.warning.codexSandbox': 'Codex a besoin des espaces de noms utilisateur non privilégiés pour son bac à sable, et AppArmor les bloque sur cette machine. Les tâches confiées à cet agent ne peuvent pas démarrer tant que ce n\'est pas résolu.',
+      'agent.warning.copyCmd': 'Copier la commande',
+      'agent.warning.codexSandboxFallback': 'Vous pouvez aussi contourner le problème en lançant Sillage avec la variable d\'environnement SILLAGE_CODEX_SANDBOX=danger-full-access ; le confinement restant est alors celui de Sillage (worktree dédié, pas de push par l\'agent).',
+      'agent.warning.codexSandboxLink': 'En savoir plus (documentation OpenAI Codex)',
       'agent.warning.cliNotFound': 'CLI {cli} introuvable dans le PATH.',
+      'agent.quotaTitle': 'Quota',
+      'agent.quotaWindow5h': '5 heures',
+      'agent.quotaWindowWeek': 'Semaine',
+      'agent.quotaUsedPercent': '{percent}% utilisé',
+      'agent.quotaResetsIn': 'réinitialisation {time}',
+      'agent.quotaUpdatedAt': 'Mis à jour : {time}',
+      'agent.quotaUnavailable': 'Quotas non disponibles pour cet agent (le CLI {cli} ne les expose pas).',
+      'time.inMin': 'dans {n} min',
+      'time.inHour': 'dans {n} h',
+      'time.inDay': 'dans {n} j',
       'reassign.tooltip': 'Réassigner la tâche',
       'chat.reassignedTo': 'Tâche réassignée à {name}',
       'errors.reassignFailed': 'Échec de la réassignation.',
@@ -386,6 +414,8 @@
       'sidebar.projectsHeading': 'Projects',
       'sidebar.newProjectTooltip': 'New project',
       'sidebar.noProjects': 'No projects',
+      'sidebar.projectMenuTooltip': 'Project actions',
+      'sidebar.markAllRead': 'Mark all as read',
       'sidebar.agentsHeading': 'Agents',
       'sidebar.newAgentTooltip': 'New agent',
       'sidebar.noAgents': 'No agents',
@@ -420,6 +450,9 @@
       'project.baseBranch': 'Base branch',
       'project.baseBranchHint': 'Workstreams branch off this branch and ship back into it. Empty: the repository default branch.',
       'project.checkCmd': 'Check command',
+      'project.allowedTools': 'Tools allowed to agents',
+      'project.allowedToolsPlaceholder': 'Bash(go test:*)\nBash(gofmt:*)',
+      'project.allowedToolsHint': 'One entry per line, in the CLI syntax. Agents can already read, write, search and read git history: add your language\'s commands here (tests, build, format). Nothing able to push will ever be accepted.',
       'project.reposHint': 'Local paths of this project\'s git repositories.',
       'project.repoNamePlaceholder': 'Repository name',
       'project.repoName': 'Name',
@@ -428,7 +461,13 @@
       'project.removeRepo': 'Remove',
       'project.previewCmdPlaceholder': 'Preview command (optional)',
       'project.previewUrlPlaceholder': 'URL to open (optional)',
-      'project.previewHint': 'Manual preview: the command runs in the workstream or task worktree. Available variables: $SILLAGE_ID (ws-107, t-482), $SILLAGE_N (107), $SILLAGE_DIR, $SILLAGE_BRANCH.',
+      'project.previewHintIntro': 'Manual preview: the command runs in the workstream or task worktree.',
+      'project.previewVarIdDesc': 'names: database, container, directory',
+      'project.previewVarNDesc': 'explicit arithmetic',
+      'project.previewVarPortDesc': 'ready-to-use port, no arithmetic to write',
+      'project.previewVarDirDesc': 'absolute paths',
+      'project.previewVarBranchDesc': 'display, debugging',
+      'project.previewExampleLabel': 'For example, to launch a Python server:',
       'project.errorNameRequired': 'Name is required.',
       'project.errorReposRequired': 'At least one repository is required.',
       'project.errorSaveFailed': 'Failed to save.',
@@ -543,6 +582,7 @@
       'preview.showLog': 'Log',
       'preview.noCmd': 'No preview command',
       'preview.noCmdHint': 'Add one in the project settings, per repository. In the meantime, the worktree path is right here.',
+      'preview.openSettings': 'Open project settings',
       'preview.noBranch': 'No workstream branch yet: create a task first.',
       'preview.worktree': 'Worktree',
       'preview.copyPath': 'Copy path',
@@ -569,6 +609,7 @@
       'tabs.conversation': 'Conversation',
       'tabs.diff': 'Diff',
       'tabs.deliverables': 'Deliverables',
+      'tabs.history': 'History',
       'chat.you': 'You',
       'chat.placeholder': 'Reply to {name}…',
       'chat.send': 'Send ⏎',
@@ -577,12 +618,14 @@
       'chat.mergeConflict': 'Conflict with the workstream branch on {files}: ask the agent to rebase on it.',
       'chat.rebased': 'Rebased automatically onto {branch}: this task now starts from the accepted work.',
       'chat.rebaseConflict': 'Automatic rebase not possible on {files} (nothing was changed): ask the agent to rebase on the workstream branch.',
+      'chat.toolDenied': 'Tool denied to the agent: {tool}. To allow it, add it to the allowed tools in the project settings.',
       'conversation.empty': 'No messages yet.',
       'diff.empty': 'No changes.',
       'deliverables.code': 'Code',
       'deliverables.docs': 'Documents',
       'deliverables.images': 'Screenshots',
       'deliverables.empty': 'No items.',
+      'history.empty': 'No commands yet.',
       'newTask.title': 'New task',
       'newTask.titlePlaceholder': 'What should the agent do?',
       'newTask.promptPlaceholder': 'Description or detailed instructions (optional)',
@@ -647,8 +690,21 @@
       'agent.errorNameRequired': 'Name is required.',
       'agent.errorSaveFailed': 'Failed to save.',
       'agent.errorDeleteFailed': 'Failed to delete.',
-      'agent.warning.codexSandbox': 'Codex sandbox is blocked on this machine (AppArmor). See the README (SILLAGE_CODEX_SANDBOX).',
+      'agent.warning.codexSandbox': 'Codex needs unprivileged user namespaces for its sandbox, and AppArmor blocks them on this machine. Tasks assigned to this agent cannot start until this is resolved.',
+      'agent.warning.copyCmd': 'Copy command',
+      'agent.warning.codexSandboxFallback': 'You can also work around this by starting Sillage with the SILLAGE_CODEX_SANDBOX=danger-full-access environment variable; the remaining containment is then Sillage\'s own (dedicated worktree, no push from the agent).',
+      'agent.warning.codexSandboxLink': 'Learn more (OpenAI Codex documentation)',
       'agent.warning.cliNotFound': '{cli} CLI not found in PATH.',
+      'agent.quotaTitle': 'Quota',
+      'agent.quotaWindow5h': '5 hours',
+      'agent.quotaWindowWeek': 'Week',
+      'agent.quotaUsedPercent': '{percent}% used',
+      'agent.quotaResetsIn': 'resets {time}',
+      'agent.quotaUpdatedAt': 'Updated: {time}',
+      'agent.quotaUnavailable': 'Quotas unavailable for this agent (the {cli} CLI doesn\'t expose them).',
+      'time.inMin': 'in {n} min',
+      'time.inHour': 'in {n} h',
+      'time.inDay': 'in {n} d',
       'reassign.tooltip': 'Reassign the task',
       'chat.reassignedTo': 'Task reassigned to {name}',
       'errors.reassignFailed': 'Failed to reassign.',
@@ -875,6 +931,21 @@
     if (month < 12) return t('time.month', { n: month });
     var year = Math.round(day / 365);
     return tCount('time.year', year);
+  }
+
+  // formatResetCountdown : durée avant iso (futur), pour l'heure de
+  // réinitialisation d'une fenêtre de quota. Contrepartie de timeAgo (passé).
+  function formatResetCountdown(iso) {
+    if (!iso) return '';
+    var then = new Date(iso).getTime();
+    if (isNaN(then)) return '';
+    var diff = Math.max(0, Math.round((then - Date.now()) / 1000));
+    var min = Math.max(1, Math.round(diff / 60));
+    if (min < 60) return t('time.inMin', { n: min });
+    var hr = Math.round(min / 60);
+    if (hr < 24) return t('time.inHour', { n: hr });
+    var day = Math.round(hr / 24);
+    return t('time.inDay', { n: day });
   }
 
   function formatTime(iso) {
@@ -1157,7 +1228,7 @@
     state.taskId = route.taskId || null;
     if (state.cardId !== prevCardId) state.taskFilter = 'all';
     if (state.taskId) {
-      state.panelTab = route.tab === 'diff' ? 'diff' : (route.tab === 'deliverables' ? 'files' : 'chat');
+      state.panelTab = route.tab === 'diff' ? 'diff' : (route.tab === 'deliverables' ? 'files' : (route.tab === 'history' ? 'history' : 'chat'));
       if (state.taskId !== prevTaskId) {
         state.panelExpanded = false;
         var t = state.tasksById[state.taskId];
@@ -1204,6 +1275,7 @@
     var h = '#/p/' + encodeURIComponent(state.projectId) + '/c/' + encodeURIComponent(state.cardId) + '/t/' + encodeURIComponent(state.taskId);
     if (tabKey === 'diff') h += '?tab=diff';
     else if (tabKey === 'files') h += '?tab=deliverables';
+    else if (tabKey === 'history') h += '?tab=history';
     navigateTo(h);
   }
 
@@ -1274,10 +1346,16 @@
       var hashHTML = projectHasRunningTask(p.id)
         ? '<span class="task-spinner project-item-spinner" title="' + escapeHtml(t('status.running')) + '"></span>'
         : '<span class="hash">#</span>';
-      return '<button class="project-item ' + (active ? 'active' : '') + '" data-action="nav-project" data-project-id="' + p.id + '">' +
-        hashHTML + '<span class="project-name">' + escapeHtml(p.name) + '</span>' +
-        (unread ? '<span class="badge-unread">' + unread + '</span>' : '') +
-        '</button>';
+      return '<div class="project-item-wrap">' +
+        '<button class="project-item ' + (active ? 'active' : '') + '" data-action="nav-project" data-project-id="' + p.id + '">' +
+          hashHTML + '<span class="project-name">' + escapeHtml(p.name) + '</span>' +
+          (unread ? '<span class="badge-unread">' + unread + '</span>' : '') +
+        '</button>' +
+        '<button class="project-menu-btn" data-action="toggle-project-menu" data-project-id="' + p.id + '" title="' + escapeHtml(t('sidebar.projectMenuTooltip')) + '" aria-label="' + escapeHtml(t('sidebar.projectMenuTooltip')) + '">⋯</button>' +
+        '<div class="project-menu hidden" data-project-menu="' + p.id + '">' +
+          '<button class="project-menu-item" data-action="mark-project-read" data-project-id="' + p.id + '">' + escapeHtml(t('sidebar.markAllRead')) + '</button>' +
+        '</div>' +
+      '</div>';
     }).join('');
 
     var agentsHTML = state.agents.map(function (a) {
@@ -1319,6 +1397,25 @@
   function renderSidebar() {
     var el = document.getElementById('sidebar');
     if (el) el.innerHTML = buildSidebarHTML();
+  }
+
+  function closeAllProjectMenus() {
+    document.querySelectorAll('.project-menu').forEach(function (m) { m.classList.add('hidden'); });
+  }
+  function toggleProjectMenu(projectId) {
+    var el = document.querySelector('.project-menu[data-project-menu="' + projectId + '"]');
+    if (!el) return;
+    var willOpen = el.classList.contains('hidden');
+    closeAllProjectMenus();
+    if (willOpen) el.classList.remove('hidden');
+  }
+  // Optimiste : les tâches locales passent lues tout de suite, l'appel serveur
+  // suit sans bloquer (comme markTaskRead sur l'ouverture d'une tâche).
+  function markProjectAllRead(projectId) {
+    closeAllProjectMenus();
+    state.tasks.forEach(function (t) { if (t.projectId === projectId) t.unread = false; });
+    render();
+    api('/api/projects/' + projectId + '/mark-all-read', { method: 'POST' }).catch(function () {});
   }
 
   // ---------------------------------------------------------------------
@@ -2321,7 +2418,10 @@
       hint = '<div class="modal-note">' + escapeHtml(t('preview.noBranch')) + '</div>';
     }
     var missingCmd = targets.some(function (x) { return !x.cmd; });
-    var cmdHint = missingCmd ? '<div class="modal-note">' + escapeHtml(t('preview.noCmdHint')) + '</div>' : '';
+    var cmdHint = missingCmd
+      ? '<div class="modal-note">' + escapeHtml(t('preview.noCmdHint')) + ' ' +
+        '<button class="detail-link" data-action="open-preview-settings">' + escapeHtml(t('preview.openSettings')) + '</button></div>'
+      : '';
 
     return '<div class="modal modal-lg">' +
       '<div class="modal-head"><span class="modal-title">' + escapeHtml(previewScopeTitle(scope)) + '</span>' +
@@ -2344,6 +2444,27 @@
     openModal(buildPreviewModalHTML(scope));
     state.previewScope = scope; // après openModal, qui remet la portée à zéro
     if (scope.runId) loadPreviewLog(scope.runId);
+  }
+
+  // Lien « Ouvrir les réglages du projet » du panneau de recette, quand un dépôt
+  // n'a pas de commande : on retrouve le projet depuis la portée du panneau
+  // (un chantier ou une tâche, jamais la portée « all ») et on ouvre directement
+  // l'onglet Dépôts, où la commande se déclare.
+  function openPreviewSettings() {
+    var scope = state.previewScope;
+    if (!scope) return;
+    var projectId = null;
+    if (scope.kind === 'card') {
+      var card = state.cardsById[scope.id];
+      projectId = card && card.projectId;
+    } else if (scope.kind === 'task') {
+      var task = state.tasksById[scope.id];
+      projectId = task && task.projectId;
+    }
+    if (!projectId) return;
+    state.projectId = projectId;
+    openEditProjectModal();
+    setProjectTab('repos');
   }
 
   // Rafraîchit le panneau sans le rouvrir : les lignes et leurs boutons, pas le
@@ -2574,6 +2695,21 @@
     return warning;
   }
 
+  // Complète agentWarningText() : commande de contournement copiable et lien
+  // vers la doc OpenAI. Uniquement pour la bannière d'avertissement (le title
+  // d'un tooltip ne peut contenir ni HTML ni bouton).
+  var CODEX_SANDBOX_FIX_CMD = 'sudo sysctl kernel.apparmor_restrict_unprivileged_userns=0';
+  function agentWarningExtrasHTML(warning) {
+    if (!warning || warning.indexOf('codex sandbox is blocked') === -1) return '';
+    return '<div class="agent-warning-cmd">' +
+      '<code class="mono">' + escapeHtml(CODEX_SANDBOX_FIX_CMD) + '</code>' +
+      '<button data-action="copy-path" data-path="' + escapeHtml(CODEX_SANDBOX_FIX_CMD) + '">' + escapeHtml(t('agent.warning.copyCmd')) + '</button>' +
+      '</div>' +
+      '<div class="agent-warning-fallback">' + escapeHtml(t('agent.warning.codexSandboxFallback')) + '</div>' +
+      '<a class="agent-warning-link" href="https://developers.openai.com/codex/concepts/sandboxing" target="_blank" rel="noopener noreferrer">' +
+      escapeHtml(t('agent.warning.codexSandboxLink')) + '</a>';
+  }
+
   function buildReassignMenuHTML(task) {
     var others = state.agents.filter(function (a) { return a.id !== task.agentId; });
     var items = others.map(function (a) {
@@ -2626,10 +2762,10 @@
     var taskProject = state.projectsById[task.projectId];
     var multiRepo = !!(taskProject && taskProject.repos && taskProject.repos.length > 1);
     var action = primaryActionInfo(task);
-    var tabs = ['chat', 'diff', 'files'];
-    var tabLabels = { chat: t('tabs.conversation'), diff: t('tabs.diff'), files: t('tabs.deliverables') };
-    var tabCounts = { chat: task.messagesCount || 0, diff: task.filesCount || 0, files: (task.docsCount || 0) + (task.filesCount || 0) };
-    var tabDataAttr = { chat: 'conversation', diff: 'diff', files: 'deliverables' };
+    var tabs = ['chat', 'diff', 'files', 'history'];
+    var tabLabels = { chat: t('tabs.conversation'), diff: t('tabs.diff'), files: t('tabs.deliverables'), history: t('tabs.history') };
+    var tabCounts = { chat: task.messagesCount || 0, diff: task.filesCount || 0, files: (task.docsCount || 0) + (task.filesCount || 0), history: (task.commandLog || []).length };
+    var tabDataAttr = { chat: 'conversation', diff: 'diff', files: 'deliverables', history: 'history' };
 
     var tabsHTML = tabs.map(function (tk) {
       var active = state.panelTab === tk;
@@ -2681,7 +2817,6 @@
             '<div class="detail-title">' + escapeHtml(task.title) + '</div>' +
             '<div class="detail-meta">' +
               buildAgentChipHTML(task, agent, soft) +
-              '<span class="mono">' + escapeHtml(agent.model || '') + '</span>' +
               '<span class="mono">' + escapeHtml(task.branch || '') + '</span>' +
               (multiRepo && task.repoName ? '<span class="repo-chip">' + escapeHtml(task.repoName) + '</span>' : '') +
               (task.commitsCount ? '<span class="repo-chip">' + escapeHtml(tCount('ship.commits', task.commitsCount)) + '</span>' : '') +
@@ -2709,6 +2844,7 @@
     if (state.panelTab === 'chat') bodyHTML = buildConversationHTML(task, agent);
     else if (state.panelTab === 'diff') bodyHTML = buildDiffHTML(task);
     else if (state.panelTab === 'files') bodyHTML = buildDeliverablesHTML(task);
+    else if (state.panelTab === 'history') bodyHTML = buildHistoryHTML(task);
 
     return '<aside class="detail-panel">' +
       (err ? '<div class="detail-error">' + escapeHtml(err) + '</div>' : '') +
@@ -2796,6 +2932,12 @@
     var rebaseConflictFiles = parseMarker('rebase-conflict', m.text);
     if (rebaseConflictFiles) {
       return '<div class="msg-system msg-system-warning">' + escapeHtml(t('chat.rebaseConflict', { files: rebaseConflictFiles.split(' ').join(', ') })) + '</div>';
+    }
+    // Outil refusé à l'agent : sans cette ligne, le refus ne se voit nulle part
+    // et la tâche prend des tours que personne ne sait expliquer.
+    var deniedTool = parseMarker('tool-denied', m.text);
+    if (deniedTool) {
+      return '<div class="msg-system msg-system-warning">' + escapeHtml(t('chat.toolDenied', { tool: deniedTool })) + '</div>';
     }
     var isUser = m.author === 'user';
     var emoji = isUser ? '🙂' : (agent.emoji || '');
@@ -3028,6 +3170,25 @@
       return '<section class="deliv-group"><div class="deliv-group-label">' + escapeHtml(g.label) + '</div>' + itemsHTML + '</section>';
     }).join('');
     return '<div class="deliverables">' + html + '</div>';
+  }
+
+  // ---------------------------------------------------------------------
+  // Onglet Historique
+  // ---------------------------------------------------------------------
+
+  // Commandes jouées par l'agent (tool_use), déjà portées par task.commandLog :
+  // pas de chargement asynchrone, contrairement à Diff/Livrables. Les plus
+  // récentes en premier, pour repérer tout de suite ce que l'agent vient de faire.
+  function buildHistoryHTML(task) {
+    var log = task.commandLog || [];
+    if (!log.length) {
+      return '<div class="empty-note">' + escapeHtml(t('history.empty')) + '</div>';
+    }
+    var items = log.slice().reverse().map(function (e) {
+      return '<div class="history-item"><span class="history-time mono">' + escapeHtml(formatTime(e.at)) + '</span>' +
+        '<span class="history-text mono">' + escapeHtml(e.text) + '</span></div>';
+    }).join('');
+    return '<div class="history-list">' + items + '</div>';
   }
 
   // ---------------------------------------------------------------------
@@ -3503,23 +3664,25 @@
         '</div>';
     }).join('');
   }
+  // Une ligne est lue bloc par bloc (`.repo-block`), jamais champ par champ à
+  // l'échelle du document : l'en-tête des colonnes porte les mêmes classes
+  // `repo-row-name`/`repo-row-path` sur des <span>, et une lecture globale le
+  // comptait comme une ligne, décalant d'un cran la commande et l'URL de recette
+  // (la dernière ligne perdait les siennes à chaque enregistrement).
   function captureRepoRowsFromDOM() {
-    var nameInputs = document.querySelectorAll('.repo-row-name');
-    var pathInputs = document.querySelectorAll('.repo-row-path');
-    var cmdInputs = document.querySelectorAll('.repo-row-preview-cmd');
-    var urlInputs = document.querySelectorAll('.repo-row-preview-url');
-    if (pathInputs.length === 0) return;
-    if (nameInputs.length === pathInputs.length) {
-      modalRepos = Array.prototype.map.call(pathInputs, function (input, i) {
-        return {
-          name: nameInputs[i].value, path: input.value,
-          previewCmd: cmdInputs[i] ? cmdInputs[i].value : '',
-          previewUrl: urlInputs[i] ? urlInputs[i].value : ''
-        };
-      });
-    } else {
-      modalRepos = [{ name: modalRepos[0] ? modalRepos[0].name : '', path: pathInputs[0].value }];
-    }
+    var blocks = document.querySelectorAll('#repo-rows .repo-block');
+    if (blocks.length === 0) return;
+    modalRepos = Array.prototype.map.call(blocks, function (block) {
+      function val(selector) {
+        var el = block.querySelector(selector);
+        return el ? el.value : '';
+      }
+      return {
+        name: val('input.repo-row-name'), path: val('input.repo-row-path'),
+        previewCmd: val('input.repo-row-preview-cmd'),
+        previewUrl: val('input.repo-row-preview-url')
+      };
+    });
   }
   function refreshRepoRowsUI() {
     var container = document.getElementById('repo-rows');
@@ -3535,6 +3698,33 @@
     if (modalRepos.length <= 1) return;
     modalRepos.splice(index, 1);
     refreshRepoRowsUI();
+  }
+  // Variables de recette : une puce par variable (nom + à quoi elle sert),
+  // plus un exemple concret. Un bloc à part de `.modal-section-hint` pour
+  // pouvoir mettre `$SILLAGE_PORT` en avant visuellement (code), là où la
+  // phrase unique d'origine le noyait dans du texte.
+  var PREVIEW_VARS = [
+    ['SILLAGE_ID', 'project.previewVarIdDesc'],
+    ['SILLAGE_N', 'project.previewVarNDesc'],
+    ['SILLAGE_PORT', 'project.previewVarPortDesc'],
+    ['SILLAGE_DIR', 'project.previewVarDirDesc'],
+    ['SILLAGE_BRANCH', 'project.previewVarBranchDesc']
+  ];
+  function buildPreviewHintHTML() {
+    var vars = PREVIEW_VARS.map(function (v) {
+      return '<li class="preview-hint-var">' +
+        '<code>$' + v[0] + '</code>' +
+        '<span>' + escapeHtml(t(v[1])) + '</span>' +
+        '</li>';
+    }).join('');
+    return '<div class="modal-section-hint preview-hint">' +
+      '<div>' + escapeHtml(t('project.previewHintIntro')) + '</div>' +
+      '<ul class="preview-hint-vars">' + vars + '</ul>' +
+      '<div class="preview-hint-example">' +
+        escapeHtml(t('project.previewExampleLabel')) +
+        ' <code>python3 -m http.server $SILLAGE_PORT</code>' +
+      '</div>' +
+    '</div>';
   }
   // L'aide ne s'affiche que quand la liste est vide : une fois les chemins
   // saisis, ils se lisent seuls et la phrase n'est plus que du bruit. Les deux
@@ -3553,7 +3743,7 @@
     return head +
       '<div id="repo-rows">' + buildRepoRowsHTML() + '</div>' +
       '<button class="add-repo-link" data-action="add-repo-row">' + escapeHtml(t('project.addRepo')) + '</button>' +
-      '<div class="modal-section-hint">' + escapeHtml(t('project.previewHint')) + '</div>';
+      buildPreviewHintHTML();
   }
   function collectReposForSubmit() {
     captureRepoRowsFromDOM();
@@ -3830,6 +4020,32 @@
     return '<datalist id="agent-emoji-options">' + options + '</datalist>';
   }
 
+  // buildAgentQuotaHTML : quota du fournisseur cli de l'agent (voir
+  // AgentOut.quota côté serveur). Seul codex publie cette info ; claude et
+  // fake affichent un message "non disponible" plutôt qu'une donnée inventée.
+  function buildAgentQuotaHTML(agent) {
+    var windowLabel = function (w) {
+      if (w.label === '5h') return t('agent.quotaWindow5h');
+      if (w.label === 'week') return t('agent.quotaWindowWeek');
+      return w.label;
+    };
+    var body;
+    if (agent.quota && agent.quota.windows && agent.quota.windows.length) {
+      var rows = agent.quota.windows.map(function (w) {
+        return '<div class="agent-quota-row">' +
+          '<span class="agent-quota-window">' + escapeHtml(windowLabel(w)) + '</span>' +
+          '<span class="agent-quota-percent">' + escapeHtml(t('agent.quotaUsedPercent', { percent: Math.round(w.usedPercent) })) + '</span>' +
+          '<span class="agent-quota-resets">' + escapeHtml(t('agent.quotaResetsIn', { time: formatResetCountdown(w.resetsAt) })) + '</span>' +
+          '</div>';
+      }).join('');
+      body = '<div class="agent-quota-box">' + rows + '</div>' +
+        '<div class="modal-note">' + escapeHtml(t('agent.quotaUpdatedAt', { time: timeAgo(agent.quota.updatedAt) })) + '</div>';
+    } else {
+      body = '<div class="modal-note">' + escapeHtml(t('agent.quotaUnavailable', { cli: agent.cli })) + '</div>';
+    }
+    return '<div class="modal-label">' + escapeHtml(t('agent.quotaTitle')) + '</div>' + body;
+  }
+
   function buildAgentModalHTML(agent) {
     var isEdit = !!agent;
     var title = isEdit ? t('agent.editTitle') : t('agent.newTitle');
@@ -3846,10 +4062,13 @@
         '<button class="delete-link" data-action="confirm-click" data-confirm-key="' + delKey + '" data-confirm-action="agent-delete" data-confirm-id="' + agent.id + '" data-default-label="' + escapeHtml(t('agent.delete')) + '" data-confirm-label="' + escapeHtml(t('agent.deleteConfirm')) + '">' + escapeHtml(delLabel) + '</button>' +
         '</div>';
     }
-    var warningBanner = (agent && agent.warning) ? '<div class="agent-warning-banner">⚠ ' + escapeHtml(agentWarningText(agent.warning)) + '</div>' : '';
+    var warningExtras = agent ? agentWarningExtrasHTML(agent.warning) : '';
+    var warningBanner = (agent && agent.warning) ? '<div class="agent-warning-banner">⚠ ' + escapeHtml(agentWarningText(agent.warning)) + warningExtras + '</div>' : '';
+    var quotaSection = isEdit ? buildAgentQuotaHTML(agent) : '';
     return '<div class="modal">' +
       '<div class="modal-head"><span class="modal-title">' + escapeHtml(title) + '</span><button class="icon-btn" data-action="close-modal" aria-label="' + escapeHtml(t('common.close')) + '">✕</button></div>' +
       warningBanner +
+      quotaSection +
       '<div class="modal-label">' + escapeHtml(t('agent.name')) + '</div><input id="agent-name" class="modal-input" value="' + (agent ? escapeHtml(agent.name) : '') + '">' +
       '<div class="agent-form-row">' +
         '<div><div class="modal-label">' + escapeHtml(t('agent.emoji')) + '</div><input id="agent-emoji" class="modal-input agent-emoji-input" maxlength="4" list="agent-emoji-options" value="' + (agent ? escapeHtml(agent.emoji || '') : '') + '">' + buildAgentEmojiDatalistHTML() + '</div>' +
@@ -3955,7 +4174,10 @@
     return '<div class="modal-section-hint">' + escapeHtml(t('project.instructionsHint')) + '</div>' +
       '<textarea id="project-context-prompt" class="modal-textarea modal-textarea-tall" rows="12" placeholder="' + escapeHtml(t('project.contextPromptPlaceholder')) + '">' + escapeHtml(projectDraft.contextPrompt) + '</textarea>' +
       '<label class="modal-label" for="project-edit-checkcmd">' + escapeHtml(t('project.checkCmd')) + '</label>' +
-      '<input id="project-edit-checkcmd" class="modal-input mono" placeholder="go test ./..." value="' + escapeHtml(projectDraft.checkCmd) + '">';
+      '<input id="project-edit-checkcmd" class="modal-input mono" placeholder="go test ./..." value="' + escapeHtml(projectDraft.checkCmd) + '">' +
+      '<label class="modal-label" for="project-allowed-tools">' + escapeHtml(t('project.allowedTools')) + '</label>' +
+      '<textarea id="project-allowed-tools" class="modal-textarea mono" rows="4" placeholder="' + escapeHtml(t('project.allowedToolsPlaceholder')) + '">' + escapeHtml(projectDraft.allowedTools) + '</textarea>' +
+      '<div class="modal-note">' + escapeHtml(t('project.allowedToolsHint')) + '</div>';
   }
 
   function buildProjectDangerPanelHTML(project) {
@@ -4006,6 +4228,15 @@
       '</div>';
   }
 
+  // splitAllowedTools : une entrée par ligne côté saisie, une liste côté API.
+  // Le serveur retire de toute façon les vides et les espaces superflus
+  // (NormalizeAllowedTools), on ne duplique pas la validation ici.
+  function splitAllowedTools(value) {
+    return String(value || '').split('\n').map(function (line) {
+      return line.trim();
+    }).filter(function (line) { return line !== ''; });
+  }
+
   // Le brouillon retient les champs simples pendant qu'on navigue d'un panneau à
   // l'autre : seul le panneau visible existe dans le DOM.
   function captureProjectDraftFromDOM() {
@@ -4015,7 +4246,8 @@
       'project-description': 'description',
       'project-delivery-target': 'target',
       'project-context-prompt': 'contextPrompt',
-      'project-edit-checkcmd': 'checkCmd'
+      'project-edit-checkcmd': 'checkCmd',
+      'project-allowed-tools': 'allowedTools'
     };
     Object.keys(fields).forEach(function (id) {
       var el = document.getElementById(id);
@@ -4047,6 +4279,8 @@
       target: (project.delivery && project.delivery.target) || '',
       contextPrompt: project.contextPrompt || '',
       checkCmd: project.checkCmd || '',
+      // Une entrée par ligne dans le champ, une liste côté API.
+      allowedTools: (project.allowedTools || []).join('\n'),
       mode: (project.delivery && project.delivery.mode) || 'pr'
     };
     var repos = (project.repos && project.repos.length) ? project.repos : [{ name: '', path: '' }];
@@ -4092,6 +4326,7 @@
     var body = {
       name: name, checkCmd: projectDraft.checkCmd.trim(), repos: reposToBody(repos),
       description: projectDraft.description.trim(), contextPrompt: projectDraft.contextPrompt.trim(),
+      allowedTools: splitAllowedTools(projectDraft.allowedTools),
       links: linksToBody(links),
       delivery: { mode: projectDraft.mode, target: projectDraft.target.trim() }
     };
@@ -4474,6 +4709,13 @@
     // l'aperçu (qui porte les compteurs de retard) n'est plus à jour.
     var rebaseFinished = !!(previous && previous.rebasing && !task.rebasing);
     upsertTask(task);
+    // Une tâche déjà ouverte peut redevenir "non lue" côté serveur (fin
+    // d'exécution d'agent, voir finalize() dans runner.go) : la remarquer
+    // lue immédiatement, sinon le badge reste bloqué à 1 sans raison visible.
+    if (state.taskId === task.id && task.unread) {
+      task.unread = false;
+      api('/api/tasks/' + task.id + '/read', { method: 'POST' }).catch(function () {});
+    }
     refreshTaskListAndFilters();
     if (state.taskId === task.id) {
       patchDetailHead(task.id);
@@ -4663,10 +4905,11 @@
 
   function onGlobalClick(e) {
     var el = e.target.closest('[data-action]');
-    if (!el) { closeAllCardMenus(); closeAllReassignMenus(); return; }
+    if (!el) { closeAllCardMenus(); closeAllReassignMenus(); closeAllProjectMenus(); return; }
     var action = el.getAttribute('data-action');
     if (action !== 'toggle-card-menu') closeAllCardMenus();
     if (action !== 'toggle-reassign-menu') closeAllReassignMenus();
+    if (action !== 'toggle-project-menu') closeAllProjectMenus();
     switch (action) {
       case 'nav-inbox': goInbox(); break;
       case 'nav-projects': goAllProjects(); break;
@@ -4681,6 +4924,8 @@
       case 'toggle-card-menu': toggleCardMenu(el.getAttribute('data-card-id')); break;
       case 'toggle-reassign-menu': toggleReassignMenu(el.getAttribute('data-task-id')); break;
       case 'reassign-task': doReassignTask(el.getAttribute('data-task-id'), el.getAttribute('data-agent-id')); break;
+      case 'toggle-project-menu': toggleProjectMenu(el.getAttribute('data-project-id')); break;
+      case 'mark-project-read': markProjectAllRead(el.getAttribute('data-project-id')); break;
       case 'move-card': moveCard(el.getAttribute('data-card-id'), el.getAttribute('data-column')); break;
       case 'open-new-card': openNewCardModal(); break;
       case 'open-new-task': if (state.cardId) openNewTaskModal(state.cardId); break;
@@ -4721,6 +4966,7 @@
       case 'start-task-preview': startTaskPreview(el.getAttribute('data-task-id')); break;
       case 'stop-preview': stopPreview(el.getAttribute('data-run-id')); break;
       case 'show-preview-log': showPreviewLog(el.getAttribute('data-run-id')); break;
+      case 'open-preview-settings': openPreviewSettings(); break;
       case 'copy-path': copyPathToClipboard(el.getAttribute('data-path'), el); break;
       case 'catch-up-ask-agent':
         askAgentToCatchUp(el.getAttribute('data-card-id'), el.getAttribute('data-target'), el.getAttribute('data-files'));

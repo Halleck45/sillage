@@ -30,6 +30,12 @@ type Store struct {
 	Workspace Workspace
 	Settings  Settings
 
+	// CodexQuota est le dernier instantané de quota codex connu (voir
+	// AgentQuota), mis à jour en best-effort après chaque exécution codex
+	// (runner.go readCodexRateLimits). Nil tant qu'aucune tâche codex n'a
+	// encore tourné, ou si le fichier de session ne portait pas l'info.
+	CodexQuota *AgentQuota
+
 	NextProjectN int
 	NextCardN    int
 	NextTaskN    int
@@ -79,6 +85,7 @@ func loadStoreFile(dataDir string) (*Store, error) {
 	migrateLegacyWorkspace(data, s)
 	migrateTaskStatuses(s)
 	migrateLegacyDelivery(s)
+	migrateProjectAllowedTools(s)
 	migrateCardRefs(s)
 	resetTransientTaskFlags(s)
 	return s, nil
@@ -142,6 +149,26 @@ func migrateLegacyDelivery(s *Store) {
 	for id, p := range s.Projects {
 		if p.Delivery.Mode == "" {
 			p.Delivery.Mode = "pr"
+			s.Projects[id] = p
+		}
+	}
+}
+
+// legacyGoAllowedTools est la chaîne Go qui vivait dans le socle du binaire
+// avant Project.AllowedTools. Elle en est sortie : le socle ne contient que ce
+// qui ne dépend d'aucun langage, sinon tout projet Python ou Rust hérite d'une
+// allowlist écrite pour un autre. Les projets existants la récupèrent ici pour
+// garder exactement leur comportement d'avant la mise à jour.
+var legacyGoAllowedTools = []string{"Bash(go build:*)", "Bash(go test:*)", "Bash(go vet:*)"}
+
+// migrateProjectAllowedTools amorce les projets antérieurs au champ. nil veut
+// dire « antérieur » ; une liste vide non nulle est un choix explicite de
+// l'utilisateur (voir AddProject et NormalizeAllowedTools) et n'est pas
+// réamorcée à chaque démarrage.
+func migrateProjectAllowedTools(s *Store) {
+	for id, p := range s.Projects {
+		if p.AllowedTools == nil {
+			p.AllowedTools = append([]string{}, legacyGoAllowedTools...)
 			s.Projects[id] = p
 		}
 	}
@@ -606,11 +633,16 @@ func sortedAgents(m map[string]Agent) []Agent {
 // avertissement de santé calculé (voir agentWarning). Coûteux (LookPath,
 // lecture /proc) : à n'appeler qu'à la liste des agents (ListAgents/Snapshot),
 // jamais depuis recomputeAgent/recomputeAll qui tournent à chaque mutation.
-func sortedAgentsWithWarnings(m map[string]Agent) []AgentOut {
+// codexQuota est le dernier instantané connu (Store.CodexQuota), attaché aux
+// seuls agents cli=codex : c'est un quota de compte, partagé entre eux.
+func sortedAgentsWithWarnings(m map[string]Agent, codexQuota *AgentQuota) []AgentOut {
 	sorted := sortedAgents(m)
 	out := make([]AgentOut, len(sorted))
 	for i, a := range sorted {
 		out[i] = AgentOut{Agent: a, Warning: agentWarning(a)}
+		if a.Cli == "codex" {
+			out[i].Quota = codexQuota
+		}
 	}
 	return out
 }
@@ -672,7 +704,7 @@ func (s *Store) Snapshot() State {
 		Projects: sortedProjectsWithWarnings(s.Projects),
 		Cards:    sortedCards(s.Cards),
 		Tasks:    sortedTasks(s.Tasks),
-		Agents:   sortedAgentsWithWarnings(s.Agents),
+		Agents:   sortedAgentsWithWarnings(s.Agents, s.CodexQuota),
 		Settings: s.Settings,
 	}
 	st.Tokens.Global = global
@@ -704,7 +736,19 @@ func (s *Store) ListAgents() []AgentOut {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.recomputeAll()
-	return sortedAgentsWithWarnings(s.Agents)
+	return sortedAgentsWithWarnings(s.Agents, s.CodexQuota)
+}
+
+// SetCodexQuota met à jour l'instantané de quota codex (voir AgentQuota),
+// partagé par tous les agents cli=codex. Appelé en best-effort après chaque
+// exécution codex (runner.go readCodexRateLimits) : windows vide n'efface pas
+// un instantané précédent, l'appelant ne l'invoque que s'il a trouvé quelque
+// chose.
+func (s *Store) SetCodexQuota(windows []AgentQuotaWindow) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.CodexQuota = &AgentQuota{UpdatedAt: time.Now(), Windows: windows}
+	return s.save()
 }
 
 // CardsByProject retourne les cartes d'un projet, recalculées.
@@ -940,6 +984,9 @@ func (s *Store) AddProject(name, description, contextPrompt string, repos []Repo
 		ID: fmt.Sprintf("p%d", s.NextProjectN), Name: name, Description: description,
 		ContextPrompt: contextPrompt, Repos: normalized, Links: normalizedLinks,
 		Delivery: normalizedDelivery,
+		// Liste vide non nulle : un projet neuf n'a rien à migrer, alors qu'un
+		// nil serait relu comme « antérieur au champ » au prochain démarrage.
+		AllowedTools: []string{},
 	}
 	s.Projects[p.ID] = p
 	if err := s.save(); err != nil {
@@ -948,13 +995,30 @@ func (s *Store) AddProject(name, description, contextPrompt string, repos []Repo
 	return p, nil
 }
 
+// NormalizeAllowedTools nettoie la liste saisie par l'humain : une entrée par
+// ligne dans l'UI, donc espaces superflus et lignes vides à retirer. Aucune
+// validation du contenu : c'est le refus figé passé au CLI (claudeDeniedTools)
+// qui garantit l'invariant, pas un filtre de saisie qui donnerait une fausse
+// impression de sûreté (Bash(sh:*) contournerait n'importe quelle liste noire).
+// Retourne une liste vide non nulle plutôt que nil : nil veut dire « projet
+// antérieur au champ » pour migrateProjectAllowedTools.
+func NormalizeAllowedTools(tools []string) []string {
+	out := []string{}
+	for _, tool := range tools {
+		if trimmed := strings.TrimSpace(tool); trimmed != "" {
+			out = append(out, trimmed)
+		}
+	}
+	return out
+}
+
 // UpdateProject modifie le nom, la description, la commande de vérification,
-// le contexte agent, la liste des dépôts et/ou les liens épinglés d'un
-// projet. Les champs nil ne sont pas modifiés ; repos et links, s'ils sont
-// fournis (même vides), remplacent entièrement la liste existante (mêmes
-// validations que AddProject). Retirer un repo ne casse pas les tâches
-// existantes : leur worktree déjà créé vit sa vie indépendamment.
-func (s *Store) UpdateProject(id string, name, description, checkCmd, contextPrompt *string, repos *[]Repo, links *[]Link, delivery *Delivery) (Project, error) {
+// le contexte agent, les outils autorisés, la liste des dépôts et/ou les liens
+// épinglés d'un projet. Les champs nil ne sont pas modifiés ; allowedTools,
+// repos et links, s'ils sont fournis (même vides), remplacent entièrement la
+// liste existante (mêmes validations que AddProject). Retirer un repo ne casse
+// pas les tâches existantes : leur worktree déjà créé vit sa vie indépendamment.
+func (s *Store) UpdateProject(id string, name, description, checkCmd, contextPrompt *string, allowedTools *[]string, repos *[]Repo, links *[]Link, delivery *Delivery) (Project, error) {
 	var normalized []Repo
 	if repos != nil {
 		var err error
@@ -999,6 +1063,9 @@ func (s *Store) UpdateProject(id string, name, description, checkCmd, contextPro
 	}
 	if contextPrompt != nil {
 		p.ContextPrompt = *contextPrompt
+	}
+	if allowedTools != nil {
+		p.AllowedTools = NormalizeAllowedTools(*allowedTools)
 	}
 	if repos != nil {
 		p.Repos = normalized
@@ -1255,6 +1322,42 @@ func (s *Store) SetTaskRebasing(id string, rebasing bool) (Task, error) {
 // liste triée par updatedAt (le tri sauterait sous le curseur).
 func (s *Store) MarkTaskRead(id string) (Task, error) {
 	return s.updateTask(id, func(t *Task) { t.Unread = false }, false)
+}
+
+// MarkAllTasksReadForProject marque comme lues toutes les tâches non lues
+// d'un projet (menu "..." d'un projet dans la sidebar), sans toucher à
+// UpdatedAt pour la même raison que MarkTaskRead. Renvoie les tâches
+// effectivement modifiées, pour que l'appelant publie leurs événements SSE.
+func (s *Store) MarkAllTasksReadForProject(projectID string) ([]Task, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.Projects[projectID]; !ok {
+		return nil, fmt.Errorf("project not found")
+	}
+	var changed []Task
+	for id, t := range s.Tasks {
+		if t.ProjectID == projectID && t.Unread {
+			t.Unread = false
+			s.Tasks[id] = t
+			changed = append(changed, t)
+		}
+	}
+	if len(changed) == 0 {
+		return nil, nil
+	}
+	for _, t := range changed {
+		s.recomputeCard(t.CardID)
+		s.recomputeAgent(t.AgentID)
+	}
+	s.recomputeProject(projectID)
+	if err := s.save(); err != nil {
+		return nil, err
+	}
+	result := make([]Task, len(changed))
+	for i, t := range changed {
+		result[i] = s.Tasks[t.ID]
+	}
+	return result, nil
 }
 
 // updateTask est l'implémentation commune de UpdateTask/MarkTaskRead.

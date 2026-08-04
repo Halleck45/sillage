@@ -213,6 +213,33 @@ button, input, textarea { font-family: inherit; }
   justify-content: center;
 }
 
+/* Menu contextuel d'un projet ("...") : superposé au survol de la ligne, sans
+   lui prendre de largeur en permanence (sinon le nom du projet n'a plus la
+   même largeur disponible dans les autres états, un survol ou une sélection
+   ne doivent rien redimensionner). Le badge non lu s'efface dessous plutôt
+   que de se pousser, pour ne pas décaler le texte non plus. */
+.project-item-wrap { position: relative; }
+.project-item-wrap:hover .badge-unread { visibility: hidden; }
+.project-menu-btn {
+  position: absolute; right: 6px; top: 50%; transform: translateY(-50%);
+  width: 20px; height: 20px; border: 0; background: var(--hover);
+  border-radius: 6px; color: var(--muted-3); cursor: pointer; font-size: 13px; line-height: 1;
+  opacity: 0; transition: opacity .12s ease;
+}
+.project-item-wrap:hover .project-menu-btn, .project-menu-btn:focus-visible { opacity: 1; }
+.project-menu-btn:hover { background: var(--border-3); }
+.project-menu {
+  position: absolute; top: 30px; right: 4px; z-index: 6;
+  background: #fff; border: 1px solid var(--border); border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(25, 25, 23, 0.12);
+  display: flex; flex-direction: column; padding: 4px; min-width: 180px;
+}
+.project-menu-item {
+  border: 0; background: transparent; text-align: left; padding: 7px 9px; border-radius: 7px;
+  font-size: 12.5px; color: var(--text-2); cursor: pointer; white-space: nowrap;
+}
+.project-menu-item:hover { background: var(--hover); }
+
 .agent-list { display: flex; flex-direction: column; gap: 1px; padding: 0 8px; }
 .agent-item { display: flex; align-items: center; gap: 9px; height: 32px; padding: 0 10px; border-radius: 8px; font-size: 13.5px; color: var(--text-2); cursor: pointer; }
 .agent-avatar {
@@ -501,6 +528,14 @@ button, input, textarea { font-family: inherit; }
   margin-top: 12px; padding: 9px 12px; background: var(--amber-bg); color: var(--amber);
   border-radius: 9px; font-size: 12.5px; line-height: 1.4;
 }
+.agent-warning-cmd { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+.agent-warning-cmd code { background: rgba(0, 0, 0, 0.06); padding: 2px 6px; border-radius: 5px; }
+.agent-warning-cmd button {
+  border: 0; background: transparent; color: inherit; text-decoration: underline;
+  cursor: pointer; font-size: 11.5px; padding: 0; flex: none;
+}
+.agent-warning-fallback { margin-top: 6px; font-size: 11.5px; opacity: 0.9; }
+.agent-warning-link { display: inline-block; margin-top: 6px; color: inherit; text-decoration: underline; }
 .reassign-menu {
   position: absolute; top: 26px; left: 0; z-index: 6;
   background: #fff; border: 1px solid var(--border); border-radius: 10px;
@@ -739,6 +774,13 @@ button, input, textarea { font-family: inherit; }
 .deliv-title { font-size: 13px; font-weight: 500; letter-spacing: -0.01em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .deliv-meta { margin-top: 2px; font-size: 11px; color: var(--muted-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
+/* ---------- Historique ---------- */
+
+.history-list { flex: 1; min-height: 0; overflow-y: auto; padding: 6px 18px 24px; }
+.history-item { display: flex; align-items: baseline; gap: 10px; padding: 5px 0; border-bottom: 1px solid var(--border-2); font-size: 11.5px; }
+.history-time { flex: none; color: var(--muted-4); }
+.history-text { flex: 1; min-width: 0; color: var(--text-3); overflow-wrap: anywhere; }
+
 /* ---------- Modals ---------- */
 
 .modal-overlay {
@@ -834,6 +876,13 @@ button, input, textarea { font-family: inherit; }
 .modal-label-row { display: flex; align-items: baseline; gap: 8px; }
 .modal-label-hint { margin-left: auto; font-weight: 400; font-size: 11px; color: var(--muted-4); }
 
+.agent-quota-box { margin-top: 8px; border: 1px solid var(--border-3); border-radius: 10px; padding: 4px 12px; }
+.agent-quota-row { display: flex; align-items: center; gap: 10px; padding: 7px 0; font-size: 12.5px; }
+.agent-quota-row + .agent-quota-row { border-top: 1px solid var(--border-3); }
+.agent-quota-window { flex: 0 0 auto; font-weight: 600; color: var(--text); }
+.agent-quota-percent { color: var(--text-2); }
+.agent-quota-resets { margin-left: auto; color: var(--muted-3); }
+
 /* Aide des raccourcis clavier */
 .shortcut-row { display: flex; align-items: baseline; gap: 10px; padding: 5px 0; font-size: 12.5px; color: var(--text-2); }
 .shortcut-keys { flex: none; display: flex; gap: 4px; min-width: 104px; }
@@ -906,6 +955,19 @@ button, input, textarea { font-family: inherit; }
 .repo-chip {
   font-size: 11px; color: var(--muted-2); background: var(--bg); padding: 2px 7px; border-radius: 6px;
   white-space: nowrap;
+}
+.preview-hint code { font-family: ui-monospace, Menlo, monospace; color: var(--accent-dark); }
+.preview-hint-vars {
+  display: flex; flex-wrap: wrap; gap: 5px 10px; margin: 6px 0 0; padding: 0; list-style: none;
+}
+.preview-hint-var {
+  display: inline-flex; align-items: baseline; gap: 5px; background: var(--bg); border-radius: 6px;
+  padding: 3px 8px;
+}
+.preview-hint-var code { font-size: 11px; }
+.preview-hint-example { margin-top: 8px; }
+.preview-hint-example code {
+  display: inline-block; margin-top: 3px; background: var(--bg); border-radius: 6px; padding: 2px 7px;
 }
 
 /* Recette manuelle (voir docs/SPEC-RECETTE.md) : une ligne par dépôt, le

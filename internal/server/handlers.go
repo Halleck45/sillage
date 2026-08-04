@@ -149,6 +149,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/projects", s.handleCreateProject)
 	mux.HandleFunc("PATCH /api/projects/{id}", s.handleUpdateProject)
 	mux.HandleFunc("DELETE /api/projects/{id}", s.handleDeleteProject)
+	mux.HandleFunc("POST /api/projects/{id}/mark-all-read", s.handleMarkProjectAllRead)
 	mux.HandleFunc("POST /api/cards", s.handleCreateCard)
 	mux.HandleFunc("PATCH /api/cards/{id}", s.handleUpdateCard)
 	mux.HandleFunc("DELETE /api/cards/{id}", s.handleDeleteCard)
@@ -643,6 +644,7 @@ func (s *Server) handleUpdateProject(w http.ResponseWriter, r *http.Request) {
 		Description   *string   `json:"description"`
 		CheckCmd      *string   `json:"checkCmd"`
 		ContextPrompt *string   `json:"contextPrompt"`
+		AllowedTools  *[]string `json:"allowedTools"`
 		Repos         *[]Repo   `json:"repos"`
 		Links         *[]Link   `json:"links"`
 		Delivery      *Delivery `json:"delivery"`
@@ -674,7 +676,7 @@ func (s *Server) handleUpdateProject(w http.ResponseWriter, r *http.Request) {
 		links = fillMissingLinkTitles(links)
 		body.Links = &links
 	}
-	project, err := s.store.UpdateProject(id, body.Name, body.Description, body.CheckCmd, body.ContextPrompt, body.Repos, body.Links, body.Delivery)
+	project, err := s.store.UpdateProject(id, body.Name, body.Description, body.CheckCmd, body.ContextPrompt, body.AllowedTools, body.Repos, body.Links, body.Delivery)
 	if err != nil {
 		writeError(w, statusForStoreError(err), err.Error())
 		return
@@ -699,6 +701,23 @@ func (s *Server) handleDeleteProject(w http.ResponseWriter, r *http.Request) {
 	if err := s.runner.DeleteProject(id); err != nil {
 		writeError(w, statusForStoreError(err), err.Error())
 		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// handleMarkProjectAllRead marque comme lues toutes les tâches non lues d'un
+// projet (menu "..." d'un projet dans la sidebar). Action locale et
+// réversible (une nouvelle activité repasse une tâche à non lue) : aucune
+// confirmation.
+func (s *Server) handleMarkProjectAllRead(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	tasks, err := s.store.MarkAllTasksReadForProject(id)
+	if err != nil {
+		writeError(w, statusForStoreError(err), err.Error())
+		return
+	}
+	for _, t := range tasks {
+		s.runner.publishTask(t)
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
