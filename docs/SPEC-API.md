@@ -142,6 +142,7 @@ PreviewRun { "id": "pv1", "projectId": "p1", "cardId": "c1", "taskId": "",
 | POST | `/api/projects` | `{name?, path}` ou `{name?, repos:[{name?,path}, ...], description?, contextPrompt?, links?:[{url,title?}, ...], delivery?}` | Project (400 si aucun dépôt, un path invalide/pas un dépôt git, noms de repo dupliqués, mode de livraison inconnu, ou lien invalide/en trop grand nombre). Seul le chemin d'un dépôt est requis : `name` absent ou vide = basename du premier dépôt, `delivery` absent = déduit des remotes des dépôts (voir « Livraison d'un chantier ») |
 | PATCH | `/api/projects/{id}` | `{name?, description?, checkCmd?, contextPrompt?, allowedTools?, repos?, links?, delivery?}` | Project (repos/links/allowedTools, si fournis, remplacent la liste entière ; retirer un repo ne casse pas les tâches existantes ; `previewCmd`/`previewUrl` se posent sur chaque Repo, et une `previewUrl` non http(s) est refusée en 400) |
 | DELETE | `/api/projects/{id}` | `{confirm:true}` | 204 (voir « Suppressions » ci-dessous). **Validation humaine obligatoire** : refus 400 sans `confirm` |
+| POST | `/api/projects/{id}/mark-all-read` | | 204 (marque `unread=false` sur toutes les tâches non lues du projet, ne modifie jamais `updatedAt` : même règle que `/api/tasks/{id}/read`). **Aucune confirmation** : action locale et réversible |
 | POST | `/api/cards` | `{projectId, title, column?, contextPrompt?}` | Card. `column`, si fourni, doit valoir `"soon"` (400 `"cards are created in the soon column"` sinon) : les cartes se créent toujours dans "Bientôt" |
 | PATCH | `/api/cards/{id}` | `{column?, title?, contextPrompt?}` | Card. `title`, si fourni, doit être non vide. Le déplacement manuel de colonne (toutes colonnes acceptées) reste indépendant de l'auto-déplacement (voir plus bas) |
 | DELETE | `/api/cards/{id}` | `{confirm:true}` | 204 (voir « Suppressions » ci-dessous). **Validation humaine obligatoire** : refus 400 sans `confirm` |
@@ -188,7 +189,7 @@ Après chaque changement de statut de tâche, la carte est automatiquement repla
 
 ### Lecture d'une tâche : `updatedAt` inchangé
 
-`POST /api/tasks/{id}/read` (ouverture d'une tâche) ne met jamais à jour `updatedAt` (variante dédiée `Store.MarkTaskRead`, distincte de la mutation générique `UpdateTask` utilisée par toutes les autres actions) : une liste de tâches triée par `updatedAt` ne doit pas se réordonner sous le curseur quand on ouvre simplement une tâche pour la lire.
+`POST /api/tasks/{id}/read` (ouverture d'une tâche) ne met jamais à jour `updatedAt` (variante dédiée `Store.MarkTaskRead`, distincte de la mutation générique `UpdateTask` utilisée par toutes les autres actions) : une liste de tâches triée par `updatedAt` ne doit pas se réordonner sous le curseur quand on ouvre simplement une tâche pour la lire. Même règle pour `POST /api/projects/{id}/mark-all-read` (`Store.MarkAllTasksReadForProject`) : le menu « ... » d'un projet dans la sidebar, pour débloquer un badge non lu resté bloqué (une tâche déjà ouverte peut redevenir non lue côté serveur si l'agent termine pendant qu'elle est affichée).
 
 ### Liens épinglés de projet
 

@@ -213,6 +213,33 @@ button, input, textarea { font-family: inherit; }
   justify-content: center;
 }
 
+/* Menu contextuel d'un projet ("...") : superposé au survol de la ligne, sans
+   lui prendre de largeur en permanence (sinon le nom du projet n'a plus la
+   même largeur disponible dans les autres états, un survol ou une sélection
+   ne doivent rien redimensionner). Le badge non lu s'efface dessous plutôt
+   que de se pousser, pour ne pas décaler le texte non plus. */
+.project-item-wrap { position: relative; }
+.project-item-wrap:hover .badge-unread { visibility: hidden; }
+.project-menu-btn {
+  position: absolute; right: 6px; top: 50%; transform: translateY(-50%);
+  width: 20px; height: 20px; border: 0; background: var(--hover);
+  border-radius: 6px; color: var(--muted-3); cursor: pointer; font-size: 13px; line-height: 1;
+  opacity: 0; transition: opacity .12s ease;
+}
+.project-item-wrap:hover .project-menu-btn, .project-menu-btn:focus-visible { opacity: 1; }
+.project-menu-btn:hover { background: var(--border-3); }
+.project-menu {
+  position: absolute; top: 30px; right: 4px; z-index: 6;
+  background: #fff; border: 1px solid var(--border); border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(25, 25, 23, 0.12);
+  display: flex; flex-direction: column; padding: 4px; min-width: 180px;
+}
+.project-menu-item {
+  border: 0; background: transparent; text-align: left; padding: 7px 9px; border-radius: 7px;
+  font-size: 12.5px; color: var(--text-2); cursor: pointer; white-space: nowrap;
+}
+.project-menu-item:hover { background: var(--hover); }
+
 .agent-list { display: flex; flex-direction: column; gap: 1px; padding: 0 8px; }
 .agent-item { display: flex; align-items: center; gap: 9px; height: 32px; padding: 0 10px; border-radius: 8px; font-size: 13.5px; color: var(--text-2); cursor: pointer; }
 .agent-avatar {
