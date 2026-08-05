@@ -13,9 +13,10 @@ internal/server/
   auth.go                    // bcrypt, sessions, middleware, rate-limit login
   sse.go                     // Hub SSE
   git.go                     // worktrees, diff parse, commits, push
-  runner.go                  // adaptateurs claude / codex / fake
+  runner.go                  // adaptateurs claude / codex / copilot / agy / fake
   preview.go                 // superviseur des recettes manuelles (process + journal)
   preview_handlers.go        // routes de recette
+  update.go                  // version, détection de mise à jour, application, redémarrage
   handlers.go                // REST
   store_test.go, git_test.go // tests unitaires
 ```
@@ -32,6 +33,14 @@ internal/server/
 
 Branches de chantier : `GetCardBranch`, `SetCardBranch`, `MarkCardBranchShipped(cardID, repoName, prURL, at)` et `MarkCardBranchPending(cardID, repoName)` (remise à `shippedAt=nil` quand du travail nouveau arrive ; `prUrl` conservée). Tous recalculent la carte, verrou tenu.
 Tokens : cumulés dans Task.tokens ; agrégats projet/global calculés en sommant les tâches.
+
+## Format de state.json
+
+- `stateFormatVersion` (const, store.go) est écrit dans le fichier (`FormatVersion`) à chaque `save()`. **À incrémenter dès qu'un champ persisté est ajouté, renommé ou change de sens.**
+- Au chargement, `FormatVersion > stateFormatVersion` fait échouer `loadStoreFile` avec `ErrStateTooNew`, **avant la moindre écriture** : `NewStore` sauvegarde immédiatement après avoir chargé, donc laisser passer un fichier trop récent le mutilerait à la seconde près (les champs exportés du Store sont sérialisés tels quels : ce que le binaire ne connaît pas disparaît). `main` refuse alors de démarrer, avec le message et la sortie de secours (`brew upgrade sillage`, ou un autre `-data`).
+- `CloneWorkspace` applique le même refus au `state.json` du clone **avant** `ReplaceWorkspaceFiles` : sinon le rapatriement laisserait le répertoire de données avec un fichier illisible sous un serveur qui tourne encore.
+- `Store.WrittenBy` garde la version de Sillage qui a écrit le fichier en dernier ("dev" pour une compilation locale). `DowngradeWarning()` prévient au démarrage quand le fichier vient d'une version publiée plus récente que le binaire **à format égal** : le chargement réussit, mais les champs apparus entre les deux tomberont à la première sauvegarde. Silencieux dès qu'une version "dev" est en jeu, faute de pouvoir comparer.
+- Limite à connaître : le garde-fou n'existe qu'entre binaires qui le portent tous les deux. Une version antérieure à son introduction ignore `FormatVersion` et le supprime même du fichier en le réécrivant. Le filet de secours reste le dépôt git de l'espace de travail (commits `sillage: update`, throttlés à 15 min).
 
 ## Auth
 
@@ -108,6 +117,16 @@ Jamais de `--dangerously-skip-permissions`. Jamais `git push` dans allowedTools.
 
 Le quota de compte (`rate_limits`) n'est PAS porté par ce flux stdout, seulement par le fichier de session que codex écrit de son côté même en mode `exec` (`~/.codex/sessions/AAAA/MM/JJ/rollout-...-<thread_id>.jsonl`) : `readCodexRateLimits` retrouve ce fichier via le `thread_id` capturé sur l'événement `thread.started` du flux, lit son dernier `rate_limits` et met à jour `Store.CodexQuota` (best-effort, jamais bloquant). Voir SPEC-API.md « Quota des agents ».
 
+### Adaptateur GitHub Copilot (`cli:"copilot"`)
+
+`copilot --autopilot --max-autopilot-continues=10 --no-ask-user --allow-tool=read,write,shell --deny-tool=<refus figés> --disable-builtin-mcps --no-remote --no-remote-export --no-auto-update --no-color --stream=off --silent [--model=<model>] -p <texte>`.
+
+Le texte contient les contextes agent, projet et chantier avant le prompt. Le stdout texte devient un Message agent final. Pas de reprise de session ni de compteurs de tokens. Les refus figés couvrent `git push`, `gh`, `glab` et les réglages Copilot du dépôt ; ils l'emportent sur les outils autorisés. Les MCP GitHub et les fonctions de contrôle distant sont désactivés.
+
+### Adaptateur Antigravity (`cli:"agy"`)
+
+`agy --print --sandbox --print-timeout=60m [--model <model>] <texte>`. Le texte contient les contextes agent, projet et chantier avant le prompt ; le stdout texte devient un Message agent final. Pas de reprise de session ni de compteurs de tokens. Le mode sandbox est toujours forcé ; `--dangerously-skip-permissions` n'est jamais utilisé.
+
 ### Adaptateur fake (`cli:"fake"`)
 
 Sans exec : goroutine qui simule ~3 s de travail : 3 lignes d'activité espacées, écrit/complète un fichier `SILLAGE-TEST.md` dans le worktree (contenu horodaté), un Message agent de synthèse, usage fictif `{input:1200, output:340, costUsd:0.004}`. Sert aux tests et à la démo sans coût.
@@ -124,9 +143,23 @@ Voir `docs/SPEC-RECETTE.md` pour le « pourquoi », SPEC-API.md §« Recette man
 - `killGroup(cmd, done)` (dans runner.go) est partagé avec l'interruption d'un agent : SIGINT au groupe, SIGKILL après 5 s. Viser le groupe et non le seul `sh` est indispensable : un `npm run dev` laisse sinon son node en vie sur le port.
 - `Server.Shutdown()` appelle `StopAll()` (en parallèle, avec attente) puis arrête l'auto-sync. `main.go` l'appelle sur SIGINT/SIGTERM avant `httpSrv.Shutdown`. Les agents, eux, ne sont pas interrompus : leur travail est dans un worktree et survit au redémarrage.
 
+## Mises à jour (update.go)
+
+Voir SPEC-API.md §« Mises à jour de Sillage » pour le contrat.
+
+- La version vit dans `main.version` (ldflags de release) et est poussée dans le paquet par `server.SetVersion` au démarrage. `buildVersion` non publiable (`"dev"`) éteint tout : `updateChecksEnabled()` est faux, aucune goroutine ne démarre, aucun appel réseau n'est fait. C'est aussi ce qui garantit qu'aucun test ne sort sur le réseau (`NewServer` est appelé sans jamais passer par `SetVersion`).
+- `updateTracker` (dans `Server`, jamais dans `Store`) garde la dernière version vue, la date de vérification et la dernière erreur. Rien de tout ça n'atteint `state.json` : ce serait une observation de la machine courante dans un fichier qui peut être rapatrié sur une autre.
+- `detectInstall()` est mémoïsé (`sync.Once`) : un binaire ne se déplace pas pendant qu'il tourne. La détection Homebrew passe par `filepath.EvalSymlinks` (le PATH ne montre qu'un lien vers le Cellar). L'écriture possible du dossier est testée réellement (fichier temporaire créé puis supprimé) : les permissions seules ne disent rien d'un montage en lecture seule.
+- `startUpdateChecker`/`stopUpdateChecker` suivent le patron de `startAutoSync` (même canal `stop`, même idempotence). Une première vérification part 3 s après le démarrage, puis un ticker de 24 h.
+- `applyUpdate()` refuse si un agent tourne (`Runner.RunningCount()`) ou si une recette tourne (`PreviewSupervisor.RunningCount()`) : on ne remplace pas un binaire sous les pieds d'un process qu'on a lancé. Le drapeau `applying` empêche deux applications simultanées et est publié en SSE.
+- `downloadRelease` vérifie le sha256 pendant l'écriture (`io.MultiWriter`) contre le `checksums.txt` de la release, n'accepte qu'une empreinte sha256 bien formée comme référence (`parseChecksums`), et ne pose le fichier qu'après vérification, par `os.Rename` depuis un temporaire du même dossier. Aucun résidu en cas d'échec.
+- `restartInPlace` fait un `syscall.Exec` : le handler répond **avant** (avec un flush et 500 ms de grâce), sinon le navigateur ne verrait qu'une socket fermée. Après Homebrew, la cible est le `sillage` du PATH, pas le chemin de départ : le Cellar de l'ancienne version peut avoir disparu.
+- `refreshServiceStatus()` sonde le lancement à l'ouverture de session via `brew services info --json`, uniquement pour une installation Homebrew (les autres modes n'ont pas de registre à interroger). Appelé dans une goroutine au démarrage, indépendamment de la version et du réglage de vérification, et à chaque `POST /api/update/check`. `serviceRegistered` retombe sur `status` quand le champ `registered` est absent (brew ancien) et renvoie `ok=false` quand rien ne permet de conclure : le champ `service` reste alors absent de la réponse, plutôt que d'affirmer que rien n'est configuré.
+- Indirections de test : `fetchLatestReleaseFn`, `downloadReleaseFn`, `brewUpgradeFn`, `detectInstallFn`, `releaseDownloadBase`, `lookPathFn`, `brewServiceInfoFn`. Même intention que `syncPushFn`/`workspaceGitEnabledFn` dans workspace.go.
+
 ## Seed (premier lancement)
 
-Agents : Bolt 🐝 `#f2b705` claude/sonnet (contexte : dev backend pragmatique) ; Muse 🦊 `#d0662f` claude/opus (produit, specs, docs) ; Otto 🦉 `#4f7d2f` codex/(modèle vide = défaut) (infra) ; Écho 🧪 `#777` fake (agent de test local, gratuit). Pas de projets seedés.
+Agents : Bolt 🐝 `#f2b705` claude/sonnet ; Muse 🦊 `#d0662f` claude/opus ; Otto 🦉 `#4f7d2f` codex/(modèle vide = défaut) ; Fably 🪶 `#6b4fbb` claude/fable ; Octo 🐙 `#24292f` copilot/(modèle par défaut) ; Astro 🚀 `#4285f4` agy/(modèle par défaut) ; Écho 🧪 `#777` fake (agent de test local, gratuit). Pas de projets seedés. Les deux agents externes ajoutés après le premier lancement sont migrés une seule fois via `AgentSeedVersion`, afin qu'une suppression volontaire reste définitive.
 
 ## Handlers
 
@@ -143,7 +176,8 @@ Suivre SPEC-API.md. Points d'attention :
 
 ## Tests
 
-- store_test.go : roundtrip save/load, compteurs dérivés.
+- store_test.go : roundtrip save/load, compteurs dérivés, signature du format à la sauvegarde, refus d'un state.json plus récent (fichier laissé intact), avertissement de retour en arrière entre versions publiées.
 - git_test.go : parser de diff sur une fixture inline (2 fichiers, add/del/ctx, fichier nouveau) ; test worktree+diff sur un repo git temporaire créé dans t.TempDir().
 - preview_test.go : commande qui finit (journal, code de retour), stderr capturé, les quatre variables et le répertoire d'exécution (le worktree, jamais le dépôt du projet), identité propre d'une tâche, URL développée avec arithmétique, arrêt qui tue le groupe de process, relancement qui remplace le run, `StopAll` qui ne laisse rien vivant, refus sans commande ou sans branche de chantier, URL non http(s) refusée, tampon de journal plafonné.
+- update_test.go : sonde de service (aucun process brew hors installation Homebrew, PID qui identifie l'instance de service, silence quand brew ne conclut pas, repli sur `status`, plus une fixture de la sortie réelle de `brew services info --json`), comparaison de versions (`0.10.0 > 0.9.9`, rc ignorée), lecture de checksums (lignes invalides écartées), compilation locale qui ne sort jamais sur le réseau, chaque `blocker` et son `selfUpdatable`, refus tant qu'un agent travaille, refus sans `confirm`, et le test de sécurité : un sha256 qui ne correspond pas ne remplace rien et ne laisse aucun temporaire (serveur HTTP local via `httptest`).
 - `go vet ./...` et `go test ./...` doivent passer. `go build` doit produire le binaire.

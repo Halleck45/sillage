@@ -15,12 +15,40 @@ import (
 	"time"
 )
 
+// stateFormatVersion est le format de state.json que ce binaire écrit et sait
+// lire. **À incrémenter dès qu'un champ persisté est ajouté, renommé ou change
+// de sens.** C'est la seule protection contre un binaire plus ancien : comme
+// les champs exportés du Store sont sérialisés tels quels, une version qui ne
+// connaît pas un champ le fait disparaître du fichier à sa première
+// sauvegarde, en silence (voir ErrStateTooNew).
+const stateFormatVersion = 2
+
+// agentSeedVersion tracks one-time additions to the built-in agent profiles.
+// Unlike checking for an ID at every startup, this lets users delete a seeded
+// agent without Sillage recreating it on the next launch.
+const agentSeedVersion = 1
+
+// ErrStateTooNew : le fichier vient d'une version plus récente de Sillage.
+// Refuser de démarrer est le seul comportement sûr, parce que charger puis
+// sauvegarder détruirait tout ce que ce binaire ne connaît pas.
+var ErrStateTooNew = errors.New("state.json comes from a newer Sillage")
+
 // Store est l'état en mémoire de l'application, persisté dans state.json.
 // Tous les champs exportés sont sérialisés ; les champs non exportés
 // (verrou, répertoire de données) sont ignorés par encoding/json.
 type Store struct {
 	mu      sync.Mutex
 	dataDir string
+
+	// FormatVersion est le format de ce fichier (voir stateFormatVersion).
+	// Écrit à chaque sauvegarde ; un fichier plus récent que le binaire fait
+	// échouer le chargement au lieu d'être réécrit en perdant des champs.
+	FormatVersion int
+
+	// WrittenBy est la version de Sillage qui a écrit ce fichier en dernier
+	// ("dev" pour une compilation locale). Sert au diagnostic : c'est la seule
+	// trace de « quel binaire a touché mes données ».
+	WrittenBy string
 
 	Projects  map[string]Project
 	Cards     map[string]Card
@@ -29,6 +57,11 @@ type Store struct {
 	Agents    map[string]Agent
 	Workspace Workspace
 	Settings  Settings
+
+	// AgentSeedVersion records which built-in agent additions have already been
+	// offered to this workspace. It does not prevent users from editing or
+	// deleting those agents afterwards.
+	AgentSeedVersion int
 
 	// CodexQuota est le dernier instantané de quota codex connu (voir
 	// AgentQuota), mis à jour en best-effort après chaque exécution codex
@@ -41,6 +74,10 @@ type Store struct {
 	NextTaskN    int
 	NextMessageN int
 	NextRef      int
+
+	// previousWriter est la valeur de WrittenBy telle qu'elle était sur disque
+	// au chargement, avant que ce binaire ne s'y inscrive. Non sérialisée.
+	previousWriter string
 
 	// commitTimer pilote le commit automatique throttlé de l'espace de travail
 	// après chaque sauvegarde. Non sérialisé (non exporté).
@@ -80,6 +117,13 @@ func loadStoreFile(dataDir string) (*Store, error) {
 	if err := json.Unmarshal(data, s); err != nil {
 		return nil, fmt.Errorf("cannot read state.json: %w", err)
 	}
+	// Avant toute chose, et surtout avant la moindre sauvegarde : un fichier
+	// d'un format plus récent n'est pas lisible sans perte.
+	if s.FormatVersion > stateFormatVersion {
+		return nil, fmt.Errorf("%w (format %d, this binary handles %d): upgrade Sillage (brew upgrade sillage, or grab the latest release) or point -data elsewhere; refusing to start so nothing is overwritten",
+			ErrStateTooNew, s.FormatVersion, stateFormatVersion)
+	}
+	s.previousWriter = s.WrittenBy
 	s.ensureMaps()
 	migrateLegacyRepos(data, s)
 	migrateLegacyWorkspace(data, s)
@@ -87,8 +131,24 @@ func loadStoreFile(dataDir string) (*Store, error) {
 	migrateLegacyDelivery(s)
 	migrateProjectAllowedTools(s)
 	migrateCardRefs(s)
+	migrateAgentSeeds(s)
 	resetTransientTaskFlags(s)
 	return s, nil
+}
+
+// migrateAgentSeeds adds profiles introduced after a workspace was created.
+// Existing agents with the same IDs always win so user customizations remain
+// untouched.
+func migrateAgentSeeds(s *Store) {
+	if s.AgentSeedVersion >= agentSeedVersion {
+		return
+	}
+	for id, agent := range newExternalAgentSeeds() {
+		if _, exists := s.Agents[id]; !exists {
+			s.Agents[id] = agent
+		}
+	}
+	s.AgentSeedVersion = agentSeedVersion
 }
 
 // resetTransientTaskFlags remet à zéro les états de tâche qui ne décrivent
@@ -223,6 +283,9 @@ func (s *Store) ReloadFromDisk() error {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.FormatVersion = fresh.FormatVersion
+	s.WrittenBy = fresh.WrittenBy
+	s.previousWriter = fresh.previousWriter
 	s.Projects = fresh.Projects
 	s.Cards = fresh.Cards
 	s.Tasks = fresh.Tasks
@@ -230,6 +293,7 @@ func (s *Store) ReloadFromDisk() error {
 	s.Agents = fresh.Agents
 	s.Workspace = fresh.Workspace
 	s.Settings = fresh.Settings
+	s.AgentSeedVersion = fresh.AgentSeedVersion
 	s.NextProjectN = fresh.NextProjectN
 	s.NextCardN = fresh.NextCardN
 	s.NextTaskN = fresh.NextTaskN
@@ -240,6 +304,40 @@ func (s *Store) ReloadFromDisk() error {
 
 func (s *Store) statePath() string {
 	return filepath.Join(s.dataDir, "state.json")
+}
+
+// DowngradeWarning décrit le risque que le format ne sait pas voir : deux
+// versions publiées du même format, dont celle qui tourne est la plus ancienne.
+// Elle chargera le fichier sans erreur, puis supprimera à la première
+// sauvegarde les champs apparus entre les deux. Vide quand il n'y a rien à
+// dire, notamment dès qu'une compilation locale est en jeu (une version "dev"
+// ne se compare à rien).
+func (s *Store) DowngradeWarning() string {
+	previous := s.previousWriter
+	if !isReleaseVersion(previous) || !isReleaseVersion(buildVersion) {
+		return ""
+	}
+	if compareVersions(previous, buildVersion) <= 0 {
+		return ""
+	}
+	return fmt.Sprintf("state.json was last written by Sillage %s and this binary is %s: fields it does not know will be dropped on the next save. Upgrade Sillage, or point -data elsewhere.", previous, buildVersion)
+}
+
+// StateFileFormatVersion lit le seul champ FormatVersion d'un state.json, sans
+// charger le reste : sert à refuser un espace de travail distant plus récent
+// avant de toucher au répertoire de données (voir CloneWorkspace).
+func StateFileFormatVersion(path string) (int, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return 0, err
+	}
+	var head struct {
+		FormatVersion int
+	}
+	if err := json.Unmarshal(data, &head); err != nil {
+		return 0, fmt.Errorf("cannot read %s: %w", filepath.Base(path), err)
+	}
+	return head.FormatVersion, nil
 }
 
 func (s *Store) ensureMaps() {
@@ -292,6 +390,24 @@ func (s *Store) initEmpty() {
 		Model: "", Cli: "fake",
 		ContextPrompt: "Local test agent, free of charge, for demos and checks.",
 	}
+	for id, agent := range newExternalAgentSeeds() {
+		s.Agents[id] = agent
+	}
+	s.AgentSeedVersion = agentSeedVersion
+}
+
+func newExternalAgentSeeds() map[string]Agent {
+	const contextPrompt = "You are a pragmatic developer, focused on quality and simplicity."
+	return map[string]Agent{
+		"github-copilot": {
+			ID: "github-copilot", Name: "Octo", Emoji: "🐙", Color: "#24292f",
+			Cli: "copilot", ContextPrompt: contextPrompt,
+		},
+		"antigravity": {
+			ID: "antigravity", Name: "Astro", Emoji: "🚀", Color: "#4285f4",
+			Cli: "agy", ContextPrompt: contextPrompt,
+		},
+	}
 }
 
 // save écrit l'état sur disque de façon atomique (fichier temp + rename).
@@ -300,6 +416,11 @@ func (s *Store) save() error {
 	if err := os.MkdirAll(s.dataDir, 0o700); err != nil {
 		return err
 	}
+	// Le fichier porte toujours la signature de qui l'a écrit en dernier : le
+	// format pour interdire une relecture par un binaire plus ancien, la
+	// version pour pouvoir répondre à « quel Sillage a touché mes données ».
+	s.FormatVersion = stateFormatVersion
+	s.WrittenBy = buildVersion
 	data, err := json.MarshalIndent(s, "", "  ")
 	if err != nil {
 		return err
@@ -664,15 +785,15 @@ var apparmorRestrictPath = "/proc/sys/kernel/apparmor_restrict_unprivileged_user
 func agentWarning(a Agent) string {
 	switch a.Cli {
 	case "codex":
-		if apparmorRestrictsUserNamespaces() && os.Getenv("SILLAGE_CODEX_SANDBOX") == "" {
-			return "codex sandbox is blocked on this machine (AppArmor); see README (SILLAGE_CODEX_SANDBOX)"
-		}
 		if _, err := lookPath("codex"); err != nil {
 			return "codex CLI not found in PATH"
 		}
-	case "claude":
-		if _, err := lookPath("claude"); err != nil {
-			return "claude CLI not found in PATH"
+		if apparmorRestrictsUserNamespaces() && os.Getenv("SILLAGE_CODEX_SANDBOX") == "" {
+			return "codex sandbox is blocked on this machine (AppArmor); see README (SILLAGE_CODEX_SANDBOX)"
+		}
+	case "claude", "copilot", "agy":
+		if _, err := lookPath(a.Cli); err != nil {
+			return a.Cli + " CLI not found in PATH"
 		}
 	}
 	return ""
@@ -853,9 +974,9 @@ func (s *Store) GetSettings() Settings {
 	return s.Settings
 }
 
-// UpdateSettings met à jour displayName et/ou lang (champs nil non modifiés).
-// lang doit être "", "fr" ou "en".
-func (s *Store) UpdateSettings(displayName, lang *string) (Settings, error) {
+// UpdateSettings met à jour displayName, lang et/ou updateCheck (champs nil
+// non modifiés). lang doit être "", "fr" ou "en".
+func (s *Store) UpdateSettings(displayName, lang *string, updateCheck *bool) (Settings, error) {
 	if lang != nil && !validLang[*lang] {
 		return Settings{}, fmt.Errorf("invalid lang: must be fr, en or empty")
 	}
@@ -866,6 +987,10 @@ func (s *Store) UpdateSettings(displayName, lang *string) (Settings, error) {
 	}
 	if lang != nil {
 		s.Settings.Lang = *lang
+	}
+	if updateCheck != nil {
+		v := *updateCheck
+		s.Settings.UpdateCheck = &v
 	}
 	if err := s.save(); err != nil {
 		return Settings{}, err
@@ -1285,6 +1410,18 @@ func (s *Store) ReserveTaskID() (id string, ref int) {
 
 // CreateTask enregistre une nouvelle tâche (statut initial "running").
 func (s *Store) CreateTask(id string, ref int, cardID, projectID, title, agentID, branch, base, worktreeDir, repoName string) (Task, error) {
+	return s.createTask(id, ref, cardID, projectID, title, agentID, branch, base, worktreeDir, repoName, "", "")
+}
+
+// CreateWaitingTask enregistre une nouvelle tâche "waiting" : le worktree est
+// créé comme pour une tâche ordinaire, mais l'agent n'est pas lancé.
+// pendingPrompt mémorise le texte à lui envoyer une fois waitsForTaskID
+// (obligatoire) accepté ; voir Server.startWaitingTask.
+func (s *Store) CreateWaitingTask(id string, ref int, cardID, projectID, title, agentID, branch, base, worktreeDir, repoName, waitsForTaskID, pendingPrompt string) (Task, error) {
+	return s.createTask(id, ref, cardID, projectID, title, agentID, branch, base, worktreeDir, repoName, waitsForTaskID, pendingPrompt)
+}
+
+func (s *Store) createTask(id string, ref int, cardID, projectID, title, agentID, branch, base, worktreeDir, repoName, waitsForTaskID, pendingPrompt string) (Task, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	t := Task{
@@ -1292,6 +1429,11 @@ func (s *Store) CreateTask(id string, ref int, cardID, projectID, title, agentID
 		AgentID: agentID, RepoName: repoName, Branch: branch, Status: "running", Checks: []Check{},
 		Unread: false, UpdatedAt: time.Now().UTC(), Tokens: Tokens{},
 		Base: base, WorktreeDir: worktreeDir,
+	}
+	if waitsForTaskID != "" {
+		t.Status = "waiting"
+		t.WaitsForTaskID = waitsForTaskID
+		t.PendingPrompt = pendingPrompt
 	}
 	s.Tasks[id] = t
 	s.recomputeCard(cardID)
@@ -1403,17 +1545,17 @@ func (s *Store) AcceptTask(id string) (Task, error) {
 	return s.UpdateTask(id, func(t *Task) { t.Status = "accepted"; t.Unread = false })
 }
 
-// CancelTask marque une tâche "cancelled" (refusée). Autorisé depuis running/review.
-// N'interrompt PAS l'agent : c'est la responsabilité de l'appelant pour une
-// tâche "running" (voir Runner.Cancel, qui interrompt le process puis appelle
-// CancelTask).
+// CancelTask marque une tâche "cancelled" (refusée). Autorisé depuis
+// waiting/running/review. N'interrompt PAS l'agent : c'est la responsabilité
+// de l'appelant pour une tâche "running" (voir Runner.Cancel, qui interrompt
+// le process puis appelle CancelTask).
 func (s *Store) CancelTask(id string) (Task, error) {
 	t, ok := s.GetTask(id)
 	if !ok {
 		return Task{}, fmt.Errorf("task not found")
 	}
 	switch t.Status {
-	case "running", "review":
+	case "waiting", "running", "review":
 	default:
 		return Task{}, fmt.Errorf("task cannot be cancelled from its current status")
 	}
@@ -1505,10 +1647,19 @@ func Slugify(title string) string {
 
 // --- Agents (CRUD) ---
 
-var validCli = map[string]bool{"claude": true, "codex": true, "fake": true}
+var validCli = map[string]bool{
+	"agy":     true,
+	"claude":  true,
+	"codex":   true,
+	"copilot": true,
+	"fake":    true,
+}
+
+const validCliDescription = "claude, codex, copilot, agy or fake"
 
 // AddAgent crée un agent. name et cli sont obligatoires ; cli doit être
-// claude, codex ou fake ; l'identifiant est le slug du nom (unique).
+// claude, codex, copilot, agy ou fake ; l'identifiant est le slug du nom
+// (unique).
 func (s *Store) AddAgent(name, emoji, color, cli, model, contextPrompt string) (Agent, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -1516,7 +1667,7 @@ func (s *Store) AddAgent(name, emoji, color, cli, model, contextPrompt string) (
 		return Agent{}, fmt.Errorf("name and cli are required")
 	}
 	if !validCli[cli] {
-		return Agent{}, fmt.Errorf("invalid cli: must be claude, codex or fake")
+		return Agent{}, fmt.Errorf("invalid cli: must be %s", validCliDescription)
 	}
 	id := Slugify(name)
 	if _, exists := s.Agents[id]; exists {
@@ -1541,7 +1692,7 @@ func (s *Store) UpdateAgent(id string, name, emoji, color, cli, model, contextPr
 	}
 	if cli != nil {
 		if !validCli[*cli] {
-			return Agent{}, fmt.Errorf("invalid cli: must be claude, codex or fake")
+			return Agent{}, fmt.Errorf("invalid cli: must be %s", validCliDescription)
 		}
 		a.Cli = *cli
 	}

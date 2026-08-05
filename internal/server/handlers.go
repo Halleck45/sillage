@@ -1,12 +1,14 @@
 package server
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io/fs"
+	"log"
 	"net"
 	"net/http"
 	"strings"
@@ -42,6 +44,10 @@ type Server struct {
 	syncErrMu   sync.Mutex
 	lastSyncErr string
 
+	// updates : ce que la dernière vérification de mise à jour a appris, plus
+	// la goroutine périodique (voir update.go). En mémoire uniquement.
+	updates *updateTracker
+
 	// rebaseMu sérialise les rebases automatiques déclenchés par une
 	// acceptation (voir rebaseSiblingTasks) : deux acceptations rapprochées ne
 	// doivent pas rejouer la même branche en parallèle. rebaseWG permet aux
@@ -69,10 +75,14 @@ func NewServer(store *Store, passwordHash, dataDir string, webFS fs.FS) *Server 
 		passwordHash: passwordHash,
 		dataDir:      dataDir,
 		static:       staticWithRevalidation(webFS, http.FileServer(http.FS(webFS))),
+		updates:      &updateTracker{},
 	}
 	if store.GetWorkspace().AutoSync {
 		s.startAutoSync()
 	}
+	// Sans effet sur une compilation locale (version "dev") ni si le réglage
+	// est coupé : aucun appel réseau n'est fait dans ces deux cas.
+	s.startUpdateChecker()
 	return s
 }
 
@@ -83,6 +93,7 @@ func NewServer(store *Store, passwordHash, dataDir string, webFS fs.FS) *Server 
 func (s *Server) Shutdown() {
 	s.previews.StopAll()
 	s.stopAutoSync()
+	s.stopUpdateChecker()
 }
 
 // staticWithRevalidation ajoute un ETag (empreinte du contenu embarqué) et
@@ -143,6 +154,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("PATCH /api/workspace", s.handleUpdateWorkspace)
 	mux.HandleFunc("POST /api/workspace/sync", s.handleWorkspaceSync)
 	mux.HandleFunc("PATCH /api/settings", s.handleUpdateSettings)
+	mux.HandleFunc("GET /api/update", s.handleGetUpdate)
+	mux.HandleFunc("POST /api/update/check", s.handleUpdateCheck)
+	mux.HandleFunc("POST /api/update/apply", s.handleUpdateApply)
 	mux.HandleFunc("POST /api/agents", s.handleCreateAgent)
 	mux.HandleFunc("PATCH /api/agents/{id}", s.handleUpdateAgent)
 	mux.HandleFunc("DELETE /api/agents/{id}", s.handleDeleteAgent)
@@ -162,6 +176,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/tasks/{id}", s.handleGetTask)
 	mux.HandleFunc("POST /api/tasks/{id}/messages", s.handlePostMessage)
 	mux.HandleFunc("POST /api/tasks/{id}/interrupt", s.handleInterrupt)
+	mux.HandleFunc("POST /api/tasks/{id}/start", s.handleStartWaitingTask)
 	mux.HandleFunc("POST /api/tasks/{id}/accept", s.handleAccept)
 	mux.HandleFunc("POST /api/tasks/{id}/cancel", s.handleCancel)
 	mux.HandleFunc("POST /api/tasks/{id}/reopen", s.handleReopen)
@@ -295,6 +310,7 @@ func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 	state := s.store.Snapshot()
 	state.Workspace = s.workspaceStatus()
 	state.Previews = s.previews.List()
+	state.Update = s.UpdateStatus()
 	writeJSON(w, http.StatusOK, state)
 }
 
@@ -304,18 +320,102 @@ func (s *Server) handleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		DisplayName *string `json:"displayName"`
 		Lang        *string `json:"lang"`
+		UpdateCheck *bool   `json:"updateCheck"`
 	}
 	if err := decodeJSON(r, &body); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-	settings, err := s.store.UpdateSettings(body.DisplayName, body.Lang)
+	settings, err := s.store.UpdateSettings(body.DisplayName, body.Lang, body.UpdateCheck)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	if body.UpdateCheck != nil {
+		if *body.UpdateCheck {
+			s.startUpdateChecker()
+		} else {
+			s.stopUpdateChecker()
+		}
+		s.runner.publishUpdate(s.UpdateStatus())
+	}
 	s.runner.publishSettings(settings)
 	writeJSON(w, http.StatusOK, settings)
+}
+
+// --- Mises à jour de Sillage (voir update.go) ---
+
+func (s *Server) handleGetUpdate(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, s.UpdateStatus())
+}
+
+// handleUpdateCheck force une vérification immédiate : le geste explicite de
+// celui qui ne veut pas attendre le tick de 24 h (ou qui a coupé le réglage et
+// veut regarder une fois).
+func (s *Server) handleUpdateCheck(w http.ResponseWriter, r *http.Request) {
+	if !isReleaseVersion(buildVersion) {
+		writeError(w, http.StatusBadRequest, "this build has no version to compare")
+		return
+	}
+	// La vérification explicite est aussi le moment de reregarder le lancement
+	// à l'ouverture de session : c'est le seul geste qui suit, dans le temps, un
+	// `brew services start` joué dans un terminal.
+	s.refreshServiceStatus()
+	ctx, cancel := context.WithTimeout(r.Context(), updateHTTPTimeout)
+	defer cancel()
+	st := s.checkForUpdate(ctx)
+	if st.Error != "" {
+		writeError(w, http.StatusBadGateway, st.Error)
+		return
+	}
+	writeJSON(w, http.StatusOK, st)
+}
+
+// handleUpdateApply installe la nouvelle version puis remplace le process
+// courant. Action sortante : {"confirm": true} obligatoire.
+func (s *Server) handleUpdateApply(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Confirm bool `json:"confirm"`
+	}
+	if err := decodeJSON(r, &body); err != nil || !body.Confirm {
+		writeError(w, http.StatusBadRequest, "confirmation required")
+		return
+	}
+
+	version := s.UpdateStatus().Latest
+	output, execPath, err := s.applyUpdate()
+	if err != nil {
+		if output != "" {
+			writeJSON(w, http.StatusBadGateway, map[string]string{"error": err.Error(), "output": output})
+			return
+		}
+		writeError(w, http.StatusBadGateway, err.Error())
+		return
+	}
+
+	resp := UpdateApplyResponse{Output: output, Version: version, Restarting: execPath != ""}
+	if execPath == "" {
+		resp.Note = "update installed, restart Sillage to run it"
+	}
+	writeJSON(w, http.StatusOK, resp)
+	if flusher, ok := w.(http.Flusher); ok {
+		flusher.Flush()
+	}
+	if execPath == "" {
+		return
+	}
+
+	// Le redémarrage se fait après la réponse : la nouvelle version prend la
+	// place du process courant (même PID, même terminal), les navigateurs
+	// ouverts se reconnectent tout seuls.
+	go func() {
+		time.Sleep(updateRestartGrace)
+		log.Printf("Sillage updated to %s: restarting", version)
+		s.Shutdown()
+		if err := restartInPlace(execPath); err != nil {
+			log.Printf("update installed but restart failed (%v): restart Sillage by hand", err)
+		}
+	}()
 }
 
 // --- Espace de travail (synchronisation git de dataDir) ---
@@ -787,11 +887,12 @@ func (s *Server) handleDeleteCard(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleCreateTask(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		CardID   string `json:"cardId"`
-		Title    string `json:"title"`
-		AgentID  string `json:"agentId"`
-		Prompt   string `json:"prompt"`
-		RepoName string `json:"repoName"`
+		CardID         string `json:"cardId"`
+		Title          string `json:"title"`
+		AgentID        string `json:"agentId"`
+		Prompt         string `json:"prompt"`
+		RepoName       string `json:"repoName"`
+		WaitsForTaskID string `json:"waitsForTaskId"`
 	}
 	if err := decodeJSON(r, &body); err != nil || body.CardID == "" || body.Title == "" || body.AgentID == "" {
 		writeError(w, http.StatusBadRequest, "cardId, title and agentId are required")
@@ -805,6 +906,21 @@ func (s *Server) handleCreateTask(w http.ResponseWriter, r *http.Request) {
 	if _, ok := s.store.GetAgent(body.AgentID); !ok {
 		writeError(w, http.StatusBadRequest, "agent not found")
 		return
+	}
+	// waitsForTaskId : la tâche reste "waiting" (agent non lancé) jusqu'à
+	// l'acceptation de la tâche référencée (voir Server.startDependentTasks).
+	// Seule une tâche du même chantier, pas déjà terminale, a un sens ici : une
+	// tâche accepted/cancelled ne fera plus jamais rien.
+	if body.WaitsForTaskID != "" {
+		dep, ok := s.store.GetTask(body.WaitsForTaskID)
+		if !ok || dep.CardID != body.CardID {
+			writeError(w, http.StatusBadRequest, "waitsForTaskId must reference a task of the same workstream")
+			return
+		}
+		if dep.Status == "accepted" || dep.Status == "cancelled" {
+			writeError(w, http.StatusBadRequest, "waitsForTaskId task is already finished")
+			return
+		}
 	}
 	project, ok := s.store.GetProject(card.ProjectID)
 	if !ok {
@@ -834,13 +950,23 @@ func (s *Server) handleCreateTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	task, err := s.store.CreateTask(id, ref, card.ID, project.ID, body.Title, body.AgentID, branch, base, dir, repo.Name)
+	var task Task
+	if body.WaitsForTaskID != "" {
+		task, err = s.store.CreateWaitingTask(id, ref, card.ID, project.ID, body.Title, body.AgentID, branch, base, dir, repo.Name, body.WaitsForTaskID, body.Prompt)
+	} else {
+		task, err = s.store.CreateTask(id, ref, card.ID, project.ID, body.Title, body.AgentID, branch, base, dir, repo.Name)
+	}
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to create task")
 		return
 	}
 	s.runner.publishTask(task)
 	s.runner.publishCards(project.ID)
+
+	if task.Status == "waiting" {
+		writeJSON(w, http.StatusOK, task)
+		return
+	}
 
 	cliInput := contextualizeCliInput(body.Title, body.Prompt)
 	if err := s.runner.Start(task.ID, true, cliInput); err != nil {
@@ -849,6 +975,66 @@ func (s *Server) handleCreateTask(w http.ResponseWriter, r *http.Request) {
 	}
 	task, _ = s.store.GetTask(task.ID)
 	writeJSON(w, http.StatusOK, task)
+}
+
+// handleStartWaitingTask lance manuellement une tâche "waiting", sans
+// attendre l'acceptation de sa dépendance : débloque une tâche dont la
+// dépendance a été refusée ou supprimée, ou permet simplement de changer
+// d'avis sur l'ordre.
+func (s *Server) handleStartWaitingTask(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	task, ok := s.store.GetTask(id)
+	if !ok {
+		writeError(w, http.StatusNotFound, "task not found")
+		return
+	}
+	if task.Status != "waiting" {
+		writeError(w, http.StatusBadRequest, "only a waiting task can be started")
+		return
+	}
+	if err := s.startWaitingTask(task); err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to start agent: "+err.Error())
+		return
+	}
+	task, _ = s.store.GetTask(id)
+	writeJSON(w, http.StatusOK, task)
+}
+
+// startWaitingTask lance l'agent d'une tâche "waiting" : rejoue son worktree
+// sur la tête courante de la branche du chantier (qui a pu avancer depuis la
+// création de la tâche) puis démarre l'agent avec le prompt initial mémorisé
+// à la création. Le rebase est best-effort et ignoré en cas d'échec : une
+// tâche jamais démarrée n'a que sa base comme contenu, donc rien à perdre, et
+// démarrer légèrement en retard reste rattrapable comme pour toute tâche
+// (voir le badge "en retard").
+func (s *Server) startWaitingTask(task Task) error {
+	if cardBranch, ok := s.store.GetCardBranch(task.CardID, task.RepoName); ok && task.WorktreeDir != "" {
+		if !IsBranchMergedInto(task.WorktreeDir, cardBranch.Branch, task.Branch) {
+			_, _, _ = RebaseOnto(task.WorktreeDir, cardBranch.Branch)
+		}
+	}
+	prompt := task.PendingPrompt
+	if _, err := s.store.UpdateTask(task.ID, func(t *Task) {
+		t.WaitsForTaskID = ""
+		t.PendingPrompt = ""
+	}); err != nil {
+		return err
+	}
+	cliInput := contextualizeCliInput(task.Title, prompt)
+	return s.runner.Start(task.ID, true, cliInput)
+}
+
+// startDependentTasks démarre les tâches "waiting" du chantier qui
+// attendaient l'acceptation de acceptedTaskID (voir Task.WaitsForTaskID).
+// Appelée après une acceptation réussie ; best-effort, une tâche qui échoue à
+// démarrer n'empêche pas les autres.
+func (s *Server) startDependentTasks(cardID, acceptedTaskID string) {
+	for _, t := range s.store.TasksByCard(cardID) {
+		if t.Status != "waiting" || t.WaitsForTaskID != acceptedTaskID {
+			continue
+		}
+		_ = s.startWaitingTask(t)
+	}
 }
 
 // handleReassignTask change l'agent assigné à une tâche : refusé si la tâche
@@ -1096,6 +1282,8 @@ func (s *Server) acceptTaskInto(w http.ResponseWriter, task Task, cardBranch Car
 	// qu'il lui faut, le rebase s'annonce ensuite par SSE.
 	s.rebaseWG.Add(1)
 	go s.rebaseSiblingTasks(task.CardID, task.ID, cardBranch)
+	// Tâches "waiting" sur celle-ci : leur tour est venu.
+	s.startDependentTasks(task.CardID, task.ID)
 	writeJSON(w, http.StatusOK, AcceptResponse{Task: task, WorkstreamBranch: cardBranch.Branch, Output: output})
 }
 

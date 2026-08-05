@@ -109,10 +109,12 @@
       'work.emptyCardAction': 'Créer la première tâche',
       'work.emptyFiltered': 'Aucune tâche ne correspond à ce filtre.',
       'filter.all': 'Toutes {n}',
+      'filter.waiting': 'En attente {n}',
       'filter.running': 'En cours {n}',
       'filter.review': 'À relire {n}',
       'filter.finished': 'Traitées {n}',
       'badge.new': 'NOUVEAU',
+      'status.waiting': 'En attente',
       'status.running': 'En cours',
       'status.review': 'À relire',
       'status.accepted': 'Acceptée',
@@ -120,11 +122,17 @@
       'status.rebasing': 'Rebase en cours',
       'status.rebasingNote': 'La tâche est rejouée sur le travail qui vient d\'être accepté.',
       'action.interrupt': 'Interrompre l\'agent',
+      'action.startNow': 'Démarrer maintenant',
       'action.accept': 'Accepter',
       'action.acceptTooltip': 'Fusionner dans la branche du chantier',
       'action.refuse': 'Refuser',
       'action.refuseTooltip': 'Écarter cette tâche du chantier',
       'action.reopen': 'Rouvrir la tâche',
+      'taskRow.waitingFor': 'En attente de « {title} »',
+      'waitingFor.note': 'Démarrera automatiquement quand « {title} » sera acceptée.',
+      'waitingFor.unknownTask': 'La tâche attendue n\'existe plus : démarrez-la manuellement.',
+      'newTask.waitsForLabel': 'Démarrer après',
+      'newTask.waitsForNone': 'Immédiatement',
       'behind.taskTooltip.one': '1 commit de retard sur {base} : à rebaser avant acceptation, sinon conflit.',
       'behind.taskTooltip.other': '{n} commits de retard sur {base} : à rebaser avant acceptation, sinon conflit.',
       'behind.cardTooltip.one': 'Le chantier a 1 commit de retard sur {base}.',
@@ -303,6 +311,11 @@
       'agent.emoji': 'Emoji',
       'agent.color': 'Couleur',
       'agent.cli': 'CLI',
+      'agent.cli.claude': 'Claude Code (claude)',
+      'agent.cli.codex': 'OpenAI Codex (codex)',
+      'agent.cli.copilot': 'GitHub Copilot (copilot)',
+      'agent.cli.agy': 'Google Antigravity (agy)',
+      'agent.cli.fake': 'Agent de test (fake)',
       'agent.model': 'Modèle',
       'agent.contextPrompt': 'Prompt de contexte',
       'agent.delete': 'Supprimer',
@@ -314,7 +327,9 @@
       'agent.warning.copyCmd': 'Copier la commande',
       'agent.warning.codexSandboxFallback': 'Vous pouvez aussi contourner le problème en lançant Sillage avec la variable d\'environnement SILLAGE_CODEX_SANDBOX=danger-full-access ; le confinement restant est alors celui de Sillage (worktree dédié, pas de push par l\'agent).',
       'agent.warning.codexSandboxLink': 'En savoir plus (documentation OpenAI Codex)',
-      'agent.warning.cliNotFound': 'CLI {cli} introuvable dans le PATH.',
+      'agent.warning.cliNotFound': 'Agent non connecté : CLI {cli} introuvable dans le PATH.',
+      'agent.warning.installHint': 'Installez le CLI, puis relancez Sillage :',
+      'agent.warning.installLink': 'Voir la documentation d’installation',
       'agent.quotaTitle': 'Quota',
       'agent.quotaWindow5h': '5 heures',
       'agent.quotaWindowWeek': 'Semaine',
@@ -392,7 +407,42 @@
       'sidebar.sponsorTooltip': 'Sponsoriser le projet',
       'settings.tabGeneral': 'Général',
       'settings.tabStats': 'Statistiques',
-      'usage.empty': 'Aucun projet.'
+      'usage.empty': 'Aucun projet.',
+      'update.sidebarAvailable': 'Mise à jour disponible',
+      'update.title': 'Mises à jour',
+      'update.currentVersion': 'Version {version}',
+      'update.devBuild': 'Compilation locale : rien à comparer.',
+      'update.upToDate': 'Sillage est à jour.',
+      'update.availableHeadline': 'Sillage {latest} est disponible (vous avez {current}).',
+      'update.releaseNotes': 'Voir les nouveautés',
+      'update.checkNow': 'Vérifier maintenant',
+      'update.checking': 'Vérification…',
+      'update.neverChecked': 'Jamais vérifié',
+      'update.lastChecked': 'Vérifié {time}',
+      'update.autoCheckLab': 'Vérifier les mises à jour automatiquement',
+      'update.autoCheckNote': 'Une requête par jour vers GitHub, pour lire le numéro de la dernière version. Rien de votre machine ne sort.',
+      'update.apply': 'Mettre à jour et redémarrer',
+      'update.applying': 'Mise à jour en cours…',
+      'update.applied': 'Sillage {version} installé, redémarrage…',
+      'update.appliedNoRestart': 'Sillage {version} installé. Redémarrez Sillage pour l\'utiliser.',
+      'update.reconnecting': 'Reconnexion à Sillage…',
+      'update.manualIntro': 'À jouer dans un terminal :',
+      'update.method.brew': 'Installé avec Homebrew',
+      'update.method.binary': 'Binaire installé dans {dir}',
+      'update.method.go': 'Installé avec go install',
+      'update.method.unknown': 'Mode d\'installation inconnu',
+      'update.blocker.tasksRunning': 'Un agent travaille : interrompez-le avant de mettre à jour.',
+      'update.blocker.previewsRunning': 'Une recette tourne : arrêtez-la avant de mettre à jour.',
+      'update.blocker.notWritable': 'Le dossier du binaire n\'est pas modifiable par Sillage.',
+      'update.blocker.brewMissing': 'La commande brew est introuvable dans le PATH.',
+      'update.blocker.goInstall': 'Une installation par go install se met à jour avec go.',
+      'update.blocker.unknownMethod': 'Sillage ne sait pas comment ce binaire a été installé.',
+      'update.errorCheckFailed': 'Impossible de joindre GitHub.',
+      'update.errorApplyFailed': 'Échec de la mise à jour.',
+      'update.serviceHeading': 'Démarrage',
+      'update.serviceOn': 'Sillage est lancé à l\'ouverture de session.',
+      'update.serviceOff': 'Sillage n\'est pas lancé à l\'ouverture de session.',
+      'update.serviceFlagsNote': 'L\'instance en cours tourne avec des arguments que le service ne reprendra pas : il lance le binaire sans option.'
     },
     en: {
       'nav.inbox': 'Inbox',
@@ -495,10 +545,12 @@
       'work.emptyCardAction': 'Create the first task',
       'work.emptyFiltered': 'No tasks match this filter.',
       'filter.all': 'All {n}',
+      'filter.waiting': 'Waiting {n}',
       'filter.running': 'In progress {n}',
       'filter.review': 'To review {n}',
       'filter.finished': 'Handled {n}',
       'badge.new': 'NEW',
+      'status.waiting': 'Waiting',
       'status.running': 'In progress',
       'status.review': 'To review',
       'status.rebasing': 'Rebasing',
@@ -506,11 +558,17 @@
       'status.accepted': 'Accepted',
       'status.cancelled': 'Refused',
       'action.interrupt': 'Stop the agent',
+      'action.startNow': 'Start now',
       'action.accept': 'Accept',
       'action.acceptTooltip': 'Merge into the workstream branch',
       'action.refuse': 'Refuse',
       'action.refuseTooltip': 'Leave this task out of the workstream',
       'action.reopen': 'Reopen the task',
+      'taskRow.waitingFor': 'Waiting for "{title}"',
+      'waitingFor.note': 'Will start automatically once "{title}" is accepted.',
+      'waitingFor.unknownTask': 'The task it was waiting for no longer exists: start it manually.',
+      'newTask.waitsForLabel': 'Start after',
+      'newTask.waitsForNone': 'Immediately',
       'behind.taskTooltip.one': '1 commit behind {base}: rebase before accepting, or it will conflict.',
       'behind.taskTooltip.other': '{n} commits behind {base}: rebase before accepting, or it will conflict.',
       'behind.cardTooltip.one': 'The workstream is 1 commit behind {base}.',
@@ -689,6 +747,11 @@
       'agent.emoji': 'Emoji',
       'agent.color': 'Color',
       'agent.cli': 'CLI',
+      'agent.cli.claude': 'Claude Code (claude)',
+      'agent.cli.codex': 'OpenAI Codex (codex)',
+      'agent.cli.copilot': 'GitHub Copilot (copilot)',
+      'agent.cli.agy': 'Google Antigravity (agy)',
+      'agent.cli.fake': 'Test agent (fake)',
       'agent.model': 'Model',
       'agent.contextPrompt': 'Context prompt',
       'agent.delete': 'Delete',
@@ -700,7 +763,9 @@
       'agent.warning.copyCmd': 'Copy command',
       'agent.warning.codexSandboxFallback': 'You can also work around this by starting Sillage with the SILLAGE_CODEX_SANDBOX=danger-full-access environment variable; the remaining containment is then Sillage\'s own (dedicated worktree, no push from the agent).',
       'agent.warning.codexSandboxLink': 'Learn more (OpenAI Codex documentation)',
-      'agent.warning.cliNotFound': '{cli} CLI not found in PATH.',
+      'agent.warning.cliNotFound': 'Agent not connected: {cli} CLI not found in PATH.',
+      'agent.warning.installHint': 'Install the CLI, then restart Sillage:',
+      'agent.warning.installLink': 'Open the installation guide',
       'agent.quotaTitle': 'Quota',
       'agent.quotaWindow5h': '5 hours',
       'agent.quotaWindowWeek': 'Week',
@@ -778,7 +843,42 @@
       'sidebar.sponsorTooltip': 'Sponsor the project',
       'settings.tabGeneral': 'General',
       'settings.tabStats': 'Statistics',
-      'usage.empty': 'No projects yet.'
+      'usage.empty': 'No projects yet.',
+      'update.sidebarAvailable': 'Update available',
+      'update.title': 'Updates',
+      'update.currentVersion': 'Version {version}',
+      'update.devBuild': 'Local build: nothing to compare.',
+      'update.upToDate': 'Sillage is up to date.',
+      'update.availableHeadline': 'Sillage {latest} is available (you run {current}).',
+      'update.releaseNotes': 'See what changed',
+      'update.checkNow': 'Check now',
+      'update.checking': 'Checking…',
+      'update.neverChecked': 'Never checked',
+      'update.lastChecked': 'Checked {time}',
+      'update.autoCheckLab': 'Check for updates automatically',
+      'update.autoCheckNote': 'One request a day to GitHub, to read the latest version number. Nothing from your machine leaves it.',
+      'update.apply': 'Update and restart',
+      'update.applying': 'Updating…',
+      'update.applied': 'Sillage {version} installed, restarting…',
+      'update.appliedNoRestart': 'Sillage {version} installed. Restart Sillage to run it.',
+      'update.reconnecting': 'Reconnecting to Sillage…',
+      'update.manualIntro': 'Run this in a terminal:',
+      'update.method.brew': 'Installed with Homebrew',
+      'update.method.binary': 'Binary installed in {dir}',
+      'update.method.go': 'Installed with go install',
+      'update.method.unknown': 'Unknown installation method',
+      'update.blocker.tasksRunning': 'An agent is working: interrupt it before updating.',
+      'update.blocker.previewsRunning': 'A preview is running: stop it before updating.',
+      'update.blocker.notWritable': 'Sillage cannot write to the binary\'s directory.',
+      'update.blocker.brewMissing': 'The brew command is not in the PATH.',
+      'update.blocker.goInstall': 'A go install setup is updated with go.',
+      'update.blocker.unknownMethod': 'Sillage cannot tell how this binary was installed.',
+      'update.errorCheckFailed': 'Could not reach GitHub.',
+      'update.errorApplyFailed': 'Update failed.',
+      'update.serviceHeading': 'Startup',
+      'update.serviceOn': 'Sillage starts when you log in.',
+      'update.serviceOff': 'Sillage does not start when you log in.',
+      'update.serviceFlagsNote': 'This instance runs with arguments the service will not carry over: it starts the binary with no options.'
     }
   };
 
@@ -816,6 +916,7 @@
   // .task-glyph) : un disque plein pour « à relire », qui se repère d'un coup
   // d'œil sans se confondre avec le losange des compteurs de fichiers.
   var STATUS_GLYPH = {
+    waiting: { icon: '◌', color: '#8b8982' },
     running: { icon: '◐', color: '#8b8982' },
     review: { icon: '●', color: '#9a6b0d' },
     accepted: { icon: '✓', color: '#2f7d54' },
@@ -865,7 +966,7 @@
   var projectDraftDirty = false;
   var searchIndex = 0; // résultat de recherche actif (navigation aux flèches)
   var onboardingExpanded = null;
-  var settingsModalTab = 'general'; // 'general' | 'stats'
+  var settingsModalTab = 'general'; // 'general' | 'stats' | 'update'
   var sseOpenedOnce = false;
 
   // ---------------------------------------------------------------------
@@ -1047,6 +1148,7 @@
     state.tokens = data.tokens || { global: { input: 0, output: 0, costUsd: 0 } };
     state.previews = data.previews || [];
     state.workspace = data.workspace || state.workspace || null;
+    state.update = data.update || state.update || null;
     state.settings = data.settings || state.settings || { displayName: '', lang: '' };
     if (state.settings.lang) {
       state.lang = state.settings.lang;
@@ -1392,6 +1494,7 @@
       '<div class="agent-list">' + (agentsHTML || '<div class="empty-note-sm">' + escapeHtml(t('sidebar.noAgents')) + '</div>') + '</div>' +
       '<div class="sidebar-footer">' +
         buildPreviewCounterHTML() +
+        buildUpdateLineHTML() +
         '<button class="settings-btn" data-action="open-workspace-modal">⚙ ' + escapeHtml(t('sidebar.settingsButton')) + '</button>' +
         '<div class="sidebar-footer-actions">' +
           '<a class="icon-link" href="https://github.com/Halleck45/sillage" target="_blank" rel="noopener noreferrer" title="' + escapeHtml(t('sidebar.repoTooltip')) + '" aria-label="' + escapeHtml(t('sidebar.repoTooltip')) + '">' + repoIconHTML() + '</a>' +
@@ -1695,6 +1798,11 @@
     if (t.rebasing) {
       return '<div class="task-row-state task-row-state-rebasing">' + escapeHtml(t2('status.rebasing')) + '</div>';
     }
+    if (t.status === 'waiting') {
+      var dep = state.tasksById[t.waitsForTaskId];
+      var waitLabel = dep ? t2('taskRow.waitingFor', { title: dep.title }) : t2('status.waiting');
+      return '<div class="task-row-state task-row-state-waiting" title="' + escapeHtml(waitLabel) + '">' + escapeHtml(t2('status.waiting')) + '</div>';
+    }
     if (t.status === 'review') {
       return '<div class="task-row-actions">' +
         '<button class="row-btn row-btn-accept" data-action="accept-task" data-task-id="' + t.id + '" title="' + escapeHtml(t2('action.acceptTooltip')) + '">' + escapeHtml(t2('action.accept')) + '</button>' +
@@ -1730,6 +1838,7 @@
     var finishedCount = (counts.accepted || 0) + (counts.cancelled || 0);
     var filters = [
       { key: 'all', label: t('filter.all', { n: tasksAll.length }) },
+      { key: 'waiting', label: t('filter.waiting', { n: counts.waiting || 0 }) },
       { key: 'running', label: t('filter.running', { n: counts.running || 0 }) },
       { key: 'review', label: t('filter.review', { n: counts.review || 0 }) },
       { key: 'finished', label: t('filter.finished', { n: finishedCount }) }
@@ -2710,6 +2819,8 @@
   // la machine. La seule action sortante du produit est le Ship du chantier.
   function primaryActionInfo(task) {
     switch (task.status) {
+      case 'waiting':
+        return { label: t('action.startNow'), cls: 'btn-neutral', action: 'start-task', kind: 'plain' };
       case 'running':
         return { label: t('action.interrupt'), cls: 'btn-neutral', action: 'interrupt', kind: 'plain' };
       case 'review':
@@ -2774,15 +2885,47 @@
   // vers la doc OpenAI. Uniquement pour la bannière d'avertissement (le title
   // d'un tooltip ne peut contenir ni HTML ni bouton).
   var CODEX_SANDBOX_FIX_CMD = 'sudo sysctl kernel.apparmor_restrict_unprivileged_userns=0';
+  var AGENT_CLI_INSTALL = {
+    claude: {
+      command: 'curl -fsSL https://claude.ai/install.sh | bash',
+      url: 'https://docs.anthropic.com/en/docs/claude-code/getting-started'
+    },
+    codex: {
+      command: 'npm install -g @openai/codex',
+      url: 'https://github.com/openai/codex'
+    },
+    copilot: {
+      command: 'curl -fsSL https://gh.io/copilot-install | bash',
+      url: 'https://docs.github.com/en/copilot/how-tos/copilot-cli/set-up-copilot-cli/install-copilot-cli'
+    },
+    agy: {
+      command: 'curl -fsSL https://antigravity.google/cli/install.sh | bash',
+      url: 'https://antigravity.google/docs/cli/install'
+    }
+  };
   function agentWarningExtrasHTML(warning) {
-    if (!warning || warning.indexOf('codex sandbox is blocked') === -1) return '';
-    return '<div class="agent-warning-cmd">' +
-      '<code class="mono">' + escapeHtml(CODEX_SANDBOX_FIX_CMD) + '</code>' +
-      '<button data-action="copy-path" data-path="' + escapeHtml(CODEX_SANDBOX_FIX_CMD) + '">' + escapeHtml(t('agent.warning.copyCmd')) + '</button>' +
-      '</div>' +
-      '<div class="agent-warning-fallback">' + escapeHtml(t('agent.warning.codexSandboxFallback')) + '</div>' +
-      '<a class="agent-warning-link" href="https://developers.openai.com/codex/concepts/sandboxing" target="_blank" rel="noopener noreferrer">' +
-      escapeHtml(t('agent.warning.codexSandboxLink')) + '</a>';
+    if (!warning) return '';
+    var missing = /^(\S+) CLI not found in PATH$/.exec(warning);
+    if (missing && AGENT_CLI_INSTALL[missing[1]]) {
+      var install = AGENT_CLI_INSTALL[missing[1]];
+      return '<div class="agent-warning-fallback">' + escapeHtml(t('agent.warning.installHint')) + '</div>' +
+        '<div class="agent-warning-cmd">' +
+          '<code class="mono">' + escapeHtml(install.command) + '</code>' +
+          '<button data-action="copy-path" data-path="' + escapeHtml(install.command) + '">' + escapeHtml(t('agent.warning.copyCmd')) + '</button>' +
+        '</div>' +
+        '<a class="agent-warning-link" href="' + escapeHtml(install.url) + '" target="_blank" rel="noopener noreferrer">' +
+          escapeHtml(t('agent.warning.installLink')) + '</a>';
+    }
+    if (warning.indexOf('codex sandbox is blocked') !== -1) {
+      return '<div class="agent-warning-cmd">' +
+        '<code class="mono">' + escapeHtml(CODEX_SANDBOX_FIX_CMD) + '</code>' +
+        '<button data-action="copy-path" data-path="' + escapeHtml(CODEX_SANDBOX_FIX_CMD) + '">' + escapeHtml(t('agent.warning.copyCmd')) + '</button>' +
+        '</div>' +
+        '<div class="agent-warning-fallback">' + escapeHtml(t('agent.warning.codexSandboxFallback')) + '</div>' +
+        '<a class="agent-warning-link" href="https://developers.openai.com/codex/concepts/sandboxing" target="_blank" rel="noopener noreferrer">' +
+        escapeHtml(t('agent.warning.codexSandboxLink')) + '</a>';
+    }
+    return '';
   }
 
   function buildReassignMenuHTML(task) {
@@ -2867,8 +3010,18 @@
         '</div>';
     }
 
+    // Tâche qui n'a pas encore démarré : dit clairement quoi attend, et si la
+    // tâche attendue n'existe plus (supprimée), le dit aussi. « Démarrer
+    // maintenant » (bouton primaire) reste toujours disponible pour débloquer.
+    var waitingRow = '';
+    if (task.status === 'waiting') {
+      var waitDep = state.tasksById[task.waitsForTaskId];
+      var waitText = waitDep ? t('waitingFor.note', { title: waitDep.title }) : t('waitingFor.unknownTask');
+      waitingRow = '<div class="behind-row"><span class="behind-text">' + escapeHtml(waitText) + '</span></div>';
+    }
+
     var linksRow = '';
-    if (task.status === 'running' || task.status === 'review') {
+    if (task.status === 'waiting' || task.status === 'running' || task.status === 'review') {
       var refusing = task.status === 'review';
       var cancelDefault = refusing ? t('action.refuse') : t('action.cancelTask');
       var cancelKey = 'task-cancel:' + task.id;
@@ -2902,6 +3055,7 @@
         '</div>' +
         buildStatusBadgeHTML(task) +
         behindRow +
+        waitingRow +
         '<div class="action-row">' + primaryBtnHTML +
           buildTaskPreviewButtonHTML(task) +
           '<span class="checks">' + renderChecks(task.checks) + '</span>' +
@@ -3285,6 +3439,15 @@
       upsertTask(task); renderMain();
     }).catch(function (e) { if (e instanceof ApiError) showDetailError(taskId, e.message || t('errors.interruptFailed')); });
   }
+  // doStartWaitingTask : démarre une tâche "waiting" avant que sa dépendance ne
+  // soit acceptée (dépendance refusée/supprimée, ou changement d'avis). Un
+  // clic, pas de confirmation : aucune donnée n'est perdue, la tâche allait
+  // démarrer tôt ou tard.
+  function doStartWaitingTask(taskId) {
+    api('/api/tasks/' + taskId + '/start', { method: 'POST' }).then(function (task) {
+      upsertTask(task); renderMain();
+    }).catch(function (e) { if (e instanceof ApiError) showDetailError(taskId, e.message || t('errors.genericFailed')); });
+  }
   function doReopen(taskId) {
     var previous = state.tasksById[taskId];
     var cardId = previous ? previous.cardId : null;
@@ -3597,6 +3760,12 @@
 
   // Nouvelle tâche
 
+  function buildAgentChoiceWarningHTML(agent) {
+    if (!agent || !agent.warning) return '';
+    return '<div class="agent-choice-warning">⚠ ' + escapeHtml(agentWarningText(agent.warning)) +
+      agentWarningExtrasHTML(agent.warning) + '</div>';
+  }
+
   function buildNewTaskModalHTML(card) {
     // Groupe de radios : un seul arrêt de tabulation, les flèches changent
     // d'agent (tabindex roulant, cf. moveAgentChoice).
@@ -3620,6 +3789,22 @@
       repoSelectHTML = '<div class="modal-label">' + escapeHtml(t('newTask.repoLabel')) + '</div>' +
         '<select id="new-task-repo" class="modal-input">' + repoOptions + '</select>';
     }
+    // Démarrer après : uniquement les tâches du chantier pas encore terminales
+    // (une tâche accepted/cancelled ne fera plus jamais rien). Absent du
+    // formulaire s'il n'y a rien à attendre, pour ne pas encombrer le cas
+    // courant.
+    var waitCandidates = state.tasks.filter(function (tk) {
+      return tk.cardId === card.id && (tk.status === 'running' || tk.status === 'review' || tk.status === 'waiting');
+    });
+    var waitsForSelectHTML = '';
+    if (waitCandidates.length > 0) {
+      var waitOptions = '<option value="">' + escapeHtml(t('newTask.waitsForNone')) + '</option>' +
+        waitCandidates.map(function (tk) {
+          return '<option value="' + escapeHtml(tk.id) + '">#' + tk.ref + ' ' + escapeHtml(tk.title) + '</option>';
+        }).join('');
+      waitsForSelectHTML = '<div class="modal-label">' + escapeHtml(t('newTask.waitsForLabel')) + '</div>' +
+        '<select id="new-task-waits-for" class="modal-input">' + waitOptions + '</select>';
+    }
     return '<div class="modal">' +
       '<div class="modal-head"><span class="modal-title">' + escapeHtml(t('newTask.title')) + '</span><span class="modal-sub">' + escapeHtml(card.title) + '</span>' +
       '<button class="icon-btn" data-action="close-modal" aria-label="' + escapeHtml(t('common.close')) + '">✕</button></div>' +
@@ -3629,9 +3814,10 @@
       '<div class="modal-label modal-label-row"><span>' + escapeHtml(t('newTask.agentLabel')) + '</span>' +
       '<span class="modal-label-hint">' + escapeHtml(t('newTask.agentHint')) + '</span></div>' +
       '<div class="agent-choices" id="agent-choices" role="radiogroup" aria-label="' + escapeHtml(t('newTask.agentLabel')) + '">' + agentChoices + '</div>' +
-      '<div class="agent-context-preview" id="agent-context-preview">' + (selected ? escapeHtml(selected.contextPrompt || '') : '') + '</div>' +
+      '<div id="agent-choice-warning">' + buildAgentChoiceWarningHTML(selected) + '</div>' +
       (project && project.contextPrompt ? '<div class="project-context-note">' + escapeHtml(t('newTask.projectContextNote')) + '</div>' : '') +
       (card && card.contextPrompt ? '<div class="project-context-note">' + escapeHtml(t('newTask.workstreamContextNote')) + '</div>' : '') +
+      waitsForSelectHTML +
       '<div id="new-task-error" class="modal-error hidden"></div>' +
       '<div id="new-task-note" class="modal-note modal-note-success hidden" role="status" aria-live="polite"></div>' +
       // Pas d'indice ici : les deux libellés de boutons disent déjà ce qui suit
@@ -3650,7 +3836,8 @@
   function openNewTaskModal(cardId) {
     var card = state.cardsById[cardId];
     if (!card) return;
-    modalAgentId = state.agents[0] ? state.agents[0].id : null;
+    var defaultAgent = state.agentsById.bolt || state.agents.find(function (a) { return !a.warning; }) || state.agents[0];
+    modalAgentId = defaultAgent ? defaultAgent.id : null;
     openModal(buildNewTaskModalHTML(card));
     setTimeout(function () { var el = document.getElementById('new-task-title'); if (el) el.focus(); }, 0);
   }
@@ -3664,9 +3851,9 @@
       el.setAttribute('tabindex', isSel ? '0' : '-1');
       if (isSel && focusIt) el.focus();
     });
-    var preview = document.getElementById('agent-context-preview');
+    var warning = document.getElementById('agent-choice-warning');
     var a = state.agentsById[agentId];
-    if (preview) preview.textContent = a ? (a.contextPrompt || '') : '';
+    if (warning) warning.innerHTML = buildAgentChoiceWarningHTML(a);
   }
 
   // Flèches dans le groupe d'agents : décale la sélection de `delta` en
@@ -3698,6 +3885,8 @@
     if (prompt) body.prompt = prompt;
     var repoEl = document.getElementById('new-task-repo');
     if (repoEl && repoEl.value) body.repoName = repoEl.value;
+    var waitsForEl = document.getElementById('new-task-waits-for');
+    if (waitsForEl && waitsForEl.value) body.waitsForTaskId = waitsForEl.value;
     api('/api/tasks', { method: 'POST', body: body }).then(function (task) {
       upsertTask(task);
       if (mode === 'another') {
@@ -4125,9 +4314,9 @@
   function buildAgentModalHTML(agent) {
     var isEdit = !!agent;
     var title = isEdit ? t('agent.editTitle') : t('agent.newTitle');
-    var cliValues = ['claude', 'codex', 'fake'];
-    var cliOptions = cliValues.map(function (c) {
-      return '<option value="' + c + '"' + (agent && agent.cli === c ? ' selected' : '') + '>' + c + '</option>';
+    var cliValues = ['claude', 'codex', 'copilot', 'agy', 'fake'];
+    var cliOptions = cliValues.map(function (cli) {
+      return '<option value="' + cli + '"' + (agent && agent.cli === cli ? ' selected' : '') + '>' + escapeHtml(t('agent.cli.' + cli)) + '</option>';
     }).join('');
     var deleteRow = '';
     if (isEdit) {
@@ -4549,6 +4738,7 @@
   function buildSettingsTabsHTML() {
     var tabs = [
       { key: 'general', label: t('settings.tabGeneral') },
+      { key: 'update', label: t('update.title') },
       { key: 'stats', label: t('settings.tabStats') }
     ];
     return '<div class="tabs">' + tabs.map(function (tb) {
@@ -4558,7 +4748,7 @@
     }).join('') + '</div>';
   }
   function setSettingsTab(tabKey) {
-    settingsModalTab = tabKey === 'stats' ? 'stats' : 'general';
+    settingsModalTab = (tabKey === 'stats' || tabKey === 'update') ? tabKey : 'general';
     refreshWorkspaceModalBody();
   }
 
@@ -4615,7 +4805,9 @@
       '<button class="btn-outline btn-block" data-action="logout">' + escapeHtml(t('nav.logout')) + '</button>';
   }
   function buildWorkspaceModalBodyHTML() {
-    var inner = settingsModalTab === 'stats' ? buildStatsSectionHTML() : buildSettingsGeneralHTML();
+    var inner = settingsModalTab === 'stats' ? buildStatsSectionHTML()
+      : settingsModalTab === 'update' ? buildUpdateSectionHTML()
+      : buildSettingsGeneralHTML();
     return buildSettingsTabsHTML() + '<div class="settings-tab-body">' + inner + '</div>';
   }
   function buildWorkspaceModalHTML() {
@@ -4713,6 +4905,243 @@
         errEl.classList.remove('hidden');
       }
     });
+  }
+
+  // ---------------------------------------------------------------------
+  // Mise à jour de Sillage
+  // ---------------------------------------------------------------------
+
+  // La modale est le seul endroit qui parle de versions : la sidebar ne porte
+  // qu'une ligne, et seulement quand il y a réellement quelque chose à faire.
+  // Ces quatre variables ne décrivent que l'opération en cours côté navigateur
+  // (l'état, lui, vient de state.update et du SSE `update`).
+  var updateChecking = false;
+  var updateApplying = false;
+  var updateMessage = '';
+  var updateError = '';
+
+  function updateState() { return state.update || { current: 'dev', method: 'dev' }; }
+
+  // Ligne de pied de sidebar : un rappel de version, qui devient un appel à
+  // l'action quand une version existe. Rien d'autre : une mise à jour n'est
+  // jamais urgente au point de couvrir l'écran.
+  function buildUpdateLineHTML() {
+    var u = updateState();
+    if (u.available) {
+      return '<button class="update-line update-line-available" data-action="open-update-modal">' +
+        '<span class="update-dot"></span>' + escapeHtml(t('update.sidebarAvailable')) + '</button>';
+    }
+    if (u.method === 'dev') return '';
+    return '<button class="update-line" data-action="open-update-modal">' +
+      escapeHtml(t('update.currentVersion', { version: u.current })) + '</button>';
+  }
+
+  function updateMethodLabel(u) {
+    if (u.method === 'binary') {
+      var path = u.path || '';
+      var dir = path.indexOf('/') >= 0 ? path.slice(0, path.lastIndexOf('/')) : path;
+      return dir ? t('update.method.binary', { dir: dir }) : '';
+    }
+    if (u.method === 'brew' || u.method === 'go' || u.method === 'unknown') return t('update.method.' + u.method);
+    return '';
+  }
+
+  function buildUpdateSectionInnerHTML() {
+    var u = updateState();
+    var isDev = u.method === 'dev';
+
+    var headline;
+    if (isDev) headline = t('update.devBuild');
+    else if (u.available) headline = t('update.availableHeadline', { latest: u.latest, current: u.current });
+    else headline = t('update.upToDate');
+
+    var metaBits = [t('update.currentVersion', { version: u.current })];
+    var methodLabel = updateMethodLabel(u);
+    if (methodLabel) metaBits.push(methodLabel);
+    metaBits.push(u.checkedAt ? t('update.lastChecked', { time: timeAgo(u.checkedAt) }) : t('update.neverChecked'));
+
+    var notesHTML = (u.available && u.releaseUrl)
+      ? '<a class="update-notes-link" href="' + escapeHtml(u.releaseUrl) + '" target="_blank" rel="noopener noreferrer">' +
+        escapeHtml(t('update.releaseNotes')) + '</a>'
+      : '';
+
+    // Un blocage temporaire (agent au travail, recette en cours) laisse le
+    // bouton visible mais éteint : la raison est plus utile qu'un bouton absent.
+    var blockerHTML = (u.available && u.blocker)
+      ? '<div class="update-blocker">' + escapeHtml(t('update.blocker.' + u.blocker)) + '</div>'
+      : '';
+
+    // `applying` vient aussi du serveur : une mise à jour lancée depuis un autre
+    // onglet (ou avant la fermeture de cette modale) reste visible ici.
+    var applying = updateApplying || !!u.applying;
+    var actionHTML = '';
+    if (u.available && u.selfUpdatable) {
+      var disabled = applying || !!u.blocker;
+      actionHTML = '<button class="btn-green btn-block" data-action="update-apply"' + (disabled ? ' disabled' : '') + '>' +
+        escapeHtml(applying ? t('update.applying') : t('update.apply')) + '</button>';
+    }
+
+    // La commande à la main est toujours offerte quand une version existe :
+    // c'est le seul recours des installations que Sillage ne peut pas toucher,
+    // et un repli rassurant pour les autres.
+    var manualHTML = '';
+    if (u.available && u.command) {
+      manualHTML = '<div class="update-manual">' +
+        '<div class="update-manual-intro">' + escapeHtml(t('update.manualIntro')) + '</div>' +
+        '<div class="agent-warning-cmd">' +
+          '<code class="mono">' + escapeHtml(u.command) + '</code>' +
+          '<button data-action="copy-path" data-path="' + escapeHtml(u.command) + '">' + escapeHtml(t('agent.warning.copyCmd')) + '</button>' +
+        '</div>' +
+      '</div>';
+    }
+
+    var checkHTML = isDev ? '' :
+      '<button class="update-check-btn" data-action="update-check"' + (updateChecking ? ' disabled' : '') + '>' +
+      escapeHtml(updateChecking ? t('update.checking') : t('update.checkNow')) + '</button>';
+
+    var autoHTML = '<label class="workspace-autosync-row">' +
+      '<input type="checkbox" data-action="toggle-update-check"' + (u.checkEnabled ? ' checked' : '') + '>' +
+      '<span>' + escapeHtml(t('update.autoCheckLab')) + '</span>' +
+      '</label>' +
+      '<div class="update-note">' + escapeHtml(t('update.autoCheckNote')) + '</div>';
+
+    // Lancement à l'ouverture de session. Absent de la réponse = aucune
+    // réponse sûre (installation hors Homebrew, brew muet) : on n'affiche rien
+    // plutôt que d'affirmer à tort que ce n'est pas configuré.
+    var serviceHTML = '';
+    if (u.service) {
+      var registered = !!u.service.registered;
+      var flagsNote = (!registered && u.service.customFlags)
+        ? '<div class="update-note">' + escapeHtml(t('update.serviceFlagsNote')) + '</div>'
+        : '';
+      var serviceCmd = (!registered && u.service.command)
+        ? '<div class="agent-warning-cmd">' +
+            '<code class="mono">' + escapeHtml(u.service.command) + '</code>' +
+            '<button data-action="copy-path" data-path="' + escapeHtml(u.service.command) + '">' + escapeHtml(t('agent.warning.copyCmd')) + '</button>' +
+          '</div>'
+        : '';
+      serviceHTML = '<div class="preferences-divider"></div>' +
+        '<div class="modal-label">' + escapeHtml(t('update.serviceHeading')) + '</div>' +
+        '<div class="update-service-state' + (registered ? ' update-service-on' : '') + '">' +
+          escapeHtml(t(registered ? 'update.serviceOn' : 'update.serviceOff')) + '</div>' +
+        serviceCmd +
+        flagsNote;
+    }
+
+    // Une vérification qui a échoué se dit : sinon « à jour » serait une
+    // promesse que le serveur n'a pas pu tenir.
+    var checkErrorHTML = (!updateError && u.error)
+      ? '<div class="update-blocker">' + escapeHtml(t('update.errorCheckFailed')) + '</div>'
+      : '';
+
+    return '<div class="update-headline">' + escapeHtml(headline) + '</div>' +
+      notesHTML +
+      '<div class="update-meta">' + metaBits.map(escapeHtml).join(' · ') + '</div>' +
+      checkErrorHTML +
+      blockerHTML +
+      (updateMessage ? '<div class="workspace-sync-message">' + escapeHtml(updateMessage) + '</div>' : '') +
+      (updateError ? '<div class="modal-error">' + escapeHtml(updateError) + '</div>' : '') +
+      (actionHTML ? '<div class="secondary-row">' + actionHTML + '</div>' : '') +
+      manualHTML +
+      '<div class="preferences-divider"></div>' +
+      checkHTML +
+      autoHTML +
+      serviceHTML;
+  }
+
+  // Le contenu vit dans #update-section pour permettre un patch ciblé sur
+  // l'événement SSE `update`, sans reconstruire toute la modale (même principe
+  // que #usage-section pour les statistiques).
+  function buildUpdateSectionHTML() {
+    return '<div id="update-section">' + buildUpdateSectionInnerHTML() + '</div>';
+  }
+
+  // Ouvre les réglages directement sur l'onglet Mises à jour : c'est la cible
+  // de la ligne de pied de sidebar.
+  function openUpdateModal() {
+    updateMessage = '';
+    updateError = '';
+    settingsModalTab = 'update';
+    openModal(buildWorkspaceModalHTML());
+  }
+
+  function refreshUpdateSection() {
+    var body = document.getElementById('update-section');
+    if (body) body.innerHTML = buildUpdateSectionInnerHTML();
+  }
+
+  function doUpdateCheck() {
+    updateChecking = true;
+    updateError = '';
+    refreshUpdateSection();
+    api('/api/update/check', { method: 'POST', body: {} }).then(function (u) {
+      if (u) state.update = u;
+    }).catch(function (e) {
+      updateError = (e instanceof ApiError && e.message) || t('update.errorCheckFailed');
+    }).then(function () {
+      updateChecking = false;
+      refreshUpdateSection();
+      renderSidebar();
+    });
+  }
+
+  function saveUpdateCheckSetting(enabled) {
+    api('/api/settings', { method: 'PATCH', body: { updateCheck: enabled } }).then(function (settings) {
+      if (settings) state.settings = settings;
+      if (state.update) state.update.checkEnabled = enabled;
+      refreshUpdateSection();
+    }).catch(function (e) {
+      updateError = (e instanceof ApiError && e.message) || t('preferences.errorSaveFailed');
+      refreshUpdateSection();
+    });
+  }
+
+  function doUpdateApply() {
+    updateApplying = true;
+    updateError = '';
+    updateMessage = '';
+    refreshUpdateSection();
+    api('/api/update/apply', { method: 'POST', body: { confirm: true } }).then(function (res) {
+      var version = (res && res.version) || '';
+      if (res && res.restarting) {
+        updateMessage = t('update.applied', { version: version });
+        refreshUpdateSection();
+        waitForRestart();
+        return;
+      }
+      updateApplying = false;
+      updateMessage = t('update.appliedNoRestart', { version: version });
+      refreshUpdateSection();
+    }).catch(function (e) {
+      updateApplying = false;
+      updateError = (e instanceof ApiError && e.message) || t('update.errorApplyFailed');
+      refreshUpdateSection();
+    });
+  }
+
+  // Le serveur se remplace par sa nouvelle version : on attend qu'il réponde à
+  // nouveau, puis on recharge la page. Le rechargement est indispensable, le
+  // frontend étant embarqué dans le binaire : sans lui, l'ancienne interface
+  // continuerait de tourner contre la nouvelle API. Un mot de passe configuré
+  // ramènera l'écran de connexion, les sessions vivant en mémoire.
+  function waitForRestart() {
+    var deadline = Date.now() + 60000;
+    updateMessage = t('update.reconnecting');
+    refreshUpdateSection();
+    (function poll() {
+      setTimeout(function () {
+        fetch('/api/update', { credentials: 'same-origin' }).then(function () {
+          window.location.reload();
+        }).catch(function () {
+          if (Date.now() < deadline) poll();
+          else {
+            updateApplying = false;
+            updateError = t('common.networkError');
+            refreshUpdateSection();
+          }
+        });
+      }, 1500);
+    })();
   }
 
   // ---------------------------------------------------------------------
@@ -4864,6 +5293,15 @@
     }
   }
 
+  // La vérification périodique a trouvé quelque chose (ou l'application d'une
+  // mise à jour a changé d'état) : la ligne de sidebar et la modale ouverte
+  // suivent, sans rendu complet.
+  function onUpdateEvent(u) {
+    state.update = u;
+    renderSidebar();
+    refreshUpdateSection();
+  }
+
   // Recette : l'état d'un run change (démarré, terminé, arrêté). Le panneau et
   // les boutons se mettent à jour sans rendu complet ; le journal, lui, reçoit
   // ses lignes une par une (onPreviewLogEvent).
@@ -4946,6 +5384,7 @@
     es.addEventListener('agents', function (e) { try { onAgentsEvent(JSON.parse(e.data)); } catch (er) {} });
     es.addEventListener('project', function (e) { try { onProjectEvent(JSON.parse(e.data)); } catch (er) {} });
     es.addEventListener('workspace', function (e) { try { onWorkspaceEvent(JSON.parse(e.data)); } catch (er) {} });
+    es.addEventListener('update', function (e) { try { onUpdateEvent(JSON.parse(e.data)); } catch (er) {} });
     es.addEventListener('settings', function (e) { try { onSettingsEvent(JSON.parse(e.data)); } catch (er) {} });
     es.addEventListener('preview', function (e) { try { onPreviewEvent(JSON.parse(e.data)); } catch (er) {} });
     es.addEventListener('previewLog', function (e) { try { onPreviewLogEvent(JSON.parse(e.data)); } catch (er) {} });
@@ -5026,6 +5465,7 @@
       case 'submit-new-project': submitNewProject(); break;
       case 'submit-new-card': submitNewCard(); break;
       case 'interrupt': doInterrupt(el.getAttribute('data-task-id')); break;
+      case 'start-task': doStartWaitingTask(el.getAttribute('data-task-id')); break;
       case 'reopen': doReopen(el.getAttribute('data-task-id')); break;
       case 'accept-task': doAcceptTask(el.getAttribute('data-task-id')); break;
       case 'refuse-task': doCancelTask(el.getAttribute('data-task-id')); break;
@@ -5066,6 +5506,10 @@
       case 'activate-workspace-git': activateWorkspaceGit(); break;
       case 'toggle-onboarding-card': toggleOnboardingCard(el.getAttribute('data-key')); break;
       case 'submit-onboarding': submitOnboarding(el.getAttribute('data-mode')); break;
+      case 'open-update-modal': openUpdateModal(); break;
+      case 'update-check': doUpdateCheck(); break;
+      case 'update-apply': doUpdateApply(); break;
+      case 'toggle-update-check': saveUpdateCheckSetting(el.checked); break;
     }
   }
 

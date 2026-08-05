@@ -1,6 +1,7 @@
 package server
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -108,6 +109,54 @@ func TestStoreRoundtripSaveLoad(t *testing.T) {
 	// Les agents seedés doivent survivre au rechargement.
 	if _, ok := s2.GetAgent("bolt"); !ok {
 		t.Fatalf("l'agent seedé 'bolt' doit être présent après rechargement")
+	}
+	for id, wantName := range map[string]string{"github-copilot": "Octo", "antigravity": "Astro"} {
+		if agent, ok := s2.GetAgent(id); !ok {
+			t.Fatalf("seeded agent %q should be present after reload", id)
+		} else if agent.Name != wantName {
+			t.Fatalf("seeded agent %q name = %q, want %q", id, agent.Name, wantName)
+		}
+	}
+}
+
+func TestAgentSeedMigrationRunsOnce(t *testing.T) {
+	dir := t.TempDir()
+	legacy := `{
+  "FormatVersion": 1,
+  "Projects": {}, "Cards": {}, "Tasks": {}, "Messages": {},
+  "Agents": {
+    "github-copilot": {"id":"github-copilot","name":"Custom Copilot","cli":"copilot"}
+  }
+}`
+	if err := os.WriteFile(filepath.Join(dir, "state.json"), []byte(legacy), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	s, err := NewStore(dir)
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+	if s.AgentSeedVersion != agentSeedVersion {
+		t.Fatalf("agent seed version = %d, want %d", s.AgentSeedVersion, agentSeedVersion)
+	}
+	if agent, ok := s.GetAgent("github-copilot"); !ok || agent.Name != "Custom Copilot" {
+		t.Fatalf("existing seeded ID should remain untouched, got %+v", agent)
+	}
+	if agent, ok := s.GetAgent("antigravity"); !ok {
+		t.Fatal("Antigravity should be added to an existing workspace")
+	} else if agent.Name != "Astro" {
+		t.Fatalf("Antigravity seeded name = %q, want Astro", agent.Name)
+	}
+
+	if err := s.DeleteAgent("antigravity"); err != nil {
+		t.Fatalf("DeleteAgent: %v", err)
+	}
+	reloaded, err := NewStore(dir)
+	if err != nil {
+		t.Fatalf("NewStore after deletion: %v", err)
+	}
+	if _, ok := reloaded.GetAgent("antigravity"); ok {
+		t.Fatal("a deleted seeded agent should not be recreated")
 	}
 }
 
@@ -415,6 +464,11 @@ func TestAddAgentSlugUniqueAndValidation(t *testing.T) {
 	}
 	if a.ID != "nova" {
 		t.Fatalf("id attendu 'nova', reçu %q", a.ID)
+	}
+	for _, cli := range []string{"copilot", "agy"} {
+		if _, err := s.AddAgent("Custom "+cli, "", "", cli, "", ""); err != nil {
+			t.Fatalf("AddAgent should accept cli %q: %v", cli, err)
+		}
 	}
 }
 
@@ -879,13 +933,13 @@ func TestSettingsUpdateValidatesLang(t *testing.T) {
 	}
 
 	invalid := "de"
-	if _, err := s.UpdateSettings(nil, &invalid); err == nil {
+	if _, err := s.UpdateSettings(nil, &invalid, nil); err == nil {
 		t.Fatalf("une langue invalide devrait être refusée")
 	}
 
 	name := "Ada"
 	lang := "fr"
-	settings, err := s.UpdateSettings(&name, &lang)
+	settings, err := s.UpdateSettings(&name, &lang, nil)
 	if err != nil {
 		t.Fatalf("UpdateSettings: %v", err)
 	}
@@ -894,7 +948,7 @@ func TestSettingsUpdateValidatesLang(t *testing.T) {
 	}
 
 	empty := ""
-	settings, err = s.UpdateSettings(nil, &empty)
+	settings, err = s.UpdateSettings(nil, &empty, nil)
 	if err != nil {
 		t.Fatalf("UpdateSettings (lang vide): %v", err)
 	}
@@ -977,9 +1031,14 @@ func TestAgentWarningCodexSandboxBlockedByAppArmor(t *testing.T) {
 
 	origLookPath := lookPath
 	defer func() { lookPath = origLookPath }()
-	lookPath = func(string) (string, error) { return "/usr/bin/codex", nil } // binaire présent : seul AppArmor doit déclencher.
 
 	t.Setenv("SILLAGE_CODEX_SANDBOX", "")
+	lookPath = func(string) (string, error) { return "", fmt.Errorf("not found") }
+	if got := agentWarning(Agent{Cli: "codex"}); got != "codex CLI not found in PATH" {
+		t.Fatalf("a missing CLI should take priority over sandbox diagnostics, got %q", got)
+	}
+
+	lookPath = func(string) (string, error) { return "/usr/bin/codex", nil }
 	want := "codex sandbox is blocked on this machine (AppArmor); see README (SILLAGE_CODEX_SANDBOX)"
 	if got := agentWarning(Agent{Cli: "codex"}); got != want {
 		t.Fatalf("warning attendu %q, reçu %q", want, got)
@@ -1006,6 +1065,12 @@ func TestAgentWarningMissingBinary(t *testing.T) {
 	if got := agentWarning(Agent{Cli: "codex"}); got != "codex CLI not found in PATH" {
 		t.Fatalf("warning attendu 'codex CLI not found in PATH', reçu %q", got)
 	}
+	if got := agentWarning(Agent{Cli: "copilot"}); got != "copilot CLI not found in PATH" {
+		t.Fatalf("warning = %q, want missing Copilot CLI", got)
+	}
+	if got := agentWarning(Agent{Cli: "agy"}); got != "agy CLI not found in PATH" {
+		t.Fatalf("warning = %q, want missing Antigravity CLI", got)
+	}
 	if got := agentWarning(Agent{Cli: "fake"}); got != "" {
 		t.Fatalf("l'agent fake ne devrait jamais avoir d'avertissement, reçu %q", got)
 	}
@@ -1025,6 +1090,12 @@ func TestAgentWarningHealthy(t *testing.T) {
 	}
 	if got := agentWarning(Agent{Cli: "claude"}); got != "" {
 		t.Fatalf("aucun avertissement attendu, reçu %q", got)
+	}
+	if got := agentWarning(Agent{Cli: "copilot"}); got != "" {
+		t.Fatalf("healthy Copilot should have no warning, got %q", got)
+	}
+	if got := agentWarning(Agent{Cli: "agy"}); got != "" {
+		t.Fatalf("healthy Antigravity should have no warning, got %q", got)
 	}
 }
 
@@ -1330,5 +1401,98 @@ func TestUpdateProjectAllowedTools(t *testing.T) {
 	}
 	if len(updated.AllowedTools) != 0 {
 		t.Fatalf("liste vide attendue, reçue %v", updated.AllowedTools)
+	}
+}
+
+// TestStateFormatVersionStamped : toute sauvegarde signe le fichier (format +
+// version qui l'a écrit), y compris sur un state.json antérieur au champ.
+func TestStateFormatVersionStamped(t *testing.T) {
+	dir := t.TempDir()
+	legacy := `{"Projects":{},"Cards":{},"Tasks":{},"Messages":{},"Agents":{}}`
+	if err := os.WriteFile(filepath.Join(dir, "state.json"), []byte(legacy), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	s, err := NewStore(dir)
+	if err != nil {
+		t.Fatalf("NewStore sur un fichier legacy: %v", err)
+	}
+	if s.FormatVersion != stateFormatVersion {
+		t.Fatalf("format attendu %d, reçu %d", stateFormatVersion, s.FormatVersion)
+	}
+	if s.WrittenBy != buildVersion {
+		t.Fatalf("writtenBy attendu %q, reçu %q", buildVersion, s.WrittenBy)
+	}
+
+	got, err := StateFileFormatVersion(filepath.Join(dir, "state.json"))
+	if err != nil {
+		t.Fatalf("StateFileFormatVersion: %v", err)
+	}
+	if got != stateFormatVersion {
+		t.Fatalf("format sur disque attendu %d, reçu %d", stateFormatVersion, got)
+	}
+}
+
+// TestStateTooNewRefusesToLoad est le garde-fou contre un binaire plus ancien :
+// un fichier d'un format plus récent ne doit ni se charger ni, surtout, être
+// réécrit (c'est la réécriture qui détruit les champs inconnus).
+func TestStateTooNewRefusesToLoad(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "state.json")
+	future := fmt.Sprintf(`{"FormatVersion":%d,"WrittenBy":"99.0.0","Projects":{},"Cards":{},"Tasks":{},"Messages":{},"Agents":{},"UnknownFutureField":{"keep":"me"}}`, stateFormatVersion+1)
+	if err := os.WriteFile(path, []byte(future), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	before, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := NewStore(dir); err == nil {
+		t.Fatalf("NewStore devait refuser un state.json plus récent")
+	} else if !errors.Is(err, ErrStateTooNew) {
+		t.Fatalf("erreur attendue ErrStateTooNew, reçue %v", err)
+	} else if !strings.Contains(err.Error(), "upgrade Sillage") {
+		t.Fatalf("le message doit dire quoi faire, reçu %q", err.Error())
+	}
+
+	after, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(before) != string(after) {
+		t.Fatalf("le fichier a été réécrit alors qu'il devait être laissé intact")
+	}
+}
+
+// TestDowngradeWarning : ce que le format ne voit pas. Deux versions publiées
+// du même format, dont celle qui tourne est la plus ancienne : le chargement
+// réussit, mais on le dit. Une compilation locale ne se compare à rien.
+func TestDowngradeWarning(t *testing.T) {
+	cases := []struct {
+		writtenBy, running string
+		want               bool
+	}{
+		{"0.10.0", "0.4.2", true},
+		{"0.4.2", "0.10.0", false}, // mise à jour normale : rien à signaler
+		{"0.10.0", "0.10.0", false},
+		{"dev", "0.10.0", false}, // écrit par un build local : incomparable
+		{"0.10.0", "dev", false}, // c'est le build local qui tourne : incomparable
+		{"", "0.10.0", false},    // fichier antérieur au champ
+	}
+	for _, c := range cases {
+		dir := t.TempDir()
+		s, err := NewStore(dir)
+		if err != nil {
+			t.Fatalf("NewStore: %v", err)
+		}
+		s.previousWriter = c.writtenBy
+		prev := buildVersion
+		buildVersion = c.running
+		got := s.DowngradeWarning()
+		buildVersion = prev
+		if (got != "") != c.want {
+			t.Errorf("écrit par %q, tourne en %q : avertissement=%q, attendu %v", c.writtenBy, c.running, got, c.want)
+		}
 	}
 }

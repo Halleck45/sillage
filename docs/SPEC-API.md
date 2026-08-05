@@ -76,24 +76,26 @@ Agent   { "id": "bolt", "name": "Bolt", "emoji": "🐝", "color": "#f2b705",
           // active = une tâche running lui est assignée. warning : calculé à chaque
           // liste d'agents (jamais persisté dans state.json), vide si tout va bien ;
           // voir "Santé des agents" ci-dessous. quota : voir "Quota des agents"
-          // ci-dessous, absent/null pour cli ∈ {claude, fake} et pour un agent
+          // ci-dessous, absent/null pour cli ∈ {claude, copilot, agy, fake} et pour un agent
           // codex sans exécution encore observée.
 
 Task    { "id": "t1", "cardId": "c1", "projectId": "p1", "ref": 482, "title": "...",
           "agentId": "bolt", "repoName": "api", "branch": "sillage/482-slug",
-          "status": "running|review|accepted|cancelled",
+          "status": "waiting|running|review|accepted|cancelled",
           "messagesCount": 5, "filesCount": 3, "docsCount": 1, "commitsCount": 2,
           "checks": [ { "label": "go test", "ok": true } ],   // [] si aucun
           "liveActivity": "Edit · internal/server/store.go" | null,
           "commandLog": [ { "text": "Edit · internal/server/store.go", "at": "..." } ],
           "unread": true, "updatedAt": "2026-08-02T10:00:00Z", "tokens": Tokens,
-          "rebasing": false }
+          "rebasing": false, "waitsForTaskId": "t0" }
           // repoName : nom du Repo du projet utilisé pour le worktree
           // commitsCount : commits de base..branche, recalculé à la fin de chaque exécution
           //   (comme filesCount/docsCount) ; pas de recalcul entre-temps
           // rebasing : un rebase automatique de cette tâche est en cours (voir
           //   "Rebase automatique après une acceptation"). État volatile, remis à false au
           //   chargement de state.json. N'affecte jamais updatedAt.
+          // waitsForTaskId : absent/vide sauf statut "waiting" (voir "Démarrage différé
+          //   d'une tâche" ci-dessous). Vidé dès que la tâche démarre, sans garder de trace.
           // commandLog : historique des commandes jouées par l'agent (tool_use, alimenté
           //   uniquement par l'adaptateur claude), les plus anciennes tombant au-delà de 500
           //   entrées. [] si aucune. Contrairement à liveActivity (remis à null en fin
@@ -111,7 +113,25 @@ WorkspaceStatus { "setupDone": true, "gitEnabled": true, "remote": "git@host:org
                   // uniquement (jamais persisté, remis à "" à chaque redémarrage) ; voir
                   // "Synchronisation automatique" ci-dessous.
 
-Settings { "displayName": "Ada", "lang": "fr" }   // lang : ""|"fr"|"en"
+Settings { "displayName": "Ada", "lang": "fr", "updateCheck": true | false | null }
+          // lang : ""|"fr"|"en". updateCheck : vérification périodique des mises à jour ;
+          // null/absent = activé (voir "Mises à jour de Sillage" ci-dessous).
+
+UpdateStatus { "current": "0.8.0", "latest": "0.9.0", "available": true,
+               "method": "brew|binary|go|unknown|dev", "path": "/opt/homebrew/bin/sillage",
+               "selfUpdatable": true, "command": "brew update && brew upgrade sillage",
+               "releaseUrl": "https://github.com/...", "checkEnabled": true,
+               "checkedAt": "..." | null, "error": "", "applying": false, "blocker": "",
+               "service": ServiceStatus | absent }
+          // JAMAIS persisté : une observation du binaire courant, recalculée à chaque
+          // demande. method="dev" = compilation locale (tout le mécanisme est éteint).
+          // Voir "Mises à jour de Sillage" ci-dessous.
+
+ServiceStatus { "registered": false, "isThisOne": false, "customFlags": true,
+                "command": "brew services start sillage" }
+          // Lancement de Sillage à l'ouverture de session. Champ `service` ABSENT dès que la
+          // réponse n'est pas sûre : installation autre que Homebrew, ou brew injoignable /
+          // muet. Voir "Lancement à l'ouverture de session" ci-dessous.
 
 PreviewRun { "id": "pv1", "projectId": "p1", "cardId": "c1", "taskId": "",
              "repoName": "api", "cmd": "make serve PORT=4101",
@@ -133,6 +153,7 @@ PreviewRun { "id": "pv1", "projectId": "p1", "cardId": "c1", "taskId": "",
 `Project.contextPrompt` et `Card.contextPrompt` (le contexte du chantier de la tâche), s'ils sont non vides, sont transmis à l'agent lors du lancement d'une tâche (voir runner.go). Chaque bloc n'est ajouté que s'il est non vide :
 - claude : ajoutés à `--append-system-prompt`, séparés par des lignes vides, dans cet ordre : contexte de l'agent, puis `Project context:\n<project.contextPrompt>`, puis `Workstream context:\n<card.contextPrompt>`.
 - codex : préfixent le prompt utilisateur, dans le même ordre (sans le contexte agent, propre à claude) : `Project context:\n<project.contextPrompt>\n\nWorkstream context:\n<card.contextPrompt>\n\n---\n\n<prompt>`.
+- copilot et agy : préfixent le prompt utilisateur comme codex, avec le contexte de l'agent en premier.
 - fake : ignorés.
 
 ## Endpoints
@@ -141,13 +162,16 @@ PreviewRun { "id": "pv1", "projectId": "p1", "cardId": "c1", "taskId": "",
 |---|---|---|---|
 | POST | `/api/login` | `{password}` | 204 ou 401 `{error}` |
 | POST | `/api/logout` | | 204 |
-| GET | `/api/state` | | `{projects, cards, tasks, agents, workspace, settings, previews, tokens:{global:Tokens}}` |
+| GET | `/api/state` | | `{projects, cards, tasks, agents, workspace, settings, previews, update, tokens:{global:Tokens}}` |
 | GET | `/api/workspace` | | WorkspaceStatus |
 | POST | `/api/workspace/setup` | `{mode:"local"\|"init"\|"clone", remote?}` | WorkspaceStatus (voir ci-dessous) |
 | PATCH | `/api/workspace` | `{remote?, autoSync?}` | WorkspaceStatus (au moins un des deux champs requis ; `remote` définit/remplace origin, 400 si git non initialisé ; `autoSync:true` exige git initialisé ET un remote déjà défini, celui fourni dans le même appel compte, 400 sinon ; voir "Synchronisation automatique" ci-dessous) |
 | POST | `/api/workspace/sync` | `{confirm:true}` | `{output, lastSyncAt}` (voir ci-dessous). **Validation humaine obligatoire** : refus 400 sans `confirm` |
-| PATCH | `/api/settings` | `{displayName?, lang?}` | Settings (`lang` doit être `""`, `"fr"` ou `"en"`, 400 sinon) |
-| POST | `/api/agents` | `{name, emoji?, color?, cli, model?, contextPrompt?}` | Agent (name et cli requis ; cli ∈ {claude, codex, fake} ; id = slug du name, 400 si déjà pris) |
+| PATCH | `/api/settings` | `{displayName?, lang?, updateCheck?}` | Settings (`lang` doit être `""`, `"fr"` ou `"en"`, 400 sinon ; `updateCheck` démarre ou arrête la vérification périodique) |
+| GET | `/api/update` | | UpdateStatus. Lecture du cache mémoire uniquement : **aucun appel réseau** |
+| POST | `/api/update/check` | `{}` | UpdateStatus après un appel à l'API GitHub. 400 sur une compilation locale (rien à comparer), 502 si GitHub est injoignable |
+| POST | `/api/update/apply` | `{confirm:true}` | `{output, version, restarting, note}` : installe la version publiée puis remplace le process. 400 sans `confirm`, 502 si l'installation échoue ou n'est pas possible en un clic (voir ci-dessous) |
+| POST | `/api/agents` | `{name, emoji?, color?, cli, model?, contextPrompt?}` | Agent (name et cli requis ; cli ∈ {claude, codex, copilot, agy, fake} ; id = slug du name, 400 si déjà pris) |
 | PATCH | `/api/agents/{id}` | mêmes champs, tous optionnels | Agent |
 | DELETE | `/api/agents/{id}` | | 204 (400 si une tâche référence encore l'agent) |
 | POST | `/api/projects` | `{name?, path}` ou `{name?, repos:[{name?,path}, ...], description?, contextPrompt?, links?:[{url,title?}, ...], delivery?}` | Project (400 si aucun dépôt, un path invalide/pas un dépôt git, noms de repo dupliqués, mode de livraison inconnu, ou lien invalide/en trop grand nombre). Seul le chemin d'un dépôt est requis : `name` absent ou vide = basename du premier dépôt, `delivery` absent = déduit des remotes des dépôts (voir « Livraison d'un chantier ») |
@@ -160,14 +184,15 @@ PreviewRun { "id": "pv1", "projectId": "p1", "cardId": "c1", "taskId": "",
 | GET | `/api/cards/{id}/delivery` | | DeliveryPreview : ce que la livraison ferait, avant tout clic (voir « Livraison d'un chantier »). Lecture seule |
 | POST | `/api/cards/{id}/ship` | `{confirm:true}` | ShipResponse : **la seule action sortante du produit** (push + pull request, ou fusion locale). 400 sans `confirm`, 409 si le chantier n'est pas livrable |
 | POST | `/api/cards/{id}/catch-up` | | CatchUpResponse : fusionne la branche de destination dans celle du chantier pour débloquer la livraison (voir « Livraison d'un chantier »). Local, aucune confirmation ; un conflit est annulé et rapporté par dépôt |
-| POST | `/api/tasks` | `{cardId, title, agentId, prompt?, repoName?}` | Task (créée `running`, agent lancé avec title+prompt). `repoName` optionnel si le projet n'a qu'un repo ; sinon 400 `"repoName required (project has several repositories)"` ou 400 si inconnu |
+| POST | `/api/tasks` | `{cardId, title, agentId, prompt?, repoName?, waitsForTaskId?}` | Task (créée `running`, agent lancé avec title+prompt). `repoName` optionnel si le projet n'a qu'un repo ; sinon 400 `"repoName required (project has several repositories)"` ou 400 si inconnu. `waitsForTaskId` : voir « Démarrage différé d'une tâche » ci-dessous |
 | PATCH | `/api/tasks/{id}` | `{agentId}` | Task : réassigne l'agent (voir « Réassignation » ci-dessous). 400 si `status=running` (`"interrupt the agent before reassigning"`) ou si l'agent est inconnu |
 | DELETE | `/api/tasks/{id}` | `{confirm:true}` | 204 (voir « Suppressions » ci-dessous). **Validation humaine obligatoire** : refus 400 sans `confirm` |
 | GET | `/api/tasks/{id}` | | `{task, messages}` |
 | POST | `/api/tasks/{id}/messages` | `{text}` | 202 ; relance l'agent (statut → running) |
 | POST | `/api/tasks/{id}/interrupt` | | Task (running → review) |
+| POST | `/api/tasks/{id}/start` | | Task (waiting → running) : démarre manuellement une tâche en attente sans attendre sa dépendance (voir « Démarrage différé d'une tâche »). 400 si `status≠waiting` |
 | POST | `/api/tasks/{id}/accept` | | `{task, workstreamBranch, output}` : commite le worktree de la tâche puis fusionne sa branche dans celle du chantier. Accepté depuis `review` uniquement (400 sinon). **Aucune confirmation** : action locale, réversible par `/reopen`. 409 en cas de conflit (voir ci-dessous) |
-| POST | `/api/tasks/{id}/cancel` | | Task (running/review → cancelled, c'est le « refuser » de l'UI). Si `running`, l'agent est d'abord interrompu (même mécanique qu'`/interrupt`). 400 depuis accepted/cancelled |
+| POST | `/api/tasks/{id}/cancel` | | Task (waiting/running/review → cancelled, c'est le « refuser » de l'UI). Si `running`, l'agent est d'abord interrompu (même mécanique qu'`/interrupt`). 400 depuis accepted/cancelled |
 | POST | `/api/tasks/{id}/reopen` | | Task (accepted/cancelled → review). 400 sinon |
 | POST | `/api/tasks/{id}/read` | | 204 (unread=false, ne modifie jamais `updatedAt` : voir plus bas) |
 | GET | `/api/tasks/{id}/diff` | | voir ci-dessous |
@@ -180,9 +205,17 @@ PreviewRun { "id": "pv1", "projectId": "p1", "cardId": "c1", "taskId": "",
 
 ### Cycle de vie des tâches et auto-déplacement de carte
 
-Statuts : `running → review → accepted`, plus `cancelled` (via `/cancel`, le « refuser » de l'UI). Une tâche ne se livre plus seule : elle est acceptée (fusionnée) dans la branche de son chantier, et c'est le chantier qui se livre (voir « Livraison d'un chantier »). `/reopen` accepte accepted/cancelled et ramène en `review` ; le merge déjà fait n'est pas annulé, la prochaine acceptation fusionnera les nouveaux commits.
+Statuts : `waiting → running → review → accepted`, plus `cancelled` (via `/cancel`, le « refuser » de l'UI). `waiting` est optionnel (voir « Démarrage différé d'une tâche » ci-dessous) : la plupart des tâches démarrent directement en `running`. Une tâche ne se livre plus seule : elle est acceptée (fusionnée) dans la branche de son chantier, et c'est le chantier qui se livre (voir « Livraison d'un chantier »). `/reopen` accepte accepted/cancelled et ramène en `review` ; le merge déjà fait n'est pas annulé, la prochaine acceptation fusionnera les nouveaux commits.
 
 Compatibilité, au chargement de state.json : `ready` (antérieur à la v0.3.4) migre vers `review` ; `shipped` et `done` migrent vers `accepted`.
+
+#### Démarrage différé d'une tâche
+
+`POST /api/tasks` accepte `waitsForTaskId`, l'identifiant d'une autre tâche du même chantier, pas encore terminale (400 `"waitsForTaskId must reference a task of the same workstream"` sinon, ou `"waitsForTaskId task is already finished"` si elle est déjà `accepted`/`cancelled`). Le worktree et la branche de la tâche sont créés normalement, mais l'agent n'est pas lancé : la tâche reste `waiting`, et `Task.waitsForTaskId` porte l'identifiant attendu.
+
+Quand la tâche référencée est acceptée (`/accept`), les tâches `waiting` qui l'attendaient démarrent automatiquement : leur worktree est rejoué (best-effort) sur la tête courante de la branche du chantier, puis l'agent est lancé avec le prompt initial fourni à la création (`waiting → running`). `POST /api/tasks/{id}/start` démarre une tâche `waiting` manuellement, sans attendre : la dépendance a pu être refusée ou supprimée, ou l'utilisateur change simplement d'avis sur l'ordre. Dans tous les cas, `Task.waitsForTaskId` est vidé au démarrage réel (aucune trace historique).
+
+Une tâche `waiting` refusée (`/cancel`, `cancelled`) ne redémarre jamais, même si sa dépendance est ensuite acceptée. Elle peut aussi être supprimée comme toute autre tâche (voir « Suppressions »).
 
 Après une acceptation réussie : un Message marqueur est ajouté au fil (`author="agent"`, `authorName=""`, texte figé `"[accepted:<workstreamBranch>]"`). Une acceptation simplement constatée (la branche de la tâche était déjà contenue dans celle du chantier) pose `"[auto-accepted:<workstreamBranch>]"`. En cas de conflit, la fusion est annulée (`git merge --abort`), un marqueur `"[merge-conflict:<fichiers séparés par des espaces>]"` est ajouté au fil, et la réponse est 409 `{"error":"merge conflict with the workstream branch","conflictFilePaths":"..."}`. Le serveur ne résout jamais un conflit lui-même, mais n'attend pas non plus qu'un humain le remarque dans le fil : l'agent reçoit aussitôt un message l'instruisant de rebaser sa branche sur celle du chantier et de régler les conflits (`conflictRebasePrompt`, voir `handlers.go`), ce qui relance la tâche en `running`. Le frontend détecte le marqueur de conflit et affiche une ligne système localisée.
 
@@ -241,7 +274,7 @@ Actions destructives, jamais déclenchées depuis les listes : confirmation doub
 
 `Agent.warning` (dans `AgentOut`, jamais `Agent` lui-même : le champ n'existe pas dans le modèle persisté) est recalculé à chaque liste d'agents (`GET /api/state`, événement SSE `agents`) :
 - `cli=codex` : si `/proc/sys/kernel/apparmor_restrict_unprivileged_userns` vaut `1` et que `SILLAGE_CODEX_SANDBOX` n'est pas définie → `"codex sandbox is blocked on this machine (AppArmor); see README (SILLAGE_CODEX_SANDBOX)"`.
-- `cli=codex` ou `cli=claude` : si le binaire correspondant est introuvable dans le PATH → `"<cli> CLI not found in PATH"`.
+- `cli=codex`, `cli=claude`, `cli=copilot` ou `cli=agy` : si le binaire correspondant est introuvable dans le PATH → `"<cli> CLI not found in PATH"`.
 - Sinon (ou `cli=fake`) : chaîne vide.
 
 ### Quota des agents
@@ -249,8 +282,7 @@ Actions destructives, jamais déclenchées depuis les listes : confirmation doub
 `Agent.quota` (dans `AgentOut`, jamais persisté) reflète le dernier instantané de quota connu chez le fournisseur du cli, quand ce dernier le publie :
 
 - `cli=codex` : après chaque exécution, Sillage lit le fichier de session que codex écrit de son côté (`~/.codex/sessions/AAAA/MM/JJ/rollout-...-<thread_id>.jsonl`, même en mode `codex exec --json` qui ne porte pas cette info sur son flux stdout) et en extrait le dernier `rate_limits` vu : deux fenêtres glissantes, `"5h"` (300 min) et `"week"` (10080 min), chacune avec `usedPercent` et `resetsAt`. C'est un quota de compte OpenAI, donc identique pour tous les agents `cli=codex` (`Store.CodexQuota`, un seul instantané partagé). `quota` reste `null` tant qu'aucune tâche codex n'a encore tourné sur cette instance.
-- `cli=claude` : `quota` est toujours `null`. Le CLI claude ne publie aucune information de quota exploitable (ni commande dédiée, ni champ dans son flux JSON ou ses fichiers de session) ; l'UI affiche un message "non disponible" plutôt que d'inventer une donnée.
-- `cli=fake` : toujours `null`.
+- `cli=claude`, `cli=copilot`, `cli=agy` et `cli=fake` : toujours `null`. Ces adaptateurs ne publient aucune information de quota exploitable ; l'UI affiche un message "non disponible" plutôt que d'inventer une donnée.
 
 Forme de `quota` quand non nul : `{ "updatedAt": "...", "windows": [ { "label": "5h", "usedPercent": 44.0, "resetsAt": "..." }, { "label": "week", "usedPercent": 49.0, "resetsAt": "..." } ] }`.
 
@@ -340,7 +372,7 @@ Le répertoire de données (dataDir) peut devenir un dépôt git optionnel, pour
 
 - `mode:"local"` : marque `setupDone`, aucun git. Refusé (400) si déjà fait.
 - `mode:"init"` : `git init` (branche main), écrit `.gitignore`, premier commit ; `remote` optionnel (`git remote add`, jamais de push). Rejouable plus tard (depuis les réglages) pour activer git sur un espace resté local, même si `setupDone` est déjà vrai.
-- `mode:"clone"` (`remote` requis) : clone dans un répertoire temporaire, vérifie que `state.json` existe à sa racine (sinon 400 `"remote does not look like a Sillage workspace"`), puis remplace `state.json`/`config.json`/`.git` de dataDir par ceux du clone et recharge le store en mémoire, sans redémarrage (les sessions actives restent valides). Le mot de passe devient celui de l'espace rapatrié. Refusé (400) si déjà fait.
+- `mode:"clone"` (`remote` requis) : clone dans un répertoire temporaire, vérifie que `state.json` existe à sa racine (sinon 400 `"remote does not look like a Sillage workspace"`) et qu'il n'a pas été écrit par un Sillage plus récent (sinon refus avant tout remplacement, `"state.json comes from a newer Sillage ..."` ; voir docs/SPEC-BACKEND.md §« Format de state.json »), puis remplace `state.json`/`config.json`/`.git` de dataDir par ceux du clone et recharge le store en mémoire, sans redémarrage (les sessions actives restent valides). Le mot de passe devient celui de l'espace rapatrié. Refusé (400) si déjà fait.
 - `POST /api/workspace/sync` : commit d'abord si nécessaire, puis `git pull --rebase origin main`, puis `git push -u origin main` (fonction dédiée `SyncPush`, qui n'opère jamais sur un dépôt de projet). En cas de conflit de rebase : `git rebase --abort` puis 409 `{"error":"sync conflict: the remote workspace diverged, resolve manually in <dataDir>"}`. Une synchronisation manuelle réussie efface toujours `lastSyncError`, y compris si l'auto-sync était en pause sur conflit (voir ci-dessous).
 - Compatibilité : un state.json existant sans champ `workspace` (installation antérieure à la v0.3) migre vers `setupDone=true` en mode local au chargement : l'onboarding ne s'affiche jamais sur un espace déjà utilisé.
 
@@ -379,6 +411,27 @@ Sillage ne sait rien des stacks : il exécute la commande de recette d'un dépô
 - **Rien ne survit à l'arrêt du serveur** : SIGINT/SIGTERM déclenche l'arrêt de tous les runs (SIGINT au groupe, SIGKILL après 5 s) avant la fermeture du serveur HTTP. Il n'y a **ni plafond ni TTL d'inactivité** : à la place, l'interface affiche en permanence le nombre de recettes en cours, et c'est l'humain qui arrête (un TTL qui coupe un serveur pendant qu'on s'en sert est plus agaçant qu'utile).
 - **Sans commande configurée**, il n'y a rien à lancer : l'interface affiche le chemin du worktree avec un bouton de copie. Ce repli est le minimum garanti, disponible sur 100 % des projets sans configuration.
 
+### Mises à jour de Sillage
+
+Sillage sait dire qu'une version plus récente existe, et l'installer en un clic quand son mode d'installation le permet. La version courante est injectée au build de release (`-ldflags "-X main.version=vX.Y.Z"`) : une compilation locale vaut `"dev"`, ce qui éteint tout le mécanisme (`method: "dev"`, `blocker: "dev"`, aucun appel réseau). À défaut de ldflags, la version du module est relue dans les informations de build (cas de `go install`).
+
+- **Vérification** : un `GET https://api.github.com/repos/Halleck45/sillage/releases/latest`, au démarrage puis toutes les 24 h. C'est une lecture : aucune donnée de la machine n'est envoyée, aucun identifiant, aucune télémétrie. `Settings.updateCheck: false` arrête la goroutine ; `POST /api/update/check` reste possible à la main. `GET /api/update` et le champ `update` de `/api/state` ne lisent que le cache mémoire.
+- **Comparaison** numérique sur `X.Y.Z` (donc `0.10.0 > 0.9.9`), suffixe de pré-release ignoré : une `1.0.0-rc1` et une `1.0.0` se valent.
+- **Mode d'installation**, déduit une fois au démarrage du chemin réel du binaire (symlinks résolus) :
+
+  | `method` | Détection | `command` | Clic |
+  | --- | --- | --- | --- |
+  | `brew` | chemin réel sous `.../Cellar/...` | `brew update && brew upgrade sillage` | oui, si `brew` est dans le PATH |
+  | `binary` | tout le reste | `curl -fsSL .../install.sh \| sh` | oui, si le dossier du binaire est écrivable |
+  | `go` | dossier = `$GOBIN`, `$GOPATH/bin` ou `~/go/bin` | `go install github.com/Halleck45/sillage@latest` | non |
+  | `unknown` | chemin du binaire introuvable | l'installeur | non |
+
+  `command` est **toujours** renseignée quand une mise à jour existe : c'est le recours universel, y compris quand le clic est impossible.
+- **`blocker`** nomme ce qui empêche le clic. Deux valeurs sont temporaires et laissent `selfUpdatable: true` (le bouton s'affiche, éteint, avec la raison) : `tasksRunning` (un agent travaille) et `previewsRunning` (une recette tourne) ; on ne remplace pas un binaire sous les pieds d'un agent. Les autres sont structurelles et mettent `selfUpdatable: false` : `goInstall`, `notWritable`, `brewMissing`, `unknownMethod`, `dev`.
+- **`POST /api/update/apply`** exige `{"confirm": true}` (même règle que la livraison et la sync). Mode `brew` : `brew update` puis `brew upgrade sillage`. Mode `binary` : téléchargement de `sillage_<goos>_<goarch>` depuis la release, **vérification du sha256 contre le `checksums.txt` de la même release** (une empreinte qui ne correspond pas annule tout, sans rien poser), écriture dans un temporaire du dossier de destination puis `os.Rename` par-dessus le binaire courant.
+- **Lancement à l'ouverture de session** (champ `service`, installations Homebrew uniquement) : `brew services info sillage --json` donne `registered` (enregistré au login), `status` et `pid`. Sondé au démarrage et à chaque `POST /api/update/check`, jamais sur le chemin de `GET /api/state` (un demi-tour de process ruby, ~500 ms). `isThisOne` vaut vrai quand le `pid` rapporté est celui du process courant : c'est le seul marqueur exact de « je suis l'instance du service », là où la variable d'environnement `INVOCATION_ID` de systemd est héritée par tout ce qui descend de la session et donnerait un faux positif dans un simple terminal. `customFlags` signale que l'instance en cours a reçu des arguments que le service n'aura pas (il lance le binaire nu). Le champ est **absent** hors Homebrew, ou si brew ne permet pas de conclure : l'absence d'unité systemd/launchd ne prouve rien (superviseur maison, ligne dans un profil shell), et annoncer « ce n'est pas configuré » à quelqu'un qui l'a fait autrement serait faux. Aucune action côté API : la suggestion se limite à la commande à copier, parce que `brew services start` enregistre **et** démarre, donc lancerait une seconde instance qui échouerait à prendre le port tenu par celle qui affiche le message.
+- **Redémarrage** : la réponse est envoyée d'abord, puis le process se remplace lui-même par la nouvelle version (`syscall.Exec` : même PID, même terminal, mêmes arguments). `restarting: true` l'annonce. Les sessions vivent en mémoire : un mot de passe configuré ramènera l'écran de connexion. Le frontend étant embarqué dans le binaire, l'interface **doit** recharger la page une fois le serveur de nouveau joignable. Si le nouveau binaire est introuvable (cas Homebrew où le Cellar de l'ancienne version a disparu et où `sillage` n'est pas dans le PATH), la réponse porte `restarting: false` et une `note` : la mise à jour est posée, le redémarrage reste à faire à la main.
+
 ### Diff
 
 ```jsonc
@@ -409,6 +462,7 @@ Sillage ne sait rien des stacks : il exécute la commande de recette d'un dépô
 - `project` : Project complet (après PATCH `/api/projects/{id}`).
 - `workspace` : WorkspaceStatus (après setup, changement de remote/autoSync, sync manuelle, ou tick d'auto-sync).
 - `settings` : Settings (après PATCH `/api/settings`).
+- `update` : UpdateStatus (après une vérification périodique ou manuelle, un changement du réglage, et au début et à la fin d'une application de mise à jour).
 - `preview` : PreviewRun (lancement, sortie, arrêt d'une recette manuelle).
 - `previewLog` : `{runId, line}` : une ligne de sortie d'un run de recette.
 - `taskDeleted` : `{taskId, cardId, projectId}` (après `DELETE /api/tasks/{id}`, une fois par tâche supprimée y compris en cascade).
@@ -422,6 +476,7 @@ Le frontend maintient son état en mémoire à partir de `/api/state` + SSE ; re
 - Push / livraison uniquement via le bouton « Livrer » de l'en-tête du chantier, en deux clics : le bouton ouvre un récapitulatif (mode, dépôts, branche → base, commits, fichiers, avertissements) dont le bouton d'action **est** la confirmation (`{"confirm":true}`). Jamais automatique. Le bouton est grisé, avec la raison en infobulle, tant que `card.shipReady` est faux ou qu'il n'y a rien à livrer. Il reste actif quand des tâches sont encore en cours ou à relire : le récapitulatif annonce alors la livraison partielle (« n tâches ne sont pas encore acceptées ») plutôt que d'interdire d'envoyer ce qui est prêt. Même règle de confirmation explicite pour la synchronisation de l'espace de travail (`/api/workspace/sync`).
 - Accepter ou refuser une tâche s'obtient en un clic depuis la liste de tâches (boutons révélés au survol d'une tâche à relire) : ces actions sont locales et réversibles (`/reopen`), donc sans confirmation. L'état de chaque tâche (acceptée, refusée) est lisible dans la liste sans ouvrir la tâche.
 - Recette manuelle : le bouton « Recette » est présent dans l'en-tête du chantier (avant « Livrer » : on éprouve, puis on livre) et dans le panneau de détail d'une tâche (action secondaire, la principale reste « Accepter »). Il est **toujours affiché**, même sans commande configurée : le panneau propose alors le chemin du worktree à copier. Lancer et arrêter sont des actions locales, sans confirmation. Une pastille verte sur le bouton, et un compteur en bas de sidebar, disent ce qui tourne.
+- Mise à jour : tout vit dans **Réglages > Mises à jour** (troisième onglet, à côté de Général et Statistiques) : la version courante, le mode d'installation, la date de dernière vérification, l'annonce quand une version existe, le bouton « Mettre à jour et redémarrer » (éteint avec la raison quand `blocker` est temporaire), la commande à copier, « Vérifier maintenant », et la case de vérification automatique. Le seul rappel hors de cet onglet est une ligne en bas de sidebar, jamais une bannière ni une modale spontanée : `Version <current>` en gris, qui devient « Mise à jour disponible » (vert, avec pastille) quand `update.available` est vrai, et rien du tout sur une compilation locale (`method: "dev"`). Cette ligne ouvre les réglages directement sur l'onglet. Après une réponse `restarting: true`, le frontend attend que le serveur réponde à nouveau puis **recharge la page** (le frontend est embarqué dans le binaire). Le même onglet porte le bloc « Démarrage » quand `update.service` est présent : l'état du lancement à l'ouverture de session, et la commande à copier quand il ne l'est pas. Rien du tout quand le champ est absent.
 - Tokens : jamais affichés dans le flux de travail (kanban, détail de tâche, liste des projets), pour ne pas ajouter de charge mentale. Seul endroit visible : Réglages > onglet Statistiques, consommation par projet, sans prix.
 - Un outil refusé à un agent s'affiche dans le fil comme une ligne système, qui nomme l'outil demandé et pointe vers les réglages du projet (voir « Outils autorisés aux agents »). Un refus silencieux se paie en tours d'agent que personne ne sait expliquer.
 - Le champ `allowedTools` est une entrée par ligne, avec un exemple en placeholder et une aide courte : c'est la seule saisie du produit où l'utilisateur doit connaître une syntaxe qui n'est pas la sienne mais celle du CLI. Vide par défaut, et vide reste un état normal : le socle suffit à lire, écrire et chercher.

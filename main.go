@@ -6,6 +6,7 @@ import (
 	"embed"
 	"errors"
 	"flag"
+	"fmt"
 	"io/fs"
 	"log"
 	"net/http"
@@ -21,13 +22,42 @@ import (
 //go:embed web
 var webFS embed.FS
 
+// version est injectée au build de release (-ldflags "-X main.version=vX.Y.Z").
+// Une compilation locale garde "dev", ce qui désactive toute la mécanique de
+// mise à jour : rien à comparer, aucun appel réseau (voir internal/server/update.go).
+var version = "dev"
+
 func main() {
 	addr := flag.String("addr", "127.0.0.1:8787", "listen address")
 	dataDir := flag.String("data", defaultDataDir(), "data directory (state, worktrees, config)")
+	showVersion := flag.Bool("version", false, "print version and exit")
 	flag.Parse()
+
+	server.SetVersion(version)
+	if *showVersion {
+		fmt.Println(server.CurrentVersion())
+		return
+	}
 
 	if err := os.MkdirAll(*dataDir, 0o700); err != nil {
 		log.Fatalf("cannot create data directory %s: %v", *dataDir, err)
+	}
+
+	// L'état d'abord : c'est le seul chargement qui peut refuser de démarrer,
+	// et un refus ne doit pas être précédé de lignes sans rapport.
+	store, err := server.NewStore(*dataDir)
+	if err != nil {
+		if errors.Is(err, server.ErrStateTooNew) {
+			log.Fatal(err) // le message porte déjà la raison et la sortie de secours
+		}
+		log.Fatalf("cannot load state: %v", err)
+	}
+
+	// Le format ne voit pas tout : deux versions publiées du même format, dont
+	// celle qui tourne est la plus ancienne, chargent sans erreur mais perdront
+	// des champs à la première sauvegarde.
+	if warning := store.DowngradeWarning(); warning != "" {
+		log.Print(warning)
 	}
 
 	hash, err := server.LoadPasswordHash(*dataDir)
@@ -36,11 +66,6 @@ func main() {
 	}
 	if hash == "" {
 		log.Print("No SILLAGE_PASSWORD set: running without a login password.")
-	}
-
-	store, err := server.NewStore(*dataDir)
-	if err != nil {
-		log.Fatalf("cannot load state: %v", err)
 	}
 
 	webContent, err := fs.Sub(webFS, "web")
@@ -66,7 +91,7 @@ func main() {
 		_ = httpSrv.Shutdown(shutdownCtx)
 	}()
 
-	log.Printf("Sillage listening on %s (data: %s)", *addr, *dataDir)
+	log.Printf("Sillage %s listening on %s (data: %s)", server.CurrentVersion(), *addr, *dataDir)
 	if err := httpSrv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		log.Fatalf("server stopped: %v", err)
 	}

@@ -264,6 +264,19 @@ func (p *PreviewSupervisor) StopAll() {
 	wg.Wait()
 }
 
+// RunningCount retourne le nombre de recettes en cours.
+func (p *PreviewSupervisor) RunningCount() int {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	n := 0
+	for _, proc := range p.runs {
+		if proc.run.Status == "running" {
+			n++
+		}
+	}
+	return n
+}
+
 // List retourne les runs connus, triés par date de lancement (le plus récent
 // en dernier), pour l'hydratation du frontend.
 func (p *PreviewSupervisor) List() []PreviewRun {

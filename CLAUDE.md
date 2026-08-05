@@ -15,7 +15,7 @@ node --check web/app.js                                   # syntaxe du frontend
 
 La CI (`.github/workflows/ci.yml`) exige les cinq : `gofmt -l .` vide, `go vet ./...`, `go test ./...`, `go build`, `node --check web/app.js`.
 
-Flags du binaire : `-addr` (défaut `127.0.0.1:8787`), `-data` (défaut `~/.local/share/sillage`). Env : `SILLAGE_PASSWORD` (remplace le hash du mot de passe au démarrage, pratique en dev), `SILLAGE_CODEX_SANDBOX` (mode sandbox de codex, défaut `workspace-write`).
+Flags du binaire : `-addr` (défaut `127.0.0.1:8787`), `-data` (défaut `~/.local/share/sillage`), `-version`. Env : `SILLAGE_PASSWORD` (remplace le hash du mot de passe au démarrage, pratique en dev), `SILLAGE_CODEX_SANDBOX` (mode sandbox de codex, défaut `workspace-write`).
 
 Le frontend est embarqué via `//go:embed web` : toute modification de `web/` demande un rebuild + redémarrage pour être visible.
 
@@ -36,6 +36,7 @@ Ce sont les promesses de sécurité du produit (voir `CONTRIBUTING.md`) :
 1. **`git push` n'existe qu'à deux endroits, tous deux dans `internal/server/git.go`** : `pushBranch()` (dépôts de projet, deux appelants seulement : `Ship()` pour la branche d'un chantier, `mergeThenPush()` pour la branche de destination du mode `merge-push`) et `SyncPush()` (synchronisation de l'espace de données, jamais un dépôt de projet). Aucune entrée capable de pousser dans les allowlists d'outils des agents, aucun flag de contournement de permissions (`--dangerously-skip-permissions` interdit). Les deux modes de fusion n'acceptent que le fast-forward ; `merge` ne pousse jamais rien, `merge-push` ne pousse que la branche de destination, jamais en force.
 2. **Les actions sortantes exigent `{"confirm": true}`** sur une requête authentifiée : livraison d'un chantier (la seule action sortante côté projets), sync de l'espace de travail.
 3. Le serveur reste sûr sur un portable : localhost par défaut, mot de passe bcrypt, rate-limit du login, `Content-Type: application/json` obligatoire sur les mutations (protection CSRF avec SameSite=Lax).
+   Le seul appel réseau que Sillage fait de lui-même est la vérification de mise à jour (`update.go`) : un GET vers l'API GitHub, en lecture, désactivable dans les réglages. Aucune donnée de la machine n'y est envoyée, et un binaire téléchargé n'est jamais posé sans vérification de son sha256.
 4. Une seule dépendance Go externe : `golang.org/x/crypto`. En ajouter une demande une très bonne raison.
 
 ## Les specs sont le contrat
@@ -55,12 +56,14 @@ internal/server/
   models.go                 tous les structs JSON de SPEC-API.md
   store.go                  état en mémoire + persistance atomique + compteurs dérivés
   handlers.go               routage (net/http ServeMux avec patterns méthode+chemin), middlewares
-  runner.go                 adaptateurs claude / codex / fake, un process max par tâche
+  runner.go                 adaptateurs claude / codex / copilot / agy / fake, un process max par tâche
   preview.go                recette manuelle : un process par worktree, journal en mémoire
   preview_handlers.go       routes de recette (lancer, arrêter, journal)
   git.go                    worktrees (chantier + tâche), parser de diff unifié, commits, fusions
                             (MergeBranch, MergeLocal, MergeAndPush), pushBranch + SyncPush
                             (les deux seuls push), Ship, OpenPR (gh/glab)
+  update.go                 version du binaire, détection de mise à jour (GitHub), application
+                            selon le mode d'installation (brew / binaire), redémarrage sur place
   workspace.go              dataDir en dépôt git optionnel (setup, clone, commit auto throttlé)
   auth.go                   bcrypt, sessions en mémoire, rate-limit login
   sse.go                    Hub pub/sub
@@ -74,7 +77,8 @@ web/                        index.html + style.css + app.js (SPA vanilla, zéro 
 - Un `sync.Mutex` protège tout. Les helpers `recomputeCard/Project/Agent/All` doivent être appelés **verrou tenu** et recalculent les champs dérivés (progression, compteurs, `unread`, tokens agrégés, `active`).
 - `recomputeCard` porte aussi deux règles produit : l'état du bouton de livraison (`ShipReady`/`ShipBlocker`, voir `shipReadiness`) et la colonne de la carte, qui ne passe à `done` que si toutes ses tâches sont terminales **et** que le chantier a été livré (`CardBranch.ShippedAt`). « Terminé » veut dire livré ; un chantier livré qui reçoit du travail nouveau en ressort.
 - `save()` écrit un fichier temporaire puis `os.Rename` (atomique), et arme le commit git de l'espace de travail. Ce commit est **throttlé** (`workspaceCommitInterval`, 15 min) et non debouncé : un minuteur en attente n'est jamais repoussé, sinon un agent actif (plusieurs sauvegardes par seconde) empêcherait tout commit. Chaque commit stockant un blob complet de `state.json`, commiter à chaque sauvegarde gonfle le dépôt en objets libres pour aucun gain.
-- Les migrations de format se font au chargement dans `loadStoreFile` (`migrateLegacyRepos`, `migrateLegacyWorkspace`, `migrateTaskStatuses`, `migrateLegacyDelivery`) en relisant le JSON brut : ajouter une migration là, pas ailleurs. `resetTransientTaskFlags`, au même endroit, éteint les états qui ne décrivent qu'une opération en cours (`Task.Rebasing`).
+- `stateFormatVersion` (const dans `store.go`) est le format de `state.json`, écrit dans le fichier à chaque sauvegarde. **À incrémenter dès qu'un champ persisté est ajouté, renommé ou change de sens** : c'est la seule protection contre un binaire plus ancien, qui sinon charge le fichier puis le réécrit en supprimant en silence les champs qu'il ne connaît pas (`NewStore` sauvegarde immédiatement après le chargement). Un fichier de format supérieur fait échouer `loadStoreFile` (`ErrStateTooNew`) avant toute écriture, et `main` refuse de démarrer. `Store.WrittenBy` garde la version qui a écrit en dernier : `DowngradeWarning()` prévient au démarrage quand deux versions publiées du même format se marchent dessus (ce que le format ne peut pas voir). Attention : la protection n'est effective qu'entre binaires qui la portent tous les deux.
+- Les migrations de format se font au chargement dans `loadStoreFile` (`migrateLegacyRepos`, `migrateLegacyWorkspace`, `migrateTaskStatuses`, `migrateLegacyDelivery`, `migrateAgentSeeds`) en relisant le JSON brut : ajouter une migration là, pas ailleurs. `resetTransientTaskFlags`, au même endroit, éteint les états qui ne décrivent qu'une opération en cours (`Task.Rebasing`).
 - `AgentOut.Warning` (santé de l'agent : binaire absent du PATH, sandbox codex bloqué par AppArmor) est calculé à chaque `ListAgents` et **jamais persisté** : `Agent` n'a pas ce champ.
 - `ReloadFromDisk()` remplace le contenu sans changer le pointeur `Store`, pour que sessions et abonnements SSE survivent au rapatriement d'un espace de travail.
 
@@ -82,13 +86,15 @@ web/                        index.html + style.css + app.js (SPA vanilla, zéro 
 
 Un `procHandle` par tâche au maximum (`map[taskID]*procHandle`). Un message envoyé pendant qu'un agent tourne est mis en file (`pending`) et rejoué à la fin de l'exécution en cours. Les process sont lancés avec `Setpgid` pour qu'`Interrupt` puisse SIGINT le groupe (puis SIGKILL après 5 s).
 
-Trois adaptateurs, sélectionnés par `agent.cli` :
+Cinq adaptateurs, sélectionnés par `agent.cli` :
 
 - **claude** : `claude -p --output-format stream-json --verbose --permission-mode acceptEdits --allowedTools <claudeAllowedTools> [--append-system-prompt ...] [--resume <sessionId>]`. Parse le JSONL : `system/init` → `sessionId` stocké (reprise de conversation), blocs `text` → Messages, blocs `tool_use` → ligne d'activité live, `result` → tokens et coût. `claudeAllowedTools` est une constante figée : ne pas y ajouter d'outil capable de pousser.
 - **codex** : `codex exec --json --sandbox <SILLAGE_CODEX_SANDBOX|workspace-write> -C <worktree>`. Pas de reprise de session : l'historique est rejoué via `buildTranscript`. Les événements de tokens portent des **totaux cumulés** : ne garder que le dernier et l'ajouter une seule fois en fin de process (`parseCodexTokenStream`).
+- **copilot** : `copilot --autopilot ... -p <prompt>`, outils read/write/shell autorisés avec refus prioritaires pour `git push`, `gh`, `glab` et les réglages Copilot du dépôt. MCP GitHub et contrôle distant désactivés. Sortie texte finale, pas de reprise ni de tokens.
+- **agy** : `agy --print --sandbox --print-timeout=60m <prompt>`. Sandbox toujours forcé, jamais `--dangerously-skip-permissions`. Sortie texte finale, pas de reprise ni de tokens.
 - **fake** : simule ~3 s de travail, écrit `SILLAGE-TEST.md` dans le worktree, produit un usage fictif. Aucun process externe.
 
-Le prompt d'un départ frais (lancement initial, ou premier message après réassignation, `sessionId` vide) est préfixé par `Task: <title>\n\n` (`contextualizeCliInput`). Le contexte projet s'ajoute au system prompt pour claude (`buildSystemPrompt`) et en préfixe du prompt pour codex.
+Le prompt d'un départ frais (lancement initial, ou premier message après réassignation, `sessionId` vide) est préfixé par `Task: <title>\n\n` (`contextualizeCliInput`). Le contexte projet s'ajoute au system prompt pour claude (`buildSystemPrompt`) et en préfixe du prompt pour codex, copilot et agy ; ces deux derniers reçoivent aussi le contexte agent dans ce préfixe.
 
 Toute mutation d'état publie les événements SSE correspondants via les helpers `publishTask/publishMessage/publishCards/publishTokens/publishAgents/publishActivity/...` : oublier une publication laisse le frontend désynchronisé jusqu'au prochain reload.
 

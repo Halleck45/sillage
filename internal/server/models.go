@@ -74,7 +74,8 @@ type Project struct {
 	CheckCmd string `json:"checkCmd"`
 
 	// ContextPrompt est un texte libre transmis aux agents (voir runner.go :
-	// ajouté au system prompt claude, préfixe du prompt codex, ignoré par fake).
+	// ajouté au system prompt claude, préfixe du prompt codex/copilot/agy,
+	// ignoré par fake).
 	ContextPrompt string `json:"contextPrompt"`
 
 	// AllowedTools accorde aux agents claude de ce projet des outils en plus du
@@ -82,7 +83,7 @@ type Project struct {
 	// Saisi par l'humain dans les réglages, jamais lu depuis un fichier du dépôt
 	// (invariant 5 de CONTRIBUTING.md) : ces fichiers sont écrits par les agents.
 	// Le refus figé (claudeDeniedTools) l'emporte sur toute entrée d'ici.
-	// Ignoré par codex (sandbox) et par fake.
+	// Ignoré par codex, copilot, agy et fake.
 	AllowedTools []string `json:"allowedTools"`
 
 	// Delivery définit ce que livrer veut dire pour ce projet (voir Delivery).
@@ -149,11 +150,12 @@ type Card struct {
 	AwaitingShip bool `json:"awaitingShip"`
 
 	// ContextPrompt est un texte libre transmis aux agents (voir runner.go :
-	// ajouté au system prompt claude, préfixe du prompt codex, ignoré par fake).
+	// ajouté au system prompt claude, préfixe du prompt codex/copilot/agy,
+	// ignoré par fake).
 	ContextPrompt string `json:"contextPrompt"`
 }
 
-// Agent est un profil d'agent IA (claude, codex ou fake).
+// Agent est un profil d'agent IA (claude, codex, copilot, agy ou fake).
 type Agent struct {
 	ID            string `json:"id"`
 	Name          string `json:"name"`
@@ -188,7 +190,8 @@ type AgentQuotaWindow struct {
 // readCodexRateLimits, lue dans le fichier de session codex après chaque
 // exécution : le flux `codex exec --json` ne la porte pas). C'est un quota de
 // compte OpenAI, donc partagé par tous les agents cli=codex, jamais calculé
-// par agent. claude et fake n'ont pas de source : AgentOut.Quota reste nil.
+// par agent. claude, copilot, agy et fake n'ont pas de source :
+// AgentOut.Quota reste nil.
 type AgentQuota struct {
 	UpdatedAt time.Time          `json:"updatedAt"`
 	Windows   []AgentQuotaWindow `json:"windows"`
@@ -219,7 +222,7 @@ type Task struct {
 	AgentID       string  `json:"agentId"`
 	RepoName      string  `json:"repoName"` // dépôt du projet utilisé pour le worktree
 	Branch        string  `json:"branch"`
-	Status        string  `json:"status"` // running|review|accepted|cancelled
+	Status        string  `json:"status"` // waiting|running|review|accepted|cancelled
 	MessagesCount int     `json:"messagesCount"`
 	FilesCount    int     `json:"filesCount"`
 	DocsCount     int     `json:"docsCount"`
@@ -243,11 +246,23 @@ type Task struct {
 	// arrêt brutal en plein rebase ne laisse pas un fuseau tourner sans fin.
 	Rebasing bool `json:"rebasing"`
 
+	// WaitsForTaskID, si non vide, indique que le lancement de l'agent est
+	// retardé jusqu'à l'acceptation de la tâche référencée (statut "waiting"
+	// tant que ce n'est pas le cas ; voir Server.startWaitingTask et
+	// Server.startDependentTasks). Vide dans tous les autres cas, y compris une
+	// fois la tâche démarrée : le champ ne garde pas de trace historique.
+	WaitsForTaskID string `json:"waitsForTaskId,omitempty"`
+
 	// Champs internes ; persistés dans state.json (sinon perdus au redémarrage)
 	// et visibles par le client authentifié, ce qui est sans enjeu en mono-utilisateur.
 	Base        string `json:"base"`        // branche de base : la branche du chantier
 	WorktreeDir string `json:"worktreeDir"` //
 	SessionID   string `json:"sessionId"`   // session claude, pour --resume
+
+	// PendingPrompt est le texte initial en attente d'envoi à l'agent, mémorisé
+	// à la création d'une tâche "waiting" (le prompt fourni par l'utilisateur,
+	// non encore préfixé par contextualizeCliInput). Vidé au démarrage réel.
+	PendingPrompt string `json:"pendingPrompt,omitempty"`
 }
 
 // Message est un message échangé dans le fil d'une tâche. AuthorName porte
@@ -332,6 +347,57 @@ type SyncResponse struct {
 type Settings struct {
 	DisplayName string `json:"displayName"`
 	Lang        string `json:"lang"` // ""|"fr"|"en"
+	// UpdateCheck : vérification périodique des mises à jour. Pointeur pour
+	// que "absent" (state.json écrit avant cette fonctionnalité) veuille dire
+	// "activé", sans migration.
+	UpdateCheck *bool `json:"updateCheck"`
+}
+
+// UpdateStatus décrit les mises à jour de Sillage (GET /api/update, champ
+// `update` de GET /api/state, événement SSE "update"). Jamais persisté : ce
+// n'est pas un état du produit mais une observation du binaire courant.
+type UpdateStatus struct {
+	Current   string `json:"current"`   // version en cours d'exécution, "dev" en local
+	Latest    string `json:"latest"`    // dernière version publiée, "" si inconnue
+	Available bool   `json:"available"` // latest > current
+	// Method : "brew" | "binary" | "go" | "unknown" | "dev"
+	Method        string     `json:"method"`
+	Path          string     `json:"path"`          // binaire en cours d'exécution
+	SelfUpdatable bool       `json:"selfUpdatable"` // POST /api/update/apply peut aboutir
+	Command       string     `json:"command"`       // la mise à jour à la main, toujours renseignée
+	ReleaseURL    string     `json:"releaseUrl"`
+	CheckEnabled  bool       `json:"checkEnabled"`
+	CheckedAt     *time.Time `json:"checkedAt"`
+	Error         string     `json:"error"` // échec de la dernière vérification
+	Applying      bool       `json:"applying"`
+	Blocker       string     `json:"blocker"` // "" si un clic suffit, sinon la raison
+
+	// Service : lancement à l'ouverture de session, nil quand la réponse n'est
+	// pas sûre (voir ServiceStatus).
+	Service *ServiceStatus `json:"service,omitempty"`
+}
+
+// ServiceStatus décrit le lancement de Sillage à l'ouverture de session.
+// Absent (nil) dès que la question ne se pose pas ou n'a pas de réponse sûre :
+// installation autre que Homebrew, ou brew qui ne sait pas répondre. Le silence
+// est préférable à « ce n'est pas configuré » adressé à quelqu'un qui l'a fait
+// autrement (unité systemd écrite à la main, ligne dans un profil shell...).
+type ServiceStatus struct {
+	Registered bool   `json:"registered"` // lancé à l'ouverture de session
+	IsThisOne  bool   `json:"isThisOne"`  // l'instance en cours EST le service
+	Command    string `json:"command"`    // la commande qui l'installe
+	// CustomFlags : l'instance en cours a reçu des arguments, que le service
+	// n'aura pas (il lance le binaire nu). Le dire, sinon « lancer au
+	// démarrage » changerait la configuration en silence.
+	CustomFlags bool `json:"customFlags"`
+}
+
+// UpdateApplyResponse est la réponse de POST /api/update/apply.
+type UpdateApplyResponse struct {
+	Output     string `json:"output"`
+	Version    string `json:"version"`
+	Restarting bool   `json:"restarting"` // faux : mise à jour posée, redémarrage à faire à la main
+	Note       string `json:"note"`
 }
 
 // State est la réponse de GET /api/state.
@@ -343,6 +409,7 @@ type State struct {
 	Workspace WorkspaceStatus `json:"workspace"`
 	Settings  Settings        `json:"settings"`
 	Previews  []PreviewRun    `json:"previews"`
+	Update    UpdateStatus    `json:"update"`
 	Tokens    struct {
 		Global Tokens `json:"global"`
 	} `json:"tokens"`
