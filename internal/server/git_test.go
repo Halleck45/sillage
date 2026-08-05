@@ -1304,3 +1304,157 @@ func TestDeleteTaskInterruptsRunningAgentAndRemovesWorktree(t *testing.T) {
 		t.Fatalf("la branche %q devrait toujours exister, reçu : %q", branch, out)
 	}
 }
+
+// TestCreateTaskWaitsForDependency : une tâche créée avec waitsForTaskId reste
+// "waiting" (agent non lancé) jusqu'à l'acceptation de la tâche référencée, qui
+// la démarre alors automatiquement.
+func TestCreateTaskWaitsForDependency(t *testing.T) {
+	f := newDeliveryFixture(t, Delivery{Mode: "pr"})
+
+	depID, _ := f.addTask(t, "Backend", "backend.txt", "backend\n")
+
+	body := fmt.Sprintf(`{"cardId":%q,"title":"Frontend","agentId":"echo","waitsForTaskId":%q}`, f.card.ID, depID)
+	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(body))
+	w := httptest.NewRecorder()
+	f.srv.handleCreateTask(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("create: attendu 200, reçu %d (%s)", w.Code, w.Body.String())
+	}
+	var waiting Task
+	if err := json.Unmarshal(w.Body.Bytes(), &waiting); err != nil {
+		t.Fatalf("réponse illisible : %v", err)
+	}
+	if waiting.Status != "waiting" || waiting.WaitsForTaskID != depID {
+		t.Fatalf("tâche attendue 'waiting' en attente de %q, reçu statut %q waitsFor %q", depID, waiting.Status, waiting.WaitsForTaskID)
+	}
+	if f.srv.runner.IsRunning(waiting.ID) {
+		t.Fatalf("l'agent ne devrait pas encore tourner")
+	}
+
+	if w := f.accept(t, depID); w.Code != http.StatusOK {
+		t.Fatalf("accept: attendu 200, reçu %d (%s)", w.Code, w.Body.String())
+	}
+
+	started, ok := f.srv.store.GetTask(waiting.ID)
+	if !ok || started.Status != "running" {
+		t.Fatalf("la tâche en attente aurait dû démarrer après l'acceptation, statut %q", started.Status)
+	}
+	if started.WaitsForTaskID != "" || started.PendingPrompt != "" {
+		t.Fatalf("waitsForTaskId/pendingPrompt auraient dû être vidés, reçu %+v", started)
+	}
+	if !f.srv.runner.IsRunning(waiting.ID) {
+		t.Fatalf("l'agent devrait maintenant tourner")
+	}
+
+	// Libère vite l'agent simulé plutôt que d'attendre ses ~3 s.
+	if _, err := f.srv.runner.Interrupt(waiting.ID); err != nil {
+		t.Fatalf("Interrupt: %v", err)
+	}
+}
+
+// TestCreateTaskWaitsForInvalidDependency : waitsForTaskId doit référencer une
+// tâche du même chantier, pas déjà terminale.
+func TestCreateTaskWaitsForInvalidDependency(t *testing.T) {
+	f := newDeliveryFixture(t, Delivery{Mode: "pr"})
+	depID, _ := f.addTask(t, "Backend", "backend.txt", "backend\n")
+
+	otherCard, err := f.srv.store.AddCard(f.project.ID, "Autre chantier", "", "")
+	if err != nil {
+		t.Fatalf("AddCard: %v", err)
+	}
+	body := fmt.Sprintf(`{"cardId":%q,"title":"Frontend","agentId":"echo","waitsForTaskId":%q}`, otherCard.ID, depID)
+	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(body))
+	w := httptest.NewRecorder()
+	f.srv.handleCreateTask(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("dépendance d'un autre chantier : attendu 400, reçu %d (%s)", w.Code, w.Body.String())
+	}
+
+	if w := f.accept(t, depID); w.Code != http.StatusOK {
+		t.Fatalf("accept: attendu 200, reçu %d (%s)", w.Code, w.Body.String())
+	}
+	body = fmt.Sprintf(`{"cardId":%q,"title":"Frontend","agentId":"echo","waitsForTaskId":%q}`, f.card.ID, depID)
+	req = httptest.NewRequest(http.MethodPost, "/", strings.NewReader(body))
+	w = httptest.NewRecorder()
+	f.srv.handleCreateTask(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("dépendance déjà acceptée : attendu 400, reçu %d (%s)", w.Code, w.Body.String())
+	}
+}
+
+// TestStartWaitingTaskManualOverride : POST /api/tasks/{id}/start démarre une
+// tâche "waiting" sans attendre l'acceptation de sa dépendance (dépendance
+// refusée/supprimée, ou changement d'avis) ; refusé une fois la tâche démarrée.
+func TestStartWaitingTaskManualOverride(t *testing.T) {
+	f := newDeliveryFixture(t, Delivery{Mode: "pr"})
+	depID, _ := f.addTask(t, "Backend", "backend.txt", "backend\n")
+
+	body := fmt.Sprintf(`{"cardId":%q,"title":"Frontend","agentId":"echo","waitsForTaskId":%q}`, f.card.ID, depID)
+	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(body))
+	w := httptest.NewRecorder()
+	f.srv.handleCreateTask(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("create: attendu 200, reçu %d (%s)", w.Code, w.Body.String())
+	}
+	var waiting Task
+	if err := json.Unmarshal(w.Body.Bytes(), &waiting); err != nil {
+		t.Fatalf("réponse illisible : %v", err)
+	}
+
+	startReq := httptest.NewRequest(http.MethodPost, "/", nil)
+	startReq.SetPathValue("id", waiting.ID)
+	startW := httptest.NewRecorder()
+	f.srv.handleStartWaitingTask(startW, startReq)
+	if startW.Code != http.StatusOK {
+		t.Fatalf("start: attendu 200, reçu %d (%s)", startW.Code, startW.Body.String())
+	}
+	started, _ := f.srv.store.GetTask(waiting.ID)
+	if started.Status != "running" {
+		t.Fatalf("statut attendu 'running', reçu %q", started.Status)
+	}
+
+	// La dépendance reste en revue, jamais acceptée : le démarrage manuel a
+	// bien contourné l'attente.
+	startW2 := httptest.NewRecorder()
+	f.srv.handleStartWaitingTask(startW2, startReq)
+	if startW2.Code != http.StatusBadRequest {
+		t.Fatalf("second start: attendu 400 (n'est plus 'waiting'), reçu %d", startW2.Code)
+	}
+
+	if _, err := f.srv.runner.Interrupt(waiting.ID); err != nil {
+		t.Fatalf("Interrupt: %v", err)
+	}
+}
+
+// TestCancelWaitingTask : une tâche "waiting" peut être refusée avant même
+// d'avoir démarré, et l'acceptation ultérieure de sa dépendance ne la
+// ressuscite pas (startDependentTasks ne cible que les tâches encore "waiting").
+func TestCancelWaitingTask(t *testing.T) {
+	f := newDeliveryFixture(t, Delivery{Mode: "pr"})
+	depID, _ := f.addTask(t, "Backend", "backend.txt", "backend\n")
+
+	body := fmt.Sprintf(`{"cardId":%q,"title":"Frontend","agentId":"echo","waitsForTaskId":%q}`, f.card.ID, depID)
+	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(body))
+	w := httptest.NewRecorder()
+	f.srv.handleCreateTask(w, req)
+	var waiting Task
+	if err := json.Unmarshal(w.Body.Bytes(), &waiting); err != nil {
+		t.Fatalf("réponse illisible : %v", err)
+	}
+
+	cancelled, err := f.srv.runner.Cancel(waiting.ID)
+	if err != nil {
+		t.Fatalf("Cancel: %v", err)
+	}
+	if cancelled.Status != "cancelled" {
+		t.Fatalf("statut attendu 'cancelled', reçu %q", cancelled.Status)
+	}
+
+	if w := f.accept(t, depID); w.Code != http.StatusOK {
+		t.Fatalf("accept: attendu 200, reçu %d (%s)", w.Code, w.Body.String())
+	}
+	after, _ := f.srv.store.GetTask(waiting.ID)
+	if after.Status != "cancelled" {
+		t.Fatalf("la tâche annulée ne devrait pas redémarrer, statut %q", after.Status)
+	}
+}

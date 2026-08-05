@@ -562,7 +562,7 @@ func TestWorkspaceCommitThrottledNotDebounced(t *testing.T) {
 	if _, err := s.AddCard(project.ID, "Ma carte", "", ""); err != nil {
 		t.Fatalf("AddCard: %v", err)
 	}
-	if _, err := s.UpdateSettings(nil, nil); err != nil {
+	if _, err := s.UpdateSettings(nil, nil, nil); err != nil {
 		t.Fatalf("UpdateSettings: %v", err)
 	}
 
@@ -631,7 +631,7 @@ func TestWorkspaceCommitFiresOncePerInterval(t *testing.T) {
 	if _, err := s.AddCard(project.ID, "Ma carte", "", ""); err != nil {
 		t.Fatalf("AddCard: %v", err)
 	}
-	if _, err := s.UpdateSettings(nil, nil); err != nil {
+	if _, err := s.UpdateSettings(nil, nil, nil); err != nil {
 		t.Fatalf("UpdateSettings: %v", err)
 	}
 	waitForCommitCount(t, dir, 2)
@@ -809,5 +809,48 @@ func TestAutoSyncTickPausesOnConflictUntilManualSyncSucceeds(t *testing.T) {
 	}
 	if ws := srv.store.GetWorkspace(); ws.LastSyncAt == nil {
 		t.Fatalf("lastSyncAt devrait être renseigné après la reprise réussie")
+	}
+}
+
+// TestWorkspaceCloneRejectsNewerState : un espace de travail écrit par un
+// Sillage plus récent est refusé AVANT que le répertoire de données ne soit
+// touché. Sinon le rapatriement laisserait sur place un state.json que ce
+// binaire ne sait plus charger, avec un serveur qui tourne encore dessus.
+func TestWorkspaceCloneRejectsNewerState(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git non disponible dans cet environnement")
+	}
+	future := fmt.Sprintf(`{"FormatVersion":%d,"WrittenBy":"99.0.0","Projects":{},"Cards":{},"Tasks":{},"Messages":{},"Agents":{}}`, stateFormatVersion+1)
+	bareDir := setupBareWorkspaceRemote(t, future)
+
+	parent := t.TempDir()
+	dataDir := filepath.Join(parent, "data")
+	if err := os.MkdirAll(dataDir, 0o700); err != nil {
+		t.Fatalf("mkdir dataDir: %v", err)
+	}
+	local := `{"Projects":{"p1":{"id":"p1","name":"local","repos":[]}},"Cards":{},"Tasks":{},"Messages":{},"Agents":{}}`
+	statePath := filepath.Join(dataDir, "state.json")
+	if err := os.WriteFile(statePath, []byte(local), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := CloneWorkspace(dataDir, "file://"+bareDir)
+	if err == nil {
+		t.Fatalf("le clone d'un espace plus récent devrait échouer")
+	}
+	if !errors.Is(err, ErrStateTooNew) {
+		t.Fatalf("erreur attendue ErrStateTooNew, reçue %v", err)
+	}
+
+	// Le state local est intact : rien n'a été remplacé.
+	content, readErr := os.ReadFile(statePath)
+	if readErr != nil || string(content) != local {
+		t.Fatalf("le state.json local a été touché (%v) : %q", readErr, content)
+	}
+	entries, _ := os.ReadDir(parent)
+	for _, e := range entries {
+		if strings.HasPrefix(e.Name(), "sillage-clone-") {
+			t.Fatalf("répertoire de clone laissé derrière : %s", e.Name())
+		}
 	}
 }

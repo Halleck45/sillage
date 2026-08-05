@@ -54,7 +54,10 @@ jobs:
           for target in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64; do
             GOOS=${target%/*}
             GOARCH=${target#*/}
-            CGO_ENABLED=0 GOOS=$GOOS GOARCH=$GOARCH go build -trimpath -ldflags "-s -w" \
+            # -X main.version : sans ça le binaire ne connaît pas sa version et
+            # la détection de mise à jour reste éteinte (voir internal/server/update.go).
+            CGO_ENABLED=0 GOOS=$GOOS GOARCH=$GOARCH go build -trimpath \
+              -ldflags "-s -w -X main.version=${version}" \
               -o "dist/sillage_${GOOS}_${GOARCH}" .
           done
           (cd dist && sha256sum sillage_* > checksums.txt)
