@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Codex agents can now commit from Sillage's linked task worktrees: the runner discovers external Git metadata and grants only the required directories to `workspace-write`, keeping shared hooks and repository configuration read-only.
 - GitHub Copilot (`copilot`) and Google Antigravity (`agy`) are now full agent types, with safe non-interactive runners and two new seeded profiles. Missing Claude, Codex, Copilot, or Antigravity CLIs are shown as not connected; clicking the agent displays the official installation command, also directly from the new-task picker.
 - A task can now be created to wait for another one: pick "Start after" in the new task form and it stays queued until the task you're waiting on gets accepted, then starts on its own with the prompt you gave it. Useful when a task genuinely needs code that another task hasn't landed yet. A waiting task can still be started manually at any time, or cancelled like any other.
 - A workstream can now be shipped while some of its tasks are still running or waiting for review: what is accepted goes out now, the rest ships later. Nothing unreviewed can leak, because a workstream branch only ever contains accepted work; the ship bar and the recap announce the partial delivery ("2 tasks are not accepted yet"). The `tasks-pending` ship blocker is gone. A partially shipped workstream stays in "Doing": the "Done" column still means shipped *and* finished.

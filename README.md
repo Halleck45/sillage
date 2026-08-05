@@ -70,7 +70,7 @@ Add a project (any local git repository), create a card, create a task, pick an 
 - Data lives in `~/.local/share/sillage` (JSON state, atomic writes) plus one git worktree per task.
 - The only network call Sillage makes on its own is the daily update check: one read of GitHub's latest release number. No data from your machine is sent, no identifier, no telemetry, and you can switch it off in Settings. A binary it downloads for you is never installed without checking its sha256 against the release's `checksums.txt`.
 
-Note for codex agents: Sillage runs them with `--sandbox workspace-write`. On machines where AppArmor blocks bubblewrap (`bwrap: Operation not permitted`), either allow unprivileged user namespaces (`sudo sysctl kernel.apparmor_restrict_unprivileged_userns=0`) or start Sillage with `SILLAGE_CODEX_SANDBOX=danger-full-access`, knowing that the remaining containment is Sillage's own (dedicated worktree, no push, human validation).
+Note for codex agents: Sillage runs them with `--sandbox workspace-write`. Task directories are linked Git worktrees, so Sillage automatically grants Codex write access to the external Git metadata required for local commits while keeping repository hooks and configuration protected. On machines where AppArmor blocks bubblewrap (`bwrap: Operation not permitted`), either allow unprivileged user namespaces (`sudo sysctl kernel.apparmor_restrict_unprivileged_userns=0`) or start Sillage with `SILLAGE_CODEX_SANDBOX=danger-full-access`, knowing that the remaining containment is Sillage's own (dedicated worktree, no push, human validation).
 
 ## Agents
 
