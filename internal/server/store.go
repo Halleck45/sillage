@@ -21,7 +21,7 @@ import (
 // les champs exportés du Store sont sérialisés tels quels, une version qui ne
 // connaît pas un champ le fait disparaître du fichier à sa première
 // sauvegarde, en silence (voir ErrStateTooNew).
-const stateFormatVersion = 1
+const stateFormatVersion = 2
 
 // ErrStateTooNew : le fichier vient d'une version plus récente de Sillage.
 // Refuser de démarrer est le seul comportement sûr, parce que charger puis
@@ -1364,6 +1364,18 @@ func (s *Store) ReserveTaskID() (id string, ref int) {
 
 // CreateTask enregistre une nouvelle tâche (statut initial "running").
 func (s *Store) CreateTask(id string, ref int, cardID, projectID, title, agentID, branch, base, worktreeDir, repoName string) (Task, error) {
+	return s.createTask(id, ref, cardID, projectID, title, agentID, branch, base, worktreeDir, repoName, "", "")
+}
+
+// CreateWaitingTask enregistre une nouvelle tâche "waiting" : le worktree est
+// créé comme pour une tâche ordinaire, mais l'agent n'est pas lancé.
+// pendingPrompt mémorise le texte à lui envoyer une fois waitsForTaskID
+// (obligatoire) accepté ; voir Server.startWaitingTask.
+func (s *Store) CreateWaitingTask(id string, ref int, cardID, projectID, title, agentID, branch, base, worktreeDir, repoName, waitsForTaskID, pendingPrompt string) (Task, error) {
+	return s.createTask(id, ref, cardID, projectID, title, agentID, branch, base, worktreeDir, repoName, waitsForTaskID, pendingPrompt)
+}
+
+func (s *Store) createTask(id string, ref int, cardID, projectID, title, agentID, branch, base, worktreeDir, repoName, waitsForTaskID, pendingPrompt string) (Task, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	t := Task{
@@ -1371,6 +1383,11 @@ func (s *Store) CreateTask(id string, ref int, cardID, projectID, title, agentID
 		AgentID: agentID, RepoName: repoName, Branch: branch, Status: "running", Checks: []Check{},
 		Unread: false, UpdatedAt: time.Now().UTC(), Tokens: Tokens{},
 		Base: base, WorktreeDir: worktreeDir,
+	}
+	if waitsForTaskID != "" {
+		t.Status = "waiting"
+		t.WaitsForTaskID = waitsForTaskID
+		t.PendingPrompt = pendingPrompt
 	}
 	s.Tasks[id] = t
 	s.recomputeCard(cardID)
@@ -1482,17 +1499,17 @@ func (s *Store) AcceptTask(id string) (Task, error) {
 	return s.UpdateTask(id, func(t *Task) { t.Status = "accepted"; t.Unread = false })
 }
 
-// CancelTask marque une tâche "cancelled" (refusée). Autorisé depuis running/review.
-// N'interrompt PAS l'agent : c'est la responsabilité de l'appelant pour une
-// tâche "running" (voir Runner.Cancel, qui interrompt le process puis appelle
-// CancelTask).
+// CancelTask marque une tâche "cancelled" (refusée). Autorisé depuis
+// waiting/running/review. N'interrompt PAS l'agent : c'est la responsabilité
+// de l'appelant pour une tâche "running" (voir Runner.Cancel, qui interrompt
+// le process puis appelle CancelTask).
 func (s *Store) CancelTask(id string) (Task, error) {
 	t, ok := s.GetTask(id)
 	if !ok {
 		return Task{}, fmt.Errorf("task not found")
 	}
 	switch t.Status {
-	case "running", "review":
+	case "waiting", "running", "review":
 	default:
 		return Task{}, fmt.Errorf("task cannot be cancelled from its current status")
 	}

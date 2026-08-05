@@ -212,7 +212,7 @@ type Task struct {
 	AgentID       string  `json:"agentId"`
 	RepoName      string  `json:"repoName"` // dépôt du projet utilisé pour le worktree
 	Branch        string  `json:"branch"`
-	Status        string  `json:"status"` // running|review|accepted|cancelled
+	Status        string  `json:"status"` // waiting|running|review|accepted|cancelled
 	MessagesCount int     `json:"messagesCount"`
 	FilesCount    int     `json:"filesCount"`
 	DocsCount     int     `json:"docsCount"`
@@ -236,11 +236,23 @@ type Task struct {
 	// arrêt brutal en plein rebase ne laisse pas un fuseau tourner sans fin.
 	Rebasing bool `json:"rebasing"`
 
+	// WaitsForTaskID, si non vide, indique que le lancement de l'agent est
+	// retardé jusqu'à l'acceptation de la tâche référencée (statut "waiting"
+	// tant que ce n'est pas le cas ; voir Server.startWaitingTask et
+	// Server.startDependentTasks). Vide dans tous les autres cas, y compris une
+	// fois la tâche démarrée : le champ ne garde pas de trace historique.
+	WaitsForTaskID string `json:"waitsForTaskId,omitempty"`
+
 	// Champs internes ; persistés dans state.json (sinon perdus au redémarrage)
 	// et visibles par le client authentifié, ce qui est sans enjeu en mono-utilisateur.
 	Base        string `json:"base"`        // branche de base : la branche du chantier
 	WorktreeDir string `json:"worktreeDir"` //
 	SessionID   string `json:"sessionId"`   // session claude, pour --resume
+
+	// PendingPrompt est le texte initial en attente d'envoi à l'agent, mémorisé
+	// à la création d'une tâche "waiting" (le prompt fourni par l'utilisateur,
+	// non encore préfixé par contextualizeCliInput). Vidé au démarrage réel.
+	PendingPrompt string `json:"pendingPrompt,omitempty"`
 }
 
 // Message est un message échangé dans le fil d'une tâche. AuthorName porte
