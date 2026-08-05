@@ -1620,7 +1620,15 @@
     var runningGlyph = agents.length
       ? '<span class="task-glyph task-glyph-running" title="' + escapeHtml(t('status.running')) + '"><span class="task-spinner"></span></span>'
       : '';
-    var barColor = colKey === 'done' ? 'var(--green-live)' : 'var(--accent)';
+    // Une barre de progression n'est pas une alerte : de l'encre grise tant que
+    // le chantier avance, le vert seulement quand il est livré. Le bleu accent
+    // reste réservé aux liens et aux anneaux de focus.
+    var barColor = colKey === 'done' ? 'var(--green-live)' : 'var(--muted-3)';
+    // Une carte sans tâche n'a pas de progression : un rail vide est un trait de
+    // plus à ignorer, et il se lit plus fort que le bord de la carte.
+    var progressHTML = c.tasksTotal
+      ? '<div class="progress-track"><div class="progress-fill" style="width:' + (c.progress || 0) + '%; background:' + barColor + '"></div></div>'
+      : '';
     var liveHTML = c.liveActivity ? '<div class="card-live"><span class="live-dot"></span><span class="live-text mono">' +
       escapeHtml(c.liveActivity) + '</span></div>' : '';
     var attention = c.reviewCount ? '<span class="card-attention">' + escapeHtml(t('kanban.card.reviewCount', { n: c.reviewCount })) + '</span>' : '';
@@ -1644,7 +1652,7 @@
         '<span>💬 ' + (c.messagesCount || 0) + '</span>' +
         attention +
       '</div>' +
-      '<div class="progress-track"><div class="progress-fill" style="width:' + (c.progress || 0) + '%; background:' + barColor + '"></div></div>' +
+      progressHTML +
       '</article>';
   }
 

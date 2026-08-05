@@ -111,6 +111,19 @@ SPA vanilla d'un seul fichier, dans une IIFE, découpée en sections commentées
 - Aucune image binaire dans `web/` : la marque (`.brand-mark`, barre latérale et page de connexion) est le logo `docs/logo-sillage.png` redessiné en SVG pixel par pixel, en data-URI dans `style.css`. Même principe pour les icônes de bouton (`shipIconHTML`, `anchorIconHTML`) : SVG inline en `currentColor`, jamais d'emoji (illisible sous 16px) ni de police d'icônes.
 - Barre de livraison du chantier (`buildShipBarHTML`) : l'état du bouton vient de la carte (`shipReady`/`shipBlocker`, à jour via SSE), l'annonce et les compteurs de commits viennent de `GET /api/cards/{id}/delivery`, rechargé à l'ouverture, à chaque changement de statut et toutes les 60 s (`syncDeliveryPolling`).
 
+### Le design (`web/style.css`)
+
+Verre translucide, et le calme comme critère de décision : devant deux options, prendre celle qui demande le moins d'attention. Trois couches, décrites en tête de `style.css`, à respecter pour toute surface ajoutée :
+
+1. **L'ambiance** : le fond de la page (`body`), trois halos très étalés sur `--bg`, en `background-attachment: fixed`. `--bg` est franchement plus soutenu que les surfaces : du verre posé sur un fond aussi clair que lui donne un écran délavé où plus rien ne se distingue.
+2. **Le verre** : `--glass` (le panneau `.main`), `--glass-card` (cartes et champs posés dessus), `--glass-float` (modales et menus, le plus dense car il doit couper le lien avec ce qu'il recouvre ; en dessous de 0.88 le texte de derrière fantôme au travers). Toujours avec `backdrop-filter: var(--blur)` pour les surfaces flottantes, un trait `--border` autour et `border-top-color: var(--glass-line)` pour l'épaisseur.
+3. **L'encre** : le texte, les traits (`--border*`, `--hover`, tous des `rgba` d'encre diluée, jamais une couleur, pour se poser sur n'importe quelle densité de verre) et les voiles de sens (`--green-bg`, `--amber-bg`, `--red-bg`, translucides eux aussi).
+
+Deux règles qui en découlent :
+
+- **Rien ne se déplace au survol.** Pas de `transform` sur un bouton, une carte ou une ligne : seules la teinte et l'ombre changent, en .18–.22 s. Un écran qui compte dix boutons qui se soulèvent est un écran qu'on ne peut pas parcourir tranquillement. Les animations restantes (`om-pulse`, `om-spin`, `om-fade`, `om-rise`) sont lentes et toutes désactivées par `prefers-reduced-motion`.
+- **Pas de couleur pour décorer.** Le noir (`--solid`) pour les boutons pleins, le bleu `--accent` réservé aux liens et aux anneaux de focus, le vert au « livré », l'ambre au « en retard ». Un `@supports not (backdrop-filter)` remonte l'opacité des surfaces là où le verre n'existe pas.
+
 ## Conventions de langue
 
 - Commentaires Go et specs `docs/` : **français**.
