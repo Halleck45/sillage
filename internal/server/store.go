@@ -26,7 +26,7 @@ const stateFormatVersion = 2
 // agentSeedVersion tracks one-time additions to the built-in agent profiles.
 // Unlike checking for an ID at every startup, this lets users delete a seeded
 // agent without Sillage recreating it on the next launch.
-const agentSeedVersion = 1
+const agentSeedVersion = 2
 
 // ErrStateTooNew : le fichier vient d'une version plus récente de Sillage.
 // Refuser de démarrer est le seul comportement sûr, parce que charger puis
@@ -143,7 +143,7 @@ func migrateAgentSeeds(s *Store) {
 	if s.AgentSeedVersion >= agentSeedVersion {
 		return
 	}
-	for id, agent := range newExternalAgentSeeds() {
+	for id, agent := range externalAgentSeedsAfter(s.AgentSeedVersion) {
 		if _, exists := s.Agents[id]; !exists {
 			s.Agents[id] = agent
 		}
@@ -390,24 +390,32 @@ func (s *Store) initEmpty() {
 		Model: "", Cli: "fake",
 		ContextPrompt: "Local test agent, free of charge, for demos and checks.",
 	}
-	for id, agent := range newExternalAgentSeeds() {
+	for id, agent := range externalAgentSeedsAfter(0) {
 		s.Agents[id] = agent
 	}
 	s.AgentSeedVersion = agentSeedVersion
 }
 
-func newExternalAgentSeeds() map[string]Agent {
+func externalAgentSeedsAfter(version int) map[string]Agent {
 	const contextPrompt = "You are a pragmatic developer, focused on quality and simplicity."
-	return map[string]Agent{
-		"github-copilot": {
+	seeds := map[string]Agent{}
+	if version < 1 {
+		seeds["github-copilot"] = Agent{
 			ID: "github-copilot", Name: "Octo", Emoji: "🐙", Color: "#24292f",
 			Cli: "copilot", ContextPrompt: contextPrompt,
-		},
-		"antigravity": {
+		}
+		seeds["antigravity"] = Agent{
 			ID: "antigravity", Name: "Astro", Emoji: "🚀", Color: "#4285f4",
 			Cli: "agy", ContextPrompt: contextPrompt,
-		},
+		}
 	}
+	if version < 2 {
+		seeds["kiro"] = Agent{
+			ID: "kiro", Name: "Kiro", Emoji: "🟣", Color: "#7c3aed",
+			Cli: "kiro", ContextPrompt: contextPrompt,
+		}
+	}
+	return seeds
 }
 
 // save écrit l'état sur disque de façon atomique (fichier temp + rename).
@@ -817,6 +825,13 @@ func agentWarning(a Agent, worktreesDir string) string {
 	case "claude", "copilot":
 		if _, err := lookPath(a.Cli); err != nil {
 			return a.Cli + " CLI not found in PATH"
+		}
+	case "kiro":
+		if _, err := lookPath("kiro-cli"); err != nil {
+			return "kiro CLI not found in PATH"
+		}
+		if strings.TrimSpace(os.Getenv("KIRO_API_KEY")) == "" {
+			return "KIRO_API_KEY is not set for headless Kiro CLI"
 		}
 	}
 	return ""
@@ -1853,12 +1868,13 @@ var validCli = map[string]bool{
 	"codex":   true,
 	"copilot": true,
 	"fake":    true,
+	"kiro":    true,
 }
 
-const validCliDescription = "claude, codex, copilot, agy or fake"
+const validCliDescription = "claude, codex, copilot, agy, kiro or fake"
 
 // AddAgent crée un agent. name et cli sont obligatoires ; cli doit être
-// claude, codex, copilot, agy ou fake ; l'identifiant est le slug du nom
+// claude, codex, copilot, agy, kiro ou fake ; l'identifiant est le slug du nom
 // (unique).
 func (s *Store) AddAgent(name, emoji, color, cli, model, contextPrompt string) (Agent, error) {
 	s.mu.Lock()

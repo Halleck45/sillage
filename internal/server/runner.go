@@ -581,6 +581,8 @@ func (r *Runner) run(task Task, agent Agent, handle *procHandle, cliInput string
 		runErr = r.runCopilot(&task, agent, project, card, handle, cliInput)
 	case "agy":
 		runErr = r.runAntigravity(&task, agent, project, card, handle, cliInput)
+	case "kiro":
+		runErr = r.runKiro(&task, agent, project, card, handle, cliInput)
 	case "fake":
 		runErr = r.runFake(&task, agent, handle)
 	default:
@@ -1199,7 +1201,117 @@ func (r *Runner) runCodex(task *Task, agent Agent, project Project, card Card, h
 	return nil
 }
 
-// --- GitHub Copilot and Antigravity adapters ---
+// --- One-shot text CLI adapters ---
+
+const kiroAgentName = "sillage"
+
+// Kiro evaluates denied shell patterns before allowed ones. The temporary
+// profile can therefore let an unattended coding agent run local commands
+// while keeping outbound Git operations and Kiro self-configuration denied.
+var kiroDeniedCommands = []string{
+	`git\s+push(?:\s+.*)?`,
+	`git\s+-C\s+\S+\s+push(?:\s+.*)?`,
+	`gh(?:\s+.*)?`,
+	`glab(?:\s+.*)?`,
+	`kiro-cli\s+(?:agent|settings|integrations)(?:\s+.*)?`,
+}
+
+type kiroAgentConfig struct {
+	Name           string            `json:"name"`
+	Description    string            `json:"description"`
+	Tools          []string          `json:"tools"`
+	AllowedTools   []string          `json:"allowedTools"`
+	ToolsSettings  kiroToolsSettings `json:"toolsSettings"`
+	IncludeMCPJSON bool              `json:"includeMcpJson"`
+	Model          string            `json:"model,omitempty"`
+}
+
+type kiroToolsSettings struct {
+	Write kiroWriteSettings `json:"write"`
+	Shell kiroShellSettings `json:"shell"`
+}
+
+type kiroWriteSettings struct {
+	AllowedPaths []string `json:"allowedPaths"`
+}
+
+type kiroShellSettings struct {
+	AllowedCommands []string `json:"allowedCommands"`
+	DeniedCommands  []string `json:"deniedCommands"`
+	DenyByDefault   bool     `json:"denyByDefault"`
+}
+
+func newKiroAgentConfig(agent Agent) kiroAgentConfig {
+	return kiroAgentConfig{
+		Name:           kiroAgentName,
+		Description:    "Isolated coding agent managed by Sillage",
+		Tools:          []string{"read", "write", "shell", "grep", "glob"},
+		AllowedTools:   []string{"read", "grep", "glob"},
+		IncludeMCPJSON: false,
+		Model:          agent.Model,
+		ToolsSettings: kiroToolsSettings{
+			Write: kiroWriteSettings{AllowedPaths: []string{"**"}},
+			Shell: kiroShellSettings{
+				AllowedCommands: []string{".*"},
+				DeniedCommands:  append([]string(nil), kiroDeniedCommands...),
+				DenyByDefault:   true,
+			},
+		},
+	}
+}
+
+// createKiroHome writes the runtime profile outside the project. Headless
+// Kiro authenticates through KIRO_API_KEY, so it does not need the user's Kiro
+// home. Keeping a fresh home also prevents tasks from changing future runs.
+func createKiroHome(agent Agent) (string, error) {
+	home, err := os.MkdirTemp("", "sillage-kiro-")
+	if err != nil {
+		return "", err
+	}
+	cleanup := func(err error) (string, error) {
+		_ = os.RemoveAll(home)
+		return "", err
+	}
+	agentsDir := filepath.Join(home, "agents")
+	if err := os.MkdirAll(agentsDir, 0o700); err != nil {
+		return cleanup(err)
+	}
+	data, err := json.MarshalIndent(newKiroAgentConfig(agent), "", "  ")
+	if err != nil {
+		return cleanup(err)
+	}
+	if err := os.WriteFile(filepath.Join(agentsDir, kiroAgentName+".json"), data, 0o600); err != nil {
+		return cleanup(err)
+	}
+	return home, nil
+}
+
+func kiroArgs(cliInput string) []string {
+	return []string{"chat", "--no-interactive", "--agent", kiroAgentName, "--wrap", "never", cliInput}
+}
+
+func kiroEnv(home string) []string {
+	env := os.Environ()
+	filtered := make([]string, 0, len(env)+3)
+	for _, entry := range env {
+		if strings.HasPrefix(entry, "KIRO_HOME=") || strings.HasPrefix(entry, "KIRO_LOG_NO_COLOR=") || strings.HasPrefix(entry, "NO_COLOR=") {
+			continue
+		}
+		filtered = append(filtered, entry)
+	}
+	return append(filtered, "KIRO_HOME="+home, "KIRO_LOG_NO_COLOR=1", "NO_COLOR=1")
+}
+
+func (r *Runner) runKiro(task *Task, agent Agent, project Project, card Card, handle *procHandle, cliInput string) error {
+	home, err := createKiroHome(agent)
+	if err != nil {
+		return fmt.Errorf("cannot prepare Kiro runtime: %w", err)
+	}
+	defer os.RemoveAll(home)
+
+	cliInput = prefixAgentContext(agent, project, card, cliInput)
+	return r.runTextCLI(task, agent, handle, "kiro-cli", kiroArgs(cliInput), kiroEnv(home))
+}
 
 func copilotArgs(agent Agent, cliInput string) []string {
 	args := []string{
@@ -1285,7 +1397,7 @@ func copilotEnv() []string {
 }
 
 // runTextCLI runs a non-interactive CLI whose stdout is its final answer.
-// Copilot and Antigravity currently do not expose token accounting in this
+// Copilot, Antigravity, and Kiro currently do not expose token accounting in this
 // mode, so the adapter deliberately records only the response and exit error.
 // A nil env makes the child inherit the process environment unchanged.
 func (r *Runner) runTextCLI(task *Task, agent Agent, handle *procHandle, binary string, args []string, env []string) error {
