@@ -3,6 +3,7 @@ package server
 import (
 	"encoding/json"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -216,6 +217,178 @@ func TestContextPartsCodexPrefix(t *testing.T) {
 	want2 := "Workstream context:\nW\n\n---\n\n"
 	if got := prefixFor("", "W"); got != want2 {
 		t.Fatalf("préfixe attendu %q, reçu %q", want2, got)
+	}
+}
+
+func TestCodexArgsAllowLinkedWorktreeGitWritesWithoutExposingHooks(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git is not available")
+	}
+
+	root := t.TempDir()
+	repo := filepath.Join(root, "repo with spaces")
+	worktrees := filepath.Join(root, "task worktrees")
+	if err := os.MkdirAll(repo, 0o755); err != nil {
+		t.Fatalf("create repository directory: %v", err)
+	}
+	initTestRepo(t, repo)
+	worktree, _, err := CreateWorktree(repo, worktrees, "task one", "sillage/test-codex-git", "main")
+	if err != nil {
+		t.Fatalf("CreateWorktree: %v", err)
+	}
+
+	gitDir, err := resolveCodexGitDir(worktree, "--absolute-git-dir")
+	if err != nil {
+		t.Fatalf("resolve worktree git-dir: %v", err)
+	}
+	commonDir, err := resolveCodexGitDir(worktree, "--git-common-dir")
+	if err != nil {
+		t.Fatalf("resolve common git-dir: %v", err)
+	}
+	dirs := codexGitWritableDirs(worktree)
+
+	for _, required := range []string{
+		gitDir,
+		filepath.Join(commonDir, "objects"),
+		filepath.Join(commonDir, "refs"),
+		filepath.Join(commonDir, "logs"),
+	} {
+		required, err = canonicalExistingDir(required)
+		if err != nil {
+			t.Fatalf("resolve required directory: %v", err)
+		}
+		if !containsString(dirs, required) {
+			t.Errorf("Codex writable directories should contain %q: %v", required, dirs)
+		}
+	}
+	for _, protected := range []string{commonDir, filepath.Join(commonDir, "hooks")} {
+		protected, err = canonicalExistingDir(protected)
+		if err != nil {
+			t.Fatalf("resolve protected directory: %v", err)
+		}
+		if containsString(dirs, protected) {
+			t.Errorf("Codex writable directories must not expose %q: %v", protected, dirs)
+		}
+	}
+
+	args := codexArgs(worktree, "workspace-write", Agent{Model: "gpt-test"}, "Commit the change")
+	for _, dir := range dirs {
+		if !containsAdjacentArgs(args, "--add-dir", dir) {
+			t.Errorf("Codex arguments should grant write access to %q: %v", dir, args)
+		}
+	}
+	if !containsAdjacentArgs(args, "--model", "gpt-test") {
+		t.Errorf("Codex arguments should preserve the selected model: %v", args)
+	}
+	if args[len(args)-1] != "Commit the change" {
+		t.Errorf("Codex prompt should be the final argument: %v", args)
+	}
+
+	// Reproduce the sandbox boundary without launching Codex: the common
+	// git-dir is read-only, and only the directories selected above are made
+	// writable. A real add and commit must still succeed.
+	t.Cleanup(func() {
+		_ = filepath.Walk(commonDir, func(path string, info os.FileInfo, walkErr error) error {
+			if walkErr != nil {
+				return nil
+			}
+			if info.IsDir() {
+				return os.Chmod(path, 0o755)
+			}
+			return os.Chmod(path, 0o644)
+		})
+	})
+	chmodTree(t, commonDir, 0o555, 0o444)
+	for _, dir := range dirs {
+		chmodTree(t, dir, 0o755, 0o644)
+	}
+	if err := os.WriteFile(filepath.Join(worktree, "codex.txt"), []byte("committed from the task worktree\n"), 0o644); err != nil {
+		t.Fatalf("write task file: %v", err)
+	}
+	runTestGit(t, worktree, "add", "codex.txt")
+	runTestGit(t, worktree, "commit", "-m", "Test Codex worktree commit")
+	if status := strings.TrimSpace(runTestGit(t, worktree, "status", "--porcelain")); status != "" {
+		t.Fatalf("worktree should be clean after commit, got %q", status)
+	}
+}
+
+func TestCodexGitWritableDirsSkipMetadataInsideWorkspace(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git is not available")
+	}
+
+	repo := t.TempDir()
+	initTestRepo(t, repo)
+	if dirs := codexGitWritableDirs(repo); len(dirs) != 0 {
+		t.Fatalf("a regular repository should already be writable through the workspace: %v", dirs)
+	}
+	if dirs := codexGitWritableDirs(t.TempDir()); len(dirs) != 0 {
+		t.Fatalf("a non-Git directory should not add writable roots: %v", dirs)
+	}
+}
+
+func TestCodexGitWritableDirsSupportExternalSeparateGitDir(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git is not available")
+	}
+
+	root := t.TempDir()
+	worktree := filepath.Join(root, "workspace")
+	gitDir := filepath.Join(root, "external metadata", "repository.git")
+	if err := os.MkdirAll(worktree, 0o755); err != nil {
+		t.Fatalf("create workspace: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Dir(gitDir), 0o755); err != nil {
+		t.Fatalf("create metadata parent: %v", err)
+	}
+	runTestGit(t, root, "init", "-b", "main", "--separate-git-dir", gitDir, worktree)
+
+	want, err := canonicalExistingDir(gitDir)
+	if err != nil {
+		t.Fatalf("resolve separate git-dir: %v", err)
+	}
+	if got := codexGitWritableDirs(worktree); len(got) != 1 || got[0] != want {
+		t.Fatalf("external separate git-dir should be added as one writable root: got %v, want %q", got, want)
+	}
+}
+
+func TestCodexArgsDoNotExtendNonWorkspaceSandboxModes(t *testing.T) {
+	args := codexArgs(t.TempDir(), "danger-full-access", Agent{}, "Inspect the change")
+	if containsString(args, "--add-dir") {
+		t.Fatalf("danger-full-access should not receive redundant writable roots: %v", args)
+	}
+}
+
+func containsString(values []string, want string) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
+}
+
+func containsAdjacentArgs(args []string, flag, value string) bool {
+	for i := 0; i+1 < len(args); i++ {
+		if args[i] == flag && args[i+1] == value {
+			return true
+		}
+	}
+	return false
+}
+
+func chmodTree(t *testing.T, root string, dirMode, fileMode os.FileMode) {
+	t.Helper()
+	if err := filepath.Walk(root, func(path string, info os.FileInfo, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if info.IsDir() {
+			return os.Chmod(path, dirMode)
+		}
+		return os.Chmod(path, fileMode)
+	}); err != nil {
+		t.Fatalf("change permissions below %q: %v", root, err)
 	}
 }
 

@@ -978,14 +978,122 @@ func (r *Runner) runClaude(task *Task, agent Agent, project Project, card Card, 
 	return nil
 }
 
-// --- Adaptateur codex (best-effort) ---
+// --- Codex adapter (best-effort) ---
+
+// codexSharedGitWriteDirs contains mutable Git storage that is shared by all
+// linked worktrees. Hooks and repository configuration are intentionally not
+// included: making them agent-writable could persist code outside the task's
+// sandbox and affect later Git commands run by Sillage or the user.
+var codexSharedGitWriteDirs = []string{"objects", "refs", "logs", "reftable", "lfs", "rr-cache"}
+
+// codexGitWritableDirs returns only the external Git metadata directories that
+// Codex needs for normal local writes such as commit, rebase, and stash. A
+// linked worktree keeps its index and HEAD in its own git-dir while objects,
+// refs, and reflogs live in the common git-dir; both sides must therefore be
+// writable even though they sit outside Sillage's task worktree.
+//
+// Resolution is best-effort. If the directory is no longer a Git repository,
+// Codex still starts and can report the repository problem itself.
+func codexGitWritableDirs(worktreeDir string) []string {
+	gitDir, err := resolveCodexGitDir(worktreeDir, "--absolute-git-dir")
+	if err != nil {
+		return nil
+	}
+	commonDir, err := resolveCodexGitDir(worktreeDir, "--git-common-dir")
+	if err != nil {
+		return nil
+	}
+	workspaceDir, err := canonicalExistingDir(worktreeDir)
+	if err != nil {
+		return nil
+	}
+
+	var dirs []string
+	seen := make(map[string]bool)
+	addExternalDir := func(path string) {
+		resolved, resolveErr := canonicalExistingDir(path)
+		if resolveErr != nil || isDirWithin(resolved, workspaceDir) || seen[resolved] {
+			return
+		}
+		seen[resolved] = true
+		dirs = append(dirs, resolved)
+	}
+
+	// The per-worktree git-dir holds the index, HEAD, and operation state.
+	addExternalDir(gitDir)
+	if gitDir == commonDir {
+		// A repository created with --separate-git-dir has no narrower directory
+		// that can receive index.lock, so its complete external git-dir is needed.
+		return dirs
+	}
+	for _, name := range codexSharedGitWriteDirs {
+		addExternalDir(filepath.Join(commonDir, name))
+	}
+	return dirs
+}
+
+func resolveCodexGitDir(worktreeDir, flag string) (string, error) {
+	out, err := runGit(worktreeDir, 10*time.Second, "rev-parse", flag)
+	if err != nil {
+		return "", err
+	}
+	path := strings.TrimSuffix(strings.TrimSuffix(out, "\n"), "\r")
+	if path == "" {
+		return "", fmt.Errorf("git rev-parse %s returned an empty path", flag)
+	}
+	if !filepath.IsAbs(path) {
+		path = filepath.Join(worktreeDir, path)
+	}
+	return canonicalExistingDir(path)
+}
+
+func canonicalExistingDir(path string) (string, error) {
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return "", err
+	}
+	resolved, err := filepath.EvalSymlinks(abs)
+	if err != nil {
+		return "", err
+	}
+	info, err := os.Stat(resolved)
+	if err != nil {
+		return "", err
+	}
+	if !info.IsDir() {
+		return "", fmt.Errorf("%s is not a directory", resolved)
+	}
+	return filepath.Clean(resolved), nil
+}
+
+func isDirWithin(path, parent string) bool {
+	rel, err := filepath.Rel(parent, path)
+	if err != nil {
+		return false
+	}
+	return rel == "." || (rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)))
+}
+
+func codexArgs(worktreeDir, sandbox string, agent Agent, cliInput string) []string {
+	args := []string{"exec", "--json", "--sandbox", sandbox, "-C", worktreeDir}
+	if sandbox == "workspace-write" {
+		for _, dir := range codexGitWritableDirs(worktreeDir) {
+			args = append(args, "--add-dir", dir)
+		}
+	}
+	if agent.Model != "" {
+		args = append(args, "--model", agent.Model)
+	}
+	return append(args, cliInput)
+}
 
 func (r *Runner) runCodex(task *Task, agent Agent, project Project, card Card, handle *procHandle, cliInput string) error {
-	// workspace-write : écriture limitée au worktree, réseau coupé ; le push
-	// reste impossible et ne passe que par Ship (git.go) après validation humaine.
-	// SILLAGE_CODEX_SANDBOX permet de choisir un autre mode (ex : danger-full-access
-	// sur les machines où bwrap est bloqué par AppArmor) ; le confinement d'Sillage
-	// (worktree dédié, pas de push agent) reste alors la seule barrière.
+	// workspace-write limits source edits to the task worktree plus the narrow
+	// Git metadata roots added by codexArgs. Network access remains disabled, so
+	// outbound Git operations still go through Ship after human validation.
+	// SILLAGE_CODEX_SANDBOX can select another mode (for example,
+	// danger-full-access when AppArmor blocks bwrap); Sillage's dedicated
+	// worktree and review workflow are then the remaining containment.
 	sandbox := os.Getenv("SILLAGE_CODEX_SANDBOX")
 	if sandbox == "" {
 		sandbox = "workspace-write"
@@ -993,11 +1101,7 @@ func (r *Runner) runCodex(task *Task, agent Agent, project Project, card Card, h
 	if blocks := strings.Join(contextParts(project.ContextPrompt, card.ContextPrompt), "\n\n"); blocks != "" {
 		cliInput = blocks + "\n\n---\n\n" + cliInput
 	}
-	args := []string{"exec", "--json", "--sandbox", sandbox, "-C", task.WorktreeDir}
-	if agent.Model != "" {
-		args = append(args, "--model", agent.Model)
-	}
-	args = append(args, cliInput)
+	args := codexArgs(task.WorktreeDir, sandbox, agent, cliInput)
 
 	cmd := exec.Command("codex", args...)
 	cmd.Dir = task.WorktreeDir
