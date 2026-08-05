@@ -66,6 +66,10 @@ func SetVersion(v string) {
 // compilation locale).
 func CurrentVersion() string { return buildVersion }
 
+// brewServiceName est le nom du service Homebrew de Sillage, tel que
+// `brew services` le connaît (il vient du nom de la formule).
+const brewServiceName = "sillage"
+
 // updateTracker garde ce que la dernière vérification a appris. En mémoire
 // uniquement : une version publiée n'est pas un état du produit, la relire au
 // démarrage n'apporte rien et la persister ferait mentir un state.json
@@ -78,6 +82,12 @@ type updateTracker struct {
 	lastErr    string
 	applying   bool
 	stop       chan struct{}
+
+	// service est le dernier état connu du lancement à l'ouverture de session
+	// (nil = pas de réponse sûre, voir ServiceStatus). Interroger brew coûte
+	// un demi-tour de process : sondé au démarrage et à chaque vérification
+	// explicite, jamais sur le chemin de GET /api/state.
+	service *ServiceStatus
 }
 
 // installInfo décrit comment ce binaire a été installé, donc comment il peut
@@ -104,6 +114,7 @@ var (
 	brewUpgradeFn        = brewUpgrade
 	detectInstallFn      = detectInstall
 	releaseDownloadBase  = "https://github.com/" + updateRepo + "/releases/download/"
+	brewServiceInfoFn    = brewServiceInfo
 )
 
 // --- Version ---
@@ -279,6 +290,7 @@ func (s *Server) UpdateStatus() UpdateStatus {
 	checkedAt := s.updates.checkedAt
 	lastErr := s.updates.lastErr
 	applying := s.updates.applying
+	service := s.updates.service
 	s.updates.mu.Unlock()
 
 	st := UpdateStatus{
@@ -292,6 +304,7 @@ func (s *Server) UpdateStatus() UpdateStatus {
 		CheckedAt:    checkedAt,
 		Error:        lastErr,
 		Applying:     applying,
+		Service:      service,
 	}
 	if !isReleaseVersion(buildVersion) {
 		st.Method = "dev"
@@ -322,6 +335,102 @@ func (s *Server) UpdateStatus() UpdateStatus {
 	// seule la commande reste.
 	st.SelfUpdatable = st.Blocker == "" || st.Blocker == "tasksRunning" || st.Blocker == "previewsRunning"
 	return st
+}
+
+// --- Lancement à l'ouverture de session (Homebrew) ---
+
+// brewServiceReport est ce que `brew services info --json` nous apprend.
+// Registered est un pointeur pour distinguer « non enregistré » d'un brew trop
+// ancien qui ne connaît pas le champ : dans le doute, on ne dit rien.
+type brewServiceReport struct {
+	Registered *bool  `json:"registered"`
+	Status     string `json:"status"` // "none"|"started"|"scheduled"|"error"
+	PID        *int   `json:"pid"`
+}
+
+// brewServiceInfo interroge `brew services info <name> --json`. Environ 500 ms
+// (un process ruby) : jamais sur le chemin d'une requête de lecture d'état.
+func brewServiceInfo(name string) (*brewServiceReport, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, "brew", "services", "info", name, "--json").Output()
+	if err != nil {
+		return nil, err
+	}
+	return parseBrewServiceInfo(out, name)
+}
+
+// parseBrewServiceInfo lit la sortie de `brew services info --json` : un
+// tableau d'entrées, une par service demandé.
+func parseBrewServiceInfo(out []byte, name string) (*brewServiceReport, error) {
+	var entries []struct {
+		Name string `json:"name"`
+		brewServiceReport
+	}
+	if err := json.Unmarshal(out, &entries); err != nil {
+		return nil, err
+	}
+	for _, e := range entries {
+		if e.Name == name {
+			report := e.brewServiceReport
+			return &report, nil
+		}
+	}
+	return nil, fmt.Errorf("brew knows no service named %q", name)
+}
+
+// refreshServiceStatus met à jour ce qu'on sait du lancement à l'ouverture de
+// session. Sans effet (et sans process lancé) hors installation Homebrew : les
+// autres modes n'ont aucun registre à interroger, et l'absence de réponse ne
+// prouverait rien.
+func (s *Server) refreshServiceStatus() {
+	install := detectInstallFn()
+	if install.Method != "brew" {
+		return
+	}
+
+	report, err := brewServiceInfoFn(brewServiceName)
+	if err != nil {
+		return // brew injoignable ou muet : on se taît
+	}
+	registered, ok := serviceRegistered(report)
+	if !ok {
+		return // brew ne sait pas répondre : on se taît
+	}
+
+	status := &ServiceStatus{
+		Registered: registered,
+		// Le service lance le binaire nu : des arguments sur l'instance en
+		// cours signifient que le service ne la reproduira pas à l'identique.
+		CustomFlags: len(os.Args) > 1,
+		Command:     "brew services start " + brewServiceName,
+	}
+	// PID identique = c'est nous que le gestionnaire de services a lancé.
+	// Marqueur exact, là où une variable d'environnement (INVOCATION_ID) est
+	// héritée par tout ce qui descend de la session et donnerait un faux positif.
+	if report.PID != nil && *report.PID == os.Getpid() {
+		status.IsThisOne = true
+	}
+
+	s.updates.mu.Lock()
+	s.updates.service = status
+	s.updates.mu.Unlock()
+}
+
+// serviceRegistered lit l'enregistrement du service, avec le statut en repli
+// pour les versions de brew qui n'exposent pas `registered`. ok=false quand
+// aucune des deux sources ne permet de conclure.
+func serviceRegistered(report *brewServiceReport) (registered, ok bool) {
+	if report.Registered != nil {
+		return *report.Registered, true
+	}
+	switch report.Status {
+	case "started", "scheduled":
+		return true, true
+	case "none":
+		return false, true
+	}
+	return false, false
 }
 
 // --- Vérification ---
@@ -384,6 +493,11 @@ func fetchLatestRelease(ctx context.Context) (tag, htmlURL string, err error) {
 // déjà. Appelée au boot et à chaque activation du réglage. Même patron que
 // startAutoSync (workspace.go).
 func (s *Server) startUpdateChecker() {
+	// Le lancement à l'ouverture de session ne dépend ni de la version ni du
+	// réglage de vérification : c'est une question d'installation, pas de
+	// version, et elle se pose même si l'utilisateur a coupé les checks.
+	go s.refreshServiceStatus()
+
 	if !s.updateChecksEnabled() {
 		return
 	}

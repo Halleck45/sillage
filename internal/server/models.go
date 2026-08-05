@@ -349,6 +349,25 @@ type UpdateStatus struct {
 	Error         string     `json:"error"` // échec de la dernière vérification
 	Applying      bool       `json:"applying"`
 	Blocker       string     `json:"blocker"` // "" si un clic suffit, sinon la raison
+
+	// Service : lancement à l'ouverture de session, nil quand la réponse n'est
+	// pas sûre (voir ServiceStatus).
+	Service *ServiceStatus `json:"service,omitempty"`
+}
+
+// ServiceStatus décrit le lancement de Sillage à l'ouverture de session.
+// Absent (nil) dès que la question ne se pose pas ou n'a pas de réponse sûre :
+// installation autre que Homebrew, ou brew qui ne sait pas répondre. Le silence
+// est préférable à « ce n'est pas configuré » adressé à quelqu'un qui l'a fait
+// autrement (unité systemd écrite à la main, ligne dans un profil shell...).
+type ServiceStatus struct {
+	Registered bool   `json:"registered"` // lancé à l'ouverture de session
+	IsThisOne  bool   `json:"isThisOne"`  // l'instance en cours EST le service
+	Command    string `json:"command"`    // la commande qui l'installe
+	// CustomFlags : l'instance en cours a reçu des arguments, que le service
+	// n'aura pas (il lance le binaire nu). Le dire, sinon « lancer au
+	// démarrage » changerait la configuration en silence.
+	CustomFlags bool `json:"customFlags"`
 }
 
 // UpdateApplyResponse est la réponse de POST /api/update/apply.

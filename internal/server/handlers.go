@@ -356,6 +356,10 @@ func (s *Server) handleUpdateCheck(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "this build has no version to compare")
 		return
 	}
+	// La vérification explicite est aussi le moment de reregarder le lancement
+	// à l'ouverture de session : c'est le seul geste qui suit, dans le temps, un
+	// `brew services start` joué dans un terminal.
+	s.refreshServiceStatus()
 	ctx, cancel := context.WithTimeout(r.Context(), updateHTTPTimeout)
 	defer cancel()
 	st := s.checkForUpdate(ctx)

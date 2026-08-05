@@ -374,3 +374,172 @@ func tempLeftovers(t *testing.T, dir string) []string {
 	}
 	return out
 }
+
+func withBrewService(t *testing.T, report *brewServiceReport, err error) {
+	t.Helper()
+	prev := brewServiceInfoFn
+	brewServiceInfoFn = func(string) (*brewServiceReport, error) { return report, err }
+	t.Cleanup(func() { brewServiceInfoFn = prev })
+}
+
+func boolPtr(b bool) *bool { return &b }
+func intPtr(n int) *int    { return &n }
+
+// TestServiceStatusOnlyForBrew : les autres modes d'installation n'ont aucun
+// registre à interroger. Ne rien dire est la seule réponse honnête, et surtout
+// aucun process brew ne doit être lancé.
+func TestServiceStatusOnlyForBrew(t *testing.T) {
+	for _, method := range []string{"binary", "go", "unknown"} {
+		t.Run(method, func(t *testing.T) {
+			srv := newTestServer(t)
+			withInstall(t, installInfo{Method: method, Command: "..."})
+			called := false
+			prev := brewServiceInfoFn
+			brewServiceInfoFn = func(string) (*brewServiceReport, error) {
+				called = true
+				return &brewServiceReport{Registered: boolPtr(false)}, nil
+			}
+			t.Cleanup(func() { brewServiceInfoFn = prev })
+
+			srv.refreshServiceStatus()
+			if called {
+				t.Fatalf("brew interrogé pour une installation %q", method)
+			}
+			if srv.UpdateStatus().Service != nil {
+				t.Fatalf("aucun état de service ne doit être exposé pour %q", method)
+			}
+		})
+	}
+}
+
+func TestServiceStatusBrew(t *testing.T) {
+	t.Run("non enregistré", func(t *testing.T) {
+		srv := newTestServer(t)
+		withInstall(t, installInfo{Method: "brew", Path: "/opt/homebrew/bin/sillage", Writable: true, Command: "brew upgrade sillage"})
+		withBrewService(t, &brewServiceReport{Registered: boolPtr(false), Status: "none"}, nil)
+
+		srv.refreshServiceStatus()
+		svc := srv.UpdateStatus().Service
+		if svc == nil {
+			t.Fatal("état de service attendu")
+		}
+		if svc.Registered || svc.IsThisOne {
+			t.Fatalf("attendu ni enregistré ni service courant : %#v", svc)
+		}
+		if svc.Command != "brew services start sillage" {
+			t.Fatalf("commande inattendue : %q", svc.Command)
+		}
+	})
+
+	t.Run("enregistré, et c'est nous", func(t *testing.T) {
+		srv := newTestServer(t)
+		withInstall(t, installInfo{Method: "brew", Writable: true})
+		withBrewService(t, &brewServiceReport{Registered: boolPtr(true), Status: "started", PID: intPtr(os.Getpid())}, nil)
+
+		srv.refreshServiceStatus()
+		svc := srv.UpdateStatus().Service
+		if svc == nil || !svc.Registered || !svc.IsThisOne {
+			t.Fatalf("attendu enregistré et instance de service : %#v", svc)
+		}
+	})
+
+	t.Run("enregistré, mais un autre process", func(t *testing.T) {
+		srv := newTestServer(t)
+		withInstall(t, installInfo{Method: "brew", Writable: true})
+		withBrewService(t, &brewServiceReport{Registered: boolPtr(true), PID: intPtr(os.Getpid() + 1)}, nil)
+
+		srv.refreshServiceStatus()
+		svc := srv.UpdateStatus().Service
+		if svc == nil || !svc.Registered || svc.IsThisOne {
+			t.Fatalf("le PID ne correspond pas : IsThisOne devait rester faux : %#v", svc)
+		}
+	})
+
+	// brew injoignable, ou trop ancien pour répondre : silence complet. Une
+	// suggestion fondée sur une non-réponse serait un mensonge.
+	t.Run("brew muet", func(t *testing.T) {
+		for _, c := range []struct {
+			name   string
+			report *brewServiceReport
+			err    error
+		}{
+			{"erreur", nil, fmt.Errorf("brew: command not found")},
+			{"champ absent, statut inconnu", &brewServiceReport{Status: "wat"}, nil},
+			{"champ absent, statut vide", &brewServiceReport{}, nil},
+		} {
+			t.Run(c.name, func(t *testing.T) {
+				srv := newTestServer(t)
+				withInstall(t, installInfo{Method: "brew", Writable: true})
+				withBrewService(t, c.report, c.err)
+				srv.refreshServiceStatus()
+				if svc := srv.UpdateStatus().Service; svc != nil {
+					t.Fatalf("silence attendu, reçu %#v", svc)
+				}
+			})
+		}
+	})
+
+	// Un brew qui n'expose pas `registered` : le statut suffit à conclure.
+	t.Run("repli sur le statut", func(t *testing.T) {
+		for status, want := range map[string]bool{"started": true, "scheduled": true, "none": false} {
+			srv := newTestServer(t)
+			withInstall(t, installInfo{Method: "brew", Writable: true})
+			withBrewService(t, &brewServiceReport{Status: status}, nil)
+			srv.refreshServiceStatus()
+			svc := srv.UpdateStatus().Service
+			if svc == nil || svc.Registered != want {
+				t.Fatalf("statut %q : attendu registered=%v, reçu %#v", status, want, svc)
+			}
+		}
+	})
+}
+
+// TestParseBrewServiceInfoFixture : la sortie réelle de
+// `brew services info sillage --json` (Homebrew 4.x, Linux), capturée telle
+// quelle. Les mocks des autres tests valident la logique ; celui-ci valide la
+// forme, la seule chose qu'un mock ne peut pas garantir.
+func TestParseBrewServiceInfoFixture(t *testing.T) {
+	out := []byte(`[
+  {
+    "name": "sillage",
+    "service_name": "homebrew.sillage",
+    "running": false,
+    "loaded": false,
+    "schedulable": false,
+    "pid": null,
+    "exit_code": null,
+    "user": null,
+    "status": "none",
+    "file": "/home/linuxbrew/.linuxbrew/opt/sillage/homebrew.sillage.service",
+    "registered": false,
+    "loaded_file": null,
+    "command": "/home/linuxbrew/.linuxbrew/opt/sillage/bin/sillage",
+    "working_dir": null,
+    "root_dir": null,
+    "log_path": "/home/linuxbrew/.linuxbrew/var/log/sillage.log",
+    "error_log_path": "/home/linuxbrew/.linuxbrew/var/log/sillage.log",
+    "interval": null,
+    "cron": null
+  }
+]`)
+
+	report, err := parseBrewServiceInfo(out, "sillage")
+	if err != nil {
+		t.Fatalf("parseBrewServiceInfo: %v", err)
+	}
+	if report.Registered == nil || *report.Registered {
+		t.Fatalf("registered=false attendu, reçu %v", report.Registered)
+	}
+	if report.Status != "none" || report.PID != nil {
+		t.Fatalf("statut/pid inattendus : %q %v", report.Status, report.PID)
+	}
+	registered, ok := serviceRegistered(report)
+	if !ok || registered {
+		t.Fatalf("serviceRegistered = (%v, %v), attendu (false, true)", registered, ok)
+	}
+
+	// Un autre nom que celui demandé n'est jamais confondu.
+	if _, err := parseBrewServiceInfo(out, "autre"); err == nil {
+		t.Fatalf("un service absent de la sortie doit produire une erreur")
+	}
+}

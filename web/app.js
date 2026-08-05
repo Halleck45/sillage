@@ -421,7 +421,11 @@
       'update.blocker.goInstall': 'Une installation par go install se met à jour avec go.',
       'update.blocker.unknownMethod': 'Sillage ne sait pas comment ce binaire a été installé.',
       'update.errorCheckFailed': 'Impossible de joindre GitHub.',
-      'update.errorApplyFailed': 'Échec de la mise à jour.'
+      'update.errorApplyFailed': 'Échec de la mise à jour.',
+      'update.serviceHeading': 'Démarrage',
+      'update.serviceOn': 'Sillage est lancé à l\'ouverture de session.',
+      'update.serviceOff': 'Sillage n\'est pas lancé à l\'ouverture de session.',
+      'update.serviceFlagsNote': 'L\'instance en cours tourne avec des arguments que le service ne reprendra pas : il lance le binaire sans option.'
     },
     en: {
       'nav.inbox': 'Inbox',
@@ -836,7 +840,11 @@
       'update.blocker.goInstall': 'A go install setup is updated with go.',
       'update.blocker.unknownMethod': 'Sillage cannot tell how this binary was installed.',
       'update.errorCheckFailed': 'Could not reach GitHub.',
-      'update.errorApplyFailed': 'Update failed.'
+      'update.errorApplyFailed': 'Update failed.',
+      'update.serviceHeading': 'Startup',
+      'update.serviceOn': 'Sillage starts when you log in.',
+      'update.serviceOff': 'Sillage does not start when you log in.',
+      'update.serviceFlagsNote': 'This instance runs with arguments the service will not carry over: it starts the binary with no options.'
     }
   };
 
@@ -4851,6 +4859,29 @@
       '</label>' +
       '<div class="update-note">' + escapeHtml(t('update.autoCheckNote')) + '</div>';
 
+    // Lancement à l'ouverture de session. Absent de la réponse = aucune
+    // réponse sûre (installation hors Homebrew, brew muet) : on n'affiche rien
+    // plutôt que d'affirmer à tort que ce n'est pas configuré.
+    var serviceHTML = '';
+    if (u.service) {
+      var registered = !!u.service.registered;
+      var flagsNote = (!registered && u.service.customFlags)
+        ? '<div class="update-note">' + escapeHtml(t('update.serviceFlagsNote')) + '</div>'
+        : '';
+      var serviceCmd = (!registered && u.service.command)
+        ? '<div class="agent-warning-cmd">' +
+            '<code class="mono">' + escapeHtml(u.service.command) + '</code>' +
+            '<button data-action="copy-path" data-path="' + escapeHtml(u.service.command) + '">' + escapeHtml(t('agent.warning.copyCmd')) + '</button>' +
+          '</div>'
+        : '';
+      serviceHTML = '<div class="preferences-divider"></div>' +
+        '<div class="modal-label">' + escapeHtml(t('update.serviceHeading')) + '</div>' +
+        '<div class="update-service-state' + (registered ? ' update-service-on' : '') + '">' +
+          escapeHtml(t(registered ? 'update.serviceOn' : 'update.serviceOff')) + '</div>' +
+        serviceCmd +
+        flagsNote;
+    }
+
     // Une vérification qui a échoué se dit : sinon « à jour » serait une
     // promesse que le serveur n'a pas pu tenir.
     var checkErrorHTML = (!updateError && u.error)
@@ -4868,7 +4899,8 @@
       manualHTML +
       '<div class="preferences-divider"></div>' +
       checkHTML +
-      autoHTML;
+      autoHTML +
+      serviceHTML;
   }
 
   // Le contenu vit dans #update-section pour permettre un patch ciblé sur
