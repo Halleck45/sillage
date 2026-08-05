@@ -444,6 +444,7 @@ func (s *Store) recomputeCard(cardID string) {
 			break
 		}
 	}
+	c.AwaitingShip = hasTasks && allTerminal && !shipped
 	if hasTasks {
 		if allTerminal && shipped {
 			c.Column = "done"
