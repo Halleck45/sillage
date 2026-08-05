@@ -74,7 +74,8 @@ type Project struct {
 	CheckCmd string `json:"checkCmd"`
 
 	// ContextPrompt est un texte libre transmis aux agents (voir runner.go :
-	// ajouté au system prompt claude, préfixe du prompt codex, ignoré par fake).
+	// ajouté au system prompt claude, préfixe du prompt codex/copilot/agy,
+	// ignoré par fake).
 	ContextPrompt string `json:"contextPrompt"`
 
 	// AllowedTools accorde aux agents claude de ce projet des outils en plus du
@@ -82,7 +83,7 @@ type Project struct {
 	// Saisi par l'humain dans les réglages, jamais lu depuis un fichier du dépôt
 	// (invariant 5 de CONTRIBUTING.md) : ces fichiers sont écrits par les agents.
 	// Le refus figé (claudeDeniedTools) l'emporte sur toute entrée d'ici.
-	// Ignoré par codex (sandbox) et par fake.
+	// Ignoré par codex, copilot, agy et fake.
 	AllowedTools []string `json:"allowedTools"`
 
 	// Delivery définit ce que livrer veut dire pour ce projet (voir Delivery).
@@ -142,11 +143,12 @@ type Card struct {
 	ShipBlocker string `json:"shipBlocker"` // ""|no-tasks|nothing-accepted|nothing-to-ship
 
 	// ContextPrompt est un texte libre transmis aux agents (voir runner.go :
-	// ajouté au system prompt claude, préfixe du prompt codex, ignoré par fake).
+	// ajouté au system prompt claude, préfixe du prompt codex/copilot/agy,
+	// ignoré par fake).
 	ContextPrompt string `json:"contextPrompt"`
 }
 
-// Agent est un profil d'agent IA (claude, codex ou fake).
+// Agent est un profil d'agent IA (claude, codex, copilot, agy ou fake).
 type Agent struct {
 	ID            string `json:"id"`
 	Name          string `json:"name"`
@@ -181,7 +183,8 @@ type AgentQuotaWindow struct {
 // readCodexRateLimits, lue dans le fichier de session codex après chaque
 // exécution : le flux `codex exec --json` ne la porte pas). C'est un quota de
 // compte OpenAI, donc partagé par tous les agents cli=codex, jamais calculé
-// par agent. claude et fake n'ont pas de source : AgentOut.Quota reste nil.
+// par agent. claude, copilot, agy et fake n'ont pas de source :
+// AgentOut.Quota reste nil.
 type AgentQuota struct {
 	UpdatedAt time.Time          `json:"updatedAt"`
 	Windows   []AgentQuotaWindow `json:"windows"`

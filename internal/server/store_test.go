@@ -110,6 +110,54 @@ func TestStoreRoundtripSaveLoad(t *testing.T) {
 	if _, ok := s2.GetAgent("bolt"); !ok {
 		t.Fatalf("l'agent seedé 'bolt' doit être présent après rechargement")
 	}
+	for id, wantName := range map[string]string{"github-copilot": "Octo", "antigravity": "Astro"} {
+		if agent, ok := s2.GetAgent(id); !ok {
+			t.Fatalf("seeded agent %q should be present after reload", id)
+		} else if agent.Name != wantName {
+			t.Fatalf("seeded agent %q name = %q, want %q", id, agent.Name, wantName)
+		}
+	}
+}
+
+func TestAgentSeedMigrationRunsOnce(t *testing.T) {
+	dir := t.TempDir()
+	legacy := `{
+  "FormatVersion": 1,
+  "Projects": {}, "Cards": {}, "Tasks": {}, "Messages": {},
+  "Agents": {
+    "github-copilot": {"id":"github-copilot","name":"Custom Copilot","cli":"copilot"}
+  }
+}`
+	if err := os.WriteFile(filepath.Join(dir, "state.json"), []byte(legacy), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	s, err := NewStore(dir)
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+	if s.AgentSeedVersion != agentSeedVersion {
+		t.Fatalf("agent seed version = %d, want %d", s.AgentSeedVersion, agentSeedVersion)
+	}
+	if agent, ok := s.GetAgent("github-copilot"); !ok || agent.Name != "Custom Copilot" {
+		t.Fatalf("existing seeded ID should remain untouched, got %+v", agent)
+	}
+	if agent, ok := s.GetAgent("antigravity"); !ok {
+		t.Fatal("Antigravity should be added to an existing workspace")
+	} else if agent.Name != "Astro" {
+		t.Fatalf("Antigravity seeded name = %q, want Astro", agent.Name)
+	}
+
+	if err := s.DeleteAgent("antigravity"); err != nil {
+		t.Fatalf("DeleteAgent: %v", err)
+	}
+	reloaded, err := NewStore(dir)
+	if err != nil {
+		t.Fatalf("NewStore after deletion: %v", err)
+	}
+	if _, ok := reloaded.GetAgent("antigravity"); ok {
+		t.Fatal("a deleted seeded agent should not be recreated")
+	}
 }
 
 func TestDerivedCounters(t *testing.T) {
@@ -416,6 +464,11 @@ func TestAddAgentSlugUniqueAndValidation(t *testing.T) {
 	}
 	if a.ID != "nova" {
 		t.Fatalf("id attendu 'nova', reçu %q", a.ID)
+	}
+	for _, cli := range []string{"copilot", "agy"} {
+		if _, err := s.AddAgent("Custom "+cli, "", "", cli, "", ""); err != nil {
+			t.Fatalf("AddAgent should accept cli %q: %v", cli, err)
+		}
 	}
 }
 
@@ -972,9 +1025,14 @@ func TestAgentWarningCodexSandboxBlockedByAppArmor(t *testing.T) {
 
 	origLookPath := lookPath
 	defer func() { lookPath = origLookPath }()
-	lookPath = func(string) (string, error) { return "/usr/bin/codex", nil } // binaire présent : seul AppArmor doit déclencher.
 
 	t.Setenv("SILLAGE_CODEX_SANDBOX", "")
+	lookPath = func(string) (string, error) { return "", fmt.Errorf("not found") }
+	if got := agentWarning(Agent{Cli: "codex"}); got != "codex CLI not found in PATH" {
+		t.Fatalf("a missing CLI should take priority over sandbox diagnostics, got %q", got)
+	}
+
+	lookPath = func(string) (string, error) { return "/usr/bin/codex", nil }
 	want := "codex sandbox is blocked on this machine (AppArmor); see README (SILLAGE_CODEX_SANDBOX)"
 	if got := agentWarning(Agent{Cli: "codex"}); got != want {
 		t.Fatalf("warning attendu %q, reçu %q", want, got)
@@ -1001,6 +1059,12 @@ func TestAgentWarningMissingBinary(t *testing.T) {
 	if got := agentWarning(Agent{Cli: "codex"}); got != "codex CLI not found in PATH" {
 		t.Fatalf("warning attendu 'codex CLI not found in PATH', reçu %q", got)
 	}
+	if got := agentWarning(Agent{Cli: "copilot"}); got != "copilot CLI not found in PATH" {
+		t.Fatalf("warning = %q, want missing Copilot CLI", got)
+	}
+	if got := agentWarning(Agent{Cli: "agy"}); got != "agy CLI not found in PATH" {
+		t.Fatalf("warning = %q, want missing Antigravity CLI", got)
+	}
 	if got := agentWarning(Agent{Cli: "fake"}); got != "" {
 		t.Fatalf("l'agent fake ne devrait jamais avoir d'avertissement, reçu %q", got)
 	}
@@ -1020,6 +1084,12 @@ func TestAgentWarningHealthy(t *testing.T) {
 	}
 	if got := agentWarning(Agent{Cli: "claude"}); got != "" {
 		t.Fatalf("aucun avertissement attendu, reçu %q", got)
+	}
+	if got := agentWarning(Agent{Cli: "copilot"}); got != "" {
+		t.Fatalf("healthy Copilot should have no warning, got %q", got)
+	}
+	if got := agentWarning(Agent{Cli: "agy"}); got != "" {
+		t.Fatalf("healthy Antigravity should have no warning, got %q", got)
 	}
 }
 

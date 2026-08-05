@@ -43,6 +43,14 @@ const claudeDeniedTools = "Bash(git push:*),Bash(gh:*),Bash(glab:*)," +
 	"Edit(.claude/settings*.json),Write(.claude/settings*.json)," +
 	"Edit(.claude/hooks/**),Write(.claude/hooks/**)"
 
+// Copilot deny rules override the selectively allowed read, write, and shell
+// tools. They keep outbound Git operations and agent-controlled settings out
+// of a task even when the CLI runs unattended.
+const copilotDeniedTools = "shell(git push),shell(gh:*),shell(glab:*)," +
+	"write(.github/copilot-instructions.md)," +
+	"write(.github/copilot/settings.json)," +
+	"write(.github/copilot/settings.local.json)"
+
 // claudeTools assemble la liste d'outils réellement passée au CLI : le socle,
 // puis les outils accordés au projet par l'humain dans les réglages.
 func claudeTools(projectTools []string) string {
@@ -569,6 +577,10 @@ func (r *Runner) run(task Task, agent Agent, handle *procHandle, cliInput string
 		runErr = r.runClaude(&task, agent, project, card, handle, cliInput)
 	case "codex":
 		runErr = r.runCodex(&task, agent, project, card, handle, cliInput)
+	case "copilot":
+		runErr = r.runCopilot(&task, agent, project, card, handle, cliInput)
+	case "agy":
+		runErr = r.runAntigravity(&task, agent, project, card, handle, cliInput)
 	case "fake":
 		runErr = r.runFake(&task, agent, handle)
 	default:
@@ -695,6 +707,16 @@ func buildSystemPrompt(agentContext, projectContext, workstreamContext string) s
 		parts = append([]string{agentContext}, parts...)
 	}
 	return strings.Join(parts, "\n\n")
+}
+
+// prefixAgentContext is used by one-shot CLIs that do not expose a dedicated
+// system-prompt option. It keeps all Sillage context ahead of the task text.
+func prefixAgentContext(agent Agent, project Project, card Card, cliInput string) string {
+	context := buildSystemPrompt(agent.ContextPrompt, project.ContextPrompt, card.ContextPrompt)
+	if context == "" {
+		return cliInput
+	}
+	return context + "\n\n---\n\n" + cliInput
 }
 
 // summarizeToolUse construit la ligne d'activité affichée pour un tool_use claude.
@@ -1069,6 +1091,97 @@ func (r *Runner) runCodex(task *Task, agent Agent, project Project, card Card, h
 			msg = waitErr.Error()
 		}
 		return fmt.Errorf("%s", msg)
+	}
+	return nil
+}
+
+// --- GitHub Copilot and Antigravity adapters ---
+
+func copilotArgs(agent Agent, cliInput string) []string {
+	args := []string{
+		"--autopilot",
+		"--max-autopilot-continues=10",
+		"--no-ask-user",
+		"--allow-tool=read,write,shell",
+		"--deny-tool=" + copilotDeniedTools,
+		"--disable-builtin-mcps",
+		"--no-remote",
+		"--no-remote-export",
+		"--no-auto-update",
+		"--no-color",
+		"--stream=off",
+		"--silent",
+	}
+	if agent.Model != "" {
+		args = append(args, "--model="+agent.Model)
+	}
+	return append(args, "-p", cliInput)
+}
+
+func antigravityArgs(agent Agent, cliInput string) []string {
+	args := []string{"--print", "--sandbox", "--print-timeout=60m"}
+	if agent.Model != "" {
+		args = append(args, "--model", agent.Model)
+	}
+	return append(args, cliInput)
+}
+
+func (r *Runner) runCopilot(task *Task, agent Agent, project Project, card Card, handle *procHandle, cliInput string) error {
+	cliInput = prefixAgentContext(agent, project, card, cliInput)
+	return r.runTextCLI(task, agent, handle, "copilot", copilotArgs(agent, cliInput))
+}
+
+func (r *Runner) runAntigravity(task *Task, agent Agent, project Project, card Card, handle *procHandle, cliInput string) error {
+	cliInput = prefixAgentContext(agent, project, card, cliInput)
+	return r.runTextCLI(task, agent, handle, "agy", antigravityArgs(agent, cliInput))
+}
+
+// runTextCLI runs a non-interactive CLI whose stdout is its final answer.
+// Copilot and Antigravity currently do not expose token accounting in this
+// mode, so the adapter deliberately records only the response and exit error.
+func (r *Runner) runTextCLI(task *Task, agent Agent, handle *procHandle, binary string, args []string) error {
+	cmd := exec.Command(binary, args...)
+	cmd.Dir = task.WorktreeDir
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return err
+	}
+	var stderrBuf, stdoutBuf bytes.Buffer
+	cmd.Stderr = &stderrBuf
+
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("failed to start %s: %w", binary, err)
+	}
+	handle.cmd = cmd
+
+	scanner := bufio.NewScanner(stdout)
+	scanner.Buffer(make([]byte, 0, 64*1024), 10*1024*1024)
+	for scanner.Scan() {
+		stdoutBuf.WriteString(scanner.Text())
+		stdoutBuf.WriteByte('\n')
+	}
+	scanErr := scanner.Err()
+	waitErr := cmd.Wait()
+	if waitErr == nil && scanErr != nil {
+		waitErr = scanErr
+	}
+
+	if response := strings.TrimSpace(stdoutBuf.String()); response != "" {
+		msg, updated, err := r.store.AddMessage(task.ID, "agent", agent.Name, response)
+		if err == nil {
+			r.publishMessage(msg)
+			*task = updated
+			r.publishTask(*task)
+		}
+	}
+	if waitErr != nil && !handle.interrupted.Load() {
+		message := strings.TrimSpace(stderrBuf.String())
+		if message == "" {
+			message = waitErr.Error()
+		}
+		return fmt.Errorf("%s", message)
 	}
 	return nil
 }

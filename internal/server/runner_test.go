@@ -219,6 +219,66 @@ func TestContextPartsCodexPrefix(t *testing.T) {
 	}
 }
 
+func TestPrefixAgentContext(t *testing.T) {
+	agent := Agent{ContextPrompt: "Agent context"}
+	project := Project{ContextPrompt: "Project context"}
+	card := Card{ContextPrompt: "Workstream context"}
+	want := "Agent context\n\nProject context:\nProject context\n\nWorkstream context:\nWorkstream context\n\n---\n\nTask text"
+	if got := prefixAgentContext(agent, project, card, "Task text"); got != want {
+		t.Fatalf("prefixed input = %q, want %q", got, want)
+	}
+	if got := prefixAgentContext(Agent{}, Project{}, Card{}, "Task text"); got != "Task text" {
+		t.Fatalf("input without context = %q, want unchanged text", got)
+	}
+}
+
+func TestCopilotArgsAreAutonomousButKeepOutboundCommandsDenied(t *testing.T) {
+	args := copilotArgs(Agent{Model: "gpt-test"}, "Fix the bug")
+	joined := strings.Join(args, " ")
+	for _, required := range []string{
+		"--autopilot",
+		"--no-ask-user",
+		"--allow-tool=read,write,shell",
+		"--deny-tool=" + copilotDeniedTools,
+		"--disable-builtin-mcps",
+		"--no-remote",
+		"--model=gpt-test",
+	} {
+		if !strings.Contains(joined, required) {
+			t.Fatalf("Copilot arguments should contain %q: %v", required, args)
+		}
+	}
+	for _, required := range []string{"git push", "gh:*", "glab:*", ".github/copilot"} {
+		if !strings.Contains(copilotDeniedTools, required) {
+			t.Fatalf("Copilot deny rules should cover %q", required)
+		}
+	}
+	for _, forbidden := range []string{"--allow-all", "--yolo", "dangerously-skip-permissions"} {
+		if strings.Contains(joined, forbidden) {
+			t.Fatalf("Copilot arguments should not contain %q: %v", forbidden, args)
+		}
+	}
+	if len(args) < 2 || args[len(args)-2] != "-p" || args[len(args)-1] != "Fix the bug" {
+		t.Fatalf("Copilot prompt arguments are malformed: %v", args)
+	}
+}
+
+func TestAntigravityArgsUseSandbox(t *testing.T) {
+	args := antigravityArgs(Agent{Model: "gemini-test"}, "Fix the bug")
+	joined := strings.Join(args, " ")
+	for _, required := range []string{"--print", "--sandbox", "--print-timeout=60m", "--model gemini-test"} {
+		if !strings.Contains(joined, required) {
+			t.Fatalf("Antigravity arguments should contain %q: %v", required, args)
+		}
+	}
+	if strings.Contains(joined, "dangerously-skip-permissions") {
+		t.Fatalf("Antigravity must not bypass permissions: %v", args)
+	}
+	if args[len(args)-1] != "Fix the bug" {
+		t.Fatalf("Antigravity prompt argument is malformed: %v", args)
+	}
+}
+
 func TestBuildTranscript(t *testing.T) {
 	msgs := []Message{
 		{Author: "agent", AuthorName: "Otto", Text: "J'ai trouvé le bloc dans show_lead.html.twig lignes 78-80."},
