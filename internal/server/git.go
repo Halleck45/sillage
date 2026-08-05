@@ -258,6 +258,28 @@ func Commits(dir, base string) ([]CommitInfo, error) {
 	return commits, nil
 }
 
+// TaskWorkCounts compte ce que la branche d'une tâche a produit par rapport à
+// sa base : fichiers touchés, documents parmi eux, et commits. Best-effort, car
+// ces trois nombres ne sont qu'un affichage : un worktree disparu ou une base
+// inconnue rendent des zéros plutôt qu'une erreur.
+func TaskWorkCounts(worktreeDir, base string) (files, docs, commits int) {
+	if worktreeDir == "" || base == "" {
+		return 0, 0, 0
+	}
+	if changed, err := Diff(worktreeDir, base); err == nil {
+		files = len(changed)
+		for _, f := range changed {
+			if isDocFile(f.Path) {
+				docs++
+			}
+		}
+	}
+	if log, err := Commits(worktreeDir, base); err == nil {
+		commits = len(log)
+	}
+	return files, docs, commits
+}
+
 // CommitAll indexe tout l'arbre de travail de dir et commite s'il y a quelque
 // chose à commiter (sinon ne fait rien, sans erreur). Aucun réseau.
 func CommitAll(dir, message string) (string, error) {

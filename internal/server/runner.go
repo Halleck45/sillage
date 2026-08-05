@@ -284,7 +284,7 @@ func (r *Runner) startQueued(taskID, text string) {
 // markerPrefixes liste les préfixes des messages marqueurs posés par le
 // backend (le frontend les remplace par une ligne système localisée). Ce ne
 // sont pas des tours de conversation : ils sont exclus du transcript rejoué.
-var markerPrefixes = []string{"[reassigned:", "[accepted:", "[auto-accepted:", "[merge-conflict:", "[tool-denied:"}
+var markerPrefixes = []string{"[reassigned:", "[accepted:", "[auto-accepted:", "[merge-conflict:", "[tool-denied:", "[interrupted:"}
 
 func isMarkerMessage(text string) bool {
 	for _, prefix := range markerPrefixes {
@@ -612,19 +612,7 @@ func (r *Runner) finalize(taskID string) {
 		checks = []Check{{Label: project.CheckCmd, Ok: ok}}
 	}
 
-	filesCount, docsCount := 0, 0
-	if files, err := Diff(task.WorktreeDir, task.Base); err == nil {
-		filesCount = len(files)
-		for _, f := range files {
-			if isDocFile(f.Path) {
-				docsCount++
-			}
-		}
-	}
-	commitsCount := 0
-	if commits, err := Commits(task.WorktreeDir, task.Base); err == nil {
-		commitsCount = len(commits)
-	}
+	filesCount, docsCount, commitsCount := TaskWorkCounts(task.WorktreeDir, task.Base)
 
 	updated, err := r.store.UpdateTask(taskID, func(t *Task) {
 		if t.Status == "running" {

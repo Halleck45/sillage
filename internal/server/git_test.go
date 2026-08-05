@@ -351,6 +351,49 @@ func (f *deliveryFixture) addTask(t *testing.T, title, file, content string) (st
 	return id, cb
 }
 
+// TestRestartRefreshesCountersOfInterruptedTask : une tâche interrompue par un
+// arrêt de Sillage doit revenir avec ses compteurs, relus depuis git au
+// chargement. Le runner ne les écrit qu'à la fin d'une exécution : sans ce
+// rattrapage, un travail commité s'affiche « 0 fichier, 0 commit », et une
+// branche déjà fusionnée à la main ne serait jamais constatée acceptée
+// (autoAcceptMergedTasks exige filesCount > 0).
+func TestRestartRefreshesCountersOfInterruptedTask(t *testing.T) {
+	f := newDeliveryFixture(t, Delivery{Mode: "merge"})
+	id, _ := f.addTask(t, "Refonte visuelle", "style.css", ":root{--glass:1}\n")
+	task, ok := f.srv.store.GetTask(id)
+	if !ok {
+		t.Fatalf("tâche %s introuvable", id)
+	}
+	if _, err := CommitAll(task.WorktreeDir, "Redesign the UI"); err != nil {
+		t.Fatalf("CommitAll: %v", err)
+	}
+	// L'état que laisse un agent tué en pleine exécution : running, et des
+	// compteurs jamais écrits.
+	activity := "Bash · git status --short"
+	if _, err := f.srv.store.UpdateTask(id, func(tk *Task) {
+		tk.Status = "running"
+		tk.LiveActivity = &activity
+		tk.FilesCount, tk.DocsCount, tk.CommitsCount = 0, 0, 0
+	}); err != nil {
+		t.Fatalf("UpdateTask: %v", err)
+	}
+
+	reloaded, err := NewStore(f.dataDir)
+	if err != nil {
+		t.Fatalf("NewStore après redémarrage : %v", err)
+	}
+	got, ok := reloaded.GetTask(id)
+	if !ok {
+		t.Fatalf("tâche %s introuvable après redémarrage", id)
+	}
+	if got.Status != "review" {
+		t.Fatalf("statut après redémarrage = %q, want review", got.Status)
+	}
+	if got.FilesCount != 1 || got.CommitsCount != 1 {
+		t.Fatalf("compteurs relus attendus (1 fichier, 1 commit), reçu files=%d commits=%d", got.FilesCount, got.CommitsCount)
+	}
+}
+
 // accept accepte une tâche et attend les rebases automatiques que l'acceptation
 // déclenche en tâche de fond (voir rebaseSiblingTasks) : sans cette attente, un
 // test verrait un état intermédiaire, ou courrait contre le nettoyage de

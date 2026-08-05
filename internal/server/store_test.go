@@ -161,6 +161,68 @@ func TestAgentSeedMigrationRunsOnce(t *testing.T) {
 	}
 }
 
+// TestRunningTaskComesBackToReviewOnLoad : un statut « running » sur disque
+// décrit un processus, pas un travail. Au chargement suivant ce processus n'est
+// plus là, et sans cette remise à plat la tâche reste « en cours » pour
+// toujours : aucune sortie n'arrive plus et « Interrompre l'agent » échoue,
+// faute de processus à interrompre.
+func TestRunningTaskComesBackToReviewOnLoad(t *testing.T) {
+	dir := t.TempDir()
+	state := `{
+  "FormatVersion": ` + fmt.Sprint(stateFormatVersion) + `,
+  "Projects": {"p1": {"id":"p1","name":"demo"}},
+  "Cards": {"c1": {"id":"c1","projectId":"p1","title":"Chantier","column":"doing"}},
+  "Tasks": {"t1": {"id":"t1","cardId":"c1","projectId":"p1","title":"Design","status":"running","liveActivity":"Bash · git status","rebasing":true}},
+  "Messages": {}, "Agents": {}
+}`
+	if err := os.WriteFile(filepath.Join(dir, "state.json"), []byte(state), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	s, err := NewStore(dir)
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+	task, ok := s.GetTask("t1")
+	if !ok {
+		t.Fatal("tâche t1 introuvable après rechargement")
+	}
+	if task.Status != "review" || !task.Unread {
+		t.Fatalf("tâche attendue en revue et non lue, reçu status=%q unread=%v", task.Status, task.Unread)
+	}
+	if task.LiveActivity != nil {
+		t.Fatalf("la ligne d'activité d'un agent disparu ne doit pas survivre, reçu %q", *task.LiveActivity)
+	}
+	if task.Rebasing {
+		t.Fatal("le fuseau de rebase ne doit pas survivre à un rechargement")
+	}
+
+	msgs := s.GetMessages("t1")
+	if len(msgs) != 1 || msgs[0].Text != "[interrupted:server-restart]" {
+		t.Fatalf("marqueur [interrupted:server-restart] attendu au fil, reçu %+v", msgs)
+	}
+	if !isMarkerMessage(msgs[0].Text) {
+		t.Fatal("le marqueur d'interruption doit être exclu du transcript rejoué")
+	}
+	if task.MessagesCount != 1 {
+		t.Fatalf("messagesCount = %d, want 1", task.MessagesCount)
+	}
+	// Les compteurs dérivés du chantier doivent suivre le nouveau statut.
+	if card, _ := s.GetCard("c1"); card.ReviewCount != 1 {
+		t.Fatalf("reviewCount du chantier = %d, want 1", card.ReviewCount)
+	}
+
+	// Deuxième chargement : plus rien à remettre à plat, donc aucun marqueur de
+	// plus (sinon chaque redémarrage empilerait une ligne dans le fil).
+	again, err := NewStore(dir)
+	if err != nil {
+		t.Fatalf("NewStore (2e): %v", err)
+	}
+	if msgs := again.GetMessages("t1"); len(msgs) != 1 {
+		t.Fatalf("un seul marqueur attendu après deux chargements, reçu %d", len(msgs))
+	}
+}
+
 func TestDerivedCounters(t *testing.T) {
 	dir := t.TempDir()
 	s, err := NewStore(dir)
