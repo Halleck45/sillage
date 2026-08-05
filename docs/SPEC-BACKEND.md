@@ -127,7 +127,12 @@ Le texte contient les contextes agent, projet et chantier avant le prompt. Le st
 
 ### Adaptateur Antigravity (`cli:"agy"`)
 
-`agy --print --sandbox --print-timeout=60m [--model <model>] <texte>`. Le texte contient les contextes agent, projet et chantier avant le prompt ; le stdout texte devient un Message agent final. Pas de reprise de session ni de compteurs de tokens. Le mode sandbox est toujours forcé ; `--dangerously-skip-permissions` n'est jamais utilisé.
+`agy --sandbox --print-timeout=60m --add-dir <worktree> [--model <model>] --print <texte>`. Le texte contient les contextes agent, projet et chantier avant le prompt ; le stdout texte devient un Message agent final. Pas de reprise de session ni de compteurs de tokens. Le mode sandbox est toujours forcé ; `--dangerously-skip-permissions` n'est jamais utilisé.
+
+Deux particularités du CLI dictent l'ordre des arguments :
+
+- `--print` est un alias de `--prompt` et prend le prompt **en valeur**, ce n'est pas un booléen. Il doit rester le dernier drapeau : `agy --print --sandbox <texte>` fait exécuter le prompt « --sandbox », l'agent répond une explication du mode sandbox et ne touche à rien.
+- en mode sandbox, agy ignore le répertoire de travail du process et retombe sur son espace interne (`~/.gemini/antigravity-cli/scratch`). `--add-dir <worktree>` est donc obligatoire, sinon la tâche écrit ses fichiers hors du dépôt et le diff reste vide.
 
 ### Adaptateur fake (`cli:"fake"`)
 

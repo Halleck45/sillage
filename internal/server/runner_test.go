@@ -437,9 +437,9 @@ func TestCopilotArgsAreAutonomousButKeepOutboundCommandsDenied(t *testing.T) {
 }
 
 func TestAntigravityArgsUseSandbox(t *testing.T) {
-	args := antigravityArgs(Agent{Model: "gemini-test"}, "Fix the bug")
+	args := antigravityArgs(Agent{Model: "gemini-test"}, "/tmp/wt", "Fix the bug")
 	joined := strings.Join(args, " ")
-	for _, required := range []string{"--print", "--sandbox", "--print-timeout=60m", "--model gemini-test"} {
+	for _, required := range []string{"--print", "--sandbox", "--print-timeout=60m", "--model gemini-test", "--add-dir /tmp/wt"} {
 		if !strings.Contains(joined, required) {
 			t.Fatalf("Antigravity arguments should contain %q: %v", required, args)
 		}
@@ -447,8 +447,10 @@ func TestAntigravityArgsUseSandbox(t *testing.T) {
 	if strings.Contains(joined, "dangerously-skip-permissions") {
 		t.Fatalf("Antigravity must not bypass permissions: %v", args)
 	}
-	if args[len(args)-1] != "Fix the bug" {
-		t.Fatalf("Antigravity prompt argument is malformed: %v", args)
+	// --print prend le prompt en valeur : il doit rester juste avant lui,
+	// sinon agy exécute le drapeau suivant comme prompt.
+	if len(args) < 2 || args[len(args)-2] != "--print" || args[len(args)-1] != "Fix the bug" {
+		t.Fatalf("Antigravity prompt arguments are malformed: %v", args)
 	}
 }
 

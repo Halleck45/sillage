@@ -1222,12 +1222,24 @@ func copilotArgs(agent Agent, cliInput string) []string {
 	return append(args, "-p", cliInput)
 }
 
-func antigravityArgs(agent Agent, cliInput string) []string {
-	args := []string{"--print", "--sandbox", "--print-timeout=60m"}
+// antigravityArgs construit la ligne de commande d'agy. Deux pièges du CLI :
+//
+//   - `--print` prend le prompt en valeur (c'est un alias de `--prompt`, pas un
+//     booléen). Il doit donc rester en dernier : `--print --sandbox <prompt>`
+//     fait exécuter le prompt « --sandbox » et l'agent répond à côté.
+//   - en mode sandbox, agy ignore le répertoire de travail du process et
+//     retombe sur son espace de travail interne (`~/.gemini/antigravity-cli/scratch`).
+//     Sans `--add-dir <worktree>`, la tâche écrit ses fichiers hors du dépôt et
+//     le diff reste vide.
+func antigravityArgs(agent Agent, worktreeDir, cliInput string) []string {
+	args := []string{"--sandbox", "--print-timeout=60m"}
+	if worktreeDir != "" {
+		args = append(args, "--add-dir", worktreeDir)
+	}
 	if agent.Model != "" {
 		args = append(args, "--model", agent.Model)
 	}
-	return append(args, cliInput)
+	return append(args, "--print", cliInput)
 }
 
 func (r *Runner) runCopilot(task *Task, agent Agent, project Project, card Card, handle *procHandle, cliInput string) error {
@@ -1237,7 +1249,7 @@ func (r *Runner) runCopilot(task *Task, agent Agent, project Project, card Card,
 
 func (r *Runner) runAntigravity(task *Task, agent Agent, project Project, card Card, handle *procHandle, cliInput string) error {
 	cliInput = prefixAgentContext(agent, project, card, cliInput)
-	return r.runTextCLI(task, agent, handle, "agy", antigravityArgs(agent, cliInput), nil)
+	return r.runTextCLI(task, agent, handle, "agy", antigravityArgs(agent, task.WorktreeDir, cliInput), nil)
 }
 
 // copilotEnv strips a classic GitHub PAT (the "ghp_" prefix) from GITHUB_TOKEN
