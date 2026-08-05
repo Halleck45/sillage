@@ -51,6 +51,8 @@
       'kanban.emptyAction': 'Créer le premier chantier',
       'kanban.card.tasksLabel': 'tâches',
       'kanban.card.reviewCount': '{n} à relire',
+      'kanban.card.awaitingShip': 'À livrer',
+      'inbox.awaitingShip.title': 'Chantiers à livrer',
       'column.soon': 'Bientôt',
       'column.doing': 'En cours',
       'column.done': 'Terminé',
@@ -435,6 +437,8 @@
       'kanban.emptyAction': 'Create the first workstream',
       'kanban.card.tasksLabel': 'tasks',
       'kanban.card.reviewCount': '{n} to review',
+      'kanban.card.awaitingShip': 'Ready to ship',
+      'inbox.awaitingShip.title': 'Workstreams ready to ship',
       'column.soon': 'Soon',
       'column.doing': 'In progress',
       'column.done': 'Done',
@@ -1521,6 +1525,9 @@
     var liveHTML = c.liveActivity ? '<div class="card-live"><span class="live-dot"></span><span class="live-text mono">' +
       escapeHtml(c.liveActivity) + '</span></div>' : '';
     var attention = c.reviewCount ? '<span class="card-attention">' + escapeHtml(t('kanban.card.reviewCount', { n: c.reviewCount })) + '</span>' : '';
+    var awaitingShip = c.awaitingShip
+      ? '<span class="card-awaiting-ship">' + shipIconHTML() + escapeHtml(t('kanban.card.awaitingShip')) + '</span>'
+      : '';
     var others = COLUMN_ORDER.filter(function (k) { return k !== colKey; });
     var menuItemsHTML = others.map(function (k) {
       return '<button class="card-menu-item" data-action="move-card" data-card-id="' + c.id + '" data-column="' + k + '">' +
@@ -1539,6 +1546,7 @@
         '<span>' + (c.tasksDone || 0) + '/' + (c.tasksTotal || 0) + ' ' + escapeHtml(t('kanban.card.tasksLabel')) + '</span>' +
         '<span>▤ ' + (c.docsCount || 0) + '</span>' +
         '<span>💬 ' + (c.messagesCount || 0) + '</span>' +
+        awaitingShip +
         attention +
       '</div>' +
       '<div class="progress-track"><div class="progress-fill" style="width:' + (c.progress || 0) + '%; background:' + barColor + '"></div></div>' +
@@ -1755,7 +1763,7 @@
     var panelHTML = task ? buildDetailPanelHTML(task) : '';
     var card = state.cardId ? state.cardsById[state.cardId] : null;
     var bodyClass = 'view-body work-body' + (task ? ' has-panel' : '') + (task && state.panelExpanded ? ' panel-expanded' : '');
-    return buildHeaderHTML() + (card ? buildShipBarHTML(card) : '') +
+    return buildHeaderHTML() + (opts.bannerHTML || '') + (card ? buildShipBarHTML(card) : '') +
       '<div class="' + bodyClass + '" style="padding:0;">' +
       '<div class="task-list-pane">' + paneInnerHTML + '</div>' +
       panelHTML +
@@ -2644,10 +2652,31 @@
     if (state.screen === 'inbox') {
       return {
         tasksAll: state.tasks.filter(function (t) { return t.unread || t.status === 'review'; }),
-        opts: { showProject: true, emptyMsg: t('inbox.empty') }
+        opts: { showProject: true, emptyMsg: t('inbox.empty'), bannerHTML: buildAwaitingShipBannerHTML() }
       };
     }
     return null;
+  }
+
+  // Chantiers dont tout le travail est terminal mais qui n'ont pas été livrés
+  // (voir Card.awaitingShip) : sans ce bandeau, rien dans la boîte de réception
+  // ne les signale, puisque leurs tâches sont acceptées/refusées et n'y
+  // apparaissent donc jamais.
+  function buildAwaitingShipBannerHTML() {
+    var cards = state.cards.filter(function (c) { return c.awaitingShip; });
+    if (!cards.length) return '';
+    var rows = cards.map(function (c) {
+      var p = state.projectsById[c.projectId];
+      return '<div class="awaiting-ship-row" data-action="open-card" data-card-id="' + c.id + '">' +
+        shipIconHTML() +
+        '<span class="awaiting-ship-title">' + escapeHtml(c.title) + '</span>' +
+        (p ? '<span class="awaiting-ship-project">' + escapeHtml(p.name) + '</span>' : '') +
+        '</div>';
+    }).join('');
+    return '<div class="awaiting-ship-banner">' +
+      '<div class="awaiting-ship-head">' + escapeHtml(t('inbox.awaitingShip.title')) + '</div>' +
+      rows +
+      '</div>';
   }
 
   function buildWorkHTML() {
