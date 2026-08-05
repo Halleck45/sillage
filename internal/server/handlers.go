@@ -176,6 +176,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/tasks/{id}", s.handleGetTask)
 	mux.HandleFunc("POST /api/tasks/{id}/messages", s.handlePostMessage)
 	mux.HandleFunc("POST /api/tasks/{id}/interrupt", s.handleInterrupt)
+	mux.HandleFunc("POST /api/tasks/{id}/start", s.handleStartWaitingTask)
 	mux.HandleFunc("POST /api/tasks/{id}/accept", s.handleAccept)
 	mux.HandleFunc("POST /api/tasks/{id}/cancel", s.handleCancel)
 	mux.HandleFunc("POST /api/tasks/{id}/reopen", s.handleReopen)
@@ -886,11 +887,12 @@ func (s *Server) handleDeleteCard(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleCreateTask(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		CardID   string `json:"cardId"`
-		Title    string `json:"title"`
-		AgentID  string `json:"agentId"`
-		Prompt   string `json:"prompt"`
-		RepoName string `json:"repoName"`
+		CardID         string `json:"cardId"`
+		Title          string `json:"title"`
+		AgentID        string `json:"agentId"`
+		Prompt         string `json:"prompt"`
+		RepoName       string `json:"repoName"`
+		WaitsForTaskID string `json:"waitsForTaskId"`
 	}
 	if err := decodeJSON(r, &body); err != nil || body.CardID == "" || body.Title == "" || body.AgentID == "" {
 		writeError(w, http.StatusBadRequest, "cardId, title and agentId are required")
@@ -904,6 +906,21 @@ func (s *Server) handleCreateTask(w http.ResponseWriter, r *http.Request) {
 	if _, ok := s.store.GetAgent(body.AgentID); !ok {
 		writeError(w, http.StatusBadRequest, "agent not found")
 		return
+	}
+	// waitsForTaskId : la tâche reste "waiting" (agent non lancé) jusqu'à
+	// l'acceptation de la tâche référencée (voir Server.startDependentTasks).
+	// Seule une tâche du même chantier, pas déjà terminale, a un sens ici : une
+	// tâche accepted/cancelled ne fera plus jamais rien.
+	if body.WaitsForTaskID != "" {
+		dep, ok := s.store.GetTask(body.WaitsForTaskID)
+		if !ok || dep.CardID != body.CardID {
+			writeError(w, http.StatusBadRequest, "waitsForTaskId must reference a task of the same workstream")
+			return
+		}
+		if dep.Status == "accepted" || dep.Status == "cancelled" {
+			writeError(w, http.StatusBadRequest, "waitsForTaskId task is already finished")
+			return
+		}
 	}
 	project, ok := s.store.GetProject(card.ProjectID)
 	if !ok {
@@ -933,13 +950,23 @@ func (s *Server) handleCreateTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	task, err := s.store.CreateTask(id, ref, card.ID, project.ID, body.Title, body.AgentID, branch, base, dir, repo.Name)
+	var task Task
+	if body.WaitsForTaskID != "" {
+		task, err = s.store.CreateWaitingTask(id, ref, card.ID, project.ID, body.Title, body.AgentID, branch, base, dir, repo.Name, body.WaitsForTaskID, body.Prompt)
+	} else {
+		task, err = s.store.CreateTask(id, ref, card.ID, project.ID, body.Title, body.AgentID, branch, base, dir, repo.Name)
+	}
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to create task")
 		return
 	}
 	s.runner.publishTask(task)
 	s.runner.publishCards(project.ID)
+
+	if task.Status == "waiting" {
+		writeJSON(w, http.StatusOK, task)
+		return
+	}
 
 	cliInput := contextualizeCliInput(body.Title, body.Prompt)
 	if err := s.runner.Start(task.ID, true, cliInput); err != nil {
@@ -948,6 +975,66 @@ func (s *Server) handleCreateTask(w http.ResponseWriter, r *http.Request) {
 	}
 	task, _ = s.store.GetTask(task.ID)
 	writeJSON(w, http.StatusOK, task)
+}
+
+// handleStartWaitingTask lance manuellement une tâche "waiting", sans
+// attendre l'acceptation de sa dépendance : débloque une tâche dont la
+// dépendance a été refusée ou supprimée, ou permet simplement de changer
+// d'avis sur l'ordre.
+func (s *Server) handleStartWaitingTask(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	task, ok := s.store.GetTask(id)
+	if !ok {
+		writeError(w, http.StatusNotFound, "task not found")
+		return
+	}
+	if task.Status != "waiting" {
+		writeError(w, http.StatusBadRequest, "only a waiting task can be started")
+		return
+	}
+	if err := s.startWaitingTask(task); err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to start agent: "+err.Error())
+		return
+	}
+	task, _ = s.store.GetTask(id)
+	writeJSON(w, http.StatusOK, task)
+}
+
+// startWaitingTask lance l'agent d'une tâche "waiting" : rejoue son worktree
+// sur la tête courante de la branche du chantier (qui a pu avancer depuis la
+// création de la tâche) puis démarre l'agent avec le prompt initial mémorisé
+// à la création. Le rebase est best-effort et ignoré en cas d'échec : une
+// tâche jamais démarrée n'a que sa base comme contenu, donc rien à perdre, et
+// démarrer légèrement en retard reste rattrapable comme pour toute tâche
+// (voir le badge "en retard").
+func (s *Server) startWaitingTask(task Task) error {
+	if cardBranch, ok := s.store.GetCardBranch(task.CardID, task.RepoName); ok && task.WorktreeDir != "" {
+		if !IsBranchMergedInto(task.WorktreeDir, cardBranch.Branch, task.Branch) {
+			_, _, _ = RebaseOnto(task.WorktreeDir, cardBranch.Branch)
+		}
+	}
+	prompt := task.PendingPrompt
+	if _, err := s.store.UpdateTask(task.ID, func(t *Task) {
+		t.WaitsForTaskID = ""
+		t.PendingPrompt = ""
+	}); err != nil {
+		return err
+	}
+	cliInput := contextualizeCliInput(task.Title, prompt)
+	return s.runner.Start(task.ID, true, cliInput)
+}
+
+// startDependentTasks démarre les tâches "waiting" du chantier qui
+// attendaient l'acceptation de acceptedTaskID (voir Task.WaitsForTaskID).
+// Appelée après une acceptation réussie ; best-effort, une tâche qui échoue à
+// démarrer n'empêche pas les autres.
+func (s *Server) startDependentTasks(cardID, acceptedTaskID string) {
+	for _, t := range s.store.TasksByCard(cardID) {
+		if t.Status != "waiting" || t.WaitsForTaskID != acceptedTaskID {
+			continue
+		}
+		_ = s.startWaitingTask(t)
+	}
 }
 
 // handleReassignTask change l'agent assigné à une tâche : refusé si la tâche
@@ -1195,6 +1282,8 @@ func (s *Server) acceptTaskInto(w http.ResponseWriter, task Task, cardBranch Car
 	// qu'il lui faut, le rebase s'annonce ensuite par SSE.
 	s.rebaseWG.Add(1)
 	go s.rebaseSiblingTasks(task.CardID, task.ID, cardBranch)
+	// Tâches "waiting" sur celle-ci : leur tour est venu.
+	s.startDependentTasks(task.CardID, task.ID)
 	writeJSON(w, http.StatusOK, AcceptResponse{Task: task, WorkstreamBranch: cardBranch.Branch, Output: output})
 }
 

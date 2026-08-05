@@ -493,6 +493,7 @@ button, input, textarea { font-family: inherit; }
   font-size: 12.5px; font-weight: 700; line-height: 1;
   background: #f1efea; box-shadow: inset 0 0 0 1px var(--border-3);
 }
+.task-glyph-waiting { background: #f1efea; box-shadow: inset 0 0 0 1px var(--border-3); }
 .task-glyph-review { background: var(--amber-bg); box-shadow: inset 0 0 0 1px #f0dcae; }
 .task-glyph-accepted { background: var(--green-bg); box-shadow: inset 0 0 0 1px #c6e2d0; }
 .task-glyph-cancelled { background: #f1efea; box-shadow: inset 0 0 0 1px var(--border-3); }
@@ -571,6 +572,7 @@ button, input, textarea { font-family: inherit; }
 .task-row-state {
   flex: none; padding-top: 2px; font-size: 11.5px; font-weight: 600; letter-spacing: 0.01em; white-space: nowrap;
 }
+.task-row-state-waiting { color: var(--muted-3); font-weight: 400; cursor: help; }
 .task-row-state-accepted { color: var(--green-live); }
 .task-row-state-cancelled { color: var(--muted-3); font-weight: 400; }
 .task-row-state-rebasing { color: var(--amber); }
@@ -924,9 +926,7 @@ button, input, textarea { font-family: inherit; }
 .agent-choice-info { flex: 1; min-width: 0; }
 .agent-choice-name { display: block; font-size: 13.5px; font-weight: 600; letter-spacing: -0.01em; }
 .agent-choice-model { display: block; margin-top: 2px; font-size: 10.5px; color: var(--muted-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.agent-context-preview { margin-top: 10px; padding: 11px 13px; background: #faf9f6; border-radius: 10px; font-size: 12.5px; line-height: 1.5; color: var(--text-3); }
-.agent-choice-warning { margin-top: 8px; color: var(--amber); }
-.agent-context-preview > .agent-choice-warning:first-child { margin-top: 0; }
+.agent-choice-warning { margin-top: 10px; padding: 11px 13px; background: #faf9f6; border-radius: 10px; font-size: 12.5px; line-height: 1.5; color: var(--amber); }
 .project-context-note { margin-top: 8px; font-size: 11.5px; color: var(--muted-3); }
 
 /* ---------- New surfaces (v0.2) ---------- */
