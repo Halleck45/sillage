@@ -142,6 +142,15 @@ type Card struct {
 	ShipReady   bool   `json:"shipReady"`
 	ShipBlocker string `json:"shipBlocker"` // ""|no-tasks|nothing-accepted|nothing-to-ship
 
+	// AwaitingShip est vrai quand tout le travail du chantier est terminal
+	// (accepté ou refusé), qu'au moins une tâche est acceptée (sinon rien à
+	// livrer : un chantier entièrement refusé n'est pas "non livré", il n'a
+	// simplement rien à envoyer) mais qu'il n'a pas encore été livré. La
+	// colonne reste "doing" (voir recomputeCard) sans que rien ne le distingue
+	// d'un chantier réellement encore en cours. C'est ce signal que l'UI
+	// affiche clairement (liste des chantiers, boîte de réception).
+	AwaitingShip bool `json:"awaitingShip"`
+
 	// ContextPrompt est un texte libre transmis aux agents (voir runner.go :
 	// ajouté au system prompt claude, préfixe du prompt codex/copilot/agy,
 	// ignoré par fake).

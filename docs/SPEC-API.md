@@ -59,12 +59,17 @@ Card    { "id": "c1", "projectId": "p1", "ref": 101, "column": "soon|doing|done"
           "reviewCount": 1, "progress": 25, "liveActivity": "..." | null,
           "branches": [CardBranch, ...], "shipReady": false,
           "shipBlocker": "|no-tasks|nothing-accepted|nothing-to-ship",
+          "awaitingShip": false,
           "contextPrompt": "..." }
           // Card = chantier (vocabulaire produit) ; nom technique inchangé. contextPrompt :
           // texte libre transmis aux agents (voir plus bas), peut être vide.
           // ref : référence courte du projet (compteur partagé avec les tâches), utilisée
           // dans le nom de la branche du chantier.
           // shipReady/shipBlocker : dérivés, état du bouton de livraison (voir plus bas).
+          // awaitingShip : dérivé, vrai si toutes les tâches sont terminales (acceptées ou
+          // refusées), qu'au moins une est acceptée, et que le chantier n'a pas été livré
+          // (aucune branche shippedAt) ; c'est le signal affiché dans la liste des chantiers
+          // et la boîte de réception. Faux pour un chantier entièrement refusé : rien à livrer.
 
 Agent   { "id": "bolt", "name": "Bolt", "emoji": "🐝", "color": "#f2b705",
           "model": "claude-sonnet-5", "cli": "claude", "contextPrompt": "...",

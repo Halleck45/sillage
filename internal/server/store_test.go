@@ -830,14 +830,20 @@ func TestCardAutoMoveToDoneAndBack(t *testing.T) {
 	if !c.ShipReady {
 		t.Fatalf("le chantier devrait être livrable (blocage %q)", c.ShipBlocker)
 	}
+	if !c.AwaitingShip {
+		t.Fatalf("le chantier devrait être signalé comme non livré (tout est terminal)")
+	}
 
-	// Livraison : la carte passe en "done".
+	// Livraison : la carte passe en "done" et n'est plus signalée en attente.
 	if _, err := s.MarkCardBranchShipped(card.ID, "p", "https://example.com/pr/1", time.Now().UTC()); err != nil {
 		t.Fatalf("MarkCardBranchShipped: %v", err)
 	}
 	c, _ = s.GetCard(card.ID)
 	if c.Column != "done" {
 		t.Fatalf("colonne attendue 'done' après livraison, reçue %q", c.Column)
+	}
+	if c.AwaitingShip {
+		t.Fatalf("le chantier livré ne devrait plus être signalé comme non livré")
 	}
 
 	// Réouvrir T1 : la carte doit repasser en doing.
@@ -866,6 +872,36 @@ func TestCardAutoMoveToDoneAndBack(t *testing.T) {
 	c, _ = s.GetCard(card.ID)
 	if c.Column != "doing" {
 		t.Fatalf("colonne attendue 'doing' après nouvelle tâche sur carte done, reçue %q", c.Column)
+	}
+}
+
+// --- AwaitingShip : un chantier entièrement refusé n'a rien à livrer ---
+
+func TestCardAwaitingShipFalseWhenNothingAccepted(t *testing.T) {
+	dir := t.TempDir()
+	s, err := NewStore(dir)
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+	project, err := s.AddProject("p", "", "", []Repo{{Path: "/tmp/p"}}, nil, nil)
+	if err != nil {
+		t.Fatalf("AddProject: %v", err)
+	}
+	card, err := s.AddCard(project.ID, "Carte", "", "")
+	if err != nil {
+		t.Fatalf("AddCard: %v", err)
+	}
+	if _, err := s.SetCardBranch(card.ID, CardBranch{RepoName: "p", Branch: "sillage/ws-1-carte", Base: "main", WorktreeDir: "/tmp/ws"}); err != nil {
+		t.Fatalf("SetCardBranch: %v", err)
+	}
+	mkTaskWithStatus(t, s, card.ID, project.ID, "cancelled")
+
+	c, ok := s.GetCard(card.ID)
+	if !ok {
+		t.Fatalf("carte introuvable")
+	}
+	if c.AwaitingShip {
+		t.Fatalf("un chantier entièrement refusé n'a rien à livrer, ne devrait pas être signalé")
 	}
 }
 
