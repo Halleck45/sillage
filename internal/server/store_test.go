@@ -776,14 +776,20 @@ func TestCardAutoMoveToDoneAndBack(t *testing.T) {
 	if !c.ShipReady {
 		t.Fatalf("le chantier devrait être livrable (blocage %q)", c.ShipBlocker)
 	}
+	if !c.AwaitingShip {
+		t.Fatalf("le chantier devrait être signalé comme non livré (tout est terminal)")
+	}
 
-	// Livraison : la carte passe en "done".
+	// Livraison : la carte passe en "done" et n'est plus signalée en attente.
 	if _, err := s.MarkCardBranchShipped(card.ID, "p", "https://example.com/pr/1", time.Now().UTC()); err != nil {
 		t.Fatalf("MarkCardBranchShipped: %v", err)
 	}
 	c, _ = s.GetCard(card.ID)
 	if c.Column != "done" {
 		t.Fatalf("colonne attendue 'done' après livraison, reçue %q", c.Column)
+	}
+	if c.AwaitingShip {
+		t.Fatalf("le chantier livré ne devrait plus être signalé comme non livré")
 	}
 
 	// Réouvrir T1 : la carte doit repasser en doing.
