@@ -77,19 +77,21 @@ Agent   { "id": "bolt", "name": "Bolt", "emoji": "🐝", "color": "#f2b705",
 
 Task    { "id": "t1", "cardId": "c1", "projectId": "p1", "ref": 482, "title": "...",
           "agentId": "bolt", "repoName": "api", "branch": "sillage/482-slug",
-          "status": "running|review|accepted|cancelled",
+          "status": "waiting|running|review|accepted|cancelled",
           "messagesCount": 5, "filesCount": 3, "docsCount": 1, "commitsCount": 2,
           "checks": [ { "label": "go test", "ok": true } ],   // [] si aucun
           "liveActivity": "Edit · internal/server/store.go" | null,
           "commandLog": [ { "text": "Edit · internal/server/store.go", "at": "..." } ],
           "unread": true, "updatedAt": "2026-08-02T10:00:00Z", "tokens": Tokens,
-          "rebasing": false }
+          "rebasing": false, "waitsForTaskId": "t0" }
           // repoName : nom du Repo du projet utilisé pour le worktree
           // commitsCount : commits de base..branche, recalculé à la fin de chaque exécution
           //   (comme filesCount/docsCount) ; pas de recalcul entre-temps
           // rebasing : un rebase automatique de cette tâche est en cours (voir
           //   "Rebase automatique après une acceptation"). État volatile, remis à false au
           //   chargement de state.json. N'affecte jamais updatedAt.
+          // waitsForTaskId : absent/vide sauf statut "waiting" (voir "Démarrage différé
+          //   d'une tâche" ci-dessous). Vidé dès que la tâche démarre, sans garder de trace.
           // commandLog : historique des commandes jouées par l'agent (tool_use, alimenté
           //   uniquement par l'adaptateur claude), les plus anciennes tombant au-delà de 500
           //   entrées. [] si aucune. Contrairement à liveActivity (remis à null en fin
@@ -177,14 +179,15 @@ PreviewRun { "id": "pv1", "projectId": "p1", "cardId": "c1", "taskId": "",
 | GET | `/api/cards/{id}/delivery` | | DeliveryPreview : ce que la livraison ferait, avant tout clic (voir « Livraison d'un chantier »). Lecture seule |
 | POST | `/api/cards/{id}/ship` | `{confirm:true}` | ShipResponse : **la seule action sortante du produit** (push + pull request, ou fusion locale). 400 sans `confirm`, 409 si le chantier n'est pas livrable |
 | POST | `/api/cards/{id}/catch-up` | | CatchUpResponse : fusionne la branche de destination dans celle du chantier pour débloquer la livraison (voir « Livraison d'un chantier »). Local, aucune confirmation ; un conflit est annulé et rapporté par dépôt |
-| POST | `/api/tasks` | `{cardId, title, agentId, prompt?, repoName?}` | Task (créée `running`, agent lancé avec title+prompt). `repoName` optionnel si le projet n'a qu'un repo ; sinon 400 `"repoName required (project has several repositories)"` ou 400 si inconnu |
+| POST | `/api/tasks` | `{cardId, title, agentId, prompt?, repoName?, waitsForTaskId?}` | Task (créée `running`, agent lancé avec title+prompt). `repoName` optionnel si le projet n'a qu'un repo ; sinon 400 `"repoName required (project has several repositories)"` ou 400 si inconnu. `waitsForTaskId` : voir « Démarrage différé d'une tâche » ci-dessous |
 | PATCH | `/api/tasks/{id}` | `{agentId}` | Task : réassigne l'agent (voir « Réassignation » ci-dessous). 400 si `status=running` (`"interrupt the agent before reassigning"`) ou si l'agent est inconnu |
 | DELETE | `/api/tasks/{id}` | `{confirm:true}` | 204 (voir « Suppressions » ci-dessous). **Validation humaine obligatoire** : refus 400 sans `confirm` |
 | GET | `/api/tasks/{id}` | | `{task, messages}` |
 | POST | `/api/tasks/{id}/messages` | `{text}` | 202 ; relance l'agent (statut → running) |
 | POST | `/api/tasks/{id}/interrupt` | | Task (running → review) |
+| POST | `/api/tasks/{id}/start` | | Task (waiting → running) : démarre manuellement une tâche en attente sans attendre sa dépendance (voir « Démarrage différé d'une tâche »). 400 si `status≠waiting` |
 | POST | `/api/tasks/{id}/accept` | | `{task, workstreamBranch, output}` : commite le worktree de la tâche puis fusionne sa branche dans celle du chantier. Accepté depuis `review` uniquement (400 sinon). **Aucune confirmation** : action locale, réversible par `/reopen`. 409 en cas de conflit (voir ci-dessous) |
-| POST | `/api/tasks/{id}/cancel` | | Task (running/review → cancelled, c'est le « refuser » de l'UI). Si `running`, l'agent est d'abord interrompu (même mécanique qu'`/interrupt`). 400 depuis accepted/cancelled |
+| POST | `/api/tasks/{id}/cancel` | | Task (waiting/running/review → cancelled, c'est le « refuser » de l'UI). Si `running`, l'agent est d'abord interrompu (même mécanique qu'`/interrupt`). 400 depuis accepted/cancelled |
 | POST | `/api/tasks/{id}/reopen` | | Task (accepted/cancelled → review). 400 sinon |
 | POST | `/api/tasks/{id}/read` | | 204 (unread=false, ne modifie jamais `updatedAt` : voir plus bas) |
 | GET | `/api/tasks/{id}/diff` | | voir ci-dessous |
@@ -197,9 +200,17 @@ PreviewRun { "id": "pv1", "projectId": "p1", "cardId": "c1", "taskId": "",
 
 ### Cycle de vie des tâches et auto-déplacement de carte
 
-Statuts : `running → review → accepted`, plus `cancelled` (via `/cancel`, le « refuser » de l'UI). Une tâche ne se livre plus seule : elle est acceptée (fusionnée) dans la branche de son chantier, et c'est le chantier qui se livre (voir « Livraison d'un chantier »). `/reopen` accepte accepted/cancelled et ramène en `review` ; le merge déjà fait n'est pas annulé, la prochaine acceptation fusionnera les nouveaux commits.
+Statuts : `waiting → running → review → accepted`, plus `cancelled` (via `/cancel`, le « refuser » de l'UI). `waiting` est optionnel (voir « Démarrage différé d'une tâche » ci-dessous) : la plupart des tâches démarrent directement en `running`. Une tâche ne se livre plus seule : elle est acceptée (fusionnée) dans la branche de son chantier, et c'est le chantier qui se livre (voir « Livraison d'un chantier »). `/reopen` accepte accepted/cancelled et ramène en `review` ; le merge déjà fait n'est pas annulé, la prochaine acceptation fusionnera les nouveaux commits.
 
 Compatibilité, au chargement de state.json : `ready` (antérieur à la v0.3.4) migre vers `review` ; `shipped` et `done` migrent vers `accepted`.
+
+#### Démarrage différé d'une tâche
+
+`POST /api/tasks` accepte `waitsForTaskId`, l'identifiant d'une autre tâche du même chantier, pas encore terminale (400 `"waitsForTaskId must reference a task of the same workstream"` sinon, ou `"waitsForTaskId task is already finished"` si elle est déjà `accepted`/`cancelled`). Le worktree et la branche de la tâche sont créés normalement, mais l'agent n'est pas lancé : la tâche reste `waiting`, et `Task.waitsForTaskId` porte l'identifiant attendu.
+
+Quand la tâche référencée est acceptée (`/accept`), les tâches `waiting` qui l'attendaient démarrent automatiquement : leur worktree est rejoué (best-effort) sur la tête courante de la branche du chantier, puis l'agent est lancé avec le prompt initial fourni à la création (`waiting → running`). `POST /api/tasks/{id}/start` démarre une tâche `waiting` manuellement, sans attendre : la dépendance a pu être refusée ou supprimée, ou l'utilisateur change simplement d'avis sur l'ordre. Dans tous les cas, `Task.waitsForTaskId` est vidé au démarrage réel (aucune trace historique).
+
+Une tâche `waiting` refusée (`/cancel`, `cancelled`) ne redémarre jamais, même si sa dépendance est ensuite acceptée. Elle peut aussi être supprimée comme toute autre tâche (voir « Suppressions »).
 
 Après une acceptation réussie : un Message marqueur est ajouté au fil (`author="agent"`, `authorName=""`, texte figé `"[accepted:<workstreamBranch>]"`). Une acceptation simplement constatée (la branche de la tâche était déjà contenue dans celle du chantier) pose `"[auto-accepted:<workstreamBranch>]"`. En cas de conflit, la fusion est annulée (`git merge --abort`), un marqueur `"[merge-conflict:<fichiers séparés par des espaces>]"` est ajouté au fil, et la réponse est 409 `{"error":"merge conflict with the workstream branch","conflictFilePaths":"..."}`. Le serveur ne résout jamais un conflit lui-même, mais n'attend pas non plus qu'un humain le remarque dans le fil : l'agent reçoit aussitôt un message l'instruisant de rebaser sa branche sur celle du chantier et de régler les conflits (`conflictRebasePrompt`, voir `handlers.go`), ce qui relance la tâche en `running`. Le frontend détecte le marqueur de conflit et affiche une ligne système localisée.
 
