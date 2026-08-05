@@ -1063,20 +1063,21 @@ func TestAgentWarningCodexSandboxBlockedByAppArmor(t *testing.T) {
 	origLookPath := lookPath
 	defer func() { lookPath = origLookPath }()
 
+	wtDir := t.TempDir()
 	t.Setenv("SILLAGE_CODEX_SANDBOX", "")
 	lookPath = func(string) (string, error) { return "", fmt.Errorf("not found") }
-	if got := agentWarning(Agent{Cli: "codex"}); got != "codex CLI not found in PATH" {
+	if got := agentWarning(Agent{Cli: "codex"}, wtDir); got != "codex CLI not found in PATH" {
 		t.Fatalf("a missing CLI should take priority over sandbox diagnostics, got %q", got)
 	}
 
 	lookPath = func(string) (string, error) { return "/usr/bin/codex", nil }
 	want := "codex sandbox is blocked on this machine (AppArmor); see README (SILLAGE_CODEX_SANDBOX)"
-	if got := agentWarning(Agent{Cli: "codex"}); got != want {
+	if got := agentWarning(Agent{Cli: "codex"}, wtDir); got != want {
 		t.Fatalf("warning attendu %q, reçu %q", want, got)
 	}
 
 	t.Setenv("SILLAGE_CODEX_SANDBOX", "danger-full-access")
-	if got := agentWarning(Agent{Cli: "codex"}); got == want {
+	if got := agentWarning(Agent{Cli: "codex"}, wtDir); got == want {
 		t.Fatalf("SILLAGE_CODEX_SANDBOX définie ne devrait plus déclencher l'avertissement AppArmor")
 	}
 }
@@ -1089,25 +1090,31 @@ func TestAgentWarningMissingBinary(t *testing.T) {
 	origLookPath := lookPath
 	defer func() { lookPath = origLookPath }()
 	lookPath = func(string) (string, error) { return "", fmt.Errorf("not found") }
+	wtDir := t.TempDir()
 
-	if got := agentWarning(Agent{Cli: "claude"}); got != "claude CLI not found in PATH" {
+	if got := agentWarning(Agent{Cli: "claude"}, wtDir); got != "claude CLI not found in PATH" {
 		t.Fatalf("warning attendu 'claude CLI not found in PATH', reçu %q", got)
 	}
-	if got := agentWarning(Agent{Cli: "codex"}); got != "codex CLI not found in PATH" {
+	if got := agentWarning(Agent{Cli: "codex"}, wtDir); got != "codex CLI not found in PATH" {
 		t.Fatalf("warning attendu 'codex CLI not found in PATH', reçu %q", got)
 	}
-	if got := agentWarning(Agent{Cli: "copilot"}); got != "copilot CLI not found in PATH" {
+	if got := agentWarning(Agent{Cli: "copilot"}, wtDir); got != "copilot CLI not found in PATH" {
 		t.Fatalf("warning = %q, want missing Copilot CLI", got)
 	}
-	if got := agentWarning(Agent{Cli: "agy"}); got != "agy CLI not found in PATH" {
+	if got := agentWarning(Agent{Cli: "agy"}, wtDir); got != "agy CLI not found in PATH" {
 		t.Fatalf("warning = %q, want missing Antigravity CLI", got)
 	}
-	if got := agentWarning(Agent{Cli: "fake"}); got != "" {
+	if got := agentWarning(Agent{Cli: "fake"}, wtDir); got != "" {
 		t.Fatalf("l'agent fake ne devrait jamais avoir d'avertissement, reçu %q", got)
 	}
 }
 
-func TestAgentWarningAntigravityToolPermission(t *testing.T) {
+// TestAgentWarningAntigravityPermissions : agy a besoin de deux choses pour
+// travailler sans humain devant l'écran, une politique d'exécution qui ne
+// demande rien et des autorisations de fichier sur les worktrees. Les motifs de
+// chemin ne comptent pas (la CLI ne les connaît pas), un dossier couvre ce qu'il
+// contient.
+func TestAgentWarningAntigravityPermissions(t *testing.T) {
 	origLookPath := lookPath
 	defer func() { lookPath = origLookPath }()
 	lookPath = func(file string) (string, error) { return "/usr/bin/" + file, nil }
@@ -1116,27 +1123,42 @@ func TestAgentWarningAntigravityToolPermission(t *testing.T) {
 	defer func() { antigravitySettingsPath = origSettings }()
 	dir := t.TempDir()
 	antigravitySettingsPath = filepath.Join(dir, "settings.json")
+	wtDir := filepath.Join(dir, "data", "worktrees")
 
-	// Fichier absent : la CLI applique sa politique par défaut, qui auto-refuse
-	// les commandes en mode headless.
-	if got := agentWarning(Agent{Cli: "agy"}); got != antigravityPolicyWarning {
-		t.Fatalf("warning = %q, want the tool permission warning", got)
+	// Fichier absent : la CLI applique ses réglages par défaut, qui auto-refusent
+	// en mode headless.
+	if got := agentWarning(Agent{Cli: "agy"}, wtDir); got != antigravityPolicyWarning {
+		t.Fatalf("warning = %q, want the permissions warning", got)
 	}
 
-	cases := map[string]string{
-		`{"toolPermission":"request-review"}`:       antigravityPolicyWarning,
-		`{"toolPermission":"strict"}`:               antigravityPolicyWarning,
-		`{"permissions":{"allow":["file(*)"]}}`:     antigravityPolicyWarning,
-		`{"toolPermission":"proceed-in-sandbox"}`:   "",
-		`{"toolPermission":"always-proceed"}`:       "",
-		`{"permissions":{"allow":["command(go)"]}}`: "",
+	files := fmt.Sprintf(`"read_file(%s)","write_file(%s)"`, wtDir, wtDir)
+	cases := []struct {
+		settings string
+		want     string
+	}{
+		// Politique manquante ou insuffisante.
+		{fmt.Sprintf(`{"permissions":{"allow":[%s]}}`, files), antigravityPolicyWarning},
+		{fmt.Sprintf(`{"toolPermission":"request-review","permissions":{"allow":[%s]}}`, files), antigravityPolicyWarning},
+		{fmt.Sprintf(`{"toolPermission":"strict","permissions":{"allow":[%s]}}`, files), antigravityPolicyWarning},
+		// Autorisations de fichier manquantes ou hors sujet.
+		{`{"toolPermission":"proceed-in-sandbox"}`, antigravityPolicyWarning},
+		{`{"toolPermission":"proceed-in-sandbox","permissions":{"allow":["read_file(/elsewhere)","write_file(/elsewhere)"]}}`, antigravityPolicyWarning},
+		{fmt.Sprintf(`{"toolPermission":"proceed-in-sandbox","permissions":{"allow":["read_file(%s/*)","write_file(%s/*)"]}}`, wtDir, wtDir), antigravityPolicyWarning},
+		{fmt.Sprintf(`{"toolPermission":"proceed-in-sandbox","permissions":{"allow":["read_file(%s)"]}}`, wtDir), antigravityPolicyWarning},
+		// Tout est là.
+		{fmt.Sprintf(`{"toolPermission":"proceed-in-sandbox","permissions":{"allow":[%s]}}`, files), ""},
+		{fmt.Sprintf(`{"toolPermission":"always-proceed","permissions":{"allow":[%s]}}`, files), ""},
+		{`{"toolPermission":"proceed-in-sandbox","permissions":{"allow":["read_file(*)","write_file(*)"]}}`, ""},
+		// Un dossier parent couvre ce qu'il contient, une règle sur les commandes
+		// remplace la politique.
+		{fmt.Sprintf(`{"permissions":{"allow":["command(*)","read_file(%s)","write_file(%s)"]}}`, dir, dir), ""},
 	}
-	for settings, want := range cases {
-		if err := os.WriteFile(antigravitySettingsPath, []byte(settings), 0o644); err != nil {
+	for _, c := range cases {
+		if err := os.WriteFile(antigravitySettingsPath, []byte(c.settings), 0o644); err != nil {
 			t.Fatalf("écriture settings : %v", err)
 		}
-		if got := agentWarning(Agent{Cli: "agy"}); got != want {
-			t.Fatalf("settings %s: warning = %q, want %q", settings, got, want)
+		if got := agentWarning(Agent{Cli: "agy"}, wtDir); got != c.want {
+			t.Fatalf("settings %s: warning = %q, want %q", c.settings, got, c.want)
 		}
 	}
 }
@@ -1146,24 +1168,26 @@ func TestFixAntigravityToolPermission(t *testing.T) {
 	defer func() { antigravitySettingsPath = origSettings }()
 	dir := t.TempDir()
 	antigravitySettingsPath = filepath.Join(dir, "nested", "settings.json")
+	wtDir := filepath.Join(dir, "data", "worktrees")
 
 	// Fichier (et dossier) absents : le correctif les crée.
-	if err := fixAntigravityToolPermission(); err != nil {
+	if err := fixAntigravityToolPermission(wtDir); err != nil {
 		t.Fatalf("fixAntigravityToolPermission: %v", err)
 	}
-	if !antigravityAllowsHeadlessCommands() {
-		t.Fatal("the policy should allow headless commands after the fix")
+	if !antigravityWorksHeadlessly(wtDir) {
+		t.Fatal("agy should be able to work headlessly after the fix")
 	}
 
-	// Les autres clés de l'utilisateur survivent : c'est son fichier.
-	kept := `{"enableTelemetry":false,"trustedWorkspaces":["/home/me/repo"],"toolPermission":"request-review"}`
+	// Les autres clés de l'utilisateur survivent, comme ses propres règles.
+	kept := `{"enableTelemetry":false,"trustedWorkspaces":["/home/me/repo"],"toolPermission":"request-review",` +
+		`"permissions":{"allow":["command(git)"],"deny":["url(*)"]}}`
 	if err := os.WriteFile(antigravitySettingsPath, []byte(kept), 0o600); err != nil {
 		t.Fatalf("écriture settings : %v", err)
 	}
 	if err := os.Chmod(antigravitySettingsPath, 0o600); err != nil { // le fichier existait déjà : WriteFile ne change pas ses droits
 		t.Fatalf("chmod settings : %v", err)
 	}
-	if err := fixAntigravityToolPermission(); err != nil {
+	if err := fixAntigravityToolPermission(wtDir); err != nil {
 		t.Fatalf("fixAntigravityToolPermission: %v", err)
 	}
 	data, err := os.ReadFile(antigravitySettingsPath)
@@ -1174,6 +1198,10 @@ func TestFixAntigravityToolPermission(t *testing.T) {
 		EnableTelemetry   bool     `json:"enableTelemetry"`
 		TrustedWorkspaces []string `json:"trustedWorkspaces"`
 		ToolPermission    string   `json:"toolPermission"`
+		Permissions       struct {
+			Allow []string `json:"allow"`
+			Deny  []string `json:"deny"`
+		} `json:"permissions"`
 	}
 	if err := json.Unmarshal(data, &got); err != nil {
 		t.Fatalf("settings illisibles après correctif : %v", err)
@@ -1184,6 +1212,25 @@ func TestFixAntigravityToolPermission(t *testing.T) {
 	if got.EnableTelemetry || len(got.TrustedWorkspaces) != 1 || got.TrustedWorkspaces[0] != "/home/me/repo" {
 		t.Fatalf("the other keys should survive untouched, got %s", data)
 	}
+	if len(got.Permissions.Deny) != 1 || got.Permissions.Deny[0] != "url(*)" {
+		t.Fatalf("deny rules should survive untouched, got %s", data)
+	}
+	wantAllow := []string{"command(git)", "read_file(" + wtDir + ")", "write_file(" + wtDir + ")"}
+	if strings.Join(got.Permissions.Allow, "|") != strings.Join(wantAllow, "|") {
+		t.Fatalf("allow rules = %v, want %v", got.Permissions.Allow, wantAllow)
+	}
+	// Deuxième passage : rien à ajouter, aucune règle en double.
+	if err := fixAntigravityToolPermission(wtDir); err != nil {
+		t.Fatalf("fixAntigravityToolPermission (2e passage) : %v", err)
+	}
+	data, _ = os.ReadFile(antigravitySettingsPath)
+	got.Permissions.Allow = nil
+	if err := json.Unmarshal(data, &got); err != nil {
+		t.Fatalf("settings illisibles : %v", err)
+	}
+	if len(got.Permissions.Allow) != len(wantAllow) {
+		t.Fatalf("the fix should be idempotent, got %v", got.Permissions.Allow)
+	}
 	if info, err := os.Stat(antigravitySettingsPath); err != nil || info.Mode().Perm() != 0o600 {
 		t.Fatalf("file mode should be preserved, got %v (%v)", info.Mode().Perm(), err)
 	}
@@ -1193,7 +1240,7 @@ func TestFixAntigravityToolPermission(t *testing.T) {
 	if err := os.WriteFile(antigravitySettingsPath, broken, 0o600); err != nil {
 		t.Fatalf("écriture settings : %v", err)
 	}
-	if err := fixAntigravityToolPermission(); err == nil {
+	if err := fixAntigravityToolPermission(wtDir); err == nil {
 		t.Fatal("an unreadable settings file should be an error, not an overwrite")
 	}
 	if data, _ := os.ReadFile(antigravitySettingsPath); string(data) != string(broken) {
@@ -1213,20 +1260,21 @@ func TestAgentWarningHealthy(t *testing.T) {
 	origSettings := antigravitySettingsPath
 	defer func() { antigravitySettingsPath = origSettings }()
 	antigravitySettingsPath = filepath.Join(t.TempDir(), "settings.json")
-	if err := os.WriteFile(antigravitySettingsPath, []byte(`{"toolPermission":"proceed-in-sandbox"}`), 0o644); err != nil {
-		t.Fatalf("écriture settings : %v", err)
+	wtDir := t.TempDir()
+	if err := fixAntigravityToolPermission(wtDir); err != nil {
+		t.Fatalf("fixAntigravityToolPermission: %v", err)
 	}
 
-	if got := agentWarning(Agent{Cli: "codex"}); got != "" {
+	if got := agentWarning(Agent{Cli: "codex"}, wtDir); got != "" {
 		t.Fatalf("aucun avertissement attendu, reçu %q", got)
 	}
-	if got := agentWarning(Agent{Cli: "claude"}); got != "" {
+	if got := agentWarning(Agent{Cli: "claude"}, wtDir); got != "" {
 		t.Fatalf("aucun avertissement attendu, reçu %q", got)
 	}
-	if got := agentWarning(Agent{Cli: "copilot"}); got != "" {
+	if got := agentWarning(Agent{Cli: "copilot"}, wtDir); got != "" {
 		t.Fatalf("healthy Copilot should have no warning, got %q", got)
 	}
-	if got := agentWarning(Agent{Cli: "agy"}); got != "" {
+	if got := agentWarning(Agent{Cli: "agy"}, wtDir); got != "" {
 		t.Fatalf("healthy Antigravity should have no warning, got %q", got)
 	}
 }

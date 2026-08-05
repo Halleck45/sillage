@@ -327,8 +327,8 @@
       'agent.warning.copyCmd': 'Copier la commande',
       'agent.warning.codexSandboxFallback': 'Vous pouvez aussi contourner le problème en lançant Sillage avec la variable d\'environnement SILLAGE_CODEX_SANDBOX=danger-full-access ; le confinement restant est alors celui de Sillage (worktree dédié, pas de push par l\'agent).',
       'agent.warning.codexSandboxLink': 'En savoir plus (documentation OpenAI Codex)',
-      'agent.warning.agyPolicy': 'Antigravity demande votre accord avant chaque commande, et personne ne peut le donner quand un agent travaille tout seul : l\'accord est refusé d\'office et la tâche se termine sans rien produire. Sa politique d\'exécution doit faire confiance au bac à sable.',
-      'agent.warning.agyPolicyHint': 'Ajoutez cette ligne dans ~/.gemini/antigravity-cli/settings.json. Les commandes se lanceront alors sans question, mais seulement dans le bac à sable, que Sillage impose toujours à cet agent.',
+      'agent.warning.agyPolicy': 'Antigravity demande votre accord avant chaque commande et devant certains fichiers, et personne ne peut le donner quand un agent travaille tout seul : l\'accord est refusé d\'office et la tâche se termine sans rien produire. Il lui faut deux réglages : une politique d\'exécution qui fait confiance au bac à sable, et le droit de lire et écrire dans les worktrees.',
+      'agent.warning.agyPolicyHint': 'Sillage peut les poser dans ~/.gemini/antigravity-cli/settings.json. Les commandes partiront alors sans question, mais seulement dans le bac à sable, que Sillage impose toujours à cet agent ; les droits sur les fichiers s\'arrêtent au dossier des worktrees, son terrain de travail. Vos autres réglages Antigravity sont conservés.',
       'agent.warning.agyPolicyLink': 'Voir la documentation d’Antigravity CLI',
       'agent.warning.agyPolicyFix': 'Régler pour moi',
       'agent.warning.agyPolicyFixConfirm': 'Écrire dans settings.json ?',
@@ -769,8 +769,8 @@
       'agent.warning.copyCmd': 'Copy command',
       'agent.warning.codexSandboxFallback': 'You can also work around this by starting Sillage with the SILLAGE_CODEX_SANDBOX=danger-full-access environment variable; the remaining containment is then Sillage\'s own (dedicated worktree, no push from the agent).',
       'agent.warning.codexSandboxLink': 'Learn more (OpenAI Codex documentation)',
-      'agent.warning.agyPolicy': 'Antigravity asks for your approval before every command, and nobody can give it while an agent works on its own: approval is denied outright and the task ends without producing anything. Its execution policy has to trust the sandbox.',
-      'agent.warning.agyPolicyHint': 'Add this line to ~/.gemini/antigravity-cli/settings.json. Commands will then run without asking, but only inside the sandbox, which Sillage always forces on this agent.',
+      'agent.warning.agyPolicy': 'Antigravity asks for your approval before every command and for some files, and nobody can give it while an agent works on its own: approval is denied outright and the task ends without producing anything. It needs two settings: an execution policy that trusts the sandbox, and permission to read and write inside the worktrees.',
+      'agent.warning.agyPolicyHint': 'Sillage can set both in ~/.gemini/antigravity-cli/settings.json. Commands will then run without asking, but only inside the sandbox, which Sillage always forces on this agent; the file permissions stop at the worktrees folder, which is where it works. Your other Antigravity settings are kept.',
       'agent.warning.agyPolicyLink': 'Open the Antigravity CLI documentation',
       'agent.warning.agyPolicyFix': 'Set it for me',
       'agent.warning.agyPolicyFixConfirm': 'Write to settings.json?',
@@ -2889,7 +2889,7 @@
   function agentWarningText(warning) {
     if (!warning) return '';
     if (warning.indexOf('codex sandbox is blocked') !== -1) return t('agent.warning.codexSandbox');
-    if (warning.indexOf('agy refuses commands headlessly') !== -1) return t('agent.warning.agyPolicy');
+    if (warning.indexOf('agy cannot work headlessly') !== -1) return t('agent.warning.agyPolicy');
     var m = /^(\S+) CLI not found in PATH$/.exec(warning);
     if (m) return t('agent.warning.cliNotFound', { cli: m[1] });
     return warning;
@@ -2899,7 +2899,6 @@
   // vers la doc OpenAI. Uniquement pour la bannière d'avertissement (le title
   // d'un tooltip ne peut contenir ni HTML ni bouton).
   var CODEX_SANDBOX_FIX_CMD = 'sudo sysctl kernel.apparmor_restrict_unprivileged_userns=0';
-  var AGY_POLICY_FIX_LINE = '"toolPermission": "proceed-in-sandbox"';
   var AGENT_CLI_INSTALL = {
     claude: {
       command: 'curl -fsSL https://claude.ai/install.sh | bash',
@@ -2931,14 +2930,10 @@
         '<a class="agent-warning-link" href="' + escapeHtml(install.url) + '" target="_blank" rel="noopener noreferrer">' +
           escapeHtml(t('agent.warning.installLink')) + '</a>';
     }
-    if (warning.indexOf('agy refuses commands headlessly') !== -1) {
+    if (warning.indexOf('agy cannot work headlessly') !== -1) {
       var fixKey = 'agent-fix:' + agentId;
       var fixLabel = isPendingConfirm(fixKey) ? t('agent.warning.agyPolicyFixConfirm') : t('agent.warning.agyPolicyFix');
       return '<div class="agent-warning-fallback">' + escapeHtml(t('agent.warning.agyPolicyHint')) + '</div>' +
-        '<div class="agent-warning-cmd">' +
-          '<code class="mono">' + escapeHtml(AGY_POLICY_FIX_LINE) + '</code>' +
-          '<button data-action="copy-path" data-path="' + escapeHtml(AGY_POLICY_FIX_LINE) + '">' + escapeHtml(t('agent.warning.copyCmd')) + '</button>' +
-        '</div>' +
         '<div class="agent-warning-action">' +
           '<button class="btn-outline" data-action="confirm-click" data-confirm-key="' + fixKey + '" data-confirm-action="agent-fix" data-confirm-id="' + escapeHtml(agentId) + '" data-default-label="' + escapeHtml(t('agent.warning.agyPolicyFix')) + '" data-confirm-label="' + escapeHtml(t('agent.warning.agyPolicyFixConfirm')) + '">' + escapeHtml(fixLabel) + '</button>' +
         '</div>' +

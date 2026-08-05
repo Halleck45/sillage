@@ -655,10 +655,10 @@ func (s *Server) handleUpdateAgent(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleFixAgentWarning applique le correctif de configuration machine que
-// Sillage sait poser lui-même. Un seul avertissement est dans ce cas : la
-// politique d'exécution d'agy, qui vit dans un fichier de l'utilisateur et
-// qu'aucun drapeau n'expose. Les autres (CLI absente, sandbox codex bloqué par
-// AppArmor) demandent une installation ou un sudo : ils restent expliqués, pas
+// Sillage sait poser lui-même. Un seul avertissement est dans ce cas : les
+// autorisations d'agy, qui vivent dans un fichier de l'utilisateur et qu'aucun
+// drapeau n'expose. Les autres (CLI absente, sandbox codex bloqué par AppArmor)
+// demandent une installation ou un sudo : ils restent expliqués, pas
 // automatisés.
 func (s *Server) handleFixAgentWarning(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
@@ -671,7 +671,7 @@ func (s *Server) handleFixAgentWarning(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "no automatic fix for this agent")
 		return
 	}
-	if err := fixAntigravityToolPermission(); err != nil {
+	if err := fixAntigravityToolPermission(s.store.WorktreesDir()); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
