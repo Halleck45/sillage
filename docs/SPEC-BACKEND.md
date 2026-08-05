@@ -112,8 +112,10 @@ Jamais de `--dangerously-skip-permissions`. Jamais `git push` dans allowedTools.
 
 ### Adaptateur codex (`cli:"codex"`), best-effort
 
-`codex exec --json -C <worktree> [--model <model>] <texte>` ; parser plusieurs formes de JSONL :
+`codex exec --json --sandbox <mode> -C <worktree> [--add-dir <git-dir>...] [--model <model>] <texte>` ; parser plusieurs formes de JSONL :
 `{"msg":{"type":"agent_message","message":"..."}}`, `{"type":"item.completed","item":{"type":"agent_message","text":"..."}}`, `token_count` → usage si présent. En cas d'échec de parsing, capturer stdout brut en un Message final. Pas de resume en v1 (chaque message relance `codex exec` avec le dernier texte).
+
+En mode `workspace-write`, les worktrees liés gardent leur index/HEAD et leurs objets/références Git hors du répertoire de tâche. Sillage résout ces chemins avec `git rev-parse` et les passe séparément via `--add-dir` : git-dir propre au worktree, puis `objects`, `refs`, `logs` et stockages optionnels existants du common-dir. Le common-dir entier n'est pas exposé pour un worktree lié, afin que `hooks` et la configuration du dépôt d'origine restent en lecture seule. La résolution est best-effort : un répertoire qui n'est plus un dépôt Git ne bloque pas le démarrage de Codex.
 
 Le quota de compte (`rate_limits`) n'est PAS porté par ce flux stdout, seulement par le fichier de session que codex écrit de son côté même en mode `exec` (`~/.codex/sessions/AAAA/MM/JJ/rollout-...-<thread_id>.jsonl`) : `readCodexRateLimits` retrouve ce fichier via le `thread_id` capturé sur l'événement `thread.started` du flux, lit son dernier `rate_limits` et met à jour `Store.CodexQuota` (best-effort, jamais bloquant). Voir SPEC-API.md « Quota des agents ».
 
