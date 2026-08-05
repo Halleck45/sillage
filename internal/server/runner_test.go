@@ -491,6 +491,19 @@ func TestRunTextCLINeverEndsSilently(t *testing.T) {
 	}
 }
 
+// TestAntigravityPromptWarnsAboutLinkedWorktree : agy refuse la lecture de
+// `.git` et meurt sans rien produire. Comme l'autorisation ne peut pas être
+// donnée d'avance (aucun motif de chemin), l'agent doit être prévenu.
+func TestAntigravityPromptWarnsAboutLinkedWorktree(t *testing.T) {
+	prompt := prefixAgentContext(Agent{}, Project{}, Card{}, antigravityWorktreeNote+"\n\nTask: x")
+	if !strings.Contains(prompt, "linked git worktree") || !strings.Contains(prompt, "`.git`") {
+		t.Fatalf("the antigravity prompt should warn about .git: %q", prompt)
+	}
+	if !strings.HasSuffix(prompt, "Task: x") {
+		t.Fatalf("the note must not come after the task text: %q", prompt)
+	}
+}
+
 func TestBuildTranscript(t *testing.T) {
 	msgs := []Message{
 		{Author: "agent", AuthorName: "Otto", Text: "J'ai trouvé le bloc dans show_lead.html.twig lignes 78-80."},
