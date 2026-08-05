@@ -182,9 +182,17 @@ func CloneWorkspace(dataDir, remote string) (cloneDir string, err error) {
 		return "", fmt.Errorf("git clone failed: %w: %s", cloneErr, strings.TrimSpace(string(out)))
 	}
 
-	if _, statErr := os.Stat(filepath.Join(cloneDir, "state.json")); statErr != nil {
+	clonedState := filepath.Join(cloneDir, "state.json")
+	if _, statErr := os.Stat(clonedState); statErr != nil {
 		os.RemoveAll(cloneDir)
 		return "", fmt.Errorf("remote does not look like a Sillage workspace")
+	}
+	// Espace de travail écrit par un Sillage plus récent : on refuse avant de
+	// toucher au répertoire de données, sinon on le laisserait avec un
+	// state.json que ce binaire ne peut plus charger.
+	if format, fmtErr := StateFileFormatVersion(clonedState); fmtErr == nil && format > stateFormatVersion {
+		os.RemoveAll(cloneDir)
+		return "", fmt.Errorf("%w (format %d, this binary handles %d): upgrade Sillage before pulling this workspace", ErrStateTooNew, format, stateFormatVersion)
 	}
 	return cloneDir, nil
 }

@@ -43,17 +43,29 @@ func main() {
 		log.Fatalf("cannot create data directory %s: %v", *dataDir, err)
 	}
 
+	// L'état d'abord : c'est le seul chargement qui peut refuser de démarrer,
+	// et un refus ne doit pas être précédé de lignes sans rapport.
+	store, err := server.NewStore(*dataDir)
+	if err != nil {
+		if errors.Is(err, server.ErrStateTooNew) {
+			log.Fatal(err) // le message porte déjà la raison et la sortie de secours
+		}
+		log.Fatalf("cannot load state: %v", err)
+	}
+
+	// Le format ne voit pas tout : deux versions publiées du même format, dont
+	// celle qui tourne est la plus ancienne, chargent sans erreur mais perdront
+	// des champs à la première sauvegarde.
+	if warning := store.DowngradeWarning(); warning != "" {
+		log.Print(warning)
+	}
+
 	hash, err := server.LoadPasswordHash(*dataDir)
 	if err != nil {
 		log.Fatalf("cannot initialize authentication: %v", err)
 	}
 	if hash == "" {
 		log.Print("No SILLAGE_PASSWORD set: running without a login password.")
-	}
-
-	store, err := server.NewStore(*dataDir)
-	if err != nil {
-		log.Fatalf("cannot load state: %v", err)
 	}
 
 	webContent, err := fs.Sub(webFS, "web")

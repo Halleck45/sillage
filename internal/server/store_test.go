@@ -1,6 +1,7 @@
 package server
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -1324,5 +1325,98 @@ func TestUpdateProjectAllowedTools(t *testing.T) {
 	}
 	if len(updated.AllowedTools) != 0 {
 		t.Fatalf("liste vide attendue, reçue %v", updated.AllowedTools)
+	}
+}
+
+// TestStateFormatVersionStamped : toute sauvegarde signe le fichier (format +
+// version qui l'a écrit), y compris sur un state.json antérieur au champ.
+func TestStateFormatVersionStamped(t *testing.T) {
+	dir := t.TempDir()
+	legacy := `{"Projects":{},"Cards":{},"Tasks":{},"Messages":{},"Agents":{}}`
+	if err := os.WriteFile(filepath.Join(dir, "state.json"), []byte(legacy), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	s, err := NewStore(dir)
+	if err != nil {
+		t.Fatalf("NewStore sur un fichier legacy: %v", err)
+	}
+	if s.FormatVersion != stateFormatVersion {
+		t.Fatalf("format attendu %d, reçu %d", stateFormatVersion, s.FormatVersion)
+	}
+	if s.WrittenBy != buildVersion {
+		t.Fatalf("writtenBy attendu %q, reçu %q", buildVersion, s.WrittenBy)
+	}
+
+	got, err := StateFileFormatVersion(filepath.Join(dir, "state.json"))
+	if err != nil {
+		t.Fatalf("StateFileFormatVersion: %v", err)
+	}
+	if got != stateFormatVersion {
+		t.Fatalf("format sur disque attendu %d, reçu %d", stateFormatVersion, got)
+	}
+}
+
+// TestStateTooNewRefusesToLoad est le garde-fou contre un binaire plus ancien :
+// un fichier d'un format plus récent ne doit ni se charger ni, surtout, être
+// réécrit (c'est la réécriture qui détruit les champs inconnus).
+func TestStateTooNewRefusesToLoad(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "state.json")
+	future := fmt.Sprintf(`{"FormatVersion":%d,"WrittenBy":"99.0.0","Projects":{},"Cards":{},"Tasks":{},"Messages":{},"Agents":{},"UnknownFutureField":{"keep":"me"}}`, stateFormatVersion+1)
+	if err := os.WriteFile(path, []byte(future), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	before, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := NewStore(dir); err == nil {
+		t.Fatalf("NewStore devait refuser un state.json plus récent")
+	} else if !errors.Is(err, ErrStateTooNew) {
+		t.Fatalf("erreur attendue ErrStateTooNew, reçue %v", err)
+	} else if !strings.Contains(err.Error(), "upgrade Sillage") {
+		t.Fatalf("le message doit dire quoi faire, reçu %q", err.Error())
+	}
+
+	after, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(before) != string(after) {
+		t.Fatalf("le fichier a été réécrit alors qu'il devait être laissé intact")
+	}
+}
+
+// TestDowngradeWarning : ce que le format ne voit pas. Deux versions publiées
+// du même format, dont celle qui tourne est la plus ancienne : le chargement
+// réussit, mais on le dit. Une compilation locale ne se compare à rien.
+func TestDowngradeWarning(t *testing.T) {
+	cases := []struct {
+		writtenBy, running string
+		want               bool
+	}{
+		{"0.10.0", "0.4.2", true},
+		{"0.4.2", "0.10.0", false}, // mise à jour normale : rien à signaler
+		{"0.10.0", "0.10.0", false},
+		{"dev", "0.10.0", false}, // écrit par un build local : incomparable
+		{"0.10.0", "dev", false}, // c'est le build local qui tourne : incomparable
+		{"", "0.10.0", false},    // fichier antérieur au champ
+	}
+	for _, c := range cases {
+		dir := t.TempDir()
+		s, err := NewStore(dir)
+		if err != nil {
+			t.Fatalf("NewStore: %v", err)
+		}
+		s.previousWriter = c.writtenBy
+		prev := buildVersion
+		buildVersion = c.running
+		got := s.DowngradeWarning()
+		buildVersion = prev
+		if (got != "") != c.want {
+			t.Errorf("écrit par %q, tourne en %q : avertissement=%q, attendu %v", c.writtenBy, c.running, got, c.want)
+		}
 	}
 }

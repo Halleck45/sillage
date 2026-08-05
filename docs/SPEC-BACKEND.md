@@ -34,6 +34,14 @@ internal/server/
 Branches de chantier : `GetCardBranch`, `SetCardBranch`, `MarkCardBranchShipped(cardID, repoName, prURL, at)` et `MarkCardBranchPending(cardID, repoName)` (remise à `shippedAt=nil` quand du travail nouveau arrive ; `prUrl` conservée). Tous recalculent la carte, verrou tenu.
 Tokens : cumulés dans Task.tokens ; agrégats projet/global calculés en sommant les tâches.
 
+## Format de state.json
+
+- `stateFormatVersion` (const, store.go) est écrit dans le fichier (`FormatVersion`) à chaque `save()`. **À incrémenter dès qu'un champ persisté est ajouté, renommé ou change de sens.**
+- Au chargement, `FormatVersion > stateFormatVersion` fait échouer `loadStoreFile` avec `ErrStateTooNew`, **avant la moindre écriture** : `NewStore` sauvegarde immédiatement après avoir chargé, donc laisser passer un fichier trop récent le mutilerait à la seconde près (les champs exportés du Store sont sérialisés tels quels : ce que le binaire ne connaît pas disparaît). `main` refuse alors de démarrer, avec le message et la sortie de secours (`brew upgrade sillage`, ou un autre `-data`).
+- `CloneWorkspace` applique le même refus au `state.json` du clone **avant** `ReplaceWorkspaceFiles` : sinon le rapatriement laisserait le répertoire de données avec un fichier illisible sous un serveur qui tourne encore.
+- `Store.WrittenBy` garde la version de Sillage qui a écrit le fichier en dernier ("dev" pour une compilation locale). `DowngradeWarning()` prévient au démarrage quand le fichier vient d'une version publiée plus récente que le binaire **à format égal** : le chargement réussit, mais les champs apparus entre les deux tomberont à la première sauvegarde. Silencieux dès qu'une version "dev" est en jeu, faute de pouvoir comparer.
+- Limite à connaître : le garde-fou n'existe qu'entre binaires qui le portent tous les deux. Une version antérieure à son introduction ignore `FormatVersion` et le supprime même du fichier en le réécrivant. Le filet de secours reste le dépôt git de l'espace de travail (commits `sillage: update`, throttlés à 15 min).
+
 ## Auth
 
 - Sessions en mémoire : token 32 octets crypto/rand hex, map[token]expiry (30 jours). Cookie `sillage_session` HttpOnly SameSite=Lax, Secure si TLS ou `X-Forwarded-Proto: https`.
@@ -157,7 +165,7 @@ Suivre SPEC-API.md. Points d'attention :
 
 ## Tests
 
-- store_test.go : roundtrip save/load, compteurs dérivés.
+- store_test.go : roundtrip save/load, compteurs dérivés, signature du format à la sauvegarde, refus d'un state.json plus récent (fichier laissé intact), avertissement de retour en arrière entre versions publiées.
 - git_test.go : parser de diff sur une fixture inline (2 fichiers, add/del/ctx, fichier nouveau) ; test worktree+diff sur un repo git temporaire créé dans t.TempDir().
 - preview_test.go : commande qui finit (journal, code de retour), stderr capturé, les quatre variables et le répertoire d'exécution (le worktree, jamais le dépôt du projet), identité propre d'une tâche, URL développée avec arithmétique, arrêt qui tue le groupe de process, relancement qui remplace le run, `StopAll` qui ne laisse rien vivant, refus sans commande ou sans branche de chantier, URL non http(s) refusée, tampon de journal plafonné.
 - update_test.go : comparaison de versions (`0.10.0 > 0.9.9`, rc ignorée), lecture de checksums (lignes invalides écartées), compilation locale qui ne sort jamais sur le réseau, chaque `blocker` et son `selfUpdatable`, refus tant qu'un agent travaille, refus sans `confirm`, et le test de sécurité : un sha256 qui ne correspond pas ne remplace rien et ne laisse aucun temporaire (serveur HTTP local via `httptest`).

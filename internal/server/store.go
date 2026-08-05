@@ -15,12 +15,35 @@ import (
 	"time"
 )
 
+// stateFormatVersion est le format de state.json que ce binaire écrit et sait
+// lire. **À incrémenter dès qu'un champ persisté est ajouté, renommé ou change
+// de sens.** C'est la seule protection contre un binaire plus ancien : comme
+// les champs exportés du Store sont sérialisés tels quels, une version qui ne
+// connaît pas un champ le fait disparaître du fichier à sa première
+// sauvegarde, en silence (voir ErrStateTooNew).
+const stateFormatVersion = 1
+
+// ErrStateTooNew : le fichier vient d'une version plus récente de Sillage.
+// Refuser de démarrer est le seul comportement sûr, parce que charger puis
+// sauvegarder détruirait tout ce que ce binaire ne connaît pas.
+var ErrStateTooNew = errors.New("state.json comes from a newer Sillage")
+
 // Store est l'état en mémoire de l'application, persisté dans state.json.
 // Tous les champs exportés sont sérialisés ; les champs non exportés
 // (verrou, répertoire de données) sont ignorés par encoding/json.
 type Store struct {
 	mu      sync.Mutex
 	dataDir string
+
+	// FormatVersion est le format de ce fichier (voir stateFormatVersion).
+	// Écrit à chaque sauvegarde ; un fichier plus récent que le binaire fait
+	// échouer le chargement au lieu d'être réécrit en perdant des champs.
+	FormatVersion int
+
+	// WrittenBy est la version de Sillage qui a écrit ce fichier en dernier
+	// ("dev" pour une compilation locale). Sert au diagnostic : c'est la seule
+	// trace de « quel binaire a touché mes données ».
+	WrittenBy string
 
 	Projects  map[string]Project
 	Cards     map[string]Card
@@ -41,6 +64,10 @@ type Store struct {
 	NextTaskN    int
 	NextMessageN int
 	NextRef      int
+
+	// previousWriter est la valeur de WrittenBy telle qu'elle était sur disque
+	// au chargement, avant que ce binaire ne s'y inscrive. Non sérialisée.
+	previousWriter string
 
 	// commitTimer pilote le commit automatique throttlé de l'espace de travail
 	// après chaque sauvegarde. Non sérialisé (non exporté).
@@ -80,6 +107,13 @@ func loadStoreFile(dataDir string) (*Store, error) {
 	if err := json.Unmarshal(data, s); err != nil {
 		return nil, fmt.Errorf("cannot read state.json: %w", err)
 	}
+	// Avant toute chose, et surtout avant la moindre sauvegarde : un fichier
+	// d'un format plus récent n'est pas lisible sans perte.
+	if s.FormatVersion > stateFormatVersion {
+		return nil, fmt.Errorf("%w (format %d, this binary handles %d): upgrade Sillage (brew upgrade sillage, or grab the latest release) or point -data elsewhere; refusing to start so nothing is overwritten",
+			ErrStateTooNew, s.FormatVersion, stateFormatVersion)
+	}
+	s.previousWriter = s.WrittenBy
 	s.ensureMaps()
 	migrateLegacyRepos(data, s)
 	migrateLegacyWorkspace(data, s)
@@ -223,6 +257,9 @@ func (s *Store) ReloadFromDisk() error {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.FormatVersion = fresh.FormatVersion
+	s.WrittenBy = fresh.WrittenBy
+	s.previousWriter = fresh.previousWriter
 	s.Projects = fresh.Projects
 	s.Cards = fresh.Cards
 	s.Tasks = fresh.Tasks
@@ -240,6 +277,40 @@ func (s *Store) ReloadFromDisk() error {
 
 func (s *Store) statePath() string {
 	return filepath.Join(s.dataDir, "state.json")
+}
+
+// DowngradeWarning décrit le risque que le format ne sait pas voir : deux
+// versions publiées du même format, dont celle qui tourne est la plus ancienne.
+// Elle chargera le fichier sans erreur, puis supprimera à la première
+// sauvegarde les champs apparus entre les deux. Vide quand il n'y a rien à
+// dire, notamment dès qu'une compilation locale est en jeu (une version "dev"
+// ne se compare à rien).
+func (s *Store) DowngradeWarning() string {
+	previous := s.previousWriter
+	if !isReleaseVersion(previous) || !isReleaseVersion(buildVersion) {
+		return ""
+	}
+	if compareVersions(previous, buildVersion) <= 0 {
+		return ""
+	}
+	return fmt.Sprintf("state.json was last written by Sillage %s and this binary is %s: fields it does not know will be dropped on the next save. Upgrade Sillage, or point -data elsewhere.", previous, buildVersion)
+}
+
+// StateFileFormatVersion lit le seul champ FormatVersion d'un state.json, sans
+// charger le reste : sert à refuser un espace de travail distant plus récent
+// avant de toucher au répertoire de données (voir CloneWorkspace).
+func StateFileFormatVersion(path string) (int, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return 0, err
+	}
+	var head struct {
+		FormatVersion int
+	}
+	if err := json.Unmarshal(data, &head); err != nil {
+		return 0, fmt.Errorf("cannot read %s: %w", filepath.Base(path), err)
+	}
+	return head.FormatVersion, nil
 }
 
 func (s *Store) ensureMaps() {
@@ -300,6 +371,11 @@ func (s *Store) save() error {
 	if err := os.MkdirAll(s.dataDir, 0o700); err != nil {
 		return err
 	}
+	// Le fichier porte toujours la signature de qui l'a écrit en dernier : le
+	// format pour interdire une relecture par un binaire plus ancien, la
+	// version pour pouvoir répondre à « quel Sillage a touché mes données ».
+	s.FormatVersion = stateFormatVersion
+	s.WrittenBy = buildVersion
 	data, err := json.MarshalIndent(s, "", "  ")
 	if err != nil {
 		return err
