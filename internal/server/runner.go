@@ -1307,7 +1307,8 @@ func (r *Runner) runTextCLI(task *Task, agent Agent, handle *procHandle, binary 
 		waitErr = scanErr
 	}
 
-	if response := strings.TrimSpace(stdoutBuf.String()); response != "" {
+	response := strings.TrimSpace(stdoutBuf.String())
+	if response != "" {
 		msg, updated, err := r.store.AddMessage(task.ID, "agent", agent.Name, response)
 		if err == nil {
 			r.publishMessage(msg)
@@ -1315,12 +1316,25 @@ func (r *Runner) runTextCLI(task *Task, agent Agent, handle *procHandle, binary 
 			r.publishTask(*task)
 		}
 	}
-	if waitErr != nil && !handle.interrupted.Load() {
+	if handle.interrupted.Load() {
+		return nil
+	}
+	if waitErr != nil {
 		message := strings.TrimSpace(stderrBuf.String())
 		if message == "" {
 			message = waitErr.Error()
 		}
 		return fmt.Errorf("%s", message)
+	}
+	// Un adaptateur texte qui sort en succès sans rien écrire est un échec : la
+	// conversation resterait vide, sans le moindre indice. C'est le cas quand
+	// agy auto-refuse une confirmation d'outil (mode print) : il explique alors
+	// la marche à suivre sur stderr, que le succès de sortie ferait perdre.
+	if response == "" {
+		if message := strings.TrimSpace(stderrBuf.String()); message != "" {
+			return fmt.Errorf("%s", message)
+		}
+		return fmt.Errorf("%s produced no output", binary)
 	}
 	return nil
 }

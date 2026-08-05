@@ -271,6 +271,7 @@ Actions destructives, jamais déclenchées depuis les listes : confirmation doub
 `Agent.warning` (dans `AgentOut`, jamais `Agent` lui-même : le champ n'existe pas dans le modèle persisté) est recalculé à chaque liste d'agents (`GET /api/state`, événement SSE `agents`) :
 - `cli=codex` : si `/proc/sys/kernel/apparmor_restrict_unprivileged_userns` vaut `1` et que `SILLAGE_CODEX_SANDBOX` n'est pas définie → `"codex sandbox is blocked on this machine (AppArmor); see README (SILLAGE_CODEX_SANDBOX)"`.
 - `cli=codex`, `cli=claude`, `cli=copilot` ou `cli=agy` : si le binaire correspondant est introuvable dans le PATH → `"<cli> CLI not found in PATH"`.
+- `cli=agy` : si `~/.gemini/antigravity-cli/settings.json` n'autorise pas les commandes sans confirmation (`toolPermission` différent de `proceed-in-sandbox` et `always-proceed`, et aucune règle `command(...)` dans `permissions.allow`), fichier absent inclus → `"agy refuses commands headlessly; set \"toolPermission\": \"proceed-in-sandbox\" in ~/.gemini/antigravity-cli/settings.json"`.
 - Sinon (ou `cli=fake`) : chaîne vide.
 
 ### Quota des agents

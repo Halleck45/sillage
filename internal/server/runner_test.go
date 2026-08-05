@@ -454,6 +454,43 @@ func TestAntigravityArgsUseSandbox(t *testing.T) {
 	}
 }
 
+// TestRunTextCLINeverEndsSilently couvre le symptôme réel d'agy : la CLI sort
+// en succès, sans rien sur stdout, en expliquant sur stderr qu'elle a
+// auto-refusé une confirmation d'outil. La tâche finissait « à relire » avec
+// une conversation vide : aucune trace de ce qui s'est passé.
+func TestRunTextCLINeverEndsSilently(t *testing.T) {
+	s, err := NewStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+	p, _ := s.AddProject("p", "", "", []Repo{{Name: "r", Path: "/tmp/x"}}, nil, nil)
+	card, _ := s.AddCard(p.ID, "Carte", "", "")
+	taskID := mkTaskWithStatus(t, s, card.ID, p.ID, "running")
+	task, _ := s.GetTask(taskID)
+	task.WorktreeDir = t.TempDir()
+
+	runner := NewRunner(s, NewHub())
+	agent := Agent{Name: "Astro", Cli: "agy"}
+	run := func(script string) error {
+		return runner.runTextCLI(&task, agent, &procHandle{done: make(chan struct{})}, "sh", []string{"-c", script}, nil)
+	}
+
+	err = run("echo 'a tool required the command permission' 1>&2")
+	if err == nil || !strings.Contains(err.Error(), "required the command permission") {
+		t.Fatalf("stderr should surface on a silent success, got %v", err)
+	}
+	if err = run("exit 0"); err == nil || !strings.Contains(err.Error(), "produced no output") {
+		t.Fatalf("an empty run should report itself, got %v", err)
+	}
+	if err = run("echo done"); err != nil {
+		t.Fatalf("a run with an answer should succeed, got %v", err)
+	}
+	msgs := s.GetMessages(taskID)
+	if len(msgs) != 1 || msgs[0].Text != "done" {
+		t.Fatalf("only the answer should become a message, got %+v", msgs)
+	}
+}
+
 func TestBuildTranscript(t *testing.T) {
 	msgs := []Message{
 		{Author: "agent", AuthorName: "Otto", Text: "J'ai trouvé le bloc dans show_lead.html.twig lignes 78-80."},
