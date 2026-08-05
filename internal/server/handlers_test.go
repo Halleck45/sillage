@@ -245,7 +245,7 @@ func TestFixAgentWarningHandler(t *testing.T) {
 	if out.Warning != "" {
 		t.Fatalf("the returned agent should carry no warning anymore, got %q", out.Warning)
 	}
-	if !antigravityAllowsHeadlessCommands() {
+	if !antigravityWorksHeadlessly(srv.store.WorktreesDir()) {
 		t.Fatal("the fix should have been written to the settings file")
 	}
 

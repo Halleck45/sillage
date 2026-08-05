@@ -756,11 +756,11 @@ func sortedAgents(m map[string]Agent) []Agent {
 // jamais depuis recomputeAgent/recomputeAll qui tournent à chaque mutation.
 // codexQuota est le dernier instantané connu (Store.CodexQuota), attaché aux
 // seuls agents cli=codex : c'est un quota de compte, partagé entre eux.
-func sortedAgentsWithWarnings(m map[string]Agent, codexQuota *AgentQuota) []AgentOut {
+func sortedAgentsWithWarnings(m map[string]Agent, codexQuota *AgentQuota, worktreesDir string) []AgentOut {
 	sorted := sortedAgents(m)
 	out := make([]AgentOut, len(sorted))
 	for i, a := range sorted {
-		out[i] = AgentOut{Agent: a, Warning: agentWarning(a)}
+		out[i] = AgentOut{Agent: a, Warning: agentWarning(a, worktreesDir)}
 		if a.Cli == "codex" {
 			out[i].Quota = codexQuota
 		}
@@ -782,7 +782,7 @@ var apparmorRestrictPath = "/proc/sys/kernel/apparmor_restrict_unprivileged_user
 // n'expose ce réglage). Indirection testable.
 var antigravitySettingsPath = defaultAntigravitySettingsPath()
 
-const antigravityPolicyWarning = `agy refuses commands headlessly; set "toolPermission": "proceed-in-sandbox" in ~/.gemini/antigravity-cli/settings.json`
+const antigravityPolicyWarning = `agy cannot work headlessly with its current permissions; see ~/.gemini/antigravity-cli/settings.json`
 
 func defaultAntigravitySettingsPath() string {
 	home, err := os.UserHomeDir()
@@ -797,7 +797,7 @@ func defaultAntigravitySettingsPath() string {
 // SILLAGE_CODEX_SANDBOX défini, politique d'exécution d'agy incompatible avec
 // le mode headless, ou binaire cli introuvable dans le PATH.
 // Jamais persisté : voir AgentOut.
-func agentWarning(a Agent) string {
+func agentWarning(a Agent, worktreesDir string) string {
 	switch a.Cli {
 	case "codex":
 		if _, err := lookPath("codex"); err != nil {
@@ -810,7 +810,7 @@ func agentWarning(a Agent) string {
 		if _, err := lookPath("agy"); err != nil {
 			return "agy CLI not found in PATH"
 		}
-		if !antigravityAllowsHeadlessCommands() {
+		if !antigravityWorksHeadlessly(worktreesDir) {
 			return antigravityPolicyWarning
 		}
 	case "claude", "copilot":
@@ -821,16 +821,34 @@ func agentWarning(a Agent) string {
 	return ""
 }
 
-// antigravityAllowsHeadlessCommands dit si la CLI agy peut lancer une commande
-// sans personne pour l'autoriser. En mode print, une demande de confirmation
-// est auto-refusée et la session s'arrête aussitôt, sans rien écrire sur
-// stdout : avec la politique par défaut ("request-review"), une tâche
-// Antigravity qui veut lancer des tests finit muette, sans diff ni message.
-// Deux réglages conviennent : "proceed-in-sandbox" (l'accord vient du sandbox,
-// que Sillage force toujours) et "always-proceed" ; une règle d'autorisation
-// explicite sur les commandes (permissions.allow) vaut aussi accord.
+// antigravitySettings est la partie du fichier de configuration d'agy dont
+// dépend le travail sans humain devant l'écran.
+type antigravitySettings struct {
+	ToolPermission string `json:"toolPermission"`
+	Permissions    struct {
+		Allow []string `json:"allow"`
+	} `json:"permissions"`
+}
+
+// antigravityWorksHeadlessly dit si la CLI agy peut travailler sans personne
+// pour l'autoriser. En mode print, toute demande de confirmation est
+// auto-refusée et la session s'arrête aussitôt, sans rien écrire sur stdout :
+// une seule demande suffit à rendre une tâche muette, sans diff ni message.
+// Deux choses sont donc nécessaires :
+//
+//   - une politique d'exécution des commandes qui ne demande rien :
+//     "proceed-in-sandbox" (l'accord vient du bac à sable, que Sillage force
+//     toujours) ou "always-proceed" ; le défaut "request-review" ne marche pas ;
+//   - des autorisations de lecture et d'écriture sur les worktrees. Les fichiers
+//     ordinaires du worktree passent sans règle, mais certains chemins sont
+//     traités comme sensibles (`.git`, qui dans un worktree lié est un fichier
+//     qu'un modèle en exploration essaie d'ouvrir) et certaines modifications
+//     demandent un accord. Une règle sur un **dossier** couvre tout ce qu'il
+//     contient (vérifié) : deux règles sur la racine des worktrees suffisent, et
+//     ne donnent rien de plus que le terrain de jeu de l'agent.
+//
 // Fichier illisible ou absent : politique par défaut, donc non.
-func antigravityAllowsHeadlessCommands() bool {
+func antigravityWorksHeadlessly(worktreesDir string) bool {
 	if antigravitySettingsPath == "" {
 		return true // chemin du home inconnu : rien à diagnostiquer.
 	}
@@ -838,21 +856,48 @@ func antigravityAllowsHeadlessCommands() bool {
 	if err != nil {
 		return false
 	}
-	var cfg struct {
-		ToolPermission string `json:"toolPermission"`
-		Permissions    struct {
-			Allow []string `json:"allow"`
-		} `json:"permissions"`
-	}
+	var cfg antigravitySettings
 	if err := json.Unmarshal(data, &cfg); err != nil {
 		return false
 	}
 	switch cfg.ToolPermission {
 	case "proceed-in-sandbox", "always-proceed":
-		return true
+	default:
+		if !antigravityRuleCovers(cfg.Permissions.Allow, "command", "") {
+			return false
+		}
 	}
-	for _, rule := range cfg.Permissions.Allow {
-		if strings.HasPrefix(rule, "command(") {
+	for _, tool := range antigravityFileTools {
+		if !antigravityRuleCovers(cfg.Permissions.Allow, tool, worktreesDir) {
+			return false
+		}
+	}
+	return true
+}
+
+// antigravityFileTools sont les outils de fichier dont un agent de code a besoin
+// dans son worktree.
+var antigravityFileTools = []string{"read_file", "write_file"}
+
+// antigravityRuleCovers dit si permissions.allow autorise tool sur tout le
+// contenu de dir. Les règles d'agy ne connaissent pas les motifs de chemin :
+// `read_file(<dossier>/*)` ne correspond à rien. Seuls comptent le joker global
+// `*`, un chemin exact, et un dossier, qui couvre ce qu'il contient. dir vide
+// ne demande que l'existence d'une règle pour cet outil.
+func antigravityRuleCovers(rules []string, tool, dir string) bool {
+	if dir != "" {
+		dir = filepath.Clean(dir)
+	}
+	for _, rule := range rules {
+		if !strings.HasPrefix(rule, tool+"(") || !strings.HasSuffix(rule, ")") {
+			continue
+		}
+		target := rule[len(tool)+1 : len(rule)-1]
+		if target == "*" || dir == "" {
+			return true
+		}
+		target = filepath.Clean(target)
+		if target == dir || strings.HasPrefix(dir, target+string(filepath.Separator)) {
 			return true
 		}
 	}
@@ -864,16 +909,17 @@ func antigravityAllowsHeadlessCommands() bool {
 // Sillage force toujours pour cet agent.
 const antigravityToolPermissionFix = "proceed-in-sandbox"
 
-// fixAntigravityToolPermission règle toolPermission dans le fichier de
-// configuration de la CLI agy. C'est le seul endroit où cette politique
-// s'exprime, et Sillage n'y touche que sur demande explicite de l'humain
+// fixAntigravityToolPermission règle la politique d'exécution et les deux
+// autorisations de fichier sur la racine des worktrees dans le fichier de
+// configuration de la CLI agy. C'est le seul endroit où ces réglages
+// s'expriment, et Sillage n'y touche que sur demande explicite de l'humain
 // (bouton de l'avertissement de l'agent).
 //
-// Les autres clés sont relues et réécrites telles quelles : le fichier
-// appartient à l'utilisateur, et il y garde par exemple ses espaces de travail
-// de confiance. Un fichier illisible n'est jamais écrasé : mieux vaut refuser
-// et le dire que perdre une configuration.
-func fixAntigravityToolPermission() error {
+// Les autres clés, et les règles déjà présentes, sont relues et réécrites
+// telles quelles : le fichier appartient à l'utilisateur, et il y garde par
+// exemple ses espaces de travail de confiance. Un fichier illisible n'est jamais
+// écrasé : mieux vaut refuser et le dire que perdre une configuration.
+func fixAntigravityToolPermission(worktreesDir string) error {
 	if antigravitySettingsPath == "" {
 		return fmt.Errorf("cannot locate the agy settings file")
 	}
@@ -899,6 +945,7 @@ func fixAntigravityToolPermission() error {
 	}
 
 	settings["toolPermission"] = antigravityToolPermissionFix
+	settings["permissions"] = antigravityAllowWorktrees(settings["permissions"], worktreesDir)
 	out, err := json.MarshalIndent(settings, "", "  ")
 	if err != nil {
 		return err
@@ -914,6 +961,35 @@ func fixAntigravityToolPermission() error {
 		return err
 	}
 	return nil
+}
+
+// antigravityAllowWorktrees complète le bloc permissions relu du fichier avec
+// les règles manquantes sur la racine des worktrees, sans toucher au reste
+// (règles déjà là, refus, autres clés).
+func antigravityAllowWorktrees(existing any, worktreesDir string) map[string]any {
+	perms := map[string]any{}
+	if m, ok := existing.(map[string]any); ok {
+		for k, v := range m {
+			perms[k] = v
+		}
+	}
+	var allow []string
+	var raw []any
+	if list, ok := perms["allow"].([]any); ok {
+		raw = list
+	}
+	for _, item := range raw {
+		if s, ok := item.(string); ok {
+			allow = append(allow, s)
+		}
+	}
+	for _, tool := range antigravityFileTools {
+		if !antigravityRuleCovers(allow, tool, worktreesDir) {
+			allow = append(allow, tool+"("+filepath.Clean(worktreesDir)+")")
+		}
+	}
+	perms["allow"] = allow
+	return perms
 }
 
 // apparmorRestrictsUserNamespaces lit apparmorRestrictPath : "1" signifie que
@@ -943,7 +1019,7 @@ func (s *Store) Snapshot() State {
 		Projects: sortedProjectsWithWarnings(s.Projects),
 		Cards:    sortedCards(s.Cards),
 		Tasks:    sortedTasks(s.Tasks),
-		Agents:   sortedAgentsWithWarnings(s.Agents, s.CodexQuota),
+		Agents:   sortedAgentsWithWarnings(s.Agents, s.CodexQuota, s.WorktreesDir()),
 		Settings: s.Settings,
 	}
 	st.Tokens.Global = global
@@ -975,7 +1051,13 @@ func (s *Store) ListAgents() []AgentOut {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.recomputeAll()
-	return sortedAgentsWithWarnings(s.Agents, s.CodexQuota)
+	return sortedAgentsWithWarnings(s.Agents, s.CodexQuota, s.WorktreesDir())
+}
+
+// WorktreesDir est la racine des worktrees (un dossier par tâche et par branche
+// de chantier), sous dataDir. Voir git.go pour les chemins eux-mêmes.
+func (s *Store) WorktreesDir() string {
+	return filepath.Join(s.dataDir, "worktrees")
 }
 
 // SetCodexQuota met à jour l'instantané de quota codex (voir AgentQuota),
