@@ -301,6 +301,11 @@
       'agent.emoji': 'Emoji',
       'agent.color': 'Couleur',
       'agent.cli': 'CLI',
+      'agent.cli.claude': 'Claude Code (claude)',
+      'agent.cli.codex': 'OpenAI Codex (codex)',
+      'agent.cli.copilot': 'GitHub Copilot (copilot)',
+      'agent.cli.agy': 'Google Antigravity (agy)',
+      'agent.cli.fake': 'Agent de test (fake)',
       'agent.model': 'Modèle',
       'agent.contextPrompt': 'Prompt de contexte',
       'agent.delete': 'Supprimer',
@@ -312,7 +317,9 @@
       'agent.warning.copyCmd': 'Copier la commande',
       'agent.warning.codexSandboxFallback': 'Vous pouvez aussi contourner le problème en lançant Sillage avec la variable d\'environnement SILLAGE_CODEX_SANDBOX=danger-full-access ; le confinement restant est alors celui de Sillage (worktree dédié, pas de push par l\'agent).',
       'agent.warning.codexSandboxLink': 'En savoir plus (documentation OpenAI Codex)',
-      'agent.warning.cliNotFound': 'CLI {cli} introuvable dans le PATH.',
+      'agent.warning.cliNotFound': 'Agent non connecté : CLI {cli} introuvable dans le PATH.',
+      'agent.warning.installHint': 'Installez le CLI, puis relancez Sillage :',
+      'agent.warning.installLink': 'Voir la documentation d’installation',
       'agent.quotaTitle': 'Quota',
       'agent.quotaWindow5h': '5 heures',
       'agent.quotaWindowWeek': 'Semaine',
@@ -720,6 +727,11 @@
       'agent.emoji': 'Emoji',
       'agent.color': 'Color',
       'agent.cli': 'CLI',
+      'agent.cli.claude': 'Claude Code (claude)',
+      'agent.cli.codex': 'OpenAI Codex (codex)',
+      'agent.cli.copilot': 'GitHub Copilot (copilot)',
+      'agent.cli.agy': 'Google Antigravity (agy)',
+      'agent.cli.fake': 'Test agent (fake)',
       'agent.model': 'Model',
       'agent.contextPrompt': 'Context prompt',
       'agent.delete': 'Delete',
@@ -731,7 +743,9 @@
       'agent.warning.copyCmd': 'Copy command',
       'agent.warning.codexSandboxFallback': 'You can also work around this by starting Sillage with the SILLAGE_CODEX_SANDBOX=danger-full-access environment variable; the remaining containment is then Sillage\'s own (dedicated worktree, no push from the agent).',
       'agent.warning.codexSandboxLink': 'Learn more (OpenAI Codex documentation)',
-      'agent.warning.cliNotFound': '{cli} CLI not found in PATH.',
+      'agent.warning.cliNotFound': 'Agent not connected: {cli} CLI not found in PATH.',
+      'agent.warning.installHint': 'Install the CLI, then restart Sillage:',
+      'agent.warning.installLink': 'Open the installation guide',
       'agent.quotaTitle': 'Quota',
       'agent.quotaWindow5h': '5 hours',
       'agent.quotaWindowWeek': 'Week',
@@ -2817,15 +2831,47 @@
   // vers la doc OpenAI. Uniquement pour la bannière d'avertissement (le title
   // d'un tooltip ne peut contenir ni HTML ni bouton).
   var CODEX_SANDBOX_FIX_CMD = 'sudo sysctl kernel.apparmor_restrict_unprivileged_userns=0';
+  var AGENT_CLI_INSTALL = {
+    claude: {
+      command: 'curl -fsSL https://claude.ai/install.sh | bash',
+      url: 'https://docs.anthropic.com/en/docs/claude-code/getting-started'
+    },
+    codex: {
+      command: 'npm install -g @openai/codex',
+      url: 'https://github.com/openai/codex'
+    },
+    copilot: {
+      command: 'curl -fsSL https://gh.io/copilot-install | bash',
+      url: 'https://docs.github.com/en/copilot/how-tos/copilot-cli/set-up-copilot-cli/install-copilot-cli'
+    },
+    agy: {
+      command: 'curl -fsSL https://antigravity.google/cli/install.sh | bash',
+      url: 'https://antigravity.google/docs/cli/install'
+    }
+  };
   function agentWarningExtrasHTML(warning) {
-    if (!warning || warning.indexOf('codex sandbox is blocked') === -1) return '';
-    return '<div class="agent-warning-cmd">' +
-      '<code class="mono">' + escapeHtml(CODEX_SANDBOX_FIX_CMD) + '</code>' +
-      '<button data-action="copy-path" data-path="' + escapeHtml(CODEX_SANDBOX_FIX_CMD) + '">' + escapeHtml(t('agent.warning.copyCmd')) + '</button>' +
-      '</div>' +
-      '<div class="agent-warning-fallback">' + escapeHtml(t('agent.warning.codexSandboxFallback')) + '</div>' +
-      '<a class="agent-warning-link" href="https://developers.openai.com/codex/concepts/sandboxing" target="_blank" rel="noopener noreferrer">' +
-      escapeHtml(t('agent.warning.codexSandboxLink')) + '</a>';
+    if (!warning) return '';
+    var missing = /^(\S+) CLI not found in PATH$/.exec(warning);
+    if (missing && AGENT_CLI_INSTALL[missing[1]]) {
+      var install = AGENT_CLI_INSTALL[missing[1]];
+      return '<div class="agent-warning-fallback">' + escapeHtml(t('agent.warning.installHint')) + '</div>' +
+        '<div class="agent-warning-cmd">' +
+          '<code class="mono">' + escapeHtml(install.command) + '</code>' +
+          '<button data-action="copy-path" data-path="' + escapeHtml(install.command) + '">' + escapeHtml(t('agent.warning.copyCmd')) + '</button>' +
+        '</div>' +
+        '<a class="agent-warning-link" href="' + escapeHtml(install.url) + '" target="_blank" rel="noopener noreferrer">' +
+          escapeHtml(t('agent.warning.installLink')) + '</a>';
+    }
+    if (warning.indexOf('codex sandbox is blocked') !== -1) {
+      return '<div class="agent-warning-cmd">' +
+        '<code class="mono">' + escapeHtml(CODEX_SANDBOX_FIX_CMD) + '</code>' +
+        '<button data-action="copy-path" data-path="' + escapeHtml(CODEX_SANDBOX_FIX_CMD) + '">' + escapeHtml(t('agent.warning.copyCmd')) + '</button>' +
+        '</div>' +
+        '<div class="agent-warning-fallback">' + escapeHtml(t('agent.warning.codexSandboxFallback')) + '</div>' +
+        '<a class="agent-warning-link" href="https://developers.openai.com/codex/concepts/sandboxing" target="_blank" rel="noopener noreferrer">' +
+        escapeHtml(t('agent.warning.codexSandboxLink')) + '</a>';
+    }
+    return '';
   }
 
   function buildReassignMenuHTML(task) {
@@ -3640,6 +3686,16 @@
 
   // Nouvelle tâche
 
+  function buildAgentContextPreviewHTML(agent) {
+    if (!agent) return '';
+    var context = agent.contextPrompt
+      ? '<div>' + escapeHtml(agent.contextPrompt) + '</div>'
+      : '';
+    if (!agent.warning) return context;
+    return context + '<div class="agent-choice-warning">⚠ ' + escapeHtml(agentWarningText(agent.warning)) +
+      agentWarningExtrasHTML(agent.warning) + '</div>';
+  }
+
   function buildNewTaskModalHTML(card) {
     // Groupe de radios : un seul arrêt de tabulation, les flèches changent
     // d'agent (tabindex roulant, cf. moveAgentChoice).
@@ -3672,7 +3728,7 @@
       '<div class="modal-label modal-label-row"><span>' + escapeHtml(t('newTask.agentLabel')) + '</span>' +
       '<span class="modal-label-hint">' + escapeHtml(t('newTask.agentHint')) + '</span></div>' +
       '<div class="agent-choices" id="agent-choices" role="radiogroup" aria-label="' + escapeHtml(t('newTask.agentLabel')) + '">' + agentChoices + '</div>' +
-      '<div class="agent-context-preview" id="agent-context-preview">' + (selected ? escapeHtml(selected.contextPrompt || '') : '') + '</div>' +
+      '<div class="agent-context-preview" id="agent-context-preview">' + buildAgentContextPreviewHTML(selected) + '</div>' +
       (project && project.contextPrompt ? '<div class="project-context-note">' + escapeHtml(t('newTask.projectContextNote')) + '</div>' : '') +
       (card && card.contextPrompt ? '<div class="project-context-note">' + escapeHtml(t('newTask.workstreamContextNote')) + '</div>' : '') +
       '<div id="new-task-error" class="modal-error hidden"></div>' +
@@ -3693,7 +3749,8 @@
   function openNewTaskModal(cardId) {
     var card = state.cardsById[cardId];
     if (!card) return;
-    modalAgentId = state.agents[0] ? state.agents[0].id : null;
+    var defaultAgent = state.agentsById.bolt || state.agents.find(function (a) { return !a.warning; }) || state.agents[0];
+    modalAgentId = defaultAgent ? defaultAgent.id : null;
     openModal(buildNewTaskModalHTML(card));
     setTimeout(function () { var el = document.getElementById('new-task-title'); if (el) el.focus(); }, 0);
   }
@@ -3709,7 +3766,7 @@
     });
     var preview = document.getElementById('agent-context-preview');
     var a = state.agentsById[agentId];
-    if (preview) preview.textContent = a ? (a.contextPrompt || '') : '';
+    if (preview) preview.innerHTML = buildAgentContextPreviewHTML(a);
   }
 
   // Flèches dans le groupe d'agents : décale la sélection de `delta` en
@@ -4168,9 +4225,9 @@
   function buildAgentModalHTML(agent) {
     var isEdit = !!agent;
     var title = isEdit ? t('agent.editTitle') : t('agent.newTitle');
-    var cliValues = ['claude', 'codex', 'fake'];
-    var cliOptions = cliValues.map(function (c) {
-      return '<option value="' + c + '"' + (agent && agent.cli === c ? ' selected' : '') + '>' + c + '</option>';
+    var cliValues = ['claude', 'codex', 'copilot', 'agy', 'fake'];
+    var cliOptions = cliValues.map(function (cli) {
+      return '<option value="' + cli + '"' + (agent && agent.cli === cli ? ' selected' : '') + '>' + escapeHtml(t('agent.cli.' + cli)) + '</option>';
     }).join('');
     var deleteRow = '';
     if (isEdit) {

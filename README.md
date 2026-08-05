@@ -5,7 +5,7 @@
 [![Go version](https://img.shields.io/github/go-mod/go-version/Halleck45/sillage)](go.mod)
 [![License: MIT](https://img.shields.io/badge/license-MIT-2f7d54)](LICENSE)
 
-**A calm web dashboard to pilot AI coding agents (Claude Code, Codex CLI) across your projects.**
+**A calm web dashboard to pilot AI coding agents (Claude Code, Codex CLI, GitHub Copilot, Antigravity) across your projects.**
 
 Sillage runs your agents in isolated git worktrees, streams their activity live, and never lets anything leave your machine without your explicit approval. **One self-contained binary, zero dependencies, zero configuration**: download, run, open a browser tab.
 
@@ -35,7 +35,7 @@ Also: multiple repositories per project, task reassignment, agent health warning
 
 ## Quickstart
 
-Sillage is a single static binary with the web UI embedded: no database, no runtime, no config files to write. The only things it talks to are `git` and your agent CLIs ([Claude Code](https://docs.anthropic.com/en/docs/claude-code) and/or [Codex CLI](https://github.com/openai/codex), logged in; the built-in free agent works without either).
+Sillage is a single static binary with the web UI embedded: no database, no runtime, no config files to write. The only things it talks to are `git` and the agent CLIs you choose: [Claude Code](https://docs.anthropic.com/en/docs/claude-code), [Codex CLI](https://github.com/openai/codex), [GitHub Copilot CLI](https://github.com/github/copilot-cli), and [Antigravity CLI](https://antigravity.google/product/antigravity-cli). The built-in free agent works without any external CLI.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Halleck45/sillage/main/install.sh | sh
@@ -64,7 +64,7 @@ Add a project (any local git repository), create a card, create a task, pick an 
 
 ## Security model
 
-- Agents run headless with a fixed allowlist of tools: file edits and read-only commands inside the task worktree. Never `git push`, never permission bypass flags.
+- Agents run headless with explicit tool permissions or a workspace sandbox. Outbound Git commands stay denied, and Antigravity never receives its permission-bypass flag.
 - The server binds to `127.0.0.1` by default. Optional password login (bcrypt, `SILLAGE_PASSWORD`), HttpOnly session cookies, login rate limiting, JSON content-type enforcement on mutations.
 - **Never expose the HTTP port directly to the internet.** For remote access use [Tailscale](https://tailscale.com) (`sillage -addr <tailscale-ip>:8787`) or a TLS reverse proxy; the session cookie switches to Secure automatically behind `X-Forwarded-Proto: https`.
 - Data lives in `~/.local/share/sillage` (JSON state, atomic writes) plus one git worktree per task.
@@ -74,16 +74,19 @@ Note for codex agents: Sillage runs them with `--sandbox workspace-write`. On ma
 
 ## Agents
 
-Four agents are seeded on first run and stored in the state file (editable there for now, UI coming):
+Seven editable agents are seeded. Existing workspaces receive the two new external profiles once; deleting either profile remains permanent.
 
 | Agent | CLI | Role |
 |---|---|---|
 | Bolt 🐝 | claude (sonnet) | pragmatic backend developer |
 | Muse 🦊 | claude (opus) | product, specs, documentation |
 | Otto 🦉 | codex | infrastructure, CI, tooling |
+| Fably 🪶 | claude (fable) | pragmatic developer |
+| Octo 🐙 | copilot | pragmatic developer |
+| Astro 🚀 | agy | pragmatic developer |
 | Écho 🧪 | built-in fake | free local agent for demos and tests |
 
-Each agent has a context prompt appended to its system prompt, and a model. Conversations resume the underlying CLI session, so follow-up messages keep full context.
+Each agent has an editable context prompt and model. A missing CLI is shown as not connected; clicking the agent gives you its installation command. Claude resumes its CLI session, while one-shot adapters replay the recent conversation for follow-up messages.
 
 ## Architecture
 

@@ -13,7 +13,7 @@ internal/server/
   auth.go                    // bcrypt, sessions, middleware, rate-limit login
   sse.go                     // Hub SSE
   git.go                     // worktrees, diff parse, commits, push
-  runner.go                  // adaptateurs claude / codex / fake
+  runner.go                  // adaptateurs claude / codex / copilot / agy / fake
   preview.go                 // superviseur des recettes manuelles (process + journal)
   preview_handlers.go        // routes de recette
   update.go                  // version, détection de mise à jour, application, redémarrage
@@ -117,6 +117,16 @@ Jamais de `--dangerously-skip-permissions`. Jamais `git push` dans allowedTools.
 
 Le quota de compte (`rate_limits`) n'est PAS porté par ce flux stdout, seulement par le fichier de session que codex écrit de son côté même en mode `exec` (`~/.codex/sessions/AAAA/MM/JJ/rollout-...-<thread_id>.jsonl`) : `readCodexRateLimits` retrouve ce fichier via le `thread_id` capturé sur l'événement `thread.started` du flux, lit son dernier `rate_limits` et met à jour `Store.CodexQuota` (best-effort, jamais bloquant). Voir SPEC-API.md « Quota des agents ».
 
+### Adaptateur GitHub Copilot (`cli:"copilot"`)
+
+`copilot --autopilot --max-autopilot-continues=10 --no-ask-user --allow-tool=read,write,shell --deny-tool=<refus figés> --disable-builtin-mcps --no-remote --no-remote-export --no-auto-update --no-color --stream=off --silent [--model=<model>] -p <texte>`.
+
+Le texte contient les contextes agent, projet et chantier avant le prompt. Le stdout texte devient un Message agent final. Pas de reprise de session ni de compteurs de tokens. Les refus figés couvrent `git push`, `gh`, `glab` et les réglages Copilot du dépôt ; ils l'emportent sur les outils autorisés. Les MCP GitHub et les fonctions de contrôle distant sont désactivés.
+
+### Adaptateur Antigravity (`cli:"agy"`)
+
+`agy --print --sandbox --print-timeout=60m [--model <model>] <texte>`. Le texte contient les contextes agent, projet et chantier avant le prompt ; le stdout texte devient un Message agent final. Pas de reprise de session ni de compteurs de tokens. Le mode sandbox est toujours forcé ; `--dangerously-skip-permissions` n'est jamais utilisé.
+
 ### Adaptateur fake (`cli:"fake"`)
 
 Sans exec : goroutine qui simule ~3 s de travail : 3 lignes d'activité espacées, écrit/complète un fichier `SILLAGE-TEST.md` dans le worktree (contenu horodaté), un Message agent de synthèse, usage fictif `{input:1200, output:340, costUsd:0.004}`. Sert aux tests et à la démo sans coût.
@@ -149,7 +159,7 @@ Voir SPEC-API.md §« Mises à jour de Sillage » pour le contrat.
 
 ## Seed (premier lancement)
 
-Agents : Bolt 🐝 `#f2b705` claude/sonnet (contexte : dev backend pragmatique) ; Muse 🦊 `#d0662f` claude/opus (produit, specs, docs) ; Otto 🦉 `#4f7d2f` codex/(modèle vide = défaut) (infra) ; Écho 🧪 `#777` fake (agent de test local, gratuit). Pas de projets seedés.
+Agents : Bolt 🐝 `#f2b705` claude/sonnet ; Muse 🦊 `#d0662f` claude/opus ; Otto 🦉 `#4f7d2f` codex/(modèle vide = défaut) ; Fably 🪶 `#6b4fbb` claude/fable ; Octo 🐙 `#24292f` copilot/(modèle par défaut) ; Astro 🚀 `#4285f4` agy/(modèle par défaut) ; Écho 🧪 `#777` fake (agent de test local, gratuit). Pas de projets seedés. Les deux agents externes ajoutés après le premier lancement sont migrés une seule fois via `AgentSeedVersion`, afin qu'une suppression volontaire reste définitive.
 
 ## Handlers
 

@@ -21,7 +21,12 @@ import (
 // les champs exportés du Store sont sérialisés tels quels, une version qui ne
 // connaît pas un champ le fait disparaître du fichier à sa première
 // sauvegarde, en silence (voir ErrStateTooNew).
-const stateFormatVersion = 1
+const stateFormatVersion = 2
+
+// agentSeedVersion tracks one-time additions to the built-in agent profiles.
+// Unlike checking for an ID at every startup, this lets users delete a seeded
+// agent without Sillage recreating it on the next launch.
+const agentSeedVersion = 1
 
 // ErrStateTooNew : le fichier vient d'une version plus récente de Sillage.
 // Refuser de démarrer est le seul comportement sûr, parce que charger puis
@@ -52,6 +57,11 @@ type Store struct {
 	Agents    map[string]Agent
 	Workspace Workspace
 	Settings  Settings
+
+	// AgentSeedVersion records which built-in agent additions have already been
+	// offered to this workspace. It does not prevent users from editing or
+	// deleting those agents afterwards.
+	AgentSeedVersion int
 
 	// CodexQuota est le dernier instantané de quota codex connu (voir
 	// AgentQuota), mis à jour en best-effort après chaque exécution codex
@@ -121,8 +131,24 @@ func loadStoreFile(dataDir string) (*Store, error) {
 	migrateLegacyDelivery(s)
 	migrateProjectAllowedTools(s)
 	migrateCardRefs(s)
+	migrateAgentSeeds(s)
 	resetTransientTaskFlags(s)
 	return s, nil
+}
+
+// migrateAgentSeeds adds profiles introduced after a workspace was created.
+// Existing agents with the same IDs always win so user customizations remain
+// untouched.
+func migrateAgentSeeds(s *Store) {
+	if s.AgentSeedVersion >= agentSeedVersion {
+		return
+	}
+	for id, agent := range newExternalAgentSeeds() {
+		if _, exists := s.Agents[id]; !exists {
+			s.Agents[id] = agent
+		}
+	}
+	s.AgentSeedVersion = agentSeedVersion
 }
 
 // resetTransientTaskFlags remet à zéro les états de tâche qui ne décrivent
@@ -267,6 +293,7 @@ func (s *Store) ReloadFromDisk() error {
 	s.Agents = fresh.Agents
 	s.Workspace = fresh.Workspace
 	s.Settings = fresh.Settings
+	s.AgentSeedVersion = fresh.AgentSeedVersion
 	s.NextProjectN = fresh.NextProjectN
 	s.NextCardN = fresh.NextCardN
 	s.NextTaskN = fresh.NextTaskN
@@ -362,6 +389,24 @@ func (s *Store) initEmpty() {
 		ID: "echo", Name: "Écho", Emoji: "🧪", Color: "#777777",
 		Model: "", Cli: "fake",
 		ContextPrompt: "Local test agent, free of charge, for demos and checks.",
+	}
+	for id, agent := range newExternalAgentSeeds() {
+		s.Agents[id] = agent
+	}
+	s.AgentSeedVersion = agentSeedVersion
+}
+
+func newExternalAgentSeeds() map[string]Agent {
+	const contextPrompt = "You are a pragmatic developer, focused on quality and simplicity."
+	return map[string]Agent{
+		"github-copilot": {
+			ID: "github-copilot", Name: "Octo", Emoji: "🐙", Color: "#24292f",
+			Cli: "copilot", ContextPrompt: contextPrompt,
+		},
+		"antigravity": {
+			ID: "antigravity", Name: "Astro", Emoji: "🚀", Color: "#4285f4",
+			Cli: "agy", ContextPrompt: contextPrompt,
+		},
 	}
 }
 
@@ -739,15 +784,15 @@ var apparmorRestrictPath = "/proc/sys/kernel/apparmor_restrict_unprivileged_user
 func agentWarning(a Agent) string {
 	switch a.Cli {
 	case "codex":
-		if apparmorRestrictsUserNamespaces() && os.Getenv("SILLAGE_CODEX_SANDBOX") == "" {
-			return "codex sandbox is blocked on this machine (AppArmor); see README (SILLAGE_CODEX_SANDBOX)"
-		}
 		if _, err := lookPath("codex"); err != nil {
 			return "codex CLI not found in PATH"
 		}
-	case "claude":
-		if _, err := lookPath("claude"); err != nil {
-			return "claude CLI not found in PATH"
+		if apparmorRestrictsUserNamespaces() && os.Getenv("SILLAGE_CODEX_SANDBOX") == "" {
+			return "codex sandbox is blocked on this machine (AppArmor); see README (SILLAGE_CODEX_SANDBOX)"
+		}
+	case "claude", "copilot", "agy":
+		if _, err := lookPath(a.Cli); err != nil {
+			return a.Cli + " CLI not found in PATH"
 		}
 	}
 	return ""
@@ -1584,10 +1629,19 @@ func Slugify(title string) string {
 
 // --- Agents (CRUD) ---
 
-var validCli = map[string]bool{"claude": true, "codex": true, "fake": true}
+var validCli = map[string]bool{
+	"agy":     true,
+	"claude":  true,
+	"codex":   true,
+	"copilot": true,
+	"fake":    true,
+}
+
+const validCliDescription = "claude, codex, copilot, agy or fake"
 
 // AddAgent crée un agent. name et cli sont obligatoires ; cli doit être
-// claude, codex ou fake ; l'identifiant est le slug du nom (unique).
+// claude, codex, copilot, agy ou fake ; l'identifiant est le slug du nom
+// (unique).
 func (s *Store) AddAgent(name, emoji, color, cli, model, contextPrompt string) (Agent, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -1595,7 +1649,7 @@ func (s *Store) AddAgent(name, emoji, color, cli, model, contextPrompt string) (
 		return Agent{}, fmt.Errorf("name and cli are required")
 	}
 	if !validCli[cli] {
-		return Agent{}, fmt.Errorf("invalid cli: must be claude, codex or fake")
+		return Agent{}, fmt.Errorf("invalid cli: must be %s", validCliDescription)
 	}
 	id := Slugify(name)
 	if _, exists := s.Agents[id]; exists {
@@ -1620,7 +1674,7 @@ func (s *Store) UpdateAgent(id string, name, emoji, color, cli, model, contextPr
 	}
 	if cli != nil {
 		if !validCli[*cli] {
-			return Agent{}, fmt.Errorf("invalid cli: must be claude, codex or fake")
+			return Agent{}, fmt.Errorf("invalid cli: must be %s", validCliDescription)
 		}
 		a.Cli = *cli
 	}
