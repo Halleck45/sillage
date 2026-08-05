@@ -1232,20 +1232,43 @@ func antigravityArgs(agent Agent, cliInput string) []string {
 
 func (r *Runner) runCopilot(task *Task, agent Agent, project Project, card Card, handle *procHandle, cliInput string) error {
 	cliInput = prefixAgentContext(agent, project, card, cliInput)
-	return r.runTextCLI(task, agent, handle, "copilot", copilotArgs(agent, cliInput))
+	return r.runTextCLI(task, agent, handle, "copilot", copilotArgs(agent, cliInput), copilotEnv())
 }
 
 func (r *Runner) runAntigravity(task *Task, agent Agent, project Project, card Card, handle *procHandle, cliInput string) error {
 	cliInput = prefixAgentContext(agent, project, card, cliInput)
-	return r.runTextCLI(task, agent, handle, "agy", antigravityArgs(agent, cliInput))
+	return r.runTextCLI(task, agent, handle, "agy", antigravityArgs(agent, cliInput), nil)
+}
+
+// copilotEnv strips a classic GitHub PAT (the "ghp_" prefix) from GITHUB_TOKEN
+// before it reaches the copilot binary. The CLI refuses to start at all when
+// it finds one ("Classic Personal Access Tokens are not supported"), even
+// though this token is never needed inside the sandbox: copilotDeniedTools
+// already blocks git push/gh/glab, and Sillage itself never reads this
+// variable. Leaving it set otherwise breaks every copilot task on a machine
+// where GITHUB_TOKEN happens to hold an old classic PAT for unrelated tools.
+// Fine-grained PATs and an unset GITHUB_TOKEN pass through untouched, so
+// gh's own auth (gh auth login, copilot's /login) keeps working.
+func copilotEnv() []string {
+	env := os.Environ()
+	filtered := make([]string, 0, len(env))
+	for _, kv := range env {
+		if strings.HasPrefix(kv, "GITHUB_TOKEN=ghp_") {
+			continue
+		}
+		filtered = append(filtered, kv)
+	}
+	return filtered
 }
 
 // runTextCLI runs a non-interactive CLI whose stdout is its final answer.
 // Copilot and Antigravity currently do not expose token accounting in this
 // mode, so the adapter deliberately records only the response and exit error.
-func (r *Runner) runTextCLI(task *Task, agent Agent, handle *procHandle, binary string, args []string) error {
+// A nil env makes the child inherit the process environment unchanged.
+func (r *Runner) runTextCLI(task *Task, agent Agent, handle *procHandle, binary string, args []string, env []string) error {
 	cmd := exec.Command(binary, args...)
 	cmd.Dir = task.WorktreeDir
+	cmd.Env = env
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 
 	stdout, err := cmd.StdoutPipe()
