@@ -1,6 +1,7 @@
 package server
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -1101,6 +1102,66 @@ func TestAgentWarningAntigravityToolPermission(t *testing.T) {
 		if got := agentWarning(Agent{Cli: "agy"}); got != want {
 			t.Fatalf("settings %s: warning = %q, want %q", settings, got, want)
 		}
+	}
+}
+
+func TestFixAntigravityToolPermission(t *testing.T) {
+	origSettings := antigravitySettingsPath
+	defer func() { antigravitySettingsPath = origSettings }()
+	dir := t.TempDir()
+	antigravitySettingsPath = filepath.Join(dir, "nested", "settings.json")
+
+	// Fichier (et dossier) absents : le correctif les crée.
+	if err := fixAntigravityToolPermission(); err != nil {
+		t.Fatalf("fixAntigravityToolPermission: %v", err)
+	}
+	if !antigravityAllowsHeadlessCommands() {
+		t.Fatal("the policy should allow headless commands after the fix")
+	}
+
+	// Les autres clés de l'utilisateur survivent : c'est son fichier.
+	kept := `{"enableTelemetry":false,"trustedWorkspaces":["/home/me/repo"],"toolPermission":"request-review"}`
+	if err := os.WriteFile(antigravitySettingsPath, []byte(kept), 0o600); err != nil {
+		t.Fatalf("écriture settings : %v", err)
+	}
+	if err := os.Chmod(antigravitySettingsPath, 0o600); err != nil { // le fichier existait déjà : WriteFile ne change pas ses droits
+		t.Fatalf("chmod settings : %v", err)
+	}
+	if err := fixAntigravityToolPermission(); err != nil {
+		t.Fatalf("fixAntigravityToolPermission: %v", err)
+	}
+	data, err := os.ReadFile(antigravitySettingsPath)
+	if err != nil {
+		t.Fatalf("relecture settings : %v", err)
+	}
+	var got struct {
+		EnableTelemetry   bool     `json:"enableTelemetry"`
+		TrustedWorkspaces []string `json:"trustedWorkspaces"`
+		ToolPermission    string   `json:"toolPermission"`
+	}
+	if err := json.Unmarshal(data, &got); err != nil {
+		t.Fatalf("settings illisibles après correctif : %v", err)
+	}
+	if got.ToolPermission != "proceed-in-sandbox" {
+		t.Fatalf("toolPermission = %q, want proceed-in-sandbox", got.ToolPermission)
+	}
+	if got.EnableTelemetry || len(got.TrustedWorkspaces) != 1 || got.TrustedWorkspaces[0] != "/home/me/repo" {
+		t.Fatalf("the other keys should survive untouched, got %s", data)
+	}
+	if info, err := os.Stat(antigravitySettingsPath); err != nil || info.Mode().Perm() != 0o600 {
+		t.Fatalf("file mode should be preserved, got %v (%v)", info.Mode().Perm(), err)
+	}
+
+	// Fichier illisible : refuser plutôt que perdre la configuration.
+	broken := []byte("{ not json")
+	if err := os.WriteFile(antigravitySettingsPath, broken, 0o600); err != nil {
+		t.Fatalf("écriture settings : %v", err)
+	}
+	if err := fixAntigravityToolPermission(); err == nil {
+		t.Fatal("an unreadable settings file should be an error, not an overwrite")
+	}
+	if data, _ := os.ReadFile(antigravitySettingsPath); string(data) != string(broken) {
+		t.Fatalf("the unreadable file should be left untouched, got %s", data)
 	}
 }
 
