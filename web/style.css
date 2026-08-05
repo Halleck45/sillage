@@ -926,7 +926,6 @@ button, input, textarea { font-family: inherit; }
 .agent-choice-info { flex: 1; min-width: 0; }
 .agent-choice-name { display: block; font-size: 13.5px; font-weight: 600; letter-spacing: -0.01em; }
 .agent-choice-model { display: block; margin-top: 2px; font-size: 10.5px; color: var(--muted-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.agent-context-preview { margin-top: 10px; padding: 11px 13px; background: #faf9f6; border-radius: 10px; font-size: 12.5px; line-height: 1.5; color: var(--text-3); }
 .project-context-note { margin-top: 8px; font-size: 11.5px; color: var(--muted-3); }
 
 /* ---------- New surfaces (v0.2) ---------- */
