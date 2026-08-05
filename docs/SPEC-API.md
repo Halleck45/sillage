@@ -175,6 +175,7 @@ PreviewRun { "id": "pv1", "projectId": "p1", "cardId": "c1", "taskId": "",
 | POST | `/api/agents` | `{name, emoji?, color?, cli, model?, contextPrompt?}` | Agent (name et cli requis ; cli ∈ {claude, codex, copilot, agy, fake} ; id = slug du name, 400 si déjà pris) |
 | PATCH | `/api/agents/{id}` | mêmes champs, tous optionnels | Agent |
 | DELETE | `/api/agents/{id}` | | 204 (400 si une tâche référence encore l'agent) |
+| POST | `/api/agents/{id}/fix-warning` | | AgentOut, avertissement recalculé (donc vide si le correctif a marché). Applique le seul correctif de configuration machine que Sillage sait poser : `"toolPermission": "proceed-in-sandbox"` dans `~/.gemini/antigravity-cli/settings.json`. 404 agent inconnu, 400 `"no automatic fix for this agent"` si `cli != "agy"`, 500 si le fichier existe mais n'est pas du JSON valide (il n'est alors **pas** écrasé). Les autres clés du fichier sont conservées. SSE : `agents` |
 | POST | `/api/projects` | `{name?, path}` ou `{name?, repos:[{name?,path}, ...], description?, contextPrompt?, links?:[{url,title?}, ...], delivery?}` | Project (400 si aucun dépôt, un path invalide/pas un dépôt git, noms de repo dupliqués, mode de livraison inconnu, ou lien invalide/en trop grand nombre). Seul le chemin d'un dépôt est requis : `name` absent ou vide = basename du premier dépôt, `delivery` absent = déduit des remotes des dépôts (voir « Livraison d'un chantier ») |
 | PATCH | `/api/projects/{id}` | `{name?, description?, checkCmd?, contextPrompt?, allowedTools?, repos?, links?, delivery?}` | Project (repos/links/allowedTools, si fournis, remplacent la liste entière ; retirer un repo ne casse pas les tâches existantes ; `previewCmd`/`previewUrl` se posent sur chaque Repo, et une `previewUrl` non http(s) est refusée en 400) |
 | DELETE | `/api/projects/{id}` | `{confirm:true}` | 204 (voir « Suppressions » ci-dessous). **Validation humaine obligatoire** : refus 400 sans `confirm` |
@@ -278,6 +279,8 @@ Actions destructives, jamais déclenchées depuis les listes : confirmation doub
 - `cli=codex`, `cli=claude`, `cli=copilot` ou `cli=agy` : si le binaire correspondant est introuvable dans le PATH → `"<cli> CLI not found in PATH"`.
 - `cli=agy` : si `~/.gemini/antigravity-cli/settings.json` n'autorise pas les commandes sans confirmation (`toolPermission` différent de `proceed-in-sandbox` et `always-proceed`, et aucune règle `command(...)` dans `permissions.allow`), fichier absent inclus → `"agy refuses commands headlessly; set \"toolPermission\": \"proceed-in-sandbox\" in ~/.gemini/antigravity-cli/settings.json"`.
 - Sinon (ou `cli=fake`) : chaîne vide.
+
+Un seul de ces avertissements se corrige en un clic (`POST /api/agents/{id}/fix-warning`) : la politique d'agy, parce qu'elle n'est qu'une ligne dans un fichier de configuration. Installer une CLI absente ou lever une restriction AppArmor demande une installation ou un `sudo` : ces deux avertissements restent expliqués, avec leur commande à copier, et Sillage ne les exécute pas.
 
 ### Quota des agents
 

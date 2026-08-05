@@ -330,6 +330,9 @@
       'agent.warning.agyPolicy': 'Antigravity demande votre accord avant chaque commande, et personne ne peut le donner quand un agent travaille tout seul : l\'accord est refusé d\'office et la tâche se termine sans rien produire. Sa politique d\'exécution doit faire confiance au bac à sable.',
       'agent.warning.agyPolicyHint': 'Ajoutez cette ligne dans ~/.gemini/antigravity-cli/settings.json. Les commandes se lanceront alors sans question, mais seulement dans le bac à sable, que Sillage impose toujours à cet agent.',
       'agent.warning.agyPolicyLink': 'Voir la documentation d’Antigravity CLI',
+      'agent.warning.agyPolicyFix': 'Régler pour moi',
+      'agent.warning.agyPolicyFixConfirm': 'Écrire dans settings.json ?',
+      'agent.warning.agyPolicyFixed': 'Réglé. Antigravity peut travailler dans son bac à sable.',
       'agent.warning.cliNotFound': 'Agent non connecté : CLI {cli} introuvable dans le PATH.',
       'agent.warning.installHint': 'Installez le CLI, puis relancez Sillage :',
       'agent.warning.installLink': 'Voir la documentation d’installation',
@@ -769,6 +772,9 @@
       'agent.warning.agyPolicy': 'Antigravity asks for your approval before every command, and nobody can give it while an agent works on its own: approval is denied outright and the task ends without producing anything. Its execution policy has to trust the sandbox.',
       'agent.warning.agyPolicyHint': 'Add this line to ~/.gemini/antigravity-cli/settings.json. Commands will then run without asking, but only inside the sandbox, which Sillage always forces on this agent.',
       'agent.warning.agyPolicyLink': 'Open the Antigravity CLI documentation',
+      'agent.warning.agyPolicyFix': 'Set it for me',
+      'agent.warning.agyPolicyFixConfirm': 'Write to settings.json?',
+      'agent.warning.agyPolicyFixed': 'Set. Antigravity can work inside its sandbox.',
       'agent.warning.cliNotFound': 'Agent not connected: {cli} CLI not found in PATH.',
       'agent.warning.installHint': 'Install the CLI, then restart Sillage:',
       'agent.warning.installLink': 'Open the installation guide',
@@ -1256,6 +1262,7 @@
     var id = el.getAttribute('data-confirm-id');
     handleConfirmClick(key, function () {
       if (kind === 'agent-delete') doDeleteAgent(id);
+      else if (kind === 'agent-fix') doFixAgentWarning(id);
       else if (kind === 'workspace-sync') doWorkspaceSync();
       else if (kind === 'task-cancel') doCancelTask(id);
       else if (kind === 'task-delete') doDeleteTask(id);
@@ -2911,7 +2918,7 @@
       url: 'https://antigravity.google/docs/cli/install'
     }
   };
-  function agentWarningExtrasHTML(warning) {
+  function agentWarningExtrasHTML(warning, agentId) {
     if (!warning) return '';
     var missing = /^(\S+) CLI not found in PATH$/.exec(warning);
     if (missing && AGENT_CLI_INSTALL[missing[1]]) {
@@ -2925,10 +2932,15 @@
           escapeHtml(t('agent.warning.installLink')) + '</a>';
     }
     if (warning.indexOf('agy refuses commands headlessly') !== -1) {
+      var fixKey = 'agent-fix:' + agentId;
+      var fixLabel = isPendingConfirm(fixKey) ? t('agent.warning.agyPolicyFixConfirm') : t('agent.warning.agyPolicyFix');
       return '<div class="agent-warning-fallback">' + escapeHtml(t('agent.warning.agyPolicyHint')) + '</div>' +
         '<div class="agent-warning-cmd">' +
           '<code class="mono">' + escapeHtml(AGY_POLICY_FIX_LINE) + '</code>' +
           '<button data-action="copy-path" data-path="' + escapeHtml(AGY_POLICY_FIX_LINE) + '">' + escapeHtml(t('agent.warning.copyCmd')) + '</button>' +
+        '</div>' +
+        '<div class="agent-warning-action">' +
+          '<button class="btn-outline" data-action="confirm-click" data-confirm-key="' + fixKey + '" data-confirm-action="agent-fix" data-confirm-id="' + escapeHtml(agentId) + '" data-default-label="' + escapeHtml(t('agent.warning.agyPolicyFix')) + '" data-confirm-label="' + escapeHtml(t('agent.warning.agyPolicyFixConfirm')) + '">' + escapeHtml(fixLabel) + '</button>' +
         '</div>' +
         '<a class="agent-warning-link" href="https://antigravity.google/docs/cli/reference" target="_blank" rel="noopener noreferrer">' +
           escapeHtml(t('agent.warning.agyPolicyLink')) + '</a>';
@@ -3780,7 +3792,7 @@
   function buildAgentChoiceWarningHTML(agent) {
     if (!agent || !agent.warning) return '';
     return '<div class="agent-choice-warning">⚠ ' + escapeHtml(agentWarningText(agent.warning)) +
-      agentWarningExtrasHTML(agent.warning) + '</div>';
+      agentWarningExtrasHTML(agent.warning, agent.id) + '</div>';
   }
 
   function buildNewTaskModalHTML(card) {
@@ -4344,7 +4356,7 @@
         '<button class="delete-link" data-action="confirm-click" data-confirm-key="' + delKey + '" data-confirm-action="agent-delete" data-confirm-id="' + agent.id + '" data-default-label="' + escapeHtml(t('agent.delete')) + '" data-confirm-label="' + escapeHtml(t('agent.deleteConfirm')) + '">' + escapeHtml(delLabel) + '</button>' +
         '</div>';
     }
-    var warningExtras = agent ? agentWarningExtrasHTML(agent.warning) : '';
+    var warningExtras = agent ? agentWarningExtrasHTML(agent.warning, agent.id) : '';
     var warningBanner = (agent && agent.warning) ? '<div class="agent-warning-banner">⚠ ' + escapeHtml(agentWarningText(agent.warning)) + warningExtras + '</div>' : '';
     var quotaSection = isEdit ? buildAgentQuotaHTML(agent) : '';
     return '<div class="modal">' +
@@ -4401,6 +4413,39 @@
       renderSidebar();
     }).catch(function (e) {
       showAgentModalError((e instanceof ApiError && e.message) || t('agent.errorSaveFailed'));
+    });
+  }
+  // Correction de la configuration machine d'un agent (aujourd'hui : la
+  // politique d'exécution d'agy). L'avertissement disparaît sur place : la
+  // bannière devient sa propre confirmation, sans re-rendu de la modale ouverte
+  // (elle peut être celle de l'agent comme le choix d'agent d'une tâche).
+  function doFixAgentWarning(agentId) {
+    api('/api/agents/' + agentId + '/fix-warning', { method: 'POST' }).then(function (agent) {
+      var i = state.agents.findIndex(function (a) { return a.id === agent.id; });
+      if (i >= 0) state.agents[i] = agent;
+      reindex();
+      renderSidebar();
+      var banners = document.querySelectorAll('.agent-warning-banner, .agent-choice-warning');
+      for (var b = 0; b < banners.length; b++) {
+        banners[b].textContent = '✓ ' + t('agent.warning.agyPolicyFixed');
+      }
+    }).catch(function (e) {
+      // Un échec ici (settings.json illisible, droits) doit se voir là où on a
+      // cliqué : la modale d'agent a son emplacement d'erreur, le choix d'agent
+      // d'une nouvelle tâche non.
+      var msg = (e instanceof ApiError && e.message) || t('agent.errorSaveFailed');
+      showAgentModalError(msg);
+      var actions = document.querySelectorAll('.agent-warning-action');
+      for (var a = 0; a < actions.length; a++) {
+        var line = actions[a].querySelector('.agent-warning-error');
+        if (!line) {
+          line = document.createElement('div');
+          line.className = 'agent-warning-fallback agent-warning-error';
+          actions[a].appendChild(line);
+        }
+        line.textContent = msg;
+      }
+      patchConfirmButtons('agent-fix:' + agentId);
     });
   }
   function doDeleteAgent(agentId) {

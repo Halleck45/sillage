@@ -549,6 +549,8 @@ button, input, textarea { font-family: inherit; }
   cursor: pointer; font-size: 11.5px; padding: 0; flex: none;
 }
 .agent-warning-fallback { margin-top: 6px; font-size: 11.5px; opacity: 0.9; }
+.agent-warning-action { margin-top: 8px; }
+.agent-warning-action button { font-size: 12px; padding: 4px 10px; }
 .agent-warning-link { display: inline-block; margin-top: 6px; color: inherit; text-decoration: underline; }
 .reassign-menu {
   position: absolute; top: 26px; left: 0; z-index: 6;

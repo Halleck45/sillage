@@ -1247,8 +1247,19 @@ func (r *Runner) runCopilot(task *Task, agent Agent, project Project, card Card,
 	return r.runTextCLI(task, agent, handle, "copilot", copilotArgs(agent, cliInput), copilotEnv())
 }
 
+// antigravityWorktreeNote prévient l'agent de la particularité de son
+// répertoire qui l'a déjà fait échouer : une tâche travaille dans un worktree
+// git lié, où `.git` est un fichier d'une ligne qui pointe ailleurs. Un modèle
+// qui explore essaie de l'ouvrir ; agy traite ce chemin comme sensible et exige
+// une confirmation, impossible en mode headless, donc la session s'arrête sur
+// le champ sans rien produire. Aucune règle d'autorisation générale ne couvre
+// le cas : `permissions.allow` n'accepte pas de motif de chemin
+// (`read_file(<dossier>/*)` ne correspond à rien), seulement des chemins
+// exacts, qui changent à chaque tâche. Le prévenir coûte deux lignes de prompt.
+const antigravityWorktreeNote = "Environment: your working directory is a linked git worktree, so `.git` is a one-line pointer file, not a directory. Never open it: that read is refused and ends your session without any answer. Use git commands (`git status`, `git log`, `git diff`) instead."
+
 func (r *Runner) runAntigravity(task *Task, agent Agent, project Project, card Card, handle *procHandle, cliInput string) error {
-	cliInput = prefixAgentContext(agent, project, card, cliInput)
+	cliInput = prefixAgentContext(agent, project, card, antigravityWorktreeNote+"\n\n"+cliInput)
 	return r.runTextCLI(task, agent, handle, "agy", antigravityArgs(agent, task.WorktreeDir, cliInput), nil)
 }
 

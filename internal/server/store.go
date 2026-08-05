@@ -860,6 +860,63 @@ func antigravityAllowsHeadlessCommands() bool {
 	return false
 }
 
+// antigravityToolPermissionFix est la politique posée par le correctif : les
+// commandes partent sans confirmation, mais uniquement dans le bac à sable, que
+// Sillage force toujours pour cet agent.
+const antigravityToolPermissionFix = "proceed-in-sandbox"
+
+// fixAntigravityToolPermission règle toolPermission dans le fichier de
+// configuration de la CLI agy. C'est le seul endroit où cette politique
+// s'exprime, et Sillage n'y touche que sur demande explicite de l'humain
+// (bouton de l'avertissement de l'agent).
+//
+// Les autres clés sont relues et réécrites telles quelles : le fichier
+// appartient à l'utilisateur, et il y garde par exemple ses espaces de travail
+// de confiance. Un fichier illisible n'est jamais écrasé : mieux vaut refuser
+// et le dire que perdre une configuration.
+func fixAntigravityToolPermission() error {
+	if antigravitySettingsPath == "" {
+		return fmt.Errorf("cannot locate the agy settings file")
+	}
+	settings := map[string]any{}
+	mode := os.FileMode(0o644)
+	data, err := os.ReadFile(antigravitySettingsPath)
+	switch {
+	case err == nil:
+		if len(strings.TrimSpace(string(data))) > 0 {
+			if err := json.Unmarshal(data, &settings); err != nil {
+				return fmt.Errorf("agy settings file is not valid JSON, fix it by hand: %w", err)
+			}
+		}
+		if info, err := os.Stat(antigravitySettingsPath); err == nil {
+			mode = info.Mode().Perm()
+		}
+	case os.IsNotExist(err):
+		if err := os.MkdirAll(filepath.Dir(antigravitySettingsPath), 0o755); err != nil {
+			return err
+		}
+	default:
+		return err
+	}
+
+	settings["toolPermission"] = antigravityToolPermissionFix
+	out, err := json.MarshalIndent(settings, "", "  ")
+	if err != nil {
+		return err
+	}
+	out = append(out, '\n')
+
+	tmp := antigravitySettingsPath + ".sillage-tmp"
+	if err := os.WriteFile(tmp, out, mode); err != nil {
+		return err
+	}
+	if err := os.Rename(tmp, antigravitySettingsPath); err != nil {
+		_ = os.Remove(tmp)
+		return err
+	}
+	return nil
+}
+
 // apparmorRestrictsUserNamespaces lit apparmorRestrictPath : "1" signifie que
 // les espaces de noms utilisateur non privilégiés sont restreints.
 func apparmorRestrictsUserNamespaces() bool {

@@ -160,6 +160,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/agents", s.handleCreateAgent)
 	mux.HandleFunc("PATCH /api/agents/{id}", s.handleUpdateAgent)
 	mux.HandleFunc("DELETE /api/agents/{id}", s.handleDeleteAgent)
+	mux.HandleFunc("POST /api/agents/{id}/fix-warning", s.handleFixAgentWarning)
 	mux.HandleFunc("POST /api/projects", s.handleCreateProject)
 	mux.HandleFunc("PATCH /api/projects/{id}", s.handleUpdateProject)
 	mux.HandleFunc("DELETE /api/projects/{id}", s.handleDeleteProject)
@@ -651,6 +652,37 @@ func (s *Server) handleUpdateAgent(w http.ResponseWriter, r *http.Request) {
 	}
 	s.runner.publishAgents()
 	writeJSON(w, http.StatusOK, agent)
+}
+
+// handleFixAgentWarning applique le correctif de configuration machine que
+// Sillage sait poser lui-même. Un seul avertissement est dans ce cas : la
+// politique d'exécution d'agy, qui vit dans un fichier de l'utilisateur et
+// qu'aucun drapeau n'expose. Les autres (CLI absente, sandbox codex bloqué par
+// AppArmor) demandent une installation ou un sudo : ils restent expliqués, pas
+// automatisés.
+func (s *Server) handleFixAgentWarning(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	agent, ok := s.store.GetAgent(id)
+	if !ok {
+		writeError(w, http.StatusNotFound, "agent not found")
+		return
+	}
+	if agent.Cli != "agy" {
+		writeError(w, http.StatusBadRequest, "no automatic fix for this agent")
+		return
+	}
+	if err := fixAntigravityToolPermission(); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	s.runner.publishAgents()
+	for _, a := range s.store.ListAgents() {
+		if a.ID == id {
+			writeJSON(w, http.StatusOK, a)
+			return
+		}
+	}
+	writeError(w, http.StatusNotFound, "agent not found")
 }
 
 func (s *Server) handleDeleteAgent(w http.ResponseWriter, r *http.Request) {

@@ -202,6 +202,70 @@ func TestDeleteHandlersRequireConfirm(t *testing.T) {
 
 // TestDeleteTaskHandlerConfirmedSucceeds couvre le chemin nominal du handler
 // HTTP : confirm=true supprime effectivement la tâche (204 No Content).
+// TestFixAgentWarningHandler couvre le bouton de l'avertissement Antigravity :
+// il règle la politique d'exécution d'agy et renvoie l'agent sans son
+// avertissement. Aucun autre cli n'a de correctif automatique (installer une
+// CLI ou lancer un sudo n'est pas à Sillage de le faire).
+func TestFixAgentWarningHandler(t *testing.T) {
+	srv := newTestServer(t)
+
+	origLookPath := lookPath
+	defer func() { lookPath = origLookPath }()
+	lookPath = func(file string) (string, error) { return "/usr/bin/" + file, nil }
+
+	origSettings := antigravitySettingsPath
+	defer func() { antigravitySettingsPath = origSettings }()
+	antigravitySettingsPath = filepath.Join(t.TempDir(), "settings.json")
+
+	agents := srv.store.ListAgents()
+	var agyID, otherID string
+	for _, a := range agents {
+		if a.Cli == "agy" && agyID == "" {
+			agyID = a.ID
+		}
+		if a.Cli == "claude" && otherID == "" {
+			otherID = a.ID
+		}
+	}
+	if agyID == "" || otherID == "" {
+		t.Fatalf("seed should provide an agy agent and a claude agent, got %+v", agents)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/", nil)
+	req.SetPathValue("id", agyID)
+	w := httptest.NewRecorder()
+	srv.handleFixAgentWarning(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("attendu 200, reçu %d (body=%s)", w.Code, w.Body.String())
+	}
+	var out AgentOut
+	if err := json.Unmarshal(w.Body.Bytes(), &out); err != nil {
+		t.Fatalf("réponse illisible : %v", err)
+	}
+	if out.Warning != "" {
+		t.Fatalf("the returned agent should carry no warning anymore, got %q", out.Warning)
+	}
+	if !antigravityAllowsHeadlessCommands() {
+		t.Fatal("the fix should have been written to the settings file")
+	}
+
+	req = httptest.NewRequest(http.MethodPost, "/", nil)
+	req.SetPathValue("id", otherID)
+	w = httptest.NewRecorder()
+	srv.handleFixAgentWarning(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("attendu 400 pour un autre cli, reçu %d (body=%s)", w.Code, w.Body.String())
+	}
+
+	req = httptest.NewRequest(http.MethodPost, "/", nil)
+	req.SetPathValue("id", "nobody")
+	w = httptest.NewRecorder()
+	srv.handleFixAgentWarning(w, req)
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("attendu 404 pour un agent inconnu, reçu %d", w.Code)
+	}
+}
+
 func TestDeleteTaskHandlerConfirmedSucceeds(t *testing.T) {
 	srv := newTestServer(t)
 	project, err := srv.store.AddProject("p", "", "", []Repo{{Name: "r", Path: "/tmp/x"}}, nil, nil)
