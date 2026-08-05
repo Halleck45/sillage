@@ -3697,7 +3697,6 @@
         '<span class="agent-choice-info"><span class="agent-choice-name">' + escapeHtml(a.name) + warn + '</span>' +
         '<span class="agent-choice-model mono">' + escapeHtml(a.model || '') + '</span></span></button>';
     }).join('');
-    var selected = state.agentsById[modalAgentId];
     var project = state.projectsById[card.projectId];
     var repos = (project && project.repos) || [];
     var repoSelectHTML = '';
@@ -3733,7 +3732,6 @@
       '<div class="modal-label modal-label-row"><span>' + escapeHtml(t('newTask.agentLabel')) + '</span>' +
       '<span class="modal-label-hint">' + escapeHtml(t('newTask.agentHint')) + '</span></div>' +
       '<div class="agent-choices" id="agent-choices" role="radiogroup" aria-label="' + escapeHtml(t('newTask.agentLabel')) + '">' + agentChoices + '</div>' +
-      '<div class="agent-context-preview" id="agent-context-preview">' + (selected ? escapeHtml(selected.contextPrompt || '') : '') + '</div>' +
       (project && project.contextPrompt ? '<div class="project-context-note">' + escapeHtml(t('newTask.projectContextNote')) + '</div>' : '') +
       (card && card.contextPrompt ? '<div class="project-context-note">' + escapeHtml(t('newTask.workstreamContextNote')) + '</div>' : '') +
       waitsForSelectHTML +
@@ -3769,9 +3767,6 @@
       el.setAttribute('tabindex', isSel ? '0' : '-1');
       if (isSel && focusIt) el.focus();
     });
-    var preview = document.getElementById('agent-context-preview');
-    var a = state.agentsById[agentId];
-    if (preview) preview.textContent = a ? (a.contextPrompt || '') : '';
   }
 
   // Flèches dans le groupe d'agents : décale la sélection de `delta` en
