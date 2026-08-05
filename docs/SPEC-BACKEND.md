@@ -13,7 +13,7 @@ internal/server/
   auth.go                    // bcrypt, sessions, middleware, rate-limit login
   sse.go                     // Hub SSE
   git.go                     // worktrees, diff parse, commits, push
-  runner.go                  // adaptateurs claude / codex / copilot / agy / fake
+  runner.go                  // adaptateurs claude / codex / copilot / agy / kiro / fake
   preview.go                 // superviseur des recettes manuelles (process + journal)
   preview_handlers.go        // routes de recette
   update.go                  // version, détection de mise à jour, application, redémarrage
@@ -145,7 +145,15 @@ Sillage n'écrit ce fichier que sur clic explicite de l'humain (`POST /api/agent
 
 Reste un mode d'échec assumé : un agent qui veut lire ou écrire **hors** de son worktree fait tomber sa session (par exemple `/etc/hostname`, vérifié). C'est le comportement souhaitable, et il est maintenant visible dans la conversation. L'adaptateur prévient aussi l'agent dans son prompt (`antigravityWorktreeNote`) que `.git` est un pointeur qu'il ne doit pas ouvrir.
 
-`runTextCLI` (partagé avec copilot) traite une sortie 0 sans rien sur stdout comme un échec et remonte stderr : sans ça, la tâche finissait « à relire » avec une conversation vide, ce qui ne laissait aucune trace du refus.
+`runTextCLI` (partagé avec copilot, agy et kiro) traite une sortie 0 sans rien sur stdout comme un échec et remonte stderr : sans ça, la tâche finissait « à relire » avec une conversation vide, ce qui ne laissait aucune trace du refus.
+
+### Adaptateur Kiro (`cli:"kiro"`)
+
+`kiro-cli chat --no-interactive --agent sillage --wrap never <texte>`. Le texte contient les contextes agent, projet et chantier avant le prompt ; le stdout texte devient un Message agent final. Pas de reprise de session ni de compteurs de tokens : le transcript récent est rejoué dans le prompt comme pour les autres adaptateurs one-shot.
+
+Le mode headless exige `KIRO_API_KEY` dans l'environnement du processus Sillage. La santé de l'agent signale son absence avant le premier run.
+
+Chaque exécution reçoit un `KIRO_HOME` créé par `os.MkdirTemp`, distinct du dépôt et du profil Kiro de l'utilisateur. Il contient un agent `sillage.json` avec `read`, `write`, `shell`, `grep` et `glob`, sans MCP hérité (`includeMcpJson:false`). `write` n'est pas placé dans `allowedTools` : son `allowedPaths:["**"]` limite l'approbation automatique aux chemins relatifs au worktree. Même règle pour `shell`, qui passe par `toolsSettings` afin que les refus soient évalués avant l'autorisation générale des commandes locales. Les refus figés couvrent `git push` (y compris `git -C ... push`), `gh`, `glab` et les sous-commandes Kiro qui modifieraient agents, réglages ou intégrations. Ne jamais remplacer ce profil par `--trust-all-tools`, qui court-circuiterait cette granularité. Le `KIRO_HOME` temporaire est supprimé après la mort du process, succès, erreur ou interruption.
 
 ### Adaptateur fake (`cli:"fake"`)
 
@@ -179,7 +187,7 @@ Voir SPEC-API.md §« Mises à jour de Sillage » pour le contrat.
 
 ## Seed (premier lancement)
 
-Agents : Bolt 🐝 `#f2b705` claude/sonnet ; Muse 🦊 `#d0662f` claude/opus ; Otto 🦉 `#4f7d2f` codex/(modèle vide = défaut) ; Fably 🪶 `#6b4fbb` claude/fable ; Octo 🐙 `#24292f` copilot/(modèle par défaut) ; Astro 🚀 `#4285f4` agy/(modèle par défaut) ; Écho 🧪 `#777` fake (agent de test local, gratuit). Pas de projets seedés. Les deux agents externes ajoutés après le premier lancement sont migrés une seule fois via `AgentSeedVersion`, afin qu'une suppression volontaire reste définitive.
+Agents : Bolt 🐝 `#f2b705` claude/sonnet ; Muse 🦊 `#d0662f` claude/opus ; Otto 🦉 `#4f7d2f` codex/(modèle vide = défaut) ; Fably 🪶 `#6b4fbb` claude/fable ; Octo 🐙 `#24292f` copilot/(modèle par défaut) ; Astro 🚀 `#4285f4` agy/(modèle par défaut) ; Kiro 🟣 `#7c3aed` kiro/(modèle par défaut) ; Écho 🧪 `#777` fake (agent de test local, gratuit). Pas de projets seedés. Chaque nouvelle vague d'agents externes est migrée une seule fois via `AgentSeedVersion`, afin qu'une suppression volontaire reste définitive ; le passage de la version 1 à 2 n'ajoute que Kiro et ne recrée donc pas un profil Copilot ou Antigravity supprimé auparavant.
 
 ## Handlers
 

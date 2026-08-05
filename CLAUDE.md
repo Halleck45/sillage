@@ -56,7 +56,7 @@ internal/server/
   models.go                 tous les structs JSON de SPEC-API.md
   store.go                  état en mémoire + persistance atomique + compteurs dérivés
   handlers.go               routage (net/http ServeMux avec patterns méthode+chemin), middlewares
-  runner.go                 adaptateurs claude / codex / copilot / agy / fake, un process max par tâche
+  runner.go                 adaptateurs claude / codex / copilot / agy / kiro / fake, un process max par tâche
   preview.go                recette manuelle : un process par worktree, journal en mémoire
   preview_handlers.go       routes de recette (lancer, arrêter, journal)
   git.go                    worktrees (chantier + tâche), parser de diff unifié, commits, fusions
@@ -86,15 +86,16 @@ web/                        index.html + style.css + app.js (SPA vanilla, zéro 
 
 Un `procHandle` par tâche au maximum (`map[taskID]*procHandle`). Un message envoyé pendant qu'un agent tourne est mis en file (`pending`) et rejoué à la fin de l'exécution en cours. Les process sont lancés avec `Setpgid` pour qu'`Interrupt` puisse SIGINT le groupe (puis SIGKILL après 5 s).
 
-Cinq adaptateurs, sélectionnés par `agent.cli` :
+Six adaptateurs, sélectionnés par `agent.cli` :
 
 - **claude** : `claude -p --output-format stream-json --verbose --permission-mode acceptEdits --allowedTools <claudeAllowedTools> [--append-system-prompt ...] [--resume <sessionId>]`. Parse le JSONL : `system/init` → `sessionId` stocké (reprise de conversation), blocs `text` → Messages, blocs `tool_use` → ligne d'activité live, `result` → tokens et coût. `claudeAllowedTools` est une constante figée : ne pas y ajouter d'outil capable de pousser.
 - **codex** : `codex exec --json --sandbox <SILLAGE_CODEX_SANDBOX|workspace-write> -C <worktree>`. Pas de reprise de session : l'historique est rejoué via `buildTranscript`. Les événements de tokens portent des **totaux cumulés** : ne garder que le dernier et l'ajouter une seule fois en fin de process (`parseCodexTokenStream`).
 - **copilot** : `copilot --autopilot ... -p <prompt>`, outils read/write/shell autorisés avec refus prioritaires pour `git push`, `gh`, `glab` et les réglages Copilot du dépôt. MCP GitHub et contrôle distant désactivés. Sortie texte finale, pas de reprise ni de tokens.
 - **agy** : `agy --sandbox --print-timeout=60m --add-dir <worktree> --print <prompt>`. Sandbox toujours forcé, jamais `--dangerously-skip-permissions`. Sortie texte finale, pas de reprise ni de tokens. Deux contraintes du CLI : `--print` prend le prompt **en valeur** (donc toujours en dernier), et en sandbox agy ignore le répertoire de travail du process, d'où `--add-dir` sur le worktree. Les autorisations n'existent pas en drapeau : elles viennent de `~/.gemini/antigravity-cli/settings.json` (`toolPermission` **et** deux règles `read_file`/`write_file` sur la racine des worktrees), que Sillage lit pour avertir (`antigravityWorksHeadlessly` dans `store.go`) et n'écrit que sur clic explicite (`fixAntigravityToolPermission`, `POST /api/agents/{id}/fix-warning`). En mode print, toute demande de confirmation est auto-refusée et la session s'arrête sans rien écrire : une seule suffit à rendre la tâche muette.
+- **kiro** : `kiro-cli chat --no-interactive --agent sillage --wrap never <prompt>`, avec `KIRO_API_KEY` obligatoire. Chaque run crée un `KIRO_HOME` temporaire hors du dépôt et y pose un profil aux outils read/write/shell/grep/glob, sans MCP hérité. `write` et `shell` passent par leurs réglages granulaires ; les refus prioritaires couvrent `git push`, `gh`, `glab` et la reconfiguration de Kiro. Ne jamais employer `--trust-all-tools`. Sortie texte finale, pas de reprise ni de tokens ; le profil temporaire est supprimé en fin de run.
 - **fake** : simule ~3 s de travail, écrit `SILLAGE-TEST.md` dans le worktree, produit un usage fictif. Aucun process externe.
 
-Le prompt d'un départ frais (lancement initial, ou premier message après réassignation, `sessionId` vide) est préfixé par `Task: <title>\n\n` (`contextualizeCliInput`). Le contexte projet s'ajoute au system prompt pour claude (`buildSystemPrompt`) et en préfixe du prompt pour codex, copilot et agy ; ces deux derniers reçoivent aussi le contexte agent dans ce préfixe.
+Le prompt d'un départ frais (lancement initial, ou premier message après réassignation, `sessionId` vide) est préfixé par `Task: <title>\n\n` (`contextualizeCliInput`). Le contexte projet s'ajoute au system prompt pour claude (`buildSystemPrompt`) et en préfixe du prompt pour codex, copilot, agy et kiro ; les trois adaptateurs texte reçoivent aussi le contexte agent dans ce préfixe.
 
 Toute mutation d'état publie les événements SSE correspondants via les helpers `publishTask/publishMessage/publishCards/publishTokens/publishAgents/publishActivity/...` : oublier une publication laisse le frontend désynchronisé jusqu'au prochain reload.
 
