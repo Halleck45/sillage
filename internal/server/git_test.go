@@ -144,6 +144,53 @@ func TestWorktreeAndDiff(t *testing.T) {
 	}
 }
 
+// TestGitCommonDirFromWorktree : le worktree d'une tâche n'a qu'un fichier
+// `.git` pointeur ; c'est le dossier git du dépôt d'origine qu'un agent en bac
+// à sable doit voir pour que ses commandes git fonctionnent.
+func TestGitCommonDirFromWorktree(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git non disponible dans cet environnement")
+	}
+
+	repo := t.TempDir()
+	dataDir := t.TempDir()
+	runTestGit(t, repo, "init")
+	runTestGit(t, repo, "config", "user.email", "test@example.com")
+	runTestGit(t, repo, "config", "user.name", "Test")
+	if err := os.WriteFile(filepath.Join(repo, "README.md"), []byte("# projet\n"), 0o644); err != nil {
+		t.Fatalf("écriture README impossible : %v", err)
+	}
+	runTestGit(t, repo, "add", "-A")
+	runTestGit(t, repo, "commit", "-m", "initial")
+
+	dir, _, err := CreateWorktree(repo, dataDir, "t1", "sillage/100-test", "")
+	if err != nil {
+		t.Fatalf("CreateWorktree: %v", err)
+	}
+	common, err := GitCommonDir(dir)
+	if err != nil {
+		t.Fatalf("GitCommonDir: %v", err)
+	}
+	if !filepath.IsAbs(common) {
+		t.Fatalf("le dossier git commun doit être absolu, reçu %q", common)
+	}
+	// Le chemin doit désigner le .git du dépôt d'origine, pas celui du worktree.
+	want, err := filepath.EvalSymlinks(filepath.Join(repo, ".git"))
+	if err != nil {
+		t.Fatalf("EvalSymlinks: %v", err)
+	}
+	got, err := filepath.EvalSymlinks(common)
+	if err != nil {
+		t.Fatalf("EvalSymlinks: %v", err)
+	}
+	if got != want {
+		t.Fatalf("dossier git commun attendu %q, reçu %q", want, got)
+	}
+	if _, err := GitCommonDir(""); err == nil {
+		t.Fatal("un répertoire vide doit être une erreur")
+	}
+}
+
 func contains(list []string, item string) bool {
 	for _, v := range list {
 		if v == item {

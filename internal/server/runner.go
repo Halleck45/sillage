@@ -1222,7 +1222,7 @@ func copilotArgs(agent Agent, cliInput string) []string {
 	return append(args, "-p", cliInput)
 }
 
-// antigravityArgs construit la ligne de commande d'agy. Deux pièges du CLI :
+// antigravityArgs construit la ligne de commande d'agy. Trois pièges du CLI :
 //
 //   - `--print` prend le prompt en valeur (c'est un alias de `--prompt`, pas un
 //     booléen). Il doit donc rester en dernier : `--print --sandbox <prompt>`
@@ -1231,10 +1231,27 @@ func copilotArgs(agent Agent, cliInput string) []string {
 //     retombe sur son espace de travail interne (`~/.gemini/antigravity-cli/scratch`).
 //     Sans `--add-dir <worktree>`, la tâche écrit ses fichiers hors du dépôt et
 //     le diff reste vide.
-func antigravityArgs(agent Agent, worktreeDir, cliInput string) []string {
+//   - le sandbox ne montre que les répertoires ajoutés. Le worktree d'une tâche
+//     est un worktree lié : son vrai dossier git est celui du dépôt d'origine,
+//     hors du sandbox, donc tout git y échoue par « ce n'est pas un dépôt git ».
+//     Le modèle relance alors la commande hors sandbox (`BypassSandbox`), ce que
+//     le mode headless auto-refuse : la session s'arrête sans rien produire.
+//     D'où `--add-dir <gitCommonDir>`.
+//
+// Ce dossier git n'ouvre aucune porte (invariant 1) : agy monte un `--add-dir`
+// hors espace de travail principal **en lecture seule** (vérifié : `touch` y
+// répond « système de fichiers accessible en lecture seulement », et `git
+// commit` échoue sur `index.lock`), et son sandbox n'a pas de réseau (la
+// résolution DNS y échoue). L'agent gagne donc exactement les lectures git de
+// l'allowlist claude (status, log, diff, show), ni écriture de hooks ou de
+// config, ni push.
+func antigravityArgs(agent Agent, worktreeDir, gitCommonDir, cliInput string) []string {
 	args := []string{"--sandbox", "--print-timeout=60m"}
 	if worktreeDir != "" {
 		args = append(args, "--add-dir", worktreeDir)
+	}
+	if gitCommonDir != "" {
+		args = append(args, "--add-dir", gitCommonDir)
 	}
 	if agent.Model != "" {
 		args = append(args, "--model", agent.Model)
@@ -1256,11 +1273,20 @@ func (r *Runner) runCopilot(task *Task, agent Agent, project Project, card Card,
 // le cas : `permissions.allow` n'accepte pas de motif de chemin
 // (`read_file(<dossier>/*)` ne correspond à rien), seulement des chemins
 // exacts, qui changent à chaque tâche. Le prévenir coûte deux lignes de prompt.
-const antigravityWorktreeNote = "Environment: your working directory is a linked git worktree, so `.git` is a one-line pointer file, not a directory. Never open it: that read is refused and ends your session without any answer. Use git commands (`git status`, `git log`, `git diff`) instead."
+//
+// La note couvre aussi la sortie de bac à sable, qui tue la session de la même
+// façon : une commande bloquée dans le bac à sable (le réseau y est coupé)
+// pousse le modèle à la relancer hors bac à sable, ce que le mode headless
+// auto-refuse. Mieux vaut qu'il rapporte l'échec que de finir muet.
+const antigravityWorktreeNote = "Environment: your working directory is a linked git worktree, so `.git` is a one-line pointer file, not a directory. Never open it: that read is refused and ends your session without any answer. Read-only git commands (`git status`, `git log`, `git diff`, `git show`) work here; `git add`, `git commit` and anything writing to git do not, and you never need them: your work is committed for you. Your sandbox also has no network access. Never re-run a command outside the sandbox (no bypass-sandbox, no unsandboxed execution): such a request is auto-denied and ends your session without any answer. Report the failure in your answer instead."
 
 func (r *Runner) runAntigravity(task *Task, agent Agent, project Project, card Card, handle *procHandle, cliInput string) error {
 	cliInput = prefixAgentContext(agent, project, card, antigravityWorktreeNote+"\n\n"+cliInput)
-	return r.runTextCLI(task, agent, handle, "agy", antigravityArgs(agent, task.WorktreeDir, cliInput), nil)
+	// Best-effort : sans le dossier git commun, agy travaille quand même sur les
+	// fichiers, il perd seulement les commandes git.
+	gitCommonDir, _ := GitCommonDir(task.WorktreeDir)
+	args := antigravityArgs(agent, task.WorktreeDir, gitCommonDir, cliInput)
+	return r.runTextCLI(task, agent, handle, "agy", args, nil)
 }
 
 // copilotEnv strips a classic GitHub PAT (the "ghp_" prefix) from GITHUB_TOKEN

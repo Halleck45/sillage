@@ -45,6 +45,22 @@ func IsGitRepo(path string) bool {
 	return err == nil
 }
 
+// GitCommonDir retourne le dossier git partagé du dépôt auquel dir appartient
+// (le `.git` du dépôt d'origine quand dir est un worktree lié, où `.git` n'est
+// qu'un fichier pointeur). Sert à donner ce dossier à un agent qui travaille
+// dans un bac à sable ne montrant que les répertoires qu'on lui ajoute : sans
+// lui, toute commande git échoue par « ce n'est pas un dépôt git ».
+func GitCommonDir(dir string) (string, error) {
+	if dir == "" {
+		return "", errors.New("empty directory")
+	}
+	out, err := runGit(dir, gitDefaultTimeout, "rev-parse", "--path-format=absolute", "--git-common-dir")
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(out), nil
+}
+
 // currentBranch retourne la branche courante d'un dépôt.
 func currentBranch(repoPath string) (string, error) {
 	out, err := runGit(repoPath, gitDefaultTimeout, "rev-parse", "--abbrev-ref", "HEAD")

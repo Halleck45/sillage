@@ -127,12 +127,15 @@ Le texte contient les contextes agent, projet et chantier avant le prompt. Le st
 
 ### Adaptateur Antigravity (`cli:"agy"`)
 
-`agy --sandbox --print-timeout=60m --add-dir <worktree> [--model <model>] --print <texte>`. Le texte contient les contextes agent, projet et chantier avant le prompt ; le stdout texte devient un Message agent final. Pas de reprise de session ni de compteurs de tokens. Le mode sandbox est toujours forcé ; `--dangerously-skip-permissions` n'est jamais utilisé.
+`agy --sandbox --print-timeout=60m --add-dir <worktree> [--add-dir <dossier git commun>] [--model <model>] --print <texte>`. Le texte contient les contextes agent, projet et chantier avant le prompt ; le stdout texte devient un Message agent final. Pas de reprise de session ni de compteurs de tokens. Le mode sandbox est toujours forcé ; `--dangerously-skip-permissions` n'est jamais utilisé.
 
-Deux particularités du CLI dictent l'ordre des arguments :
+Trois particularités du CLI dictent la ligne de commande :
 
 - `--print` est un alias de `--prompt` et prend le prompt **en valeur**, ce n'est pas un booléen. Il doit rester le dernier drapeau : `agy --print --sandbox <texte>` fait exécuter le prompt « --sandbox », l'agent répond une explication du mode sandbox et ne touche à rien.
 - en mode sandbox, agy ignore le répertoire de travail du process et retombe sur son espace interne (`~/.gemini/antigravity-cli/scratch`). `--add-dir <worktree>` est donc obligatoire, sinon la tâche écrit ses fichiers hors du dépôt et le diff reste vide.
+- le sandbox ne montre **que** les répertoires ajoutés. Le worktree d'une tâche est un worktree lié : son vrai dossier git est celui du dépôt d'origine, hors du sandbox, donc toute commande git y échoue par « ce n'est pas un dépôt git ». Le modèle relance alors la commande hors sandbox (`BypassSandbox: true`), demande auto-refusée en mode print : la session s'arrête sans rien produire (observé sur un simple `git status`). D'où le second `--add-dir`, le dossier git commun résolu par `GitCommonDir` (`git rev-parse --path-format=absolute --git-common-dir`), best-effort : sans lui l'agent travaille quand même sur les fichiers, il perd seulement git.
+
+Ce second répertoire n'ouvre aucune porte (invariant 1) : un `--add-dir` hors espace de travail principal est monté **en lecture seule** (vérifié : `touch` y répond « système de fichiers accessible en lecture seulement » et `git commit` échoue sur `index.lock`), et le sandbox n'a pas de réseau (la résolution DNS y échoue). L'agent gagne donc exactement les lectures git de l'allowlist claude (`status`, `log`, `diff`, `show`), sans écriture de hooks ni de config, et sans push. Le prompt le lui dit (`antigravityWorktreeNote`), avec la consigne de ne jamais relancer une commande hors sandbox mais de rapporter l'échec : c'est ce qui évite les tâches muettes.
 
 Les autorisations ne s'expriment **pas** en ligne de commande : le seul drapeau existant est `--dangerously-skip-permissions`, que Sillage n'utilise jamais. Tout vient de `~/.gemini/antigravity-cli/settings.json`. En mode print, **toute** demande de confirmation est auto-refusée et la session s'arrête aussitôt : stdout vide, sortie 0, explication sur stderr. Une seule demande suffit donc à rendre une tâche muette, et deux réglages sont nécessaires (`antigravityWorksHeadlessly` dans `store.go`) :
 
