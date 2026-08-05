@@ -67,8 +67,9 @@ Card    { "id": "c1", "projectId": "p1", "ref": 101, "column": "soon|doing|done"
           // dans le nom de la branche du chantier.
           // shipReady/shipBlocker : dérivés, état du bouton de livraison (voir plus bas).
           // awaitingShip : dérivé, vrai si toutes les tâches sont terminales (acceptées ou
-          // refusées) mais que le chantier n'a pas été livré (aucune branche shippedAt) ;
-          // c'est le signal affiché dans la liste des chantiers et la boîte de réception.
+          // refusées), qu'au moins une est acceptée, et que le chantier n'a pas été livré
+          // (aucune branche shippedAt) ; c'est le signal affiché dans la liste des chantiers
+          // et la boîte de réception. Faux pour un chantier entièrement refusé : rien à livrer.
 
 Agent   { "id": "bolt", "name": "Bolt", "emoji": "🐝", "color": "#f2b705",
           "model": "claude-sonnet-5", "cli": "claude", "contextPrompt": "...",

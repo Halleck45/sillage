@@ -821,6 +821,36 @@ func TestCardAutoMoveToDoneAndBack(t *testing.T) {
 	}
 }
 
+// --- AwaitingShip : un chantier entièrement refusé n'a rien à livrer ---
+
+func TestCardAwaitingShipFalseWhenNothingAccepted(t *testing.T) {
+	dir := t.TempDir()
+	s, err := NewStore(dir)
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+	project, err := s.AddProject("p", "", "", []Repo{{Path: "/tmp/p"}}, nil, nil)
+	if err != nil {
+		t.Fatalf("AddProject: %v", err)
+	}
+	card, err := s.AddCard(project.ID, "Carte", "", "")
+	if err != nil {
+		t.Fatalf("AddCard: %v", err)
+	}
+	if _, err := s.SetCardBranch(card.ID, CardBranch{RepoName: "p", Branch: "sillage/ws-1-carte", Base: "main", WorktreeDir: "/tmp/ws"}); err != nil {
+		t.Fatalf("SetCardBranch: %v", err)
+	}
+	mkTaskWithStatus(t, s, card.ID, project.ID, "cancelled")
+
+	c, ok := s.GetCard(card.ID)
+	if !ok {
+		t.Fatalf("carte introuvable")
+	}
+	if c.AwaitingShip {
+		t.Fatalf("un chantier entièrement refusé n'a rien à livrer, ne devrait pas être signalé")
+	}
+}
+
 // --- Compteurs de carte avec des tâches cancelled (v0.3.1 section 4) ---
 
 func TestCardCountersExcludeCancelled(t *testing.T) {
