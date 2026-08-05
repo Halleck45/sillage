@@ -6,6 +6,7 @@ import (
 	"embed"
 	"errors"
 	"flag"
+	"fmt"
 	"io/fs"
 	"log"
 	"net/http"
@@ -21,10 +22,22 @@ import (
 //go:embed web
 var webFS embed.FS
 
+// version est injectée au build de release (-ldflags "-X main.version=vX.Y.Z").
+// Une compilation locale garde "dev", ce qui désactive toute la mécanique de
+// mise à jour : rien à comparer, aucun appel réseau (voir internal/server/update.go).
+var version = "dev"
+
 func main() {
 	addr := flag.String("addr", "127.0.0.1:8787", "listen address")
 	dataDir := flag.String("data", defaultDataDir(), "data directory (state, worktrees, config)")
+	showVersion := flag.Bool("version", false, "print version and exit")
 	flag.Parse()
+
+	server.SetVersion(version)
+	if *showVersion {
+		fmt.Println(server.CurrentVersion())
+		return
+	}
 
 	if err := os.MkdirAll(*dataDir, 0o700); err != nil {
 		log.Fatalf("cannot create data directory %s: %v", *dataDir, err)
@@ -66,7 +79,7 @@ func main() {
 		_ = httpSrv.Shutdown(shutdownCtx)
 	}()
 
-	log.Printf("Sillage listening on %s (data: %s)", *addr, *dataDir)
+	log.Printf("Sillage %s listening on %s (data: %s)", server.CurrentVersion(), *addr, *dataDir)
 	if err := httpSrv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		log.Fatalf("server stopped: %v", err)
 	}

@@ -873,13 +873,13 @@ func TestSettingsUpdateValidatesLang(t *testing.T) {
 	}
 
 	invalid := "de"
-	if _, err := s.UpdateSettings(nil, &invalid); err == nil {
+	if _, err := s.UpdateSettings(nil, &invalid, nil); err == nil {
 		t.Fatalf("une langue invalide devrait être refusée")
 	}
 
 	name := "Ada"
 	lang := "fr"
-	settings, err := s.UpdateSettings(&name, &lang)
+	settings, err := s.UpdateSettings(&name, &lang, nil)
 	if err != nil {
 		t.Fatalf("UpdateSettings: %v", err)
 	}
@@ -888,7 +888,7 @@ func TestSettingsUpdateValidatesLang(t *testing.T) {
 	}
 
 	empty := ""
-	settings, err = s.UpdateSettings(nil, &empty)
+	settings, err = s.UpdateSettings(nil, &empty, nil)
 	if err != nil {
 		t.Fatalf("UpdateSettings (lang vide): %v", err)
 	}

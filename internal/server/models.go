@@ -325,6 +325,38 @@ type SyncResponse struct {
 type Settings struct {
 	DisplayName string `json:"displayName"`
 	Lang        string `json:"lang"` // ""|"fr"|"en"
+	// UpdateCheck : vérification périodique des mises à jour. Pointeur pour
+	// que "absent" (state.json écrit avant cette fonctionnalité) veuille dire
+	// "activé", sans migration.
+	UpdateCheck *bool `json:"updateCheck"`
+}
+
+// UpdateStatus décrit les mises à jour de Sillage (GET /api/update, champ
+// `update` de GET /api/state, événement SSE "update"). Jamais persisté : ce
+// n'est pas un état du produit mais une observation du binaire courant.
+type UpdateStatus struct {
+	Current   string `json:"current"`   // version en cours d'exécution, "dev" en local
+	Latest    string `json:"latest"`    // dernière version publiée, "" si inconnue
+	Available bool   `json:"available"` // latest > current
+	// Method : "brew" | "binary" | "go" | "unknown" | "dev"
+	Method        string     `json:"method"`
+	Path          string     `json:"path"`          // binaire en cours d'exécution
+	SelfUpdatable bool       `json:"selfUpdatable"` // POST /api/update/apply peut aboutir
+	Command       string     `json:"command"`       // la mise à jour à la main, toujours renseignée
+	ReleaseURL    string     `json:"releaseUrl"`
+	CheckEnabled  bool       `json:"checkEnabled"`
+	CheckedAt     *time.Time `json:"checkedAt"`
+	Error         string     `json:"error"` // échec de la dernière vérification
+	Applying      bool       `json:"applying"`
+	Blocker       string     `json:"blocker"` // "" si un clic suffit, sinon la raison
+}
+
+// UpdateApplyResponse est la réponse de POST /api/update/apply.
+type UpdateApplyResponse struct {
+	Output     string `json:"output"`
+	Version    string `json:"version"`
+	Restarting bool   `json:"restarting"` // faux : mise à jour posée, redémarrage à faire à la main
+	Note       string `json:"note"`
 }
 
 // State est la réponse de GET /api/state.
@@ -336,6 +368,7 @@ type State struct {
 	Workspace WorkspaceStatus `json:"workspace"`
 	Settings  Settings        `json:"settings"`
 	Previews  []PreviewRun    `json:"previews"`
+	Update    UpdateStatus    `json:"update"`
 	Tokens    struct {
 		Global Tokens `json:"global"`
 	} `json:"tokens"`

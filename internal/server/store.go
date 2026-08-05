@@ -852,9 +852,9 @@ func (s *Store) GetSettings() Settings {
 	return s.Settings
 }
 
-// UpdateSettings met à jour displayName et/ou lang (champs nil non modifiés).
-// lang doit être "", "fr" ou "en".
-func (s *Store) UpdateSettings(displayName, lang *string) (Settings, error) {
+// UpdateSettings met à jour displayName, lang et/ou updateCheck (champs nil
+// non modifiés). lang doit être "", "fr" ou "en".
+func (s *Store) UpdateSettings(displayName, lang *string, updateCheck *bool) (Settings, error) {
 	if lang != nil && !validLang[*lang] {
 		return Settings{}, fmt.Errorf("invalid lang: must be fr, en or empty")
 	}
@@ -865,6 +865,10 @@ func (s *Store) UpdateSettings(displayName, lang *string) (Settings, error) {
 	}
 	if lang != nil {
 		s.Settings.Lang = *lang
+	}
+	if updateCheck != nil {
+		v := *updateCheck
+		s.Settings.UpdateCheck = &v
 	}
 	if err := s.save(); err != nil {
 		return Settings{}, err

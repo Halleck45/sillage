@@ -16,6 +16,7 @@ internal/server/
   runner.go                  // adaptateurs claude / codex / fake
   preview.go                 // superviseur des recettes manuelles (process + journal)
   preview_handlers.go        // routes de recette
+  update.go                  // version, détection de mise à jour, application, redémarrage
   handlers.go                // REST
   store_test.go, git_test.go // tests unitaires
 ```
@@ -124,6 +125,19 @@ Voir `docs/SPEC-RECETTE.md` pour le « pourquoi », SPEC-API.md §« Recette man
 - `killGroup(cmd, done)` (dans runner.go) est partagé avec l'interruption d'un agent : SIGINT au groupe, SIGKILL après 5 s. Viser le groupe et non le seul `sh` est indispensable : un `npm run dev` laisse sinon son node en vie sur le port.
 - `Server.Shutdown()` appelle `StopAll()` (en parallèle, avec attente) puis arrête l'auto-sync. `main.go` l'appelle sur SIGINT/SIGTERM avant `httpSrv.Shutdown`. Les agents, eux, ne sont pas interrompus : leur travail est dans un worktree et survit au redémarrage.
 
+## Mises à jour (update.go)
+
+Voir SPEC-API.md §« Mises à jour de Sillage » pour le contrat.
+
+- La version vit dans `main.version` (ldflags de release) et est poussée dans le paquet par `server.SetVersion` au démarrage. `buildVersion` non publiable (`"dev"`) éteint tout : `updateChecksEnabled()` est faux, aucune goroutine ne démarre, aucun appel réseau n'est fait. C'est aussi ce qui garantit qu'aucun test ne sort sur le réseau (`NewServer` est appelé sans jamais passer par `SetVersion`).
+- `updateTracker` (dans `Server`, jamais dans `Store`) garde la dernière version vue, la date de vérification et la dernière erreur. Rien de tout ça n'atteint `state.json` : ce serait une observation de la machine courante dans un fichier qui peut être rapatrié sur une autre.
+- `detectInstall()` est mémoïsé (`sync.Once`) : un binaire ne se déplace pas pendant qu'il tourne. La détection Homebrew passe par `filepath.EvalSymlinks` (le PATH ne montre qu'un lien vers le Cellar). L'écriture possible du dossier est testée réellement (fichier temporaire créé puis supprimé) : les permissions seules ne disent rien d'un montage en lecture seule.
+- `startUpdateChecker`/`stopUpdateChecker` suivent le patron de `startAutoSync` (même canal `stop`, même idempotence). Une première vérification part 3 s après le démarrage, puis un ticker de 24 h.
+- `applyUpdate()` refuse si un agent tourne (`Runner.RunningCount()`) ou si une recette tourne (`PreviewSupervisor.RunningCount()`) : on ne remplace pas un binaire sous les pieds d'un process qu'on a lancé. Le drapeau `applying` empêche deux applications simultanées et est publié en SSE.
+- `downloadRelease` vérifie le sha256 pendant l'écriture (`io.MultiWriter`) contre le `checksums.txt` de la release, n'accepte qu'une empreinte sha256 bien formée comme référence (`parseChecksums`), et ne pose le fichier qu'après vérification, par `os.Rename` depuis un temporaire du même dossier. Aucun résidu en cas d'échec.
+- `restartInPlace` fait un `syscall.Exec` : le handler répond **avant** (avec un flush et 500 ms de grâce), sinon le navigateur ne verrait qu'une socket fermée. Après Homebrew, la cible est le `sillage` du PATH, pas le chemin de départ : le Cellar de l'ancienne version peut avoir disparu.
+- Indirections de test : `fetchLatestReleaseFn`, `downloadReleaseFn`, `brewUpgradeFn`, `detectInstallFn`, `releaseDownloadBase`, `lookPathFn`. Même intention que `syncPushFn`/`workspaceGitEnabledFn` dans workspace.go.
+
 ## Seed (premier lancement)
 
 Agents : Bolt 🐝 `#f2b705` claude/sonnet (contexte : dev backend pragmatique) ; Muse 🦊 `#d0662f` claude/opus (produit, specs, docs) ; Otto 🦉 `#4f7d2f` codex/(modèle vide = défaut) (infra) ; Écho 🧪 `#777` fake (agent de test local, gratuit). Pas de projets seedés.
@@ -146,4 +160,5 @@ Suivre SPEC-API.md. Points d'attention :
 - store_test.go : roundtrip save/load, compteurs dérivés.
 - git_test.go : parser de diff sur une fixture inline (2 fichiers, add/del/ctx, fichier nouveau) ; test worktree+diff sur un repo git temporaire créé dans t.TempDir().
 - preview_test.go : commande qui finit (journal, code de retour), stderr capturé, les quatre variables et le répertoire d'exécution (le worktree, jamais le dépôt du projet), identité propre d'une tâche, URL développée avec arithmétique, arrêt qui tue le groupe de process, relancement qui remplace le run, `StopAll` qui ne laisse rien vivant, refus sans commande ou sans branche de chantier, URL non http(s) refusée, tampon de journal plafonné.
+- update_test.go : comparaison de versions (`0.10.0 > 0.9.9`, rc ignorée), lecture de checksums (lignes invalides écartées), compilation locale qui ne sort jamais sur le réseau, chaque `blocker` et son `selfUpdatable`, refus tant qu'un agent travaille, refus sans `confirm`, et le test de sécurité : un sha256 qui ne correspond pas ne remplace rien et ne laisse aucun temporaire (serveur HTTP local via `httptest`).
 - `go vet ./...` et `go test ./...` doivent passer. `go build` doit produire le binaire.

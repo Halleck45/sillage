@@ -32,6 +32,20 @@ class Sillage < Formula
     bin.install Dir["sillage_*"].first => "sillage"
   end
 
+  # `brew services start sillage` : lancement à l'ouverture de session
+  # (launchd sous macOS, systemd --user sous Linux).
+  service do
+    run [opt_bin/"sillage"]
+    keep_alive true
+    log_path var/"log/sillage.log"
+    error_log_path var/"log/sillage.log"
+    # Sillage lance des CLI (claude, codex, git, gh, glab). Sans PATH explicite,
+    # un service ne voit qu'un PATH minimal et tous les agents seraient signalés
+    # « binaire absent du PATH ». On ajoute ~/.local/bin, où atterrissent la
+    # plupart des installeurs de CLI d'agents.
+    environment_variables PATH: "#{std_service_path_env}:#{Dir.home}/.local/bin"
+  end
+
   test do
     assert_match "listen address", shell_output("#{bin}/sillage --help 2>&1")
   end

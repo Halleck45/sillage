@@ -107,7 +107,18 @@ WorkspaceStatus { "setupDone": true, "gitEnabled": true, "remote": "git@host:org
                   // uniquement (jamais persisté, remis à "" à chaque redémarrage) ; voir
                   // "Synchronisation automatique" ci-dessous.
 
-Settings { "displayName": "Ada", "lang": "fr" }   // lang : ""|"fr"|"en"
+Settings { "displayName": "Ada", "lang": "fr", "updateCheck": true | false | null }
+          // lang : ""|"fr"|"en". updateCheck : vérification périodique des mises à jour ;
+          // null/absent = activé (voir "Mises à jour de Sillage" ci-dessous).
+
+UpdateStatus { "current": "0.8.0", "latest": "0.9.0", "available": true,
+               "method": "brew|binary|go|unknown|dev", "path": "/opt/homebrew/bin/sillage",
+               "selfUpdatable": true, "command": "brew update && brew upgrade sillage",
+               "releaseUrl": "https://github.com/...", "checkEnabled": true,
+               "checkedAt": "..." | null, "error": "", "applying": false, "blocker": "" }
+          // JAMAIS persisté : une observation du binaire courant, recalculée à chaque
+          // demande. method="dev" = compilation locale (tout le mécanisme est éteint).
+          // Voir "Mises à jour de Sillage" ci-dessous.
 
 PreviewRun { "id": "pv1", "projectId": "p1", "cardId": "c1", "taskId": "",
              "repoName": "api", "cmd": "make serve PORT=4101",
@@ -137,12 +148,15 @@ PreviewRun { "id": "pv1", "projectId": "p1", "cardId": "c1", "taskId": "",
 |---|---|---|---|
 | POST | `/api/login` | `{password}` | 204 ou 401 `{error}` |
 | POST | `/api/logout` | | 204 |
-| GET | `/api/state` | | `{projects, cards, tasks, agents, workspace, settings, previews, tokens:{global:Tokens}}` |
+| GET | `/api/state` | | `{projects, cards, tasks, agents, workspace, settings, previews, update, tokens:{global:Tokens}}` |
 | GET | `/api/workspace` | | WorkspaceStatus |
 | POST | `/api/workspace/setup` | `{mode:"local"\|"init"\|"clone", remote?}` | WorkspaceStatus (voir ci-dessous) |
 | PATCH | `/api/workspace` | `{remote?, autoSync?}` | WorkspaceStatus (au moins un des deux champs requis ; `remote` définit/remplace origin, 400 si git non initialisé ; `autoSync:true` exige git initialisé ET un remote déjà défini, celui fourni dans le même appel compte, 400 sinon ; voir "Synchronisation automatique" ci-dessous) |
 | POST | `/api/workspace/sync` | `{confirm:true}` | `{output, lastSyncAt}` (voir ci-dessous). **Validation humaine obligatoire** : refus 400 sans `confirm` |
-| PATCH | `/api/settings` | `{displayName?, lang?}` | Settings (`lang` doit être `""`, `"fr"` ou `"en"`, 400 sinon) |
+| PATCH | `/api/settings` | `{displayName?, lang?, updateCheck?}` | Settings (`lang` doit être `""`, `"fr"` ou `"en"`, 400 sinon ; `updateCheck` démarre ou arrête la vérification périodique) |
+| GET | `/api/update` | | UpdateStatus. Lecture du cache mémoire uniquement : **aucun appel réseau** |
+| POST | `/api/update/check` | `{}` | UpdateStatus après un appel à l'API GitHub. 400 sur une compilation locale (rien à comparer), 502 si GitHub est injoignable |
+| POST | `/api/update/apply` | `{confirm:true}` | `{output, version, restarting, note}` : installe la version publiée puis remplace le process. 400 sans `confirm`, 502 si l'installation échoue ou n'est pas possible en un clic (voir ci-dessous) |
 | POST | `/api/agents` | `{name, emoji?, color?, cli, model?, contextPrompt?}` | Agent (name et cli requis ; cli ∈ {claude, codex, fake} ; id = slug du name, 400 si déjà pris) |
 | PATCH | `/api/agents/{id}` | mêmes champs, tous optionnels | Agent |
 | DELETE | `/api/agents/{id}` | | 204 (400 si une tâche référence encore l'agent) |
@@ -375,6 +389,26 @@ Sillage ne sait rien des stacks : il exécute la commande de recette d'un dépô
 - **Rien ne survit à l'arrêt du serveur** : SIGINT/SIGTERM déclenche l'arrêt de tous les runs (SIGINT au groupe, SIGKILL après 5 s) avant la fermeture du serveur HTTP. Il n'y a **ni plafond ni TTL d'inactivité** : à la place, l'interface affiche en permanence le nombre de recettes en cours, et c'est l'humain qui arrête (un TTL qui coupe un serveur pendant qu'on s'en sert est plus agaçant qu'utile).
 - **Sans commande configurée**, il n'y a rien à lancer : l'interface affiche le chemin du worktree avec un bouton de copie. Ce repli est le minimum garanti, disponible sur 100 % des projets sans configuration.
 
+### Mises à jour de Sillage
+
+Sillage sait dire qu'une version plus récente existe, et l'installer en un clic quand son mode d'installation le permet. La version courante est injectée au build de release (`-ldflags "-X main.version=vX.Y.Z"`) : une compilation locale vaut `"dev"`, ce qui éteint tout le mécanisme (`method: "dev"`, `blocker: "dev"`, aucun appel réseau). À défaut de ldflags, la version du module est relue dans les informations de build (cas de `go install`).
+
+- **Vérification** : un `GET https://api.github.com/repos/Halleck45/sillage/releases/latest`, au démarrage puis toutes les 24 h. C'est une lecture : aucune donnée de la machine n'est envoyée, aucun identifiant, aucune télémétrie. `Settings.updateCheck: false` arrête la goroutine ; `POST /api/update/check` reste possible à la main. `GET /api/update` et le champ `update` de `/api/state` ne lisent que le cache mémoire.
+- **Comparaison** numérique sur `X.Y.Z` (donc `0.10.0 > 0.9.9`), suffixe de pré-release ignoré : une `1.0.0-rc1` et une `1.0.0` se valent.
+- **Mode d'installation**, déduit une fois au démarrage du chemin réel du binaire (symlinks résolus) :
+
+  | `method` | Détection | `command` | Clic |
+  | --- | --- | --- | --- |
+  | `brew` | chemin réel sous `.../Cellar/...` | `brew update && brew upgrade sillage` | oui, si `brew` est dans le PATH |
+  | `binary` | tout le reste | `curl -fsSL .../install.sh \| sh` | oui, si le dossier du binaire est écrivable |
+  | `go` | dossier = `$GOBIN`, `$GOPATH/bin` ou `~/go/bin` | `go install github.com/Halleck45/sillage@latest` | non |
+  | `unknown` | chemin du binaire introuvable | l'installeur | non |
+
+  `command` est **toujours** renseignée quand une mise à jour existe : c'est le recours universel, y compris quand le clic est impossible.
+- **`blocker`** nomme ce qui empêche le clic. Deux valeurs sont temporaires et laissent `selfUpdatable: true` (le bouton s'affiche, éteint, avec la raison) : `tasksRunning` (un agent travaille) et `previewsRunning` (une recette tourne) ; on ne remplace pas un binaire sous les pieds d'un agent. Les autres sont structurelles et mettent `selfUpdatable: false` : `goInstall`, `notWritable`, `brewMissing`, `unknownMethod`, `dev`.
+- **`POST /api/update/apply`** exige `{"confirm": true}` (même règle que la livraison et la sync). Mode `brew` : `brew update` puis `brew upgrade sillage`. Mode `binary` : téléchargement de `sillage_<goos>_<goarch>` depuis la release, **vérification du sha256 contre le `checksums.txt` de la même release** (une empreinte qui ne correspond pas annule tout, sans rien poser), écriture dans un temporaire du dossier de destination puis `os.Rename` par-dessus le binaire courant.
+- **Redémarrage** : la réponse est envoyée d'abord, puis le process se remplace lui-même par la nouvelle version (`syscall.Exec` : même PID, même terminal, mêmes arguments). `restarting: true` l'annonce. Les sessions vivent en mémoire : un mot de passe configuré ramènera l'écran de connexion. Le frontend étant embarqué dans le binaire, l'interface **doit** recharger la page une fois le serveur de nouveau joignable. Si le nouveau binaire est introuvable (cas Homebrew où le Cellar de l'ancienne version a disparu et où `sillage` n'est pas dans le PATH), la réponse porte `restarting: false` et une `note` : la mise à jour est posée, le redémarrage reste à faire à la main.
+
 ### Diff
 
 ```jsonc
@@ -405,6 +439,7 @@ Sillage ne sait rien des stacks : il exécute la commande de recette d'un dépô
 - `project` : Project complet (après PATCH `/api/projects/{id}`).
 - `workspace` : WorkspaceStatus (après setup, changement de remote/autoSync, sync manuelle, ou tick d'auto-sync).
 - `settings` : Settings (après PATCH `/api/settings`).
+- `update` : UpdateStatus (après une vérification périodique ou manuelle, un changement du réglage, et au début et à la fin d'une application de mise à jour).
 - `preview` : PreviewRun (lancement, sortie, arrêt d'une recette manuelle).
 - `previewLog` : `{runId, line}` : une ligne de sortie d'un run de recette.
 - `taskDeleted` : `{taskId, cardId, projectId}` (après `DELETE /api/tasks/{id}`, une fois par tâche supprimée y compris en cascade).
@@ -418,6 +453,7 @@ Le frontend maintient son état en mémoire à partir de `/api/state` + SSE ; re
 - Push / livraison uniquement via le bouton « Livrer » de l'en-tête du chantier, en deux clics : le bouton ouvre un récapitulatif (mode, dépôts, branche → base, commits, fichiers, avertissements) dont le bouton d'action **est** la confirmation (`{"confirm":true}`). Jamais automatique. Le bouton est grisé, avec la raison en infobulle, tant que `card.shipReady` est faux ou qu'il n'y a rien à livrer. Il reste actif quand des tâches sont encore en cours ou à relire : le récapitulatif annonce alors la livraison partielle (« n tâches ne sont pas encore acceptées ») plutôt que d'interdire d'envoyer ce qui est prêt. Même règle de confirmation explicite pour la synchronisation de l'espace de travail (`/api/workspace/sync`).
 - Accepter ou refuser une tâche s'obtient en un clic depuis la liste de tâches (boutons révélés au survol d'une tâche à relire) : ces actions sont locales et réversibles (`/reopen`), donc sans confirmation. L'état de chaque tâche (acceptée, refusée) est lisible dans la liste sans ouvrir la tâche.
 - Recette manuelle : le bouton « Recette » est présent dans l'en-tête du chantier (avant « Livrer » : on éprouve, puis on livre) et dans le panneau de détail d'une tâche (action secondaire, la principale reste « Accepter »). Il est **toujours affiché**, même sans commande configurée : le panneau propose alors le chemin du worktree à copier. Lancer et arrêter sont des actions locales, sans confirmation. Une pastille verte sur le bouton, et un compteur en bas de sidebar, disent ce qui tourne.
+- Mise à jour : tout vit dans **Réglages > Mises à jour** (troisième onglet, à côté de Général et Statistiques) : la version courante, le mode d'installation, la date de dernière vérification, l'annonce quand une version existe, le bouton « Mettre à jour et redémarrer » (éteint avec la raison quand `blocker` est temporaire), la commande à copier, « Vérifier maintenant », et la case de vérification automatique. Le seul rappel hors de cet onglet est une ligne en bas de sidebar, jamais une bannière ni une modale spontanée : `Version <current>` en gris, qui devient « Mise à jour disponible » (vert, avec pastille) quand `update.available` est vrai, et rien du tout sur une compilation locale (`method: "dev"`). Cette ligne ouvre les réglages directement sur l'onglet. Après une réponse `restarting: true`, le frontend attend que le serveur réponde à nouveau puis **recharge la page** (le frontend est embarqué dans le binaire).
 - Tokens : jamais affichés dans le flux de travail (kanban, détail de tâche, liste des projets), pour ne pas ajouter de charge mentale. Seul endroit visible : Réglages > onglet Statistiques, consommation par projet, sans prix.
 - Un outil refusé à un agent s'affiche dans le fil comme une ligne système, qui nomme l'outil demandé et pointe vers les réglages du projet (voir « Outils autorisés aux agents »). Un refus silencieux se paie en tours d'agent que personne ne sait expliquer.
 - Le champ `allowedTools` est une entrée par ligne, avec un exemple en placeholder et une aide courte : c'est la seule saisie du produit où l'utilisateur doit connaître une syntaxe qui n'est pas la sienne mais celle du CLI. Vide par défaut, et vide reste un état normal : le socle suffit à lire, écrire et chercher.

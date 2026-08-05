@@ -126,6 +126,15 @@ func (r *Runner) Message(taskID, text string) (queued bool, err error) {
 	return false, r.Start(taskID, false, text)
 }
 
+// RunningCount retourne le nombre d'agents en cours d'exécution. Compte des
+// process réels, pas des statuts persistés : un "running" laissé par un
+// redémarrage brutal ne bloque donc rien.
+func (r *Runner) RunningCount() int {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return len(r.procs)
+}
+
 func (r *Runner) publishTask(t Task)       { r.hub.Publish(Event{Name: "task", Data: t}) }
 func (r *Runner) publishMessage(m Message) { r.hub.Publish(Event{Name: "message", Data: m}) }
 func (r *Runner) publishAgents()           { r.hub.Publish(Event{Name: "agents", Data: r.store.ListAgents()}) }
@@ -140,6 +149,9 @@ func (r *Runner) publishWorkspace(w WorkspaceStatus) {
 	r.hub.Publish(Event{Name: "workspace", Data: w})
 }
 func (r *Runner) publishSettings(s Settings) { r.hub.Publish(Event{Name: "settings", Data: s}) }
+func (r *Runner) publishUpdate(u UpdateStatus) {
+	r.hub.Publish(Event{Name: "update", Data: u})
+}
 func (r *Runner) publishActivity(taskID string, line *string) {
 	r.hub.Publish(Event{Name: "activity", Data: map[string]any{"taskId": taskID, "line": line}})
 }

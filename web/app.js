@@ -390,7 +390,38 @@
       'sidebar.sponsorTooltip': 'Sponsoriser le projet',
       'settings.tabGeneral': 'Général',
       'settings.tabStats': 'Statistiques',
-      'usage.empty': 'Aucun projet.'
+      'usage.empty': 'Aucun projet.',
+      'update.sidebarAvailable': 'Mise à jour disponible',
+      'update.title': 'Mises à jour',
+      'update.currentVersion': 'Version {version}',
+      'update.devBuild': 'Compilation locale : rien à comparer.',
+      'update.upToDate': 'Sillage est à jour.',
+      'update.availableHeadline': 'Sillage {latest} est disponible (vous avez {current}).',
+      'update.releaseNotes': 'Voir les nouveautés',
+      'update.checkNow': 'Vérifier maintenant',
+      'update.checking': 'Vérification…',
+      'update.neverChecked': 'Jamais vérifié',
+      'update.lastChecked': 'Vérifié {time}',
+      'update.autoCheckLab': 'Vérifier les mises à jour automatiquement',
+      'update.autoCheckNote': 'Une requête par jour vers GitHub, pour lire le numéro de la dernière version. Rien de votre machine ne sort.',
+      'update.apply': 'Mettre à jour et redémarrer',
+      'update.applying': 'Mise à jour en cours…',
+      'update.applied': 'Sillage {version} installé, redémarrage…',
+      'update.appliedNoRestart': 'Sillage {version} installé. Redémarrez Sillage pour l\'utiliser.',
+      'update.reconnecting': 'Reconnexion à Sillage…',
+      'update.manualIntro': 'À jouer dans un terminal :',
+      'update.method.brew': 'Installé avec Homebrew',
+      'update.method.binary': 'Binaire installé dans {dir}',
+      'update.method.go': 'Installé avec go install',
+      'update.method.unknown': 'Mode d\'installation inconnu',
+      'update.blocker.tasksRunning': 'Un agent travaille : interrompez-le avant de mettre à jour.',
+      'update.blocker.previewsRunning': 'Une recette tourne : arrêtez-la avant de mettre à jour.',
+      'update.blocker.notWritable': 'Le dossier du binaire n\'est pas modifiable par Sillage.',
+      'update.blocker.brewMissing': 'La commande brew est introuvable dans le PATH.',
+      'update.blocker.goInstall': 'Une installation par go install se met à jour avec go.',
+      'update.blocker.unknownMethod': 'Sillage ne sait pas comment ce binaire a été installé.',
+      'update.errorCheckFailed': 'Impossible de joindre GitHub.',
+      'update.errorApplyFailed': 'Échec de la mise à jour.'
     },
     en: {
       'nav.inbox': 'Inbox',
@@ -774,7 +805,38 @@
       'sidebar.sponsorTooltip': 'Sponsor the project',
       'settings.tabGeneral': 'General',
       'settings.tabStats': 'Statistics',
-      'usage.empty': 'No projects yet.'
+      'usage.empty': 'No projects yet.',
+      'update.sidebarAvailable': 'Update available',
+      'update.title': 'Updates',
+      'update.currentVersion': 'Version {version}',
+      'update.devBuild': 'Local build: nothing to compare.',
+      'update.upToDate': 'Sillage is up to date.',
+      'update.availableHeadline': 'Sillage {latest} is available (you run {current}).',
+      'update.releaseNotes': 'See what changed',
+      'update.checkNow': 'Check now',
+      'update.checking': 'Checking…',
+      'update.neverChecked': 'Never checked',
+      'update.lastChecked': 'Checked {time}',
+      'update.autoCheckLab': 'Check for updates automatically',
+      'update.autoCheckNote': 'One request a day to GitHub, to read the latest version number. Nothing from your machine leaves it.',
+      'update.apply': 'Update and restart',
+      'update.applying': 'Updating…',
+      'update.applied': 'Sillage {version} installed, restarting…',
+      'update.appliedNoRestart': 'Sillage {version} installed. Restart Sillage to run it.',
+      'update.reconnecting': 'Reconnecting to Sillage…',
+      'update.manualIntro': 'Run this in a terminal:',
+      'update.method.brew': 'Installed with Homebrew',
+      'update.method.binary': 'Binary installed in {dir}',
+      'update.method.go': 'Installed with go install',
+      'update.method.unknown': 'Unknown installation method',
+      'update.blocker.tasksRunning': 'An agent is working: interrupt it before updating.',
+      'update.blocker.previewsRunning': 'A preview is running: stop it before updating.',
+      'update.blocker.notWritable': 'Sillage cannot write to the binary\'s directory.',
+      'update.blocker.brewMissing': 'The brew command is not in the PATH.',
+      'update.blocker.goInstall': 'A go install setup is updated with go.',
+      'update.blocker.unknownMethod': 'Sillage cannot tell how this binary was installed.',
+      'update.errorCheckFailed': 'Could not reach GitHub.',
+      'update.errorApplyFailed': 'Update failed.'
     }
   };
 
@@ -861,7 +923,7 @@
   var projectDraftDirty = false;
   var searchIndex = 0; // résultat de recherche actif (navigation aux flèches)
   var onboardingExpanded = null;
-  var settingsModalTab = 'general'; // 'general' | 'stats'
+  var settingsModalTab = 'general'; // 'general' | 'stats' | 'update'
   var sseOpenedOnce = false;
 
   // ---------------------------------------------------------------------
@@ -1043,6 +1105,7 @@
     state.tokens = data.tokens || { global: { input: 0, output: 0, costUsd: 0 } };
     state.previews = data.previews || [];
     state.workspace = data.workspace || state.workspace || null;
+    state.update = data.update || state.update || null;
     state.settings = data.settings || state.settings || { displayName: '', lang: '' };
     if (state.settings.lang) {
       state.lang = state.settings.lang;
@@ -1388,6 +1451,7 @@
       '<div class="agent-list">' + (agentsHTML || '<div class="empty-note-sm">' + escapeHtml(t('sidebar.noAgents')) + '</div>') + '</div>' +
       '<div class="sidebar-footer">' +
         buildPreviewCounterHTML() +
+        buildUpdateLineHTML() +
         '<button class="settings-btn" data-action="open-workspace-modal">⚙ ' + escapeHtml(t('sidebar.settingsButton')) + '</button>' +
         '<div class="sidebar-footer-actions">' +
           '<a class="icon-link" href="https://github.com/Halleck45/sillage" target="_blank" rel="noopener noreferrer" title="' + escapeHtml(t('sidebar.repoTooltip')) + '" aria-label="' + escapeHtml(t('sidebar.repoTooltip')) + '">' + repoIconHTML() + '</a>' +
@@ -4520,6 +4584,7 @@
   function buildSettingsTabsHTML() {
     var tabs = [
       { key: 'general', label: t('settings.tabGeneral') },
+      { key: 'update', label: t('update.title') },
       { key: 'stats', label: t('settings.tabStats') }
     ];
     return '<div class="tabs">' + tabs.map(function (tb) {
@@ -4529,7 +4594,7 @@
     }).join('') + '</div>';
   }
   function setSettingsTab(tabKey) {
-    settingsModalTab = tabKey === 'stats' ? 'stats' : 'general';
+    settingsModalTab = (tabKey === 'stats' || tabKey === 'update') ? tabKey : 'general';
     refreshWorkspaceModalBody();
   }
 
@@ -4586,7 +4651,9 @@
       '<button class="btn-outline btn-block" data-action="logout">' + escapeHtml(t('nav.logout')) + '</button>';
   }
   function buildWorkspaceModalBodyHTML() {
-    var inner = settingsModalTab === 'stats' ? buildStatsSectionHTML() : buildSettingsGeneralHTML();
+    var inner = settingsModalTab === 'stats' ? buildStatsSectionHTML()
+      : settingsModalTab === 'update' ? buildUpdateSectionHTML()
+      : buildSettingsGeneralHTML();
     return buildSettingsTabsHTML() + '<div class="settings-tab-body">' + inner + '</div>';
   }
   function buildWorkspaceModalHTML() {
@@ -4684,6 +4751,219 @@
         errEl.classList.remove('hidden');
       }
     });
+  }
+
+  // ---------------------------------------------------------------------
+  // Mise à jour de Sillage
+  // ---------------------------------------------------------------------
+
+  // La modale est le seul endroit qui parle de versions : la sidebar ne porte
+  // qu'une ligne, et seulement quand il y a réellement quelque chose à faire.
+  // Ces quatre variables ne décrivent que l'opération en cours côté navigateur
+  // (l'état, lui, vient de state.update et du SSE `update`).
+  var updateChecking = false;
+  var updateApplying = false;
+  var updateMessage = '';
+  var updateError = '';
+
+  function updateState() { return state.update || { current: 'dev', method: 'dev' }; }
+
+  // Ligne de pied de sidebar : un rappel de version, qui devient un appel à
+  // l'action quand une version existe. Rien d'autre : une mise à jour n'est
+  // jamais urgente au point de couvrir l'écran.
+  function buildUpdateLineHTML() {
+    var u = updateState();
+    if (u.available) {
+      return '<button class="update-line update-line-available" data-action="open-update-modal">' +
+        '<span class="update-dot"></span>' + escapeHtml(t('update.sidebarAvailable')) + '</button>';
+    }
+    if (u.method === 'dev') return '';
+    return '<button class="update-line" data-action="open-update-modal">' +
+      escapeHtml(t('update.currentVersion', { version: u.current })) + '</button>';
+  }
+
+  function updateMethodLabel(u) {
+    if (u.method === 'binary') {
+      var path = u.path || '';
+      var dir = path.indexOf('/') >= 0 ? path.slice(0, path.lastIndexOf('/')) : path;
+      return dir ? t('update.method.binary', { dir: dir }) : '';
+    }
+    if (u.method === 'brew' || u.method === 'go' || u.method === 'unknown') return t('update.method.' + u.method);
+    return '';
+  }
+
+  function buildUpdateSectionInnerHTML() {
+    var u = updateState();
+    var isDev = u.method === 'dev';
+
+    var headline;
+    if (isDev) headline = t('update.devBuild');
+    else if (u.available) headline = t('update.availableHeadline', { latest: u.latest, current: u.current });
+    else headline = t('update.upToDate');
+
+    var metaBits = [t('update.currentVersion', { version: u.current })];
+    var methodLabel = updateMethodLabel(u);
+    if (methodLabel) metaBits.push(methodLabel);
+    metaBits.push(u.checkedAt ? t('update.lastChecked', { time: timeAgo(u.checkedAt) }) : t('update.neverChecked'));
+
+    var notesHTML = (u.available && u.releaseUrl)
+      ? '<a class="update-notes-link" href="' + escapeHtml(u.releaseUrl) + '" target="_blank" rel="noopener noreferrer">' +
+        escapeHtml(t('update.releaseNotes')) + '</a>'
+      : '';
+
+    // Un blocage temporaire (agent au travail, recette en cours) laisse le
+    // bouton visible mais éteint : la raison est plus utile qu'un bouton absent.
+    var blockerHTML = (u.available && u.blocker)
+      ? '<div class="update-blocker">' + escapeHtml(t('update.blocker.' + u.blocker)) + '</div>'
+      : '';
+
+    // `applying` vient aussi du serveur : une mise à jour lancée depuis un autre
+    // onglet (ou avant la fermeture de cette modale) reste visible ici.
+    var applying = updateApplying || !!u.applying;
+    var actionHTML = '';
+    if (u.available && u.selfUpdatable) {
+      var disabled = applying || !!u.blocker;
+      actionHTML = '<button class="btn-green btn-block" data-action="update-apply"' + (disabled ? ' disabled' : '') + '>' +
+        escapeHtml(applying ? t('update.applying') : t('update.apply')) + '</button>';
+    }
+
+    // La commande à la main est toujours offerte quand une version existe :
+    // c'est le seul recours des installations que Sillage ne peut pas toucher,
+    // et un repli rassurant pour les autres.
+    var manualHTML = '';
+    if (u.available && u.command) {
+      manualHTML = '<div class="update-manual">' +
+        '<div class="update-manual-intro">' + escapeHtml(t('update.manualIntro')) + '</div>' +
+        '<div class="agent-warning-cmd">' +
+          '<code class="mono">' + escapeHtml(u.command) + '</code>' +
+          '<button data-action="copy-path" data-path="' + escapeHtml(u.command) + '">' + escapeHtml(t('agent.warning.copyCmd')) + '</button>' +
+        '</div>' +
+      '</div>';
+    }
+
+    var checkHTML = isDev ? '' :
+      '<button class="update-check-btn" data-action="update-check"' + (updateChecking ? ' disabled' : '') + '>' +
+      escapeHtml(updateChecking ? t('update.checking') : t('update.checkNow')) + '</button>';
+
+    var autoHTML = '<label class="workspace-autosync-row">' +
+      '<input type="checkbox" data-action="toggle-update-check"' + (u.checkEnabled ? ' checked' : '') + '>' +
+      '<span>' + escapeHtml(t('update.autoCheckLab')) + '</span>' +
+      '</label>' +
+      '<div class="update-note">' + escapeHtml(t('update.autoCheckNote')) + '</div>';
+
+    // Une vérification qui a échoué se dit : sinon « à jour » serait une
+    // promesse que le serveur n'a pas pu tenir.
+    var checkErrorHTML = (!updateError && u.error)
+      ? '<div class="update-blocker">' + escapeHtml(t('update.errorCheckFailed')) + '</div>'
+      : '';
+
+    return '<div class="update-headline">' + escapeHtml(headline) + '</div>' +
+      notesHTML +
+      '<div class="update-meta">' + metaBits.map(escapeHtml).join(' · ') + '</div>' +
+      checkErrorHTML +
+      blockerHTML +
+      (updateMessage ? '<div class="workspace-sync-message">' + escapeHtml(updateMessage) + '</div>' : '') +
+      (updateError ? '<div class="modal-error">' + escapeHtml(updateError) + '</div>' : '') +
+      (actionHTML ? '<div class="secondary-row">' + actionHTML + '</div>' : '') +
+      manualHTML +
+      '<div class="preferences-divider"></div>' +
+      checkHTML +
+      autoHTML;
+  }
+
+  // Le contenu vit dans #update-section pour permettre un patch ciblé sur
+  // l'événement SSE `update`, sans reconstruire toute la modale (même principe
+  // que #usage-section pour les statistiques).
+  function buildUpdateSectionHTML() {
+    return '<div id="update-section">' + buildUpdateSectionInnerHTML() + '</div>';
+  }
+
+  // Ouvre les réglages directement sur l'onglet Mises à jour : c'est la cible
+  // de la ligne de pied de sidebar.
+  function openUpdateModal() {
+    updateMessage = '';
+    updateError = '';
+    settingsModalTab = 'update';
+    openModal(buildWorkspaceModalHTML());
+  }
+
+  function refreshUpdateSection() {
+    var body = document.getElementById('update-section');
+    if (body) body.innerHTML = buildUpdateSectionInnerHTML();
+  }
+
+  function doUpdateCheck() {
+    updateChecking = true;
+    updateError = '';
+    refreshUpdateSection();
+    api('/api/update/check', { method: 'POST', body: {} }).then(function (u) {
+      if (u) state.update = u;
+    }).catch(function (e) {
+      updateError = (e instanceof ApiError && e.message) || t('update.errorCheckFailed');
+    }).then(function () {
+      updateChecking = false;
+      refreshUpdateSection();
+      renderSidebar();
+    });
+  }
+
+  function saveUpdateCheckSetting(enabled) {
+    api('/api/settings', { method: 'PATCH', body: { updateCheck: enabled } }).then(function (settings) {
+      if (settings) state.settings = settings;
+      if (state.update) state.update.checkEnabled = enabled;
+      refreshUpdateSection();
+    }).catch(function (e) {
+      updateError = (e instanceof ApiError && e.message) || t('preferences.errorSaveFailed');
+      refreshUpdateSection();
+    });
+  }
+
+  function doUpdateApply() {
+    updateApplying = true;
+    updateError = '';
+    updateMessage = '';
+    refreshUpdateSection();
+    api('/api/update/apply', { method: 'POST', body: { confirm: true } }).then(function (res) {
+      var version = (res && res.version) || '';
+      if (res && res.restarting) {
+        updateMessage = t('update.applied', { version: version });
+        refreshUpdateSection();
+        waitForRestart();
+        return;
+      }
+      updateApplying = false;
+      updateMessage = t('update.appliedNoRestart', { version: version });
+      refreshUpdateSection();
+    }).catch(function (e) {
+      updateApplying = false;
+      updateError = (e instanceof ApiError && e.message) || t('update.errorApplyFailed');
+      refreshUpdateSection();
+    });
+  }
+
+  // Le serveur se remplace par sa nouvelle version : on attend qu'il réponde à
+  // nouveau, puis on recharge la page. Le rechargement est indispensable, le
+  // frontend étant embarqué dans le binaire : sans lui, l'ancienne interface
+  // continuerait de tourner contre la nouvelle API. Un mot de passe configuré
+  // ramènera l'écran de connexion, les sessions vivant en mémoire.
+  function waitForRestart() {
+    var deadline = Date.now() + 60000;
+    updateMessage = t('update.reconnecting');
+    refreshUpdateSection();
+    (function poll() {
+      setTimeout(function () {
+        fetch('/api/update', { credentials: 'same-origin' }).then(function () {
+          window.location.reload();
+        }).catch(function () {
+          if (Date.now() < deadline) poll();
+          else {
+            updateApplying = false;
+            updateError = t('common.networkError');
+            refreshUpdateSection();
+          }
+        });
+      }, 1500);
+    })();
   }
 
   // ---------------------------------------------------------------------
@@ -4835,6 +5115,15 @@
     }
   }
 
+  // La vérification périodique a trouvé quelque chose (ou l'application d'une
+  // mise à jour a changé d'état) : la ligne de sidebar et la modale ouverte
+  // suivent, sans rendu complet.
+  function onUpdateEvent(u) {
+    state.update = u;
+    renderSidebar();
+    refreshUpdateSection();
+  }
+
   // Recette : l'état d'un run change (démarré, terminé, arrêté). Le panneau et
   // les boutons se mettent à jour sans rendu complet ; le journal, lui, reçoit
   // ses lignes une par une (onPreviewLogEvent).
@@ -4917,6 +5206,7 @@
     es.addEventListener('agents', function (e) { try { onAgentsEvent(JSON.parse(e.data)); } catch (er) {} });
     es.addEventListener('project', function (e) { try { onProjectEvent(JSON.parse(e.data)); } catch (er) {} });
     es.addEventListener('workspace', function (e) { try { onWorkspaceEvent(JSON.parse(e.data)); } catch (er) {} });
+    es.addEventListener('update', function (e) { try { onUpdateEvent(JSON.parse(e.data)); } catch (er) {} });
     es.addEventListener('settings', function (e) { try { onSettingsEvent(JSON.parse(e.data)); } catch (er) {} });
     es.addEventListener('preview', function (e) { try { onPreviewEvent(JSON.parse(e.data)); } catch (er) {} });
     es.addEventListener('previewLog', function (e) { try { onPreviewLogEvent(JSON.parse(e.data)); } catch (er) {} });
@@ -5037,6 +5327,10 @@
       case 'activate-workspace-git': activateWorkspaceGit(); break;
       case 'toggle-onboarding-card': toggleOnboardingCard(el.getAttribute('data-key')); break;
       case 'submit-onboarding': submitOnboarding(el.getAttribute('data-mode')); break;
+      case 'open-update-modal': openUpdateModal(); break;
+      case 'update-check': doUpdateCheck(); break;
+      case 'update-apply': doUpdateApply(); break;
+      case 'toggle-update-check': saveUpdateCheckSetting(el.checked); break;
     }
   }
 

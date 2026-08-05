@@ -562,7 +562,7 @@ func TestWorkspaceCommitThrottledNotDebounced(t *testing.T) {
 	if _, err := s.AddCard(project.ID, "Ma carte", "", ""); err != nil {
 		t.Fatalf("AddCard: %v", err)
 	}
-	if _, err := s.UpdateSettings(nil, nil); err != nil {
+	if _, err := s.UpdateSettings(nil, nil, nil); err != nil {
 		t.Fatalf("UpdateSettings: %v", err)
 	}
 
@@ -631,7 +631,7 @@ func TestWorkspaceCommitFiresOncePerInterval(t *testing.T) {
 	if _, err := s.AddCard(project.ID, "Ma carte", "", ""); err != nil {
 		t.Fatalf("AddCard: %v", err)
 	}
-	if _, err := s.UpdateSettings(nil, nil); err != nil {
+	if _, err := s.UpdateSettings(nil, nil, nil); err != nil {
 		t.Fatalf("UpdateSettings: %v", err)
 	}
 	waitForCommitCount(t, dir, 2)
