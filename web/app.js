@@ -107,10 +107,12 @@
       'work.emptyCardAction': 'Créer la première tâche',
       'work.emptyFiltered': 'Aucune tâche ne correspond à ce filtre.',
       'filter.all': 'Toutes {n}',
+      'filter.waiting': 'En attente {n}',
       'filter.running': 'En cours {n}',
       'filter.review': 'À relire {n}',
       'filter.finished': 'Traitées {n}',
       'badge.new': 'NOUVEAU',
+      'status.waiting': 'En attente',
       'status.running': 'En cours',
       'status.review': 'À relire',
       'status.accepted': 'Acceptée',
@@ -118,11 +120,17 @@
       'status.rebasing': 'Rebase en cours',
       'status.rebasingNote': 'La tâche est rejouée sur le travail qui vient d\'être accepté.',
       'action.interrupt': 'Interrompre l\'agent',
+      'action.startNow': 'Démarrer maintenant',
       'action.accept': 'Accepter',
       'action.acceptTooltip': 'Fusionner dans la branche du chantier',
       'action.refuse': 'Refuser',
       'action.refuseTooltip': 'Écarter cette tâche du chantier',
       'action.reopen': 'Rouvrir la tâche',
+      'taskRow.waitingFor': 'En attente de « {title} »',
+      'waitingFor.note': 'Démarrera automatiquement quand « {title} » sera acceptée.',
+      'waitingFor.unknownTask': 'La tâche attendue n\'existe plus : démarrez-la manuellement.',
+      'newTask.waitsForLabel': 'Démarrer après',
+      'newTask.waitsForNone': 'Immédiatement',
       'behind.taskTooltip.one': '1 commit de retard sur {base} : à rebaser avant acceptation, sinon conflit.',
       'behind.taskTooltip.other': '{n} commits de retard sur {base} : à rebaser avant acceptation, sinon conflit.',
       'behind.cardTooltip.one': 'Le chantier a 1 commit de retard sur {base}.',
@@ -533,10 +541,12 @@
       'work.emptyCardAction': 'Create the first task',
       'work.emptyFiltered': 'No tasks match this filter.',
       'filter.all': 'All {n}',
+      'filter.waiting': 'Waiting {n}',
       'filter.running': 'In progress {n}',
       'filter.review': 'To review {n}',
       'filter.finished': 'Handled {n}',
       'badge.new': 'NEW',
+      'status.waiting': 'Waiting',
       'status.running': 'In progress',
       'status.review': 'To review',
       'status.rebasing': 'Rebasing',
@@ -544,11 +554,17 @@
       'status.accepted': 'Accepted',
       'status.cancelled': 'Refused',
       'action.interrupt': 'Stop the agent',
+      'action.startNow': 'Start now',
       'action.accept': 'Accept',
       'action.acceptTooltip': 'Merge into the workstream branch',
       'action.refuse': 'Refuse',
       'action.refuseTooltip': 'Leave this task out of the workstream',
       'action.reopen': 'Reopen the task',
+      'taskRow.waitingFor': 'Waiting for "{title}"',
+      'waitingFor.note': 'Will start automatically once "{title}" is accepted.',
+      'waitingFor.unknownTask': 'The task it was waiting for no longer exists: start it manually.',
+      'newTask.waitsForLabel': 'Start after',
+      'newTask.waitsForNone': 'Immediately',
       'behind.taskTooltip.one': '1 commit behind {base}: rebase before accepting, or it will conflict.',
       'behind.taskTooltip.other': '{n} commits behind {base}: rebase before accepting, or it will conflict.',
       'behind.cardTooltip.one': 'The workstream is 1 commit behind {base}.',
@@ -896,6 +912,7 @@
   // .task-glyph) : un disque plein pour « à relire », qui se repère d'un coup
   // d'œil sans se confondre avec le losange des compteurs de fichiers.
   var STATUS_GLYPH = {
+    waiting: { icon: '◌', color: '#8b8982' },
     running: { icon: '◐', color: '#8b8982' },
     review: { icon: '●', color: '#9a6b0d' },
     accepted: { icon: '✓', color: '#2f7d54' },
@@ -1773,6 +1790,11 @@
     if (t.rebasing) {
       return '<div class="task-row-state task-row-state-rebasing">' + escapeHtml(t2('status.rebasing')) + '</div>';
     }
+    if (t.status === 'waiting') {
+      var dep = state.tasksById[t.waitsForTaskId];
+      var waitLabel = dep ? t2('taskRow.waitingFor', { title: dep.title }) : t2('status.waiting');
+      return '<div class="task-row-state task-row-state-waiting" title="' + escapeHtml(waitLabel) + '">' + escapeHtml(t2('status.waiting')) + '</div>';
+    }
     if (t.status === 'review') {
       return '<div class="task-row-actions">' +
         '<button class="row-btn row-btn-accept" data-action="accept-task" data-task-id="' + t.id + '" title="' + escapeHtml(t2('action.acceptTooltip')) + '">' + escapeHtml(t2('action.accept')) + '</button>' +
@@ -1808,6 +1830,7 @@
     var finishedCount = (counts.accepted || 0) + (counts.cancelled || 0);
     var filters = [
       { key: 'all', label: t('filter.all', { n: tasksAll.length }) },
+      { key: 'waiting', label: t('filter.waiting', { n: counts.waiting || 0 }) },
       { key: 'running', label: t('filter.running', { n: counts.running || 0 }) },
       { key: 'review', label: t('filter.review', { n: counts.review || 0 }) },
       { key: 'finished', label: t('filter.finished', { n: finishedCount }) }
@@ -2767,6 +2790,8 @@
   // la machine. La seule action sortante du produit est le Ship du chantier.
   function primaryActionInfo(task) {
     switch (task.status) {
+      case 'waiting':
+        return { label: t('action.startNow'), cls: 'btn-neutral', action: 'start-task', kind: 'plain' };
       case 'running':
         return { label: t('action.interrupt'), cls: 'btn-neutral', action: 'interrupt', kind: 'plain' };
       case 'review':
@@ -2956,8 +2981,18 @@
         '</div>';
     }
 
+    // Tâche qui n'a pas encore démarré : dit clairement quoi attend, et si la
+    // tâche attendue n'existe plus (supprimée), le dit aussi. « Démarrer
+    // maintenant » (bouton primaire) reste toujours disponible pour débloquer.
+    var waitingRow = '';
+    if (task.status === 'waiting') {
+      var waitDep = state.tasksById[task.waitsForTaskId];
+      var waitText = waitDep ? t('waitingFor.note', { title: waitDep.title }) : t('waitingFor.unknownTask');
+      waitingRow = '<div class="behind-row"><span class="behind-text">' + escapeHtml(waitText) + '</span></div>';
+    }
+
     var linksRow = '';
-    if (task.status === 'running' || task.status === 'review') {
+    if (task.status === 'waiting' || task.status === 'running' || task.status === 'review') {
       var refusing = task.status === 'review';
       var cancelDefault = refusing ? t('action.refuse') : t('action.cancelTask');
       var cancelKey = 'task-cancel:' + task.id;
@@ -2991,6 +3026,7 @@
         '</div>' +
         buildStatusBadgeHTML(task) +
         behindRow +
+        waitingRow +
         '<div class="action-row">' + primaryBtnHTML +
           buildTaskPreviewButtonHTML(task) +
           '<span class="checks">' + renderChecks(task.checks) + '</span>' +
@@ -3374,6 +3410,15 @@
       upsertTask(task); renderMain();
     }).catch(function (e) { if (e instanceof ApiError) showDetailError(taskId, e.message || t('errors.interruptFailed')); });
   }
+  // doStartWaitingTask : démarre une tâche "waiting" avant que sa dépendance ne
+  // soit acceptée (dépendance refusée/supprimée, ou changement d'avis). Un
+  // clic, pas de confirmation : aucune donnée n'est perdue, la tâche allait
+  // démarrer tôt ou tard.
+  function doStartWaitingTask(taskId) {
+    api('/api/tasks/' + taskId + '/start', { method: 'POST' }).then(function (task) {
+      upsertTask(task); renderMain();
+    }).catch(function (e) { if (e instanceof ApiError) showDetailError(taskId, e.message || t('errors.genericFailed')); });
+  }
   function doReopen(taskId) {
     var previous = state.tasksById[taskId];
     var cardId = previous ? previous.cardId : null;
@@ -3686,13 +3731,9 @@
 
   // Nouvelle tâche
 
-  function buildAgentContextPreviewHTML(agent) {
-    if (!agent) return '';
-    var context = agent.contextPrompt
-      ? '<div>' + escapeHtml(agent.contextPrompt) + '</div>'
-      : '';
-    if (!agent.warning) return context;
-    return context + '<div class="agent-choice-warning">⚠ ' + escapeHtml(agentWarningText(agent.warning)) +
+  function buildAgentChoiceWarningHTML(agent) {
+    if (!agent || !agent.warning) return '';
+    return '<div class="agent-choice-warning">⚠ ' + escapeHtml(agentWarningText(agent.warning)) +
       agentWarningExtrasHTML(agent.warning) + '</div>';
   }
 
@@ -3719,6 +3760,22 @@
       repoSelectHTML = '<div class="modal-label">' + escapeHtml(t('newTask.repoLabel')) + '</div>' +
         '<select id="new-task-repo" class="modal-input">' + repoOptions + '</select>';
     }
+    // Démarrer après : uniquement les tâches du chantier pas encore terminales
+    // (une tâche accepted/cancelled ne fera plus jamais rien). Absent du
+    // formulaire s'il n'y a rien à attendre, pour ne pas encombrer le cas
+    // courant.
+    var waitCandidates = state.tasks.filter(function (tk) {
+      return tk.cardId === card.id && (tk.status === 'running' || tk.status === 'review' || tk.status === 'waiting');
+    });
+    var waitsForSelectHTML = '';
+    if (waitCandidates.length > 0) {
+      var waitOptions = '<option value="">' + escapeHtml(t('newTask.waitsForNone')) + '</option>' +
+        waitCandidates.map(function (tk) {
+          return '<option value="' + escapeHtml(tk.id) + '">#' + tk.ref + ' ' + escapeHtml(tk.title) + '</option>';
+        }).join('');
+      waitsForSelectHTML = '<div class="modal-label">' + escapeHtml(t('newTask.waitsForLabel')) + '</div>' +
+        '<select id="new-task-waits-for" class="modal-input">' + waitOptions + '</select>';
+    }
     return '<div class="modal">' +
       '<div class="modal-head"><span class="modal-title">' + escapeHtml(t('newTask.title')) + '</span><span class="modal-sub">' + escapeHtml(card.title) + '</span>' +
       '<button class="icon-btn" data-action="close-modal" aria-label="' + escapeHtml(t('common.close')) + '">✕</button></div>' +
@@ -3728,9 +3785,10 @@
       '<div class="modal-label modal-label-row"><span>' + escapeHtml(t('newTask.agentLabel')) + '</span>' +
       '<span class="modal-label-hint">' + escapeHtml(t('newTask.agentHint')) + '</span></div>' +
       '<div class="agent-choices" id="agent-choices" role="radiogroup" aria-label="' + escapeHtml(t('newTask.agentLabel')) + '">' + agentChoices + '</div>' +
-      '<div class="agent-context-preview" id="agent-context-preview">' + buildAgentContextPreviewHTML(selected) + '</div>' +
+      '<div id="agent-choice-warning">' + buildAgentChoiceWarningHTML(selected) + '</div>' +
       (project && project.contextPrompt ? '<div class="project-context-note">' + escapeHtml(t('newTask.projectContextNote')) + '</div>' : '') +
       (card && card.contextPrompt ? '<div class="project-context-note">' + escapeHtml(t('newTask.workstreamContextNote')) + '</div>' : '') +
+      waitsForSelectHTML +
       '<div id="new-task-error" class="modal-error hidden"></div>' +
       '<div id="new-task-note" class="modal-note modal-note-success hidden" role="status" aria-live="polite"></div>' +
       // Pas d'indice ici : les deux libellés de boutons disent déjà ce qui suit
@@ -3764,9 +3822,9 @@
       el.setAttribute('tabindex', isSel ? '0' : '-1');
       if (isSel && focusIt) el.focus();
     });
-    var preview = document.getElementById('agent-context-preview');
+    var warning = document.getElementById('agent-choice-warning');
     var a = state.agentsById[agentId];
-    if (preview) preview.innerHTML = buildAgentContextPreviewHTML(a);
+    if (warning) warning.innerHTML = buildAgentChoiceWarningHTML(a);
   }
 
   // Flèches dans le groupe d'agents : décale la sélection de `delta` en
@@ -3798,6 +3856,8 @@
     if (prompt) body.prompt = prompt;
     var repoEl = document.getElementById('new-task-repo');
     if (repoEl && repoEl.value) body.repoName = repoEl.value;
+    var waitsForEl = document.getElementById('new-task-waits-for');
+    if (waitsForEl && waitsForEl.value) body.waitsForTaskId = waitsForEl.value;
     api('/api/tasks', { method: 'POST', body: body }).then(function (task) {
       upsertTask(task);
       if (mode === 'another') {
@@ -5376,6 +5436,7 @@
       case 'submit-new-project': submitNewProject(); break;
       case 'submit-new-card': submitNewCard(); break;
       case 'interrupt': doInterrupt(el.getAttribute('data-task-id')); break;
+      case 'start-task': doStartWaitingTask(el.getAttribute('data-task-id')); break;
       case 'reopen': doReopen(el.getAttribute('data-task-id')); break;
       case 'accept-task': doAcceptTask(el.getAttribute('data-task-id')); break;
       case 'refuse-task': doCancelTask(el.getAttribute('data-task-id')); break;
