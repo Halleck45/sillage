@@ -325,6 +325,9 @@
       'agent.warning.copyCmd': 'Copier la commande',
       'agent.warning.codexSandboxFallback': 'Vous pouvez aussi contourner le problème en lançant Sillage avec la variable d\'environnement SILLAGE_CODEX_SANDBOX=danger-full-access ; le confinement restant est alors celui de Sillage (worktree dédié, pas de push par l\'agent).',
       'agent.warning.codexSandboxLink': 'En savoir plus (documentation OpenAI Codex)',
+      'agent.warning.agyPolicy': 'Antigravity demande votre accord avant chaque commande, et personne ne peut le donner quand un agent travaille tout seul : l\'accord est refusé d\'office et la tâche se termine sans rien produire. Sa politique d\'exécution doit faire confiance au bac à sable.',
+      'agent.warning.agyPolicyHint': 'Ajoutez cette ligne dans ~/.gemini/antigravity-cli/settings.json. Les commandes se lanceront alors sans question, mais seulement dans le bac à sable, que Sillage impose toujours à cet agent.',
+      'agent.warning.agyPolicyLink': 'Voir la documentation d’Antigravity CLI',
       'agent.warning.cliNotFound': 'Agent non connecté : CLI {cli} introuvable dans le PATH.',
       'agent.warning.installHint': 'Installez le CLI, puis relancez Sillage :',
       'agent.warning.installLink': 'Voir la documentation d’installation',
@@ -759,6 +762,9 @@
       'agent.warning.copyCmd': 'Copy command',
       'agent.warning.codexSandboxFallback': 'You can also work around this by starting Sillage with the SILLAGE_CODEX_SANDBOX=danger-full-access environment variable; the remaining containment is then Sillage\'s own (dedicated worktree, no push from the agent).',
       'agent.warning.codexSandboxLink': 'Learn more (OpenAI Codex documentation)',
+      'agent.warning.agyPolicy': 'Antigravity asks for your approval before every command, and nobody can give it while an agent works on its own: approval is denied outright and the task ends without producing anything. Its execution policy has to trust the sandbox.',
+      'agent.warning.agyPolicyHint': 'Add this line to ~/.gemini/antigravity-cli/settings.json. Commands will then run without asking, but only inside the sandbox, which Sillage always forces on this agent.',
+      'agent.warning.agyPolicyLink': 'Open the Antigravity CLI documentation',
       'agent.warning.cliNotFound': 'Agent not connected: {cli} CLI not found in PATH.',
       'agent.warning.installHint': 'Install the CLI, then restart Sillage:',
       'agent.warning.installLink': 'Open the installation guide',
@@ -2847,6 +2853,7 @@
   function agentWarningText(warning) {
     if (!warning) return '';
     if (warning.indexOf('codex sandbox is blocked') !== -1) return t('agent.warning.codexSandbox');
+    if (warning.indexOf('agy refuses commands headlessly') !== -1) return t('agent.warning.agyPolicy');
     var m = /^(\S+) CLI not found in PATH$/.exec(warning);
     if (m) return t('agent.warning.cliNotFound', { cli: m[1] });
     return warning;
@@ -2856,6 +2863,7 @@
   // vers la doc OpenAI. Uniquement pour la bannière d'avertissement (le title
   // d'un tooltip ne peut contenir ni HTML ni bouton).
   var CODEX_SANDBOX_FIX_CMD = 'sudo sysctl kernel.apparmor_restrict_unprivileged_userns=0';
+  var AGY_POLICY_FIX_LINE = '"toolPermission": "proceed-in-sandbox"';
   var AGENT_CLI_INSTALL = {
     claude: {
       command: 'curl -fsSL https://claude.ai/install.sh | bash',
@@ -2886,6 +2894,15 @@
         '</div>' +
         '<a class="agent-warning-link" href="' + escapeHtml(install.url) + '" target="_blank" rel="noopener noreferrer">' +
           escapeHtml(t('agent.warning.installLink')) + '</a>';
+    }
+    if (warning.indexOf('agy refuses commands headlessly') !== -1) {
+      return '<div class="agent-warning-fallback">' + escapeHtml(t('agent.warning.agyPolicyHint')) + '</div>' +
+        '<div class="agent-warning-cmd">' +
+          '<code class="mono">' + escapeHtml(AGY_POLICY_FIX_LINE) + '</code>' +
+          '<button data-action="copy-path" data-path="' + escapeHtml(AGY_POLICY_FIX_LINE) + '">' + escapeHtml(t('agent.warning.copyCmd')) + '</button>' +
+        '</div>' +
+        '<a class="agent-warning-link" href="https://antigravity.google/docs/cli/reference" target="_blank" rel="noopener noreferrer">' +
+          escapeHtml(t('agent.warning.agyPolicyLink')) + '</a>';
     }
     if (warning.indexOf('codex sandbox is blocked') !== -1) {
       return '<div class="agent-warning-cmd">' +

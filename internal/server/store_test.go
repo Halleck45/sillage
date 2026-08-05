@@ -1070,6 +1070,40 @@ func TestAgentWarningMissingBinary(t *testing.T) {
 	}
 }
 
+func TestAgentWarningAntigravityToolPermission(t *testing.T) {
+	origLookPath := lookPath
+	defer func() { lookPath = origLookPath }()
+	lookPath = func(file string) (string, error) { return "/usr/bin/" + file, nil }
+
+	origSettings := antigravitySettingsPath
+	defer func() { antigravitySettingsPath = origSettings }()
+	dir := t.TempDir()
+	antigravitySettingsPath = filepath.Join(dir, "settings.json")
+
+	// Fichier absent : la CLI applique sa politique par défaut, qui auto-refuse
+	// les commandes en mode headless.
+	if got := agentWarning(Agent{Cli: "agy"}); got != antigravityPolicyWarning {
+		t.Fatalf("warning = %q, want the tool permission warning", got)
+	}
+
+	cases := map[string]string{
+		`{"toolPermission":"request-review"}`:       antigravityPolicyWarning,
+		`{"toolPermission":"strict"}`:               antigravityPolicyWarning,
+		`{"permissions":{"allow":["file(*)"]}}`:     antigravityPolicyWarning,
+		`{"toolPermission":"proceed-in-sandbox"}`:   "",
+		`{"toolPermission":"always-proceed"}`:       "",
+		`{"permissions":{"allow":["command(go)"]}}`: "",
+	}
+	for settings, want := range cases {
+		if err := os.WriteFile(antigravitySettingsPath, []byte(settings), 0o644); err != nil {
+			t.Fatalf("écriture settings : %v", err)
+		}
+		if got := agentWarning(Agent{Cli: "agy"}); got != want {
+			t.Fatalf("settings %s: warning = %q, want %q", settings, got, want)
+		}
+	}
+}
+
 func TestAgentWarningHealthy(t *testing.T) {
 	origPath := apparmorRestrictPath
 	defer func() { apparmorRestrictPath = origPath }()
@@ -1078,6 +1112,13 @@ func TestAgentWarningHealthy(t *testing.T) {
 	origLookPath := lookPath
 	defer func() { lookPath = origLookPath }()
 	lookPath = func(file string) (string, error) { return "/usr/bin/" + file, nil }
+
+	origSettings := antigravitySettingsPath
+	defer func() { antigravitySettingsPath = origSettings }()
+	antigravitySettingsPath = filepath.Join(t.TempDir(), "settings.json")
+	if err := os.WriteFile(antigravitySettingsPath, []byte(`{"toolPermission":"proceed-in-sandbox"}`), 0o644); err != nil {
+		t.Fatalf("écriture settings : %v", err)
+	}
 
 	if got := agentWarning(Agent{Cli: "codex"}); got != "" {
 		t.Fatalf("aucun avertissement attendu, reçu %q", got)

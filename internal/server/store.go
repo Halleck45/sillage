@@ -777,9 +777,25 @@ var lookPath = exec.LookPath
 // Indirection testable.
 var apparmorRestrictPath = "/proc/sys/kernel/apparmor_restrict_unprivileged_userns"
 
+// antigravitySettingsPath est le fichier de configuration de la CLI agy, seul
+// endroit où se règle sa politique d'exécution des commandes (aucun drapeau
+// n'expose ce réglage). Indirection testable.
+var antigravitySettingsPath = defaultAntigravitySettingsPath()
+
+const antigravityPolicyWarning = `agy refuses commands headlessly; set "toolPermission": "proceed-in-sandbox" in ~/.gemini/antigravity-cli/settings.json`
+
+func defaultAntigravitySettingsPath() string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(home, ".gemini", "antigravity-cli", "settings.json")
+}
+
 // agentWarning calcule un avertissement de santé pour un agent (chaîne vide
 // si tout va bien) : sandbox codex bloqué par AppArmor sans
-// SILLAGE_CODEX_SANDBOX défini, ou binaire cli introuvable dans le PATH.
+// SILLAGE_CODEX_SANDBOX défini, politique d'exécution d'agy incompatible avec
+// le mode headless, ou binaire cli introuvable dans le PATH.
 // Jamais persisté : voir AgentOut.
 func agentWarning(a Agent) string {
 	switch a.Cli {
@@ -790,12 +806,57 @@ func agentWarning(a Agent) string {
 		if apparmorRestrictsUserNamespaces() && os.Getenv("SILLAGE_CODEX_SANDBOX") == "" {
 			return "codex sandbox is blocked on this machine (AppArmor); see README (SILLAGE_CODEX_SANDBOX)"
 		}
-	case "claude", "copilot", "agy":
+	case "agy":
+		if _, err := lookPath("agy"); err != nil {
+			return "agy CLI not found in PATH"
+		}
+		if !antigravityAllowsHeadlessCommands() {
+			return antigravityPolicyWarning
+		}
+	case "claude", "copilot":
 		if _, err := lookPath(a.Cli); err != nil {
 			return a.Cli + " CLI not found in PATH"
 		}
 	}
 	return ""
+}
+
+// antigravityAllowsHeadlessCommands dit si la CLI agy peut lancer une commande
+// sans personne pour l'autoriser. En mode print, une demande de confirmation
+// est auto-refusée et la session s'arrête aussitôt, sans rien écrire sur
+// stdout : avec la politique par défaut ("request-review"), une tâche
+// Antigravity qui veut lancer des tests finit muette, sans diff ni message.
+// Deux réglages conviennent : "proceed-in-sandbox" (l'accord vient du sandbox,
+// que Sillage force toujours) et "always-proceed" ; une règle d'autorisation
+// explicite sur les commandes (permissions.allow) vaut aussi accord.
+// Fichier illisible ou absent : politique par défaut, donc non.
+func antigravityAllowsHeadlessCommands() bool {
+	if antigravitySettingsPath == "" {
+		return true // chemin du home inconnu : rien à diagnostiquer.
+	}
+	data, err := os.ReadFile(antigravitySettingsPath)
+	if err != nil {
+		return false
+	}
+	var cfg struct {
+		ToolPermission string `json:"toolPermission"`
+		Permissions    struct {
+			Allow []string `json:"allow"`
+		} `json:"permissions"`
+	}
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		return false
+	}
+	switch cfg.ToolPermission {
+	case "proceed-in-sandbox", "always-proceed":
+		return true
+	}
+	for _, rule := range cfg.Permissions.Allow {
+		if strings.HasPrefix(rule, "command(") {
+			return true
+		}
+	}
+	return false
 }
 
 // apparmorRestrictsUserNamespaces lit apparmorRestrictPath : "1" signifie que

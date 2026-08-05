@@ -134,6 +134,10 @@ Deux particularités du CLI dictent l'ordre des arguments :
 - `--print` est un alias de `--prompt` et prend le prompt **en valeur**, ce n'est pas un booléen. Il doit rester le dernier drapeau : `agy --print --sandbox <texte>` fait exécuter le prompt « --sandbox », l'agent répond une explication du mode sandbox et ne touche à rien.
 - en mode sandbox, agy ignore le répertoire de travail du process et retombe sur son espace interne (`~/.gemini/antigravity-cli/scratch`). `--add-dir <worktree>` est donc obligatoire, sinon la tâche écrit ses fichiers hors du dépôt et le diff reste vide.
 
+La politique d'exécution des commandes ne s'exprime **pas** en ligne de commande : le seul drapeau existant est `--dangerously-skip-permissions`, que Sillage n'utilise jamais. Elle vient de `~/.gemini/antigravity-cli/settings.json` (clé `toolPermission`, valeurs `always-proceed`, `request-review`, `strict`, `proceed-in-sandbox`). Avec le défaut `request-review`, une demande d'autorisation en mode print est auto-refusée et la session s'arrête aussitôt : stdout vide, sortie 0, explication sur stderr. Sillage ne touche pas à ce fichier de l'utilisateur ; il le lit pour poser un avertissement de santé sur l'agent (voir SPEC-API.md §« Santé des agents ») qui demande `proceed-in-sandbox`, cohérent avec le `--sandbox` toujours forcé.
+
+`runTextCLI` (partagé avec copilot) traite une sortie 0 sans rien sur stdout comme un échec et remonte stderr : sans ça, la tâche finissait « à relire » avec une conversation vide, ce qui ne laissait aucune trace du refus.
+
 ### Adaptateur fake (`cli:"fake"`)
 
 Sans exec : goroutine qui simule ~3 s de travail : 3 lignes d'activité espacées, écrit/complète un fichier `SILLAGE-TEST.md` dans le worktree (contenu horodaté), un Message agent de synthèse, usage fictif `{input:1200, output:340, costUsd:0.004}`. Sert aux tests et à la démo sans coût.
