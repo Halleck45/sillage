@@ -56,12 +56,12 @@
       <p class="install-lede">Sillage is a <strong>single self-contained binary</strong>. Download it, run it. Nothing else to set up.</p>
 
       <div class="install-tabs" role="tablist" aria-label="Platform">
+        <button type="button" class="install-tab" data-target="brew" role="tab">Homebrew</button>
         <button type="button" class="install-tab" data-target="auto" role="tab">Install script</button>
         <button type="button" class="install-tab" data-target="linux-amd64" role="tab">Linux amd64</button>
         <button type="button" class="install-tab" data-target="linux-arm64" role="tab">Linux arm64</button>
         <button type="button" class="install-tab" data-target="mac-arm64" role="tab">macOS Apple Silicon</button>
         <button type="button" class="install-tab" data-target="mac-amd64" role="tab">macOS Intel</button>
-        <button type="button" class="install-tab" data-target="brew" role="tab">Homebrew</button>
         <button type="button" class="install-tab" data-target="go" role="tab">Go</button>
       </div>
 
@@ -89,7 +89,7 @@
 
   <section class="showcase wrap" id="features">
     <div class="screenshot-frame">
-      <img src="assets/kanban.png" alt="Sillage kanban board showing workstreams and tasks" loading="lazy" width="2880" height="1800">
+      <img src="assets/kanban.png" alt="Sillage kanban board showing workstreams and tasks" loading="lazy" width="1920" height="1200">
     </div>
 
     <div class="section-head">
@@ -166,7 +166,7 @@
         </div>
       </div>
       <div class="how-visual">
-        <img src="assets/task-detail.png" alt="Sillage task detail view with conversation and diff" loading="lazy" width="2880" height="1800">
+        <img src="assets/task-detail.png" alt="Sillage task detail view with conversation and diff" loading="lazy" width="1920" height="1200">
       </div>
     </div>
   </section>
@@ -196,16 +196,16 @@
   "use strict";
 
   var COMMANDS = {
+    "brew": "brew tap halleck45/sillage https://github.com/Halleck45/sillage\nbrew trust halleck45/sillage\nbrew install sillage",
     "auto": "curl -fsSL https://raw.githubusercontent.com/Halleck45/sillage/main/install.sh | sh\nsillage",
     "linux-amd64": "curl -fsSL https://github.com/Halleck45/sillage/releases/latest/download/sillage_linux_amd64 -o sillage && chmod +x sillage && ./sillage",
     "linux-arm64": "curl -fsSL https://github.com/Halleck45/sillage/releases/latest/download/sillage_linux_arm64 -o sillage && chmod +x sillage && ./sillage",
     "mac-arm64": "curl -fsSL https://github.com/Halleck45/sillage/releases/latest/download/sillage_darwin_arm64 -o sillage && chmod +x sillage && ./sillage",
     "mac-amd64": "curl -fsSL https://github.com/Halleck45/sillage/releases/latest/download/sillage_darwin_amd64 -o sillage && chmod +x sillage && ./sillage",
-    "brew": "brew tap halleck45/sillage https://github.com/Halleck45/sillage\nbrew trust halleck45/sillage\nbrew install sillage",
     "go": "go install github.com/Halleck45/sillage@latest"
   };
 
-  /* Le script d'installation se débrouille seul : c'est l'onglet par défaut.
+  /* Homebrew est l'onglet par défaut : il gère la mise à jour tout seul.
      La détection ne sert donc plus qu'à signaler le binaire correspondant,
      pour qui préfère le télécharger à la main. */
   function detectPlatformTarget() {
@@ -238,7 +238,7 @@
       tab.classList.toggle("active", active);
       tab.setAttribute("aria-selected", active ? "true" : "false");
     });
-    commandEl.textContent = COMMANDS[target] || COMMANDS["auto"];
+    commandEl.textContent = COMMANDS[target] || COMMANDS["brew"];
   }
 
   tabs.forEach(function (tab) {
@@ -290,7 +290,7 @@
     });
   }
 
-  selectTarget("auto");
+  selectTarget("brew");
 })();
 </script>
 
