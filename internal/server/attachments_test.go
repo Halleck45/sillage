@@ -223,6 +223,72 @@ func TestWithAttachmentPaths(t *testing.T) {
 	}
 }
 
+// Une image jointe dès la création de la tâche : elle est écrite sous la
+// nouvelle tâche et posée dans le fil, puisque le prompt initial, lui, n'est
+// pas un message.
+func TestCreateTaskWithImageAttachment(t *testing.T) {
+	f := newDeliveryFixture(t, Delivery{Mode: "push"})
+	body := `{"cardId":"` + f.card.ID + `","title":"Refaire l'en-tête","agentId":"echo","prompt":"comme sur l'image",` +
+		`"attachments":[{"name":"maquette.png","mime":"image/png","data":"` + pngPixel + `"}]}`
+	req := httptest.NewRequest(http.MethodPost, "/api/tasks", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	f.srv.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("statut attendu 200, reçu %d (%s)", rec.Code, rec.Body.String())
+	}
+	var task Task
+	if err := json.Unmarshal(rec.Body.Bytes(), &task); err != nil {
+		t.Fatalf("réponse illisible : %v", err)
+	}
+	_, _ = f.srv.runner.Interrupt(task.ID)
+
+	msgs := f.srv.store.GetMessages(task.ID)
+	if len(msgs) == 0 || len(msgs[0].Attachments) != 1 {
+		t.Fatalf("le fil devrait porter le message des images, reçu %+v", msgs)
+	}
+	att := msgs[0].Attachments[0]
+	if att.Name != "maquette.png" {
+		t.Fatalf("nom inattendu : %q", att.Name)
+	}
+	if _, err := os.Stat(att.Path); err != nil {
+		t.Fatalf("l'image devrait être sur le disque : %v", err)
+	}
+	if !strings.HasPrefix(att.Path, filepath.Join(f.dataDir, "attachments", task.ID)) {
+		t.Fatalf("l'image devrait vivre sous sa tâche, reçu %q", att.Path)
+	}
+}
+
+// Une tâche à démarrage différé garde les chemins de ses images avec son
+// prompt, pour les remettre à l'agent le jour où elle démarre.
+func TestCreateWaitingTaskKeepsPendingAttachments(t *testing.T) {
+	f := newDeliveryFixture(t, Delivery{Mode: "push"})
+	first, _ := f.addTask(t, "Première", "a.txt", "a")
+
+	body := `{"cardId":"` + f.card.ID + `","title":"Ensuite","agentId":"echo","prompt":"suite","waitsForTaskId":"` + first + `",` +
+		`"attachments":[{"name":"note.png","mime":"image/png","data":"` + pngPixel + `"}]}`
+	req := httptest.NewRequest(http.MethodPost, "/api/tasks", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	f.srv.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("statut attendu 200, reçu %d (%s)", rec.Code, rec.Body.String())
+	}
+	var task Task
+	if err := json.Unmarshal(rec.Body.Bytes(), &task); err != nil {
+		t.Fatalf("réponse illisible : %v", err)
+	}
+	if task.Status != "waiting" {
+		t.Fatalf("statut attendu waiting, reçu %q", task.Status)
+	}
+	if len(task.PendingAttachments) != 1 || task.PendingPrompt != "suite" {
+		t.Fatalf("prompt et images auraient dû attendre ensemble : %+v", task)
+	}
+	if msgs := f.srv.store.GetMessages(task.ID); len(msgs) != 1 || len(msgs[0].Attachments) != 1 {
+		t.Fatalf("le fil devrait déjà montrer l'image, reçu %+v", msgs)
+	}
+}
+
 // Un chemin qui sort du répertoire des pièces jointes n'est jamais servi.
 func TestGetAttachmentRefusesEscapedPath(t *testing.T) {
 	srv, dataDir, taskID := newAttachmentFixture(t)

@@ -282,6 +282,7 @@
       'newTask.title': 'Nouvelle tâche',
       'newTask.titlePlaceholder': 'Que doit faire l\'agent ?',
       'newTask.promptPlaceholder': 'Description ou instructions détaillées (optionnel)',
+      'newTask.attachHint': 'Joindre une image, ou la coller (Ctrl+V)',
       'newTask.agentLabel': 'Agent',
       'newTask.repoLabel': 'Dépôt',
       'newTask.projectContextNote': '+ contexte du projet',
@@ -754,6 +755,7 @@
       'newTask.title': 'New task',
       'newTask.titlePlaceholder': 'What should the agent do?',
       'newTask.promptPlaceholder': 'Description or detailed instructions (optional)',
+      'newTask.attachHint': 'Attach an image, or paste one (Ctrl+V)',
       'newTask.agentLabel': 'Agent',
       'newTask.repoLabel': 'Repository',
       'newTask.projectContextNote': '+ project context',
@@ -1032,6 +1034,7 @@
   };
 
   var modalAgentId = null;
+  var modalAttachments = []; // images jointes en attente, modale de création de tâche
   var modalRepos = []; // [{name, path}] pour les onglets de la modale de projet
   var modalLinks = []; // [{url, title}] liens épinglés, modale de projet
   // Onglet actif et brouillon des champs simples de la modale de projet. Les
@@ -3676,9 +3679,9 @@
         buildAttachDraftsHTML(task.id) +
         '<textarea id="composer-input" rows="1" placeholder="' + escapeHtml(t('chat.placeholder', { name: agent.name })) + '"></textarea>' +
         '<div class="composer-row">' +
-          '<button class="composer-attach" data-action="attach-image" data-task-id="' + task.id + '"' +
+          '<button class="composer-attach" data-action="attach-image" data-target="composer-file"' +
             ' title="' + escapeHtml(t('chat.attach')) + '" aria-label="' + escapeHtml(t('chat.attach')) + '">' + attachIconHTML() + '</button>' +
-          '<input type="file" id="composer-file" class="hidden" accept="image/png,image/jpeg,image/gif,image/webp" multiple data-task-id="' + task.id + '">' +
+          '<input type="file" id="composer-file" class="hidden" accept="image/png,image/jpeg,image/gif,image/webp" multiple data-scope="task:' + task.id + '">' +
           '<span class="composer-model"><span class="agent-avatar-sm" style="background:' + softColor(agent.color) + '">' + agent.emoji + '</span>' + escapeHtml(agent.model || '') + '</span>' +
           '<button class="btn-send" data-action="send-message" data-task-id="' + task.id + '" disabled>' + escapeHtml(t('chat.send')) + '</button>' +
         '</div>' +
@@ -3828,9 +3831,11 @@
   // ---------------------------------------------------------------------
   // Images jointes (Ctrl+V ou bouton joindre)
   //
-  // Elles vivent en brouillon dans state.attachDrafts le temps qu'on écrive,
-  // en data-URI (la vignette et l'envoi lisent la même chose, aucun aller-
-  // retour serveur avant d'appuyer sur Envoyer). Au départ du message elles
+  // Deux endroits s'en servent avec le même code : le composeur d'une
+  // conversation (brouillon par tâche dans state.attachDrafts) et la modale de
+  // création de tâche (brouillon dans modalAttachments). Les images vivent en
+  // data-URI le temps qu'on écrive (la vignette et l'envoi lisent la même
+  // chose, aucun aller-retour serveur avant d'appuyer sur Envoyer), puis
   // partent en base64 dans le corps JSON : le serveur les pose sur le disque
   // et n'en donne que le chemin à l'agent.
   // ---------------------------------------------------------------------
@@ -3844,39 +3849,46 @@
     return (taskId && state.attachDrafts[taskId]) || [];
   }
 
-  function buildAttachDraftsHTML(taskId) {
-    var drafts = attachDrafts(taskId);
-    if (!drafts.length) return '';
-    var items = drafts.map(function (a) {
+  // Bande de vignettes d'un brouillon. `scope` est repris tel quel sur le
+  // bouton de retrait, pour que le clic sache à quel brouillon il s'adresse.
+  function buildAttachStripHTML(list, scope) {
+    if (!list.length) return '';
+    var items = list.map(function (a) {
       return '<div class="attach-chip">' +
         '<img src="' + escapeHtml(a.dataUrl) + '" alt="' + escapeHtml(a.name) + '">' +
-        '<button class="attach-remove" data-action="remove-attachment" data-task-id="' + taskId + '" data-key="' + a.key + '"' +
+        '<button class="attach-remove" data-action="remove-attachment" data-scope="' + escapeHtml(scope) + '" data-key="' + a.key + '"' +
           ' title="' + escapeHtml(t('chat.attachRemove')) + '" aria-label="' + escapeHtml(t('chat.attachRemove')) + '">' + closeIconHTML() + '</button>' +
       '</div>';
     }).join('');
-    return '<div class="attach-strip">' + items + '</div>';
+    return items;
   }
 
-  // addAttachmentFiles lit des fichiers (presse-papiers ou sélecteur) et les
-  // ajoute au brouillon de la tâche. Ce qui est refusé le dit et n'entre pas.
-  function addAttachmentFiles(taskId, files) {
-    if (!taskId || !files || !files.length) return;
-    var drafts = state.attachDrafts[taskId] || [];
+  function buildAttachDraftsHTML(taskId) {
+    var drafts = attachDrafts(taskId);
+    if (!drafts.length) return '';
+    return '<div class="attach-strip">' + buildAttachStripHTML(drafts, 'task:' + taskId) + '</div>';
+  }
+
+  // readAttachmentFiles filtre des fichiers (presse-papiers ou sélecteur) et
+  // lit ceux qui passent. `add` reçoit chaque image lue, `fail` chaque refus :
+  // ce qui est refusé le dit et n'entre pas.
+  function readAttachmentFiles(files, alreadyThere, add, fail) {
+    if (!files || !files.length) return;
     var queue = [];
     for (var i = 0; i < files.length; i++) {
       var f = files[i];
       if (!f) continue;
       var name = f.name || 'image';
       if (ATTACH_TYPES.indexOf(f.type) === -1) {
-        showDetailError(taskId, t('chat.attachUnsupported', { name: name }));
+        fail(t('chat.attachUnsupported', { name: name }));
         continue;
       }
       if (f.size > ATTACH_MAX_BYTES) {
-        showDetailError(taskId, t('chat.attachTooLarge', { name: name }));
+        fail(t('chat.attachTooLarge', { name: name }));
         continue;
       }
-      if (drafts.length + queue.length >= ATTACH_MAX_COUNT) {
-        showDetailError(taskId, t('chat.attachTooMany'));
+      if (alreadyThere + queue.length >= ATTACH_MAX_COUNT) {
+        fail(t('chat.attachTooMany'));
         break;
       }
       queue.push(f);
@@ -3885,22 +3897,34 @@
       var reader = new FileReader();
       reader.onload = function () {
         attachKeyN++;
-        var list = state.attachDrafts[taskId] || (state.attachDrafts[taskId] = []);
-        list.push({
+        add({
           key: 'a' + attachKeyN,
           name: file.name || 'image',
           mime: file.type,
           size: file.size,
           dataUrl: String(reader.result || '')
         });
-        renderMain();
       };
-      reader.onerror = function () { showDetailError(taskId, t('chat.attachFailed', { name: file.name || 'image' })); };
+      reader.onerror = function () { fail(t('chat.attachFailed', { name: file.name || 'image' })); };
       reader.readAsDataURL(file);
     });
   }
 
-  function removeAttachment(taskId, key) {
+  // Brouillon du composeur d'une conversation.
+  function addAttachmentFiles(taskId, files) {
+    if (!taskId) return;
+    readAttachmentFiles(files, attachDrafts(taskId).length, function (att) {
+      var list = state.attachDrafts[taskId] || (state.attachDrafts[taskId] = []);
+      list.push(att);
+      renderMain();
+    }, function (msg) {
+      showDetailError(taskId, msg);
+    });
+  }
+
+  function removeAttachment(scope, key) {
+    if (scope === 'new-task') { removeModalAttachment(key); return; }
+    var taskId = scope.indexOf('task:') === 0 ? scope.slice(5) : '';
     var list = attachDrafts(taskId).filter(function (a) { return a.key !== key; });
     if (list.length) state.attachDrafts[taskId] = list;
     else delete state.attachDrafts[taskId];
@@ -3909,11 +3933,15 @@
 
   // Le corps JSON ne transporte que la charge utile base64, sans le préfixe
   // « data:<mime>;base64, » que le lecteur de fichiers ajoute.
-  function attachPayload(taskId) {
-    return attachDrafts(taskId).map(function (a) {
+  function attachPayloadOf(list) {
+    return list.map(function (a) {
       var comma = a.dataUrl.indexOf(',');
       return { name: a.name, mime: a.mime, data: comma === -1 ? '' : a.dataUrl.slice(comma + 1) };
     });
+  }
+
+  function attachPayload(taskId) {
+    return attachPayloadOf(attachDrafts(taskId));
   }
 
   function syncComposer() {
@@ -4552,6 +4580,16 @@
       '<button class="icon-btn" data-action="close-modal" aria-label="' + escapeHtml(t('common.close')) + '">✕</button></div>' +
       '<input id="new-task-title" class="modal-input" placeholder="' + escapeHtml(t('newTask.titlePlaceholder')) + '">' +
       '<textarea id="new-task-prompt" class="modal-textarea" placeholder="' + escapeHtml(t('newTask.promptPlaceholder')) + '" rows="3"></textarea>' +
+      // Joindre une image dès la création : le trombone et la bande de
+      // vignettes du composeur, au même endroit de la lecture (sous le champ
+      // qu'elles accompagnent).
+      '<div class="modal-attach-row">' +
+        '<button class="composer-attach" data-action="attach-image" data-target="new-task-file"' +
+          ' title="' + escapeHtml(t('chat.attach')) + '" aria-label="' + escapeHtml(t('chat.attach')) + '">' + attachIconHTML() + '</button>' +
+        '<span class="modal-attach-hint">' + escapeHtml(t('newTask.attachHint')) + '</span>' +
+        '<input type="file" id="new-task-file" class="hidden" accept="image/png,image/jpeg,image/gif,image/webp" multiple data-scope="new-task">' +
+      '</div>' +
+      '<div class="attach-strip" id="new-task-attach-strip">' + buildAttachStripHTML(modalAttachments, 'new-task') + '</div>' +
       repoSelectHTML +
       '<div class="modal-label modal-label-row"><span>' + escapeHtml(t('newTask.agentLabel')) + '</span>' +
       '<span class="modal-label-hint">' + escapeHtml(t('newTask.agentHint')) + '</span></div>' +
@@ -4580,8 +4618,31 @@
     if (!card) return;
     var defaultAgent = state.agentsById.bolt || state.agents.find(function (a) { return !a.warning; }) || state.agents[0];
     modalAgentId = defaultAgent ? defaultAgent.id : null;
+    modalAttachments = [];
     openModal(buildNewTaskModalHTML(card));
     setTimeout(function () { var el = document.getElementById('new-task-title'); if (el) el.focus(); }, 0);
+  }
+
+  // La modale n'est pas rendue par renderMain : seule sa bande de vignettes est
+  // réécrite, pour ne pas perdre le titre et le prompt déjà saisis.
+  function refreshModalAttachStrip() {
+    var el = document.getElementById('new-task-attach-strip');
+    if (el) el.innerHTML = buildAttachStripHTML(modalAttachments, 'new-task');
+  }
+
+  function addModalAttachmentFiles(files) {
+    readAttachmentFiles(files, modalAttachments.length, function (att) {
+      modalAttachments.push(att);
+      refreshModalAttachStrip();
+    }, function (msg) {
+      var errEl = document.getElementById('new-task-error');
+      if (errEl) { errEl.textContent = msg; errEl.classList.remove('hidden'); }
+    });
+  }
+
+  function removeModalAttachment(key) {
+    modalAttachments = modalAttachments.filter(function (a) { return a.key !== key; });
+    refreshModalAttachStrip();
   }
 
   function pickAgentInModal(agentId, focusIt) {
@@ -4625,6 +4686,7 @@
     errEl.classList.add('hidden');
     var body = { cardId: cardId, title: title, agentId: modalAgentId };
     if (prompt) body.prompt = prompt;
+    if (modalAttachments.length) body.attachments = attachPayloadOf(modalAttachments);
     var repoEl = document.getElementById('new-task-repo');
     if (repoEl && repoEl.value) body.repoName = repoEl.value;
     var waitsForEl = document.getElementById('new-task-waits-for');
@@ -4634,6 +4696,9 @@
       if (mode === 'another') {
         titleEl.value = '';
         promptEl.value = '';
+        // Les images sont parties avec la tâche créée : la suivante repart nue.
+        modalAttachments = [];
+        refreshModalAttachStrip();
         if (noteEl) {
           noteEl.textContent = t('newTask.created', { ref: task.ref, title: task.title });
           noteEl.classList.remove('hidden');
@@ -6311,8 +6376,8 @@
       case 'confirm-click': handleConfirmClickDispatch(el); break;
       case 'select-diff-file': selectDiffFile(el.getAttribute('data-task-id'), el.getAttribute('data-path')); break;
       case 'send-message': sendMessage(el.getAttribute('data-task-id')); break;
-      case 'attach-image': openAttachPicker(); break;
-      case 'remove-attachment': removeAttachment(el.getAttribute('data-task-id'), el.getAttribute('data-key')); break;
+      case 'attach-image': openAttachPicker(el.getAttribute('data-target')); break;
+      case 'remove-attachment': removeAttachment(el.getAttribute('data-scope') || '', el.getAttribute('data-key')); break;
       case 'open-attachment': openAttachmentModal(el.getAttribute('data-src'), el.getAttribute('data-name')); break;
       case 'jump-to-bottom': jumpConversationToBottom(); break;
       case 'copy-message': copyToClipboardIcon(el.getAttribute('data-copy') || '', el); break;
@@ -6425,8 +6490,8 @@
   // active. On repeint les classes plutôt que le panneau, pour ne pas voler le
   // focus au bouton radio qu'on vient d'atteindre aux flèches.
   function onGlobalChange(e) {
-    if (e.target && e.target.id === 'composer-file') {
-      addAttachmentFiles(e.target.getAttribute('data-task-id'), e.target.files);
+    if (e.target && (e.target.id === 'composer-file' || e.target.id === 'new-task-file')) {
+      addAttachmentsForScope(e.target.getAttribute('data-scope') || '', e.target.files);
       // Le champ est vidé pour que rechoisir le même fichier redéclenche
       // l'événement (sinon la valeur ne change pas et rien ne se passe).
       e.target.value = '';
@@ -6451,17 +6516,32 @@
     if (body && e.target && body.contains(e.target)) markProjectDraftDirty();
   }
 
-  function openAttachPicker() {
-    var input = document.getElementById('composer-file');
+  function openAttachPicker(id) {
+    var input = document.getElementById(id || 'composer-file');
     if (input) input.click();
   }
 
-  // Ctrl+V d'une image dans le composeur : la capture d'écran qu'on vient de
-  // prendre est le cas d'usage principal, elle n'a pas de fichier à choisir.
-  // Le collage de texte n'est jamais intercepté (aucun fichier image dedans).
+  function addAttachmentsForScope(scope, files) {
+    if (scope === 'new-task') { addModalAttachmentFiles(files); return; }
+    if (scope.indexOf('task:') === 0) addAttachmentFiles(scope.slice(5), files);
+  }
+
+  // Ctrl+V d'une image : la capture d'écran qu'on vient de prendre est le cas
+  // d'usage principal, elle n'a pas de fichier à choisir. Marche dans le
+  // composeur d'une conversation comme dans les champs de la modale de
+  // création. Le collage de texte n'est jamais intercepté (aucun fichier
+  // image dedans).
   function onGlobalPaste(e) {
     var target = e.target;
-    if (!target || target.id !== 'composer-input') return;
+    if (!target) return;
+    var scope = '';
+    if (target.id === 'composer-input') {
+      var btn = document.querySelector('.composer [data-action="send-message"]');
+      scope = btn ? 'task:' + btn.getAttribute('data-task-id') : '';
+    } else if (target.id === 'new-task-prompt' || target.id === 'new-task-title') {
+      scope = 'new-task';
+    }
+    if (!scope) return;
     var data = e.clipboardData;
     if (!data) return;
     var files = [];
@@ -6473,8 +6553,7 @@
     }
     if (!files.length) return;
     e.preventDefault();
-    var btn = document.querySelector('.composer [data-action="send-message"]');
-    addAttachmentFiles(btn ? btn.getAttribute('data-task-id') : null, files);
+    addAttachmentsForScope(scope, files);
   }
 
   // Le défilement du fil se capte à la racine (phase de capture : « scroll » ne

@@ -1114,6 +1114,11 @@ button, input, textarea { font-family: inherit; }
 /* Bande des images jointes en attente d'envoi, au-dessus du champ : ce qui
    part avec le message se voit avant de partir, et se retire d'un clic. */
 .attach-strip { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+.attach-strip:empty { display: none; }
+/* Modale de création : le trombone et son rappel sous le champ de description,
+   la bande de vignettes juste dessous. */
+.modal-attach-row { display: flex; align-items: center; gap: 7px; margin-top: 7px; margin-bottom: 8px; }
+.modal-attach-hint { font-size: 11.5px; color: var(--muted-3); }
 .attach-chip { position: relative; width: 56px; height: 56px; border-radius: 9px; overflow: hidden; border: 1px solid var(--border-2); }
 .attach-chip img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .attach-remove {

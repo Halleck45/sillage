@@ -103,6 +103,9 @@ Task    { "id": "t1", "cardId": "c1", "projectId": "p1", "ref": 482, "title": ".
           //   chargement de state.json. N'affecte jamais updatedAt.
           // waitsForTaskId : absent/vide sauf statut "waiting" (voir "Démarrage différé
           //   d'une tâche" ci-dessous). Vidé dès que la tâche démarre, sans garder de trace.
+          // pendingAttachments : images jointes à la création d'une tâche "waiting", en
+          //   attente d'être remises à l'agent (voir "Images jointes"). Même cycle de vie
+          //   que pendingPrompt : vidé dès que la tâche démarre.
           // commandLog : historique des commandes jouées par l'agent (tool_use, alimenté
           //   uniquement par l'adaptateur claude), les plus anciennes tombant au-delà de 500
           //   entrées. [] si aucune. Contrairement à liveActivity (remis à null en fin
@@ -200,7 +203,7 @@ PreviewRun { "id": "pv1", "projectId": "p1", "cardId": "c1", "taskId": "",
 | GET | `/api/cards/{id}/delivery` | | DeliveryPreview : ce que la livraison ferait, avant tout clic (voir « Livraison d'un chantier »). Lecture seule |
 | POST | `/api/cards/{id}/ship` | `{confirm:true}` | ShipResponse : **la seule action sortante du produit** (push + pull request, ou fusion locale). 400 sans `confirm`, 409 si le chantier n'est pas livrable |
 | POST | `/api/cards/{id}/catch-up` | | CatchUpResponse : fusionne la branche de destination dans celle du chantier pour débloquer la livraison (voir « Livraison d'un chantier »). Local, aucune confirmation ; un conflit est annulé et rapporté par dépôt |
-| POST | `/api/tasks` | `{cardId, title, agentId, prompt?, repoName?, waitsForTaskId?}` | Task (créée `running`, agent lancé avec title+prompt). `repoName` optionnel si le projet n'a qu'un repo ; sinon 400 `"repoName required (project has several repositories)"` ou 400 si inconnu. `waitsForTaskId` : voir « Démarrage différé d'une tâche » ci-dessous |
+| POST | `/api/tasks` | `{cardId, title, agentId, prompt?, repoName?, waitsForTaskId?, attachments?}` | Task (créée `running`, agent lancé avec title+prompt). `attachments` : mêmes règles et mêmes limites que pour un message (voir « Images jointes »). `repoName` optionnel si le projet n'a qu'un repo ; sinon 400 `"repoName required (project has several repositories)"` ou 400 si inconnu. `waitsForTaskId` : voir « Démarrage différé d'une tâche » ci-dessous |
 | PATCH | `/api/tasks/{id}` | `{agentId}` | Task : réassigne l'agent (voir « Réassignation » ci-dessous). 400 si `status=running` (`"interrupt the agent before reassigning"`) ou si l'agent est inconnu |
 | DELETE | `/api/tasks/{id}` | `{confirm:true}` | 204 (voir « Suppressions » ci-dessous). **Validation humaine obligatoire** : refus 400 sans `confirm` |
 | GET | `/api/tasks/{id}` | | `{task, messages}` |
@@ -282,7 +285,7 @@ Départ frais : quand la session CLI est vide (lancement initial, ou premier mes
 
 ### Images jointes à un message
 
-Envoi : `POST /api/tasks/{id}/messages {text, attachments}`, avec `attachments: [{name, mime, data}]` où `data` est le contenu de l'image en base64 (sans préfixe `data:`). Le multipart n'est pas accepté : toute mutation exige `Content-Type: application/json` (protection CSRF).
+Envoi : `POST /api/tasks/{id}/messages {text, attachments}` (message d'une conversation) ou `POST /api/tasks {…, attachments}` (dès la création d'une tâche), avec `attachments: [{name, mime, data}]` où `data` est le contenu de l'image en base64 (sans préfixe `data:`). Le multipart n'est pas accepté : toute mutation exige `Content-Type: application/json` (protection CSRF).
 
 Limites, refusées en 400 sans rien écrire (les images déjà écrites d'un même message sont retirées) :
 
@@ -296,9 +299,16 @@ Stockage : le fichier est écrit dans `<dataDir>/attachments/<taskId>/<attId>.<e
 
 Transmission à l'agent : le texte envoyé au CLI reçoit, une seule fois, les chemins absolus des images en fin de message (`"Attached images (local files, read them):"` puis une ligne `- <chemin>` par image). L'agent lit les fichiers lui-même ; le Message stocké, lui, garde le texte de l'utilisateur tel quel. Une image jointe pendant qu'un agent travaille suit la file d'attente habituelle (`pending`).
 
+À la création d'une tâche (`POST /api/tasks`), les mêmes chemins s'ajoutent au prompt initial (`Task: <title>` + prompt). Deux différences :
+
+- le prompt initial n'étant pas un Message, les images sont **posées dans le fil** en un Message `author="user"` au texte vide : c'est le seul endroit où l'on peut revoir ce qu'on a remis à l'agent ;
+- pour une tâche à démarrage différé (`waitsForTaskId`), elles attendent avec le prompt dans `task.pendingAttachments` (vidé au démarrage réel, comme `pendingPrompt`).
+
+Une image refusée annule la création (400, aucun worktree créé) ; un échec plus tard dans la création efface les images déjà écrites.
+
 Affichage : `GET /api/tasks/{id}/attachments/{attId}` sert l'image (authentification de session comme le reste de l'API). Tout chemin qui sortirait de `<dataDir>/attachments/<taskId>/` est refusé en 404.
 
-Côté UI : Ctrl+V d'une image dans le composeur, ou bouton joindre (trombone) à gauche de la ligne du composeur. Les images en attente s'affichent en vignettes au-dessus du champ, retirables une par une, et partent avec le message. Dans le fil, elles s'affichent en vignettes sous le texte du message ; le clic ouvre l'image en grand.
+Côté UI : Ctrl+V d'une image dans le composeur, ou bouton joindre (trombone) à gauche de la ligne du composeur. Même chose dans la modale de création de tâche (collage dans le titre ou la description, trombone sous la description). Les images en attente s'affichent en vignettes, retirables une par une, et partent avec le message ou la tâche ; « Créer et une autre » repart sans elles. Dans le fil, elles s'affichent en vignettes sous le texte du message ; le clic ouvre l'image en grand.
 
 ### Suppressions (tâches, chantiers, projets)
 

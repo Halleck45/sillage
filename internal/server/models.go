@@ -276,6 +276,12 @@ type Task struct {
 	// à la création d'une tâche "waiting" (le prompt fourni par l'utilisateur,
 	// non encore préfixé par contextualizeCliInput). Vidé au démarrage réel.
 	PendingPrompt string `json:"pendingPrompt,omitempty"`
+
+	// PendingAttachments accompagne PendingPrompt : les images jointes à la
+	// création d'une tâche "waiting", dont les chemins seront remis à l'agent
+	// au démarrage. Vidé au démarrage réel comme PendingPrompt ; les images
+	// restent visibles dans le fil, qui porte le message qui les affiche.
+	PendingAttachments []Attachment `json:"pendingAttachments,omitempty"`
 }
 
 // Message est un message échangé dans le fil d'une tâche. AuthorName porte

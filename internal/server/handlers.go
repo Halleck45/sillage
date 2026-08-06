@@ -921,12 +921,13 @@ func (s *Server) handleDeleteCard(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleCreateTask(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		CardID         string `json:"cardId"`
-		Title          string `json:"title"`
-		AgentID        string `json:"agentId"`
-		Prompt         string `json:"prompt"`
-		RepoName       string `json:"repoName"`
-		WaitsForTaskID string `json:"waitsForTaskId"`
+		CardID         string            `json:"cardId"`
+		Title          string            `json:"title"`
+		AgentID        string            `json:"agentId"`
+		Prompt         string            `json:"prompt"`
+		RepoName       string            `json:"repoName"`
+		WaitsForTaskID string            `json:"waitsForTaskId"`
+		Attachments    []attachmentInput `json:"attachments"`
 	}
 	if err := decodeJSON(r, &body); err != nil || body.CardID == "" || body.Title == "" || body.AgentID == "" {
 		writeError(w, http.StatusBadRequest, "cardId, title and agentId are required")
@@ -977,9 +978,17 @@ func (s *Server) handleCreateTask(w http.ResponseWriter, r *http.Request) {
 	}
 
 	id, ref := s.store.ReserveTaskID()
+	// Les images sont écrites avant le worktree : rien de lourd n'est engagé si
+	// l'une d'elles est refusée. Tout échec après ce point les efface.
+	atts, err := saveAttachments(s.dataDir, id, body.Attachments)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 	branch := fmt.Sprintf("sillage/%d-%s", ref, Slugify(body.Title))
 	dir, base, err := CreateWorktree(repo.Path, s.dataDir, id, branch, cardBranch.Branch)
 	if err != nil {
+		removeTaskAttachments(s.dataDir, id)
 		writeError(w, http.StatusBadRequest, "failed to create worktree: "+err.Error())
 		return
 	}
@@ -991,18 +1000,35 @@ func (s *Server) handleCreateTask(w http.ResponseWriter, r *http.Request) {
 		task, err = s.store.CreateTask(id, ref, card.ID, project.ID, body.Title, body.AgentID, branch, base, dir, repo.Name)
 	}
 	if err != nil {
+		removeTaskAttachments(s.dataDir, id)
 		writeError(w, http.StatusInternalServerError, "failed to create task")
 		return
+	}
+
+	// Les images jointes à la création entrent dans le fil : le prompt initial
+	// n'est pas un message, mais une image doit rester revisible quelque part.
+	if len(atts) > 0 {
+		if msg, updated, err := s.store.AddMessage(task.ID, "user", s.store.GetSettings().DisplayName, "", atts...); err == nil {
+			task = updated
+			s.runner.publishMessage(msg)
+		}
 	}
 	s.runner.publishTask(task)
 	s.runner.publishCards(project.ID)
 
 	if task.Status == "waiting" {
+		// L'agent démarrera plus tard : les chemins des images attendent avec le
+		// prompt (voir startWaitingTask).
+		if len(atts) > 0 {
+			if updated, err := s.store.UpdateTask(task.ID, func(t *Task) { t.PendingAttachments = atts }); err == nil {
+				task = updated
+			}
+		}
 		writeJSON(w, http.StatusOK, task)
 		return
 	}
 
-	cliInput := contextualizeCliInput(body.Title, body.Prompt)
+	cliInput := withAttachmentPaths(contextualizeCliInput(body.Title, body.Prompt), atts)
 	if err := s.runner.Start(task.ID, true, cliInput); err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to start agent: "+err.Error())
 		return
@@ -1048,13 +1074,15 @@ func (s *Server) startWaitingTask(task Task) error {
 		}
 	}
 	prompt := task.PendingPrompt
+	atts := task.PendingAttachments
 	if _, err := s.store.UpdateTask(task.ID, func(t *Task) {
 		t.WaitsForTaskID = ""
 		t.PendingPrompt = ""
+		t.PendingAttachments = nil
 	}); err != nil {
 		return err
 	}
-	cliInput := contextualizeCliInput(task.Title, prompt)
+	cliInput := withAttachmentPaths(contextualizeCliInput(task.Title, prompt), atts)
 	return s.runner.Start(task.ID, true, cliInput)
 }
 
