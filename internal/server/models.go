@@ -96,13 +96,39 @@ type Project struct {
 }
 
 // ProjectOut est la représentation d'un Project exposée par l'API : les mêmes
-// champs que Project (via embedding), plus DeliveryWarning. Ce dernier est
-// calculé à la volée (binaire gh/glab absent, remote origin manquant) et
-// jamais persisté dans state.json : Project lui-même n'a pas ce champ, donc
+// champs que Project (via embedding), plus DeliveryWarning et GithubRepos. Les
+// deux sont calculés à la volée depuis le remote origin de chaque dépôt et
+// jamais persistés dans state.json : Project lui-même n'a pas ces champs, donc
 // rien à vider à l'écriture disque. Même pattern qu'AgentOut.
 type ProjectOut struct {
 	Project
 	DeliveryWarning string `json:"deliveryWarning"`
+
+	// GithubRepos nomme les dépôts du projet dont le remote origin est sur
+	// github.com : les seuls où importer une issue a un sens. C'est ce qui
+	// décide de l'affichage de l'entrée « Importer une issue » côté UI.
+	GithubRepos []string `json:"githubRepos"`
+}
+
+// GithubIssue est une issue ouverte d'un dépôt de projet, telle que listée par
+// GET /api/projects/{id}/issues (voir issues.go). Jamais persistée : elle ne
+// sert qu'à pré-remplir un formulaire de création de tâche.
+type GithubIssue struct {
+	Number    int      `json:"number"`
+	Title     string   `json:"title"`
+	URL       string   `json:"url"`
+	Body      string   `json:"body"`
+	Labels    []string `json:"labels"`
+	Author    string   `json:"author"`
+	UpdatedAt string   `json:"updatedAt"`
+}
+
+// IssueListResponse est la réponse de GET /api/projects/{id}/issues. RepoName
+// est le dépôt effectivement interrogé (résolu par ResolveTaskRepo) : la tâche
+// créée ensuite doit viser celui-là.
+type IssueListResponse struct {
+	RepoName string        `json:"repoName"`
+	Issues   []GithubIssue `json:"issues"`
 }
 
 // CardBranch est la branche de feature d'un chantier sur un dépôt donné :
