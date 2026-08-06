@@ -26,7 +26,7 @@ const stateFormatVersion = 2
 // agentSeedVersion tracks one-time additions to the built-in agent profiles.
 // Unlike checking for an ID at every startup, this lets users delete a seeded
 // agent without Sillage recreating it on the next launch.
-const agentSeedVersion = 1
+const agentSeedVersion = 2
 
 // ErrStateTooNew : le fichier vient d'une version plus récente de Sillage.
 // Refuser de démarrer est le seul comportement sûr, parce que charger puis
@@ -143,7 +143,7 @@ func migrateAgentSeeds(s *Store) {
 	if s.AgentSeedVersion >= agentSeedVersion {
 		return
 	}
-	for id, agent := range newExternalAgentSeeds() {
+	for id, agent := range externalAgentSeedsAfter(s.AgentSeedVersion) {
 		if _, exists := s.Agents[id]; !exists {
 			s.Agents[id] = agent
 		}
@@ -152,15 +152,42 @@ func migrateAgentSeeds(s *Store) {
 }
 
 // resetTransientTaskFlags remet à zéro les états de tâche qui ne décrivent
-// qu'une opération en cours dans le processus : un rebase interrompu par un
-// arrêt brutal ne doit pas laisser un fuseau tourner indéfiniment côté UI.
+// qu'une opération en cours dans le processus : ils sont faux dès que ce
+// processus n'existe plus (arrêt brutal, redémarrage, mise à jour en place).
+//
+// Un rebase interrompu ne doit pas laisser un fuseau tourner indéfiniment côté
+// UI. Et une tâche « running » sans agent est un cul-de-sac : aucune sortie
+// n'arrivera plus, « Interrompre l'agent » échoue (le Runner ne connaît aucun
+// processus pour elle), sa colonne reste figée et ses compteurs restent à zéro
+// alors que le travail est peut-être commité, puisqu'ils ne sont écrits qu'à la
+// fin d'une exécution. Elle repasse donc en revue, non lue, avec un marqueur
+// dans le fil qui dit pourquoi et des compteurs relus depuis git : ce que
+// l'agent avait commité est relisible et acceptable tout de suite.
 func resetTransientTaskFlags(s *Store) {
+	var interrupted []string
 	for id, t := range s.Tasks {
 		if t.Rebasing {
 			t.Rebasing = false
 			s.Tasks[id] = t
 		}
+		if t.Status == "running" {
+			interrupted = append(interrupted, id)
+		}
 	}
+	if len(interrupted) == 0 {
+		return
+	}
+	sort.Slice(interrupted, func(i, j int) bool { return idNum(interrupted[i]) < idNum(interrupted[j]) })
+	for _, id := range interrupted {
+		t := s.Tasks[id]
+		t.Status = "review"
+		t.Unread = true
+		t.LiveActivity = nil
+		t.FilesCount, t.DocsCount, t.CommitsCount = TaskWorkCounts(t.WorktreeDir, t.Base)
+		s.Tasks[id] = t
+		s.appendMessage(id, "agent", "", "[interrupted:server-restart]")
+	}
+	s.recomputeAll()
 }
 
 // migrateCardRefs donne une référence aux chantiers antérieurs au champ Ref :
@@ -390,24 +417,32 @@ func (s *Store) initEmpty() {
 		Model: "", Cli: "fake",
 		ContextPrompt: "Local test agent, free of charge, for demos and checks.",
 	}
-	for id, agent := range newExternalAgentSeeds() {
+	for id, agent := range externalAgentSeedsAfter(0) {
 		s.Agents[id] = agent
 	}
 	s.AgentSeedVersion = agentSeedVersion
 }
 
-func newExternalAgentSeeds() map[string]Agent {
+func externalAgentSeedsAfter(version int) map[string]Agent {
 	const contextPrompt = "You are a pragmatic developer, focused on quality and simplicity."
-	return map[string]Agent{
-		"github-copilot": {
+	seeds := map[string]Agent{}
+	if version < 1 {
+		seeds["github-copilot"] = Agent{
 			ID: "github-copilot", Name: "Octo", Emoji: "🐙", Color: "#24292f",
 			Cli: "copilot", ContextPrompt: contextPrompt,
-		},
-		"antigravity": {
+		}
+		seeds["antigravity"] = Agent{
 			ID: "antigravity", Name: "Astro", Emoji: "🚀", Color: "#4285f4",
 			Cli: "agy", ContextPrompt: contextPrompt,
-		},
+		}
 	}
+	if version < 2 {
+		seeds["kiro"] = Agent{
+			ID: "kiro", Name: "Kiro", Emoji: "🟣", Color: "#7c3aed",
+			Cli: "kiro", ContextPrompt: contextPrompt,
+		}
+	}
+	return seeds
 }
 
 // save écrit l'état sur disque de façon atomique (fichier temp + rename).
@@ -565,6 +600,7 @@ func (s *Store) recomputeCard(cardID string) {
 			break
 		}
 	}
+	c.AwaitingShip = hasTasks && allTerminal && done > 0 && !shipped
 	if hasTasks {
 		if allTerminal && shipped {
 			c.Column = "done"
@@ -756,11 +792,11 @@ func sortedAgents(m map[string]Agent) []Agent {
 // jamais depuis recomputeAgent/recomputeAll qui tournent à chaque mutation.
 // codexQuota est le dernier instantané connu (Store.CodexQuota), attaché aux
 // seuls agents cli=codex : c'est un quota de compte, partagé entre eux.
-func sortedAgentsWithWarnings(m map[string]Agent, codexQuota *AgentQuota) []AgentOut {
+func sortedAgentsWithWarnings(m map[string]Agent, codexQuota *AgentQuota, worktreesDir string) []AgentOut {
 	sorted := sortedAgents(m)
 	out := make([]AgentOut, len(sorted))
 	for i, a := range sorted {
-		out[i] = AgentOut{Agent: a, Warning: agentWarning(a)}
+		out[i] = AgentOut{Agent: a, Warning: agentWarning(a, worktreesDir)}
 		if a.Cli == "codex" {
 			out[i].Quota = codexQuota
 		}
@@ -777,11 +813,27 @@ var lookPath = exec.LookPath
 // Indirection testable.
 var apparmorRestrictPath = "/proc/sys/kernel/apparmor_restrict_unprivileged_userns"
 
+// antigravitySettingsPath est le fichier de configuration de la CLI agy, seul
+// endroit où se règle sa politique d'exécution des commandes (aucun drapeau
+// n'expose ce réglage). Indirection testable.
+var antigravitySettingsPath = defaultAntigravitySettingsPath()
+
+const antigravityPolicyWarning = `agy cannot work headlessly with its current permissions; see ~/.gemini/antigravity-cli/settings.json`
+
+func defaultAntigravitySettingsPath() string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(home, ".gemini", "antigravity-cli", "settings.json")
+}
+
 // agentWarning calcule un avertissement de santé pour un agent (chaîne vide
 // si tout va bien) : sandbox codex bloqué par AppArmor sans
-// SILLAGE_CODEX_SANDBOX défini, ou binaire cli introuvable dans le PATH.
+// SILLAGE_CODEX_SANDBOX défini, politique d'exécution d'agy incompatible avec
+// le mode headless, ou binaire cli introuvable dans le PATH.
 // Jamais persisté : voir AgentOut.
-func agentWarning(a Agent) string {
+func agentWarning(a Agent, worktreesDir string) string {
 	switch a.Cli {
 	case "codex":
 		if _, err := lookPath("codex"); err != nil {
@@ -790,12 +842,197 @@ func agentWarning(a Agent) string {
 		if apparmorRestrictsUserNamespaces() && os.Getenv("SILLAGE_CODEX_SANDBOX") == "" {
 			return "codex sandbox is blocked on this machine (AppArmor); see README (SILLAGE_CODEX_SANDBOX)"
 		}
-	case "claude", "copilot", "agy":
+	case "agy":
+		if _, err := lookPath("agy"); err != nil {
+			return "agy CLI not found in PATH"
+		}
+		if !antigravityWorksHeadlessly(worktreesDir) {
+			return antigravityPolicyWarning
+		}
+	case "claude", "copilot":
 		if _, err := lookPath(a.Cli); err != nil {
 			return a.Cli + " CLI not found in PATH"
 		}
+	case "kiro":
+		if _, err := lookPath("kiro-cli"); err != nil {
+			return "kiro CLI not found in PATH"
+		}
+		if strings.TrimSpace(os.Getenv("KIRO_API_KEY")) == "" {
+			return "KIRO_API_KEY is not set for headless Kiro CLI"
+		}
 	}
 	return ""
+}
+
+// antigravitySettings est la partie du fichier de configuration d'agy dont
+// dépend le travail sans humain devant l'écran.
+type antigravitySettings struct {
+	ToolPermission string `json:"toolPermission"`
+	Permissions    struct {
+		Allow []string `json:"allow"`
+	} `json:"permissions"`
+}
+
+// antigravityWorksHeadlessly dit si la CLI agy peut travailler sans personne
+// pour l'autoriser. En mode print, toute demande de confirmation est
+// auto-refusée et la session s'arrête aussitôt, sans rien écrire sur stdout :
+// une seule demande suffit à rendre une tâche muette, sans diff ni message.
+// Deux choses sont donc nécessaires :
+//
+//   - une politique d'exécution des commandes qui ne demande rien :
+//     "proceed-in-sandbox" (l'accord vient du bac à sable, que Sillage force
+//     toujours) ou "always-proceed" ; le défaut "request-review" ne marche pas ;
+//   - des autorisations de lecture et d'écriture sur les worktrees. Les fichiers
+//     ordinaires du worktree passent sans règle, mais certains chemins sont
+//     traités comme sensibles (`.git`, qui dans un worktree lié est un fichier
+//     qu'un modèle en exploration essaie d'ouvrir) et certaines modifications
+//     demandent un accord. Une règle sur un **dossier** couvre tout ce qu'il
+//     contient (vérifié) : deux règles sur la racine des worktrees suffisent, et
+//     ne donnent rien de plus que le terrain de jeu de l'agent.
+//
+// Fichier illisible ou absent : politique par défaut, donc non.
+func antigravityWorksHeadlessly(worktreesDir string) bool {
+	if antigravitySettingsPath == "" {
+		return true // chemin du home inconnu : rien à diagnostiquer.
+	}
+	data, err := os.ReadFile(antigravitySettingsPath)
+	if err != nil {
+		return false
+	}
+	var cfg antigravitySettings
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		return false
+	}
+	switch cfg.ToolPermission {
+	case "proceed-in-sandbox", "always-proceed":
+	default:
+		if !antigravityRuleCovers(cfg.Permissions.Allow, "command", "") {
+			return false
+		}
+	}
+	for _, tool := range antigravityFileTools {
+		if !antigravityRuleCovers(cfg.Permissions.Allow, tool, worktreesDir) {
+			return false
+		}
+	}
+	return true
+}
+
+// antigravityFileTools sont les outils de fichier dont un agent de code a besoin
+// dans son worktree.
+var antigravityFileTools = []string{"read_file", "write_file"}
+
+// antigravityRuleCovers dit si permissions.allow autorise tool sur tout le
+// contenu de dir. Les règles d'agy ne connaissent pas les motifs de chemin :
+// `read_file(<dossier>/*)` ne correspond à rien. Seuls comptent le joker global
+// `*`, un chemin exact, et un dossier, qui couvre ce qu'il contient. dir vide
+// ne demande que l'existence d'une règle pour cet outil.
+func antigravityRuleCovers(rules []string, tool, dir string) bool {
+	if dir != "" {
+		dir = filepath.Clean(dir)
+	}
+	for _, rule := range rules {
+		if !strings.HasPrefix(rule, tool+"(") || !strings.HasSuffix(rule, ")") {
+			continue
+		}
+		target := rule[len(tool)+1 : len(rule)-1]
+		if target == "*" || dir == "" {
+			return true
+		}
+		target = filepath.Clean(target)
+		if target == dir || strings.HasPrefix(dir, target+string(filepath.Separator)) {
+			return true
+		}
+	}
+	return false
+}
+
+// antigravityToolPermissionFix est la politique posée par le correctif : les
+// commandes partent sans confirmation, mais uniquement dans le bac à sable, que
+// Sillage force toujours pour cet agent.
+const antigravityToolPermissionFix = "proceed-in-sandbox"
+
+// fixAntigravityToolPermission règle la politique d'exécution et les deux
+// autorisations de fichier sur la racine des worktrees dans le fichier de
+// configuration de la CLI agy. C'est le seul endroit où ces réglages
+// s'expriment, et Sillage n'y touche que sur demande explicite de l'humain
+// (bouton de l'avertissement de l'agent).
+//
+// Les autres clés, et les règles déjà présentes, sont relues et réécrites
+// telles quelles : le fichier appartient à l'utilisateur, et il y garde par
+// exemple ses espaces de travail de confiance. Un fichier illisible n'est jamais
+// écrasé : mieux vaut refuser et le dire que perdre une configuration.
+func fixAntigravityToolPermission(worktreesDir string) error {
+	if antigravitySettingsPath == "" {
+		return fmt.Errorf("cannot locate the agy settings file")
+	}
+	settings := map[string]any{}
+	mode := os.FileMode(0o644)
+	data, err := os.ReadFile(antigravitySettingsPath)
+	switch {
+	case err == nil:
+		if len(strings.TrimSpace(string(data))) > 0 {
+			if err := json.Unmarshal(data, &settings); err != nil {
+				return fmt.Errorf("agy settings file is not valid JSON, fix it by hand: %w", err)
+			}
+		}
+		if info, err := os.Stat(antigravitySettingsPath); err == nil {
+			mode = info.Mode().Perm()
+		}
+	case os.IsNotExist(err):
+		if err := os.MkdirAll(filepath.Dir(antigravitySettingsPath), 0o755); err != nil {
+			return err
+		}
+	default:
+		return err
+	}
+
+	settings["toolPermission"] = antigravityToolPermissionFix
+	settings["permissions"] = antigravityAllowWorktrees(settings["permissions"], worktreesDir)
+	out, err := json.MarshalIndent(settings, "", "  ")
+	if err != nil {
+		return err
+	}
+	out = append(out, '\n')
+
+	tmp := antigravitySettingsPath + ".sillage-tmp"
+	if err := os.WriteFile(tmp, out, mode); err != nil {
+		return err
+	}
+	if err := os.Rename(tmp, antigravitySettingsPath); err != nil {
+		_ = os.Remove(tmp)
+		return err
+	}
+	return nil
+}
+
+// antigravityAllowWorktrees complète le bloc permissions relu du fichier avec
+// les règles manquantes sur la racine des worktrees, sans toucher au reste
+// (règles déjà là, refus, autres clés).
+func antigravityAllowWorktrees(existing any, worktreesDir string) map[string]any {
+	perms := map[string]any{}
+	if m, ok := existing.(map[string]any); ok {
+		for k, v := range m {
+			perms[k] = v
+		}
+	}
+	var allow []string
+	var raw []any
+	if list, ok := perms["allow"].([]any); ok {
+		raw = list
+	}
+	for _, item := range raw {
+		if s, ok := item.(string); ok {
+			allow = append(allow, s)
+		}
+	}
+	for _, tool := range antigravityFileTools {
+		if !antigravityRuleCovers(allow, tool, worktreesDir) {
+			allow = append(allow, tool+"("+filepath.Clean(worktreesDir)+")")
+		}
+	}
+	perms["allow"] = allow
+	return perms
 }
 
 // apparmorRestrictsUserNamespaces lit apparmorRestrictPath : "1" signifie que
@@ -825,7 +1062,7 @@ func (s *Store) Snapshot() State {
 		Projects: sortedProjectsWithWarnings(s.Projects),
 		Cards:    sortedCards(s.Cards),
 		Tasks:    sortedTasks(s.Tasks),
-		Agents:   sortedAgentsWithWarnings(s.Agents, s.CodexQuota),
+		Agents:   sortedAgentsWithWarnings(s.Agents, s.CodexQuota, s.WorktreesDir()),
 		Settings: s.Settings,
 	}
 	st.Tokens.Global = global
@@ -857,7 +1094,13 @@ func (s *Store) ListAgents() []AgentOut {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.recomputeAll()
-	return sortedAgentsWithWarnings(s.Agents, s.CodexQuota)
+	return sortedAgentsWithWarnings(s.Agents, s.CodexQuota, s.WorktreesDir())
+}
+
+// WorktreesDir est la racine des worktrees (un dossier par tâche et par branche
+// de chantier), sous dataDir. Voir git.go pour les chemins eux-mêmes.
+func (s *Store) WorktreesDir() string {
+	return filepath.Join(s.dataDir, "worktrees")
 }
 
 // SetCodexQuota met à jour l'instantané de quota codex (voir AgentQuota),
@@ -1605,9 +1848,24 @@ func (s *Store) ReassignTask(id, agentID string) (Task, error) {
 func (s *Store) AddMessage(taskID, author, authorName, text string) (Message, Task, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	t, ok := s.Tasks[taskID]
+	m, ok := s.appendMessage(taskID, author, authorName, text)
 	if !ok {
 		return Message{}, Task{}, fmt.Errorf("task not found")
+	}
+	s.recomputeCard(s.Tasks[taskID].CardID)
+	if err := s.save(); err != nil {
+		return Message{}, Task{}, err
+	}
+	return m, s.Tasks[taskID], nil
+}
+
+// appendMessage ajoute un message au fil d'une tâche et met à jour son
+// compteur, sans recalcul dérivé ni sauvegarde : à n'appeler que verrou tenu
+// (AddMessage) ou pendant le chargement, avant que le Store ne soit visible.
+func (s *Store) appendMessage(taskID, author, authorName, text string) (Message, bool) {
+	t, ok := s.Tasks[taskID]
+	if !ok {
+		return Message{}, false
 	}
 	s.NextMessageN++
 	m := Message{ID: fmt.Sprintf("m%d", s.NextMessageN), TaskID: taskID, Author: author, AuthorName: authorName, Text: text, CreatedAt: time.Now().UTC()}
@@ -1615,11 +1873,7 @@ func (s *Store) AddMessage(taskID, author, authorName, text string) (Message, Ta
 	t.MessagesCount = len(s.Messages[taskID])
 	t.UpdatedAt = time.Now().UTC()
 	s.Tasks[taskID] = t
-	s.recomputeCard(t.CardID)
-	if err := s.save(); err != nil {
-		return Message{}, Task{}, err
-	}
-	return m, s.Tasks[taskID], nil
+	return m, true
 }
 
 var slugRe = regexp.MustCompile(`[^a-z0-9]+`)
@@ -1652,12 +1906,13 @@ var validCli = map[string]bool{
 	"codex":   true,
 	"copilot": true,
 	"fake":    true,
+	"kiro":    true,
 }
 
-const validCliDescription = "claude, codex, copilot, agy or fake"
+const validCliDescription = "claude, codex, copilot, agy, kiro or fake"
 
 // AddAgent crée un agent. name et cli sont obligatoires ; cli doit être
-// claude, codex, copilot, agy ou fake ; l'identifiant est le slug du nom
+// claude, codex, copilot, agy, kiro ou fake ; l'identifiant est le slug du nom
 // (unique).
 func (s *Store) AddAgent(name, emoji, color, cli, model, contextPrompt string) (Agent, error) {
 	s.mu.Lock()

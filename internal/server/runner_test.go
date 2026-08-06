@@ -3,6 +3,7 @@ package server
 import (
 	"encoding/json"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -219,6 +220,178 @@ func TestContextPartsCodexPrefix(t *testing.T) {
 	}
 }
 
+func TestCodexArgsAllowLinkedWorktreeGitWritesWithoutExposingHooks(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git is not available")
+	}
+
+	root := t.TempDir()
+	repo := filepath.Join(root, "repo with spaces")
+	worktrees := filepath.Join(root, "task worktrees")
+	if err := os.MkdirAll(repo, 0o755); err != nil {
+		t.Fatalf("create repository directory: %v", err)
+	}
+	initTestRepo(t, repo)
+	worktree, _, err := CreateWorktree(repo, worktrees, "task one", "sillage/test-codex-git", "main")
+	if err != nil {
+		t.Fatalf("CreateWorktree: %v", err)
+	}
+
+	gitDir, err := resolveCodexGitDir(worktree, "--absolute-git-dir")
+	if err != nil {
+		t.Fatalf("resolve worktree git-dir: %v", err)
+	}
+	commonDir, err := resolveCodexGitDir(worktree, "--git-common-dir")
+	if err != nil {
+		t.Fatalf("resolve common git-dir: %v", err)
+	}
+	dirs := codexGitWritableDirs(worktree)
+
+	for _, required := range []string{
+		gitDir,
+		filepath.Join(commonDir, "objects"),
+		filepath.Join(commonDir, "refs"),
+		filepath.Join(commonDir, "logs"),
+	} {
+		required, err = canonicalExistingDir(required)
+		if err != nil {
+			t.Fatalf("resolve required directory: %v", err)
+		}
+		if !containsString(dirs, required) {
+			t.Errorf("Codex writable directories should contain %q: %v", required, dirs)
+		}
+	}
+	for _, protected := range []string{commonDir, filepath.Join(commonDir, "hooks")} {
+		protected, err = canonicalExistingDir(protected)
+		if err != nil {
+			t.Fatalf("resolve protected directory: %v", err)
+		}
+		if containsString(dirs, protected) {
+			t.Errorf("Codex writable directories must not expose %q: %v", protected, dirs)
+		}
+	}
+
+	args := codexArgs(worktree, "workspace-write", Agent{Model: "gpt-test"}, "Commit the change")
+	for _, dir := range dirs {
+		if !containsAdjacentArgs(args, "--add-dir", dir) {
+			t.Errorf("Codex arguments should grant write access to %q: %v", dir, args)
+		}
+	}
+	if !containsAdjacentArgs(args, "--model", "gpt-test") {
+		t.Errorf("Codex arguments should preserve the selected model: %v", args)
+	}
+	if args[len(args)-1] != "Commit the change" {
+		t.Errorf("Codex prompt should be the final argument: %v", args)
+	}
+
+	// Reproduce the sandbox boundary without launching Codex: the common
+	// git-dir is read-only, and only the directories selected above are made
+	// writable. A real add and commit must still succeed.
+	t.Cleanup(func() {
+		_ = filepath.Walk(commonDir, func(path string, info os.FileInfo, walkErr error) error {
+			if walkErr != nil {
+				return nil
+			}
+			if info.IsDir() {
+				return os.Chmod(path, 0o755)
+			}
+			return os.Chmod(path, 0o644)
+		})
+	})
+	chmodTree(t, commonDir, 0o555, 0o444)
+	for _, dir := range dirs {
+		chmodTree(t, dir, 0o755, 0o644)
+	}
+	if err := os.WriteFile(filepath.Join(worktree, "codex.txt"), []byte("committed from the task worktree\n"), 0o644); err != nil {
+		t.Fatalf("write task file: %v", err)
+	}
+	runTestGit(t, worktree, "add", "codex.txt")
+	runTestGit(t, worktree, "commit", "-m", "Test Codex worktree commit")
+	if status := strings.TrimSpace(runTestGit(t, worktree, "status", "--porcelain")); status != "" {
+		t.Fatalf("worktree should be clean after commit, got %q", status)
+	}
+}
+
+func TestCodexGitWritableDirsSkipMetadataInsideWorkspace(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git is not available")
+	}
+
+	repo := t.TempDir()
+	initTestRepo(t, repo)
+	if dirs := codexGitWritableDirs(repo); len(dirs) != 0 {
+		t.Fatalf("a regular repository should already be writable through the workspace: %v", dirs)
+	}
+	if dirs := codexGitWritableDirs(t.TempDir()); len(dirs) != 0 {
+		t.Fatalf("a non-Git directory should not add writable roots: %v", dirs)
+	}
+}
+
+func TestCodexGitWritableDirsSupportExternalSeparateGitDir(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git is not available")
+	}
+
+	root := t.TempDir()
+	worktree := filepath.Join(root, "workspace")
+	gitDir := filepath.Join(root, "external metadata", "repository.git")
+	if err := os.MkdirAll(worktree, 0o755); err != nil {
+		t.Fatalf("create workspace: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Dir(gitDir), 0o755); err != nil {
+		t.Fatalf("create metadata parent: %v", err)
+	}
+	runTestGit(t, root, "init", "-b", "main", "--separate-git-dir", gitDir, worktree)
+
+	want, err := canonicalExistingDir(gitDir)
+	if err != nil {
+		t.Fatalf("resolve separate git-dir: %v", err)
+	}
+	if got := codexGitWritableDirs(worktree); len(got) != 1 || got[0] != want {
+		t.Fatalf("external separate git-dir should be added as one writable root: got %v, want %q", got, want)
+	}
+}
+
+func TestCodexArgsDoNotExtendNonWorkspaceSandboxModes(t *testing.T) {
+	args := codexArgs(t.TempDir(), "danger-full-access", Agent{}, "Inspect the change")
+	if containsString(args, "--add-dir") {
+		t.Fatalf("danger-full-access should not receive redundant writable roots: %v", args)
+	}
+}
+
+func containsString(values []string, want string) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
+}
+
+func containsAdjacentArgs(args []string, flag, value string) bool {
+	for i := 0; i+1 < len(args); i++ {
+		if args[i] == flag && args[i+1] == value {
+			return true
+		}
+	}
+	return false
+}
+
+func chmodTree(t *testing.T, root string, dirMode, fileMode os.FileMode) {
+	t.Helper()
+	if err := filepath.Walk(root, func(path string, info os.FileInfo, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if info.IsDir() {
+			return os.Chmod(path, dirMode)
+		}
+		return os.Chmod(path, fileMode)
+	}); err != nil {
+		t.Fatalf("change permissions below %q: %v", root, err)
+	}
+}
+
 func TestPrefixAgentContext(t *testing.T) {
 	agent := Agent{ContextPrompt: "Agent context"}
 	project := Project{ContextPrompt: "Project context"}
@@ -263,10 +436,107 @@ func TestCopilotArgsAreAutonomousButKeepOutboundCommandsDenied(t *testing.T) {
 	}
 }
 
-func TestAntigravityArgsUseSandbox(t *testing.T) {
-	args := antigravityArgs(Agent{Model: "gemini-test"}, "Fix the bug")
+func TestKiroArgsUseHeadlessIsolatedAgent(t *testing.T) {
+	args := kiroArgs("Fix the bug")
 	joined := strings.Join(args, " ")
-	for _, required := range []string{"--print", "--sandbox", "--print-timeout=60m", "--model gemini-test"} {
+	for _, required := range []string{"chat", "--no-interactive", "--agent " + kiroAgentName, "--wrap never"} {
+		if !strings.Contains(joined, required) {
+			t.Fatalf("Kiro arguments should contain %q: %v", required, args)
+		}
+	}
+	for _, forbidden := range []string{"--trust-all-tools", "--trust-tools"} {
+		if strings.Contains(joined, forbidden) {
+			t.Fatalf("Kiro arguments should not bypass profile permissions with %q: %v", forbidden, args)
+		}
+	}
+	if args[len(args)-1] != "Fix the bug" {
+		t.Fatalf("Kiro prompt should be the final argument: %v", args)
+	}
+}
+
+func TestKiroProfileAllowsLocalWorkButDeniesOutboundCommands(t *testing.T) {
+	config := newKiroAgentConfig(Agent{Model: "kiro-test"})
+	if config.Model != "kiro-test" || config.IncludeMCPJSON {
+		t.Fatalf("unexpected Kiro profile settings: %+v", config)
+	}
+	if slicesContain(config.AllowedTools, "write") || slicesContain(config.AllowedTools, "shell") {
+		t.Fatalf("write and shell must use granular settings, not blanket trust: %v", config.AllowedTools)
+	}
+	if len(config.ToolsSettings.Write.AllowedPaths) != 1 || config.ToolsSettings.Write.AllowedPaths[0] != "**" {
+		t.Fatalf("Kiro writes should stay relative to the worktree: %+v", config.ToolsSettings.Write)
+	}
+	if !config.ToolsSettings.Shell.DenyByDefault || len(config.ToolsSettings.Shell.AllowedCommands) != 1 {
+		t.Fatalf("unexpected Kiro shell policy: %+v", config.ToolsSettings.Shell)
+	}
+	denied := strings.Join(config.ToolsSettings.Shell.DeniedCommands, "\n")
+	for _, required := range []string{"git\\s+push", "gh", "glab", "kiro-cli"} {
+		if !strings.Contains(denied, required) {
+			t.Fatalf("Kiro deny rules should cover %q: %v", required, config.ToolsSettings.Shell.DeniedCommands)
+		}
+	}
+}
+
+func TestCreateKiroHomeWritesPrivateRuntimeProfile(t *testing.T) {
+	home, err := createKiroHome(Agent{Model: "kiro-test"})
+	if err != nil {
+		t.Fatalf("createKiroHome: %v", err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(home) })
+
+	path := filepath.Join(home, "agents", kiroAgentName+".json")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read Kiro profile: %v", err)
+	}
+	var config kiroAgentConfig
+	if err := json.Unmarshal(data, &config); err != nil {
+		t.Fatalf("unmarshal Kiro profile: %v", err)
+	}
+	if config.Name != kiroAgentName || config.Model != "kiro-test" {
+		t.Fatalf("unexpected Kiro profile: %+v", config)
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("stat Kiro profile: %v", err)
+	}
+	if info.Mode().Perm() != 0o600 {
+		t.Fatalf("Kiro profile mode = %o, want 600", info.Mode().Perm())
+	}
+}
+
+func TestKiroEnvIsolatesHomeAndPreservesAPIKey(t *testing.T) {
+	t.Setenv("KIRO_HOME", "/old")
+	t.Setenv("KIRO_API_KEY", "secret-test-key")
+	t.Setenv("NO_COLOR", "old")
+	env := kiroEnv("/tmp/new-kiro-home")
+	values := map[string]string{}
+	for _, entry := range env {
+		parts := strings.SplitN(entry, "=", 2)
+		if len(parts) == 2 {
+			values[parts[0]] = parts[1]
+		}
+	}
+	if values["KIRO_HOME"] != "/tmp/new-kiro-home" || values["KIRO_API_KEY"] != "secret-test-key" {
+		t.Fatalf("Kiro environment should isolate home and preserve authentication: %+v", values)
+	}
+	if values["NO_COLOR"] != "1" || values["KIRO_LOG_NO_COLOR"] != "1" {
+		t.Fatalf("Kiro environment should disable terminal colors: %+v", values)
+	}
+}
+
+func slicesContain(values []string, target string) bool {
+	for _, value := range values {
+		if value == target {
+			return true
+		}
+	}
+	return false
+}
+
+func TestAntigravityArgsUseSandbox(t *testing.T) {
+	args := antigravityArgs(Agent{Model: "gemini-test"}, "/tmp/wt", "/tmp/repo/.git", "Fix the bug")
+	joined := strings.Join(args, " ")
+	for _, required := range []string{"--print", "--sandbox", "--print-timeout=60m", "--model gemini-test", "--add-dir /tmp/wt", "--add-dir /tmp/repo/.git"} {
 		if !strings.Contains(joined, required) {
 			t.Fatalf("Antigravity arguments should contain %q: %v", required, args)
 		}
@@ -274,8 +544,74 @@ func TestAntigravityArgsUseSandbox(t *testing.T) {
 	if strings.Contains(joined, "dangerously-skip-permissions") {
 		t.Fatalf("Antigravity must not bypass permissions: %v", args)
 	}
-	if args[len(args)-1] != "Fix the bug" {
-		t.Fatalf("Antigravity prompt argument is malformed: %v", args)
+	// --print prend le prompt en valeur : il doit rester juste avant lui,
+	// sinon agy exécute le drapeau suivant comme prompt.
+	if len(args) < 2 || args[len(args)-2] != "--print" || args[len(args)-1] != "Fix the bug" {
+		t.Fatalf("Antigravity prompt arguments are malformed: %v", args)
+	}
+	// Dépôt introuvable : pas de --add-dir vide, qui ferait échouer le lancement.
+	bare := antigravityArgs(Agent{}, "/tmp/wt", "", "Fix the bug")
+	for i, a := range bare {
+		if a == "--add-dir" && (i+1 >= len(bare) || bare[i+1] == "") {
+			t.Fatalf("--add-dir sans valeur : %v", bare)
+		}
+	}
+	if strings.Count(strings.Join(bare, " "), "--add-dir") != 1 {
+		t.Fatalf("un seul --add-dir attendu sans dossier git : %v", bare)
+	}
+}
+
+// TestRunTextCLINeverEndsSilently couvre le symptôme réel d'agy : la CLI sort
+// en succès, sans rien sur stdout, en expliquant sur stderr qu'elle a
+// auto-refusé une confirmation d'outil. La tâche finissait « à relire » avec
+// une conversation vide : aucune trace de ce qui s'est passé.
+func TestRunTextCLINeverEndsSilently(t *testing.T) {
+	s, err := NewStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+	p, _ := s.AddProject("p", "", "", []Repo{{Name: "r", Path: "/tmp/x"}}, nil, nil)
+	card, _ := s.AddCard(p.ID, "Carte", "", "")
+	taskID := mkTaskWithStatus(t, s, card.ID, p.ID, "running")
+	task, _ := s.GetTask(taskID)
+	task.WorktreeDir = t.TempDir()
+
+	runner := NewRunner(s, NewHub())
+	agent := Agent{Name: "Astro", Cli: "agy"}
+	run := func(script string) error {
+		return runner.runTextCLI(&task, agent, &procHandle{done: make(chan struct{})}, "sh", []string{"-c", script}, nil)
+	}
+
+	err = run("echo 'a tool required the command permission' 1>&2")
+	if err == nil || !strings.Contains(err.Error(), "required the command permission") {
+		t.Fatalf("stderr should surface on a silent success, got %v", err)
+	}
+	if err = run("exit 0"); err == nil || !strings.Contains(err.Error(), "produced no output") {
+		t.Fatalf("an empty run should report itself, got %v", err)
+	}
+	if err = run("echo done"); err != nil {
+		t.Fatalf("a run with an answer should succeed, got %v", err)
+	}
+	msgs := s.GetMessages(taskID)
+	if len(msgs) != 1 || msgs[0].Text != "done" {
+		t.Fatalf("only the answer should become a message, got %+v", msgs)
+	}
+}
+
+// TestAntigravityPromptWarnsAboutLinkedWorktree : agy refuse la lecture de
+// `.git` et meurt sans rien produire. Comme l'autorisation ne peut pas être
+// donnée d'avance (aucun motif de chemin), l'agent doit être prévenu.
+func TestAntigravityPromptWarnsAboutLinkedWorktree(t *testing.T) {
+	prompt := prefixAgentContext(Agent{}, Project{}, Card{}, antigravityWorktreeNote+"\n\nTask: x")
+	if !strings.Contains(prompt, "linked git worktree") || !strings.Contains(prompt, "`.git`") {
+		t.Fatalf("the antigravity prompt should warn about .git: %q", prompt)
+	}
+	// Une sortie de bac à sable est auto-refusée : la session meurt muette.
+	if !strings.Contains(prompt, "outside the sandbox") {
+		t.Fatalf("the antigravity prompt should forbid unsandboxed retries: %q", prompt)
+	}
+	if !strings.HasSuffix(prompt, "Task: x") {
+		t.Fatalf("the note must not come after the task text: %q", prompt)
 	}
 }
 

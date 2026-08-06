@@ -144,6 +144,53 @@ func TestWorktreeAndDiff(t *testing.T) {
 	}
 }
 
+// TestGitCommonDirFromWorktree : le worktree d'une tâche n'a qu'un fichier
+// `.git` pointeur ; c'est le dossier git du dépôt d'origine qu'un agent en bac
+// à sable doit voir pour que ses commandes git fonctionnent.
+func TestGitCommonDirFromWorktree(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git non disponible dans cet environnement")
+	}
+
+	repo := t.TempDir()
+	dataDir := t.TempDir()
+	runTestGit(t, repo, "init")
+	runTestGit(t, repo, "config", "user.email", "test@example.com")
+	runTestGit(t, repo, "config", "user.name", "Test")
+	if err := os.WriteFile(filepath.Join(repo, "README.md"), []byte("# projet\n"), 0o644); err != nil {
+		t.Fatalf("écriture README impossible : %v", err)
+	}
+	runTestGit(t, repo, "add", "-A")
+	runTestGit(t, repo, "commit", "-m", "initial")
+
+	dir, _, err := CreateWorktree(repo, dataDir, "t1", "sillage/100-test", "")
+	if err != nil {
+		t.Fatalf("CreateWorktree: %v", err)
+	}
+	common, err := GitCommonDir(dir)
+	if err != nil {
+		t.Fatalf("GitCommonDir: %v", err)
+	}
+	if !filepath.IsAbs(common) {
+		t.Fatalf("le dossier git commun doit être absolu, reçu %q", common)
+	}
+	// Le chemin doit désigner le .git du dépôt d'origine, pas celui du worktree.
+	want, err := filepath.EvalSymlinks(filepath.Join(repo, ".git"))
+	if err != nil {
+		t.Fatalf("EvalSymlinks: %v", err)
+	}
+	got, err := filepath.EvalSymlinks(common)
+	if err != nil {
+		t.Fatalf("EvalSymlinks: %v", err)
+	}
+	if got != want {
+		t.Fatalf("dossier git commun attendu %q, reçu %q", want, got)
+	}
+	if _, err := GitCommonDir(""); err == nil {
+		t.Fatal("un répertoire vide doit être une erreur")
+	}
+}
+
 func contains(list []string, item string) bool {
 	for _, v := range list {
 		if v == item {
@@ -302,6 +349,49 @@ func (f *deliveryFixture) addTask(t *testing.T, title, file, content string) (st
 		t.Fatalf("UpdateTask: %v", err)
 	}
 	return id, cb
+}
+
+// TestRestartRefreshesCountersOfInterruptedTask : une tâche interrompue par un
+// arrêt de Sillage doit revenir avec ses compteurs, relus depuis git au
+// chargement. Le runner ne les écrit qu'à la fin d'une exécution : sans ce
+// rattrapage, un travail commité s'affiche « 0 fichier, 0 commit », et une
+// branche déjà fusionnée à la main ne serait jamais constatée acceptée
+// (autoAcceptMergedTasks exige filesCount > 0).
+func TestRestartRefreshesCountersOfInterruptedTask(t *testing.T) {
+	f := newDeliveryFixture(t, Delivery{Mode: "merge"})
+	id, _ := f.addTask(t, "Refonte visuelle", "style.css", ":root{--glass:1}\n")
+	task, ok := f.srv.store.GetTask(id)
+	if !ok {
+		t.Fatalf("tâche %s introuvable", id)
+	}
+	if _, err := CommitAll(task.WorktreeDir, "Redesign the UI"); err != nil {
+		t.Fatalf("CommitAll: %v", err)
+	}
+	// L'état que laisse un agent tué en pleine exécution : running, et des
+	// compteurs jamais écrits.
+	activity := "Bash · git status --short"
+	if _, err := f.srv.store.UpdateTask(id, func(tk *Task) {
+		tk.Status = "running"
+		tk.LiveActivity = &activity
+		tk.FilesCount, tk.DocsCount, tk.CommitsCount = 0, 0, 0
+	}); err != nil {
+		t.Fatalf("UpdateTask: %v", err)
+	}
+
+	reloaded, err := NewStore(f.dataDir)
+	if err != nil {
+		t.Fatalf("NewStore après redémarrage : %v", err)
+	}
+	got, ok := reloaded.GetTask(id)
+	if !ok {
+		t.Fatalf("tâche %s introuvable après redémarrage", id)
+	}
+	if got.Status != "review" {
+		t.Fatalf("statut après redémarrage = %q, want review", got.Status)
+	}
+	if got.FilesCount != 1 || got.CommitsCount != 1 {
+		t.Fatalf("compteurs relus attendus (1 fichier, 1 commit), reçu files=%d commits=%d", got.FilesCount, got.CommitsCount)
+	}
 }
 
 // accept accepte une tâche et attend les rebases automatiques que l'acceptation

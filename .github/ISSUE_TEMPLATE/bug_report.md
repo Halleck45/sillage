@@ -17,7 +17,7 @@ labels: bug
 
 - Sillage version (or commit):
 - OS:
-- Agent CLI involved (claude / codex / écho) and its version:
+- Agent CLI involved (claude / codex / copilot / agy / kiro-cli / écho) and its version:
 
 **Logs / screenshots**
 

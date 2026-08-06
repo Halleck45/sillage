@@ -284,7 +284,7 @@ func (r *Runner) startQueued(taskID, text string) {
 // markerPrefixes liste les préfixes des messages marqueurs posés par le
 // backend (le frontend les remplace par une ligne système localisée). Ce ne
 // sont pas des tours de conversation : ils sont exclus du transcript rejoué.
-var markerPrefixes = []string{"[reassigned:", "[accepted:", "[auto-accepted:", "[merge-conflict:", "[tool-denied:"}
+var markerPrefixes = []string{"[reassigned:", "[accepted:", "[auto-accepted:", "[merge-conflict:", "[tool-denied:", "[interrupted:"}
 
 func isMarkerMessage(text string) bool {
 	for _, prefix := range markerPrefixes {
@@ -581,6 +581,8 @@ func (r *Runner) run(task Task, agent Agent, handle *procHandle, cliInput string
 		runErr = r.runCopilot(&task, agent, project, card, handle, cliInput)
 	case "agy":
 		runErr = r.runAntigravity(&task, agent, project, card, handle, cliInput)
+	case "kiro":
+		runErr = r.runKiro(&task, agent, project, card, handle, cliInput)
 	case "fake":
 		runErr = r.runFake(&task, agent, handle)
 	default:
@@ -612,19 +614,7 @@ func (r *Runner) finalize(taskID string) {
 		checks = []Check{{Label: project.CheckCmd, Ok: ok}}
 	}
 
-	filesCount, docsCount := 0, 0
-	if files, err := Diff(task.WorktreeDir, task.Base); err == nil {
-		filesCount = len(files)
-		for _, f := range files {
-			if isDocFile(f.Path) {
-				docsCount++
-			}
-		}
-	}
-	commitsCount := 0
-	if commits, err := Commits(task.WorktreeDir, task.Base); err == nil {
-		commitsCount = len(commits)
-	}
+	filesCount, docsCount, commitsCount := TaskWorkCounts(task.WorktreeDir, task.Base)
 
 	updated, err := r.store.UpdateTask(taskID, func(t *Task) {
 		if t.Status == "running" {
@@ -978,14 +968,122 @@ func (r *Runner) runClaude(task *Task, agent Agent, project Project, card Card, 
 	return nil
 }
 
-// --- Adaptateur codex (best-effort) ---
+// --- Codex adapter (best-effort) ---
+
+// codexSharedGitWriteDirs contains mutable Git storage that is shared by all
+// linked worktrees. Hooks and repository configuration are intentionally not
+// included: making them agent-writable could persist code outside the task's
+// sandbox and affect later Git commands run by Sillage or the user.
+var codexSharedGitWriteDirs = []string{"objects", "refs", "logs", "reftable", "lfs", "rr-cache"}
+
+// codexGitWritableDirs returns only the external Git metadata directories that
+// Codex needs for normal local writes such as commit, rebase, and stash. A
+// linked worktree keeps its index and HEAD in its own git-dir while objects,
+// refs, and reflogs live in the common git-dir; both sides must therefore be
+// writable even though they sit outside Sillage's task worktree.
+//
+// Resolution is best-effort. If the directory is no longer a Git repository,
+// Codex still starts and can report the repository problem itself.
+func codexGitWritableDirs(worktreeDir string) []string {
+	gitDir, err := resolveCodexGitDir(worktreeDir, "--absolute-git-dir")
+	if err != nil {
+		return nil
+	}
+	commonDir, err := resolveCodexGitDir(worktreeDir, "--git-common-dir")
+	if err != nil {
+		return nil
+	}
+	workspaceDir, err := canonicalExistingDir(worktreeDir)
+	if err != nil {
+		return nil
+	}
+
+	var dirs []string
+	seen := make(map[string]bool)
+	addExternalDir := func(path string) {
+		resolved, resolveErr := canonicalExistingDir(path)
+		if resolveErr != nil || isDirWithin(resolved, workspaceDir) || seen[resolved] {
+			return
+		}
+		seen[resolved] = true
+		dirs = append(dirs, resolved)
+	}
+
+	// The per-worktree git-dir holds the index, HEAD, and operation state.
+	addExternalDir(gitDir)
+	if gitDir == commonDir {
+		// A repository created with --separate-git-dir has no narrower directory
+		// that can receive index.lock, so its complete external git-dir is needed.
+		return dirs
+	}
+	for _, name := range codexSharedGitWriteDirs {
+		addExternalDir(filepath.Join(commonDir, name))
+	}
+	return dirs
+}
+
+func resolveCodexGitDir(worktreeDir, flag string) (string, error) {
+	out, err := runGit(worktreeDir, 10*time.Second, "rev-parse", flag)
+	if err != nil {
+		return "", err
+	}
+	path := strings.TrimSuffix(strings.TrimSuffix(out, "\n"), "\r")
+	if path == "" {
+		return "", fmt.Errorf("git rev-parse %s returned an empty path", flag)
+	}
+	if !filepath.IsAbs(path) {
+		path = filepath.Join(worktreeDir, path)
+	}
+	return canonicalExistingDir(path)
+}
+
+func canonicalExistingDir(path string) (string, error) {
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return "", err
+	}
+	resolved, err := filepath.EvalSymlinks(abs)
+	if err != nil {
+		return "", err
+	}
+	info, err := os.Stat(resolved)
+	if err != nil {
+		return "", err
+	}
+	if !info.IsDir() {
+		return "", fmt.Errorf("%s is not a directory", resolved)
+	}
+	return filepath.Clean(resolved), nil
+}
+
+func isDirWithin(path, parent string) bool {
+	rel, err := filepath.Rel(parent, path)
+	if err != nil {
+		return false
+	}
+	return rel == "." || (rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)))
+}
+
+func codexArgs(worktreeDir, sandbox string, agent Agent, cliInput string) []string {
+	args := []string{"exec", "--json", "--sandbox", sandbox, "-C", worktreeDir}
+	if sandbox == "workspace-write" {
+		for _, dir := range codexGitWritableDirs(worktreeDir) {
+			args = append(args, "--add-dir", dir)
+		}
+	}
+	if agent.Model != "" {
+		args = append(args, "--model", agent.Model)
+	}
+	return append(args, cliInput)
+}
 
 func (r *Runner) runCodex(task *Task, agent Agent, project Project, card Card, handle *procHandle, cliInput string) error {
-	// workspace-write : écriture limitée au worktree, réseau coupé ; le push
-	// reste impossible et ne passe que par Ship (git.go) après validation humaine.
-	// SILLAGE_CODEX_SANDBOX permet de choisir un autre mode (ex : danger-full-access
-	// sur les machines où bwrap est bloqué par AppArmor) ; le confinement d'Sillage
-	// (worktree dédié, pas de push agent) reste alors la seule barrière.
+	// workspace-write limits source edits to the task worktree plus the narrow
+	// Git metadata roots added by codexArgs. Network access remains disabled, so
+	// outbound Git operations still go through Ship after human validation.
+	// SILLAGE_CODEX_SANDBOX can select another mode (for example,
+	// danger-full-access when AppArmor blocks bwrap); Sillage's dedicated
+	// worktree and review workflow are then the remaining containment.
 	sandbox := os.Getenv("SILLAGE_CODEX_SANDBOX")
 	if sandbox == "" {
 		sandbox = "workspace-write"
@@ -993,11 +1091,7 @@ func (r *Runner) runCodex(task *Task, agent Agent, project Project, card Card, h
 	if blocks := strings.Join(contextParts(project.ContextPrompt, card.ContextPrompt), "\n\n"); blocks != "" {
 		cliInput = blocks + "\n\n---\n\n" + cliInput
 	}
-	args := []string{"exec", "--json", "--sandbox", sandbox, "-C", task.WorktreeDir}
-	if agent.Model != "" {
-		args = append(args, "--model", agent.Model)
-	}
-	args = append(args, cliInput)
+	args := codexArgs(task.WorktreeDir, sandbox, agent, cliInput)
 
 	cmd := exec.Command("codex", args...)
 	cmd.Dir = task.WorktreeDir
@@ -1095,7 +1189,117 @@ func (r *Runner) runCodex(task *Task, agent Agent, project Project, card Card, h
 	return nil
 }
 
-// --- GitHub Copilot and Antigravity adapters ---
+// --- One-shot text CLI adapters ---
+
+const kiroAgentName = "sillage"
+
+// Kiro evaluates denied shell patterns before allowed ones. The temporary
+// profile can therefore let an unattended coding agent run local commands
+// while keeping outbound Git operations and Kiro self-configuration denied.
+var kiroDeniedCommands = []string{
+	`git\s+push(?:\s+.*)?`,
+	`git\s+-C\s+\S+\s+push(?:\s+.*)?`,
+	`gh(?:\s+.*)?`,
+	`glab(?:\s+.*)?`,
+	`kiro-cli\s+(?:agent|settings|integrations)(?:\s+.*)?`,
+}
+
+type kiroAgentConfig struct {
+	Name           string            `json:"name"`
+	Description    string            `json:"description"`
+	Tools          []string          `json:"tools"`
+	AllowedTools   []string          `json:"allowedTools"`
+	ToolsSettings  kiroToolsSettings `json:"toolsSettings"`
+	IncludeMCPJSON bool              `json:"includeMcpJson"`
+	Model          string            `json:"model,omitempty"`
+}
+
+type kiroToolsSettings struct {
+	Write kiroWriteSettings `json:"write"`
+	Shell kiroShellSettings `json:"shell"`
+}
+
+type kiroWriteSettings struct {
+	AllowedPaths []string `json:"allowedPaths"`
+}
+
+type kiroShellSettings struct {
+	AllowedCommands []string `json:"allowedCommands"`
+	DeniedCommands  []string `json:"deniedCommands"`
+	DenyByDefault   bool     `json:"denyByDefault"`
+}
+
+func newKiroAgentConfig(agent Agent) kiroAgentConfig {
+	return kiroAgentConfig{
+		Name:           kiroAgentName,
+		Description:    "Isolated coding agent managed by Sillage",
+		Tools:          []string{"read", "write", "shell", "grep", "glob"},
+		AllowedTools:   []string{"read", "grep", "glob"},
+		IncludeMCPJSON: false,
+		Model:          agent.Model,
+		ToolsSettings: kiroToolsSettings{
+			Write: kiroWriteSettings{AllowedPaths: []string{"**"}},
+			Shell: kiroShellSettings{
+				AllowedCommands: []string{".*"},
+				DeniedCommands:  append([]string(nil), kiroDeniedCommands...),
+				DenyByDefault:   true,
+			},
+		},
+	}
+}
+
+// createKiroHome writes the runtime profile outside the project. Headless
+// Kiro authenticates through KIRO_API_KEY, so it does not need the user's Kiro
+// home. Keeping a fresh home also prevents tasks from changing future runs.
+func createKiroHome(agent Agent) (string, error) {
+	home, err := os.MkdirTemp("", "sillage-kiro-")
+	if err != nil {
+		return "", err
+	}
+	cleanup := func(err error) (string, error) {
+		_ = os.RemoveAll(home)
+		return "", err
+	}
+	agentsDir := filepath.Join(home, "agents")
+	if err := os.MkdirAll(agentsDir, 0o700); err != nil {
+		return cleanup(err)
+	}
+	data, err := json.MarshalIndent(newKiroAgentConfig(agent), "", "  ")
+	if err != nil {
+		return cleanup(err)
+	}
+	if err := os.WriteFile(filepath.Join(agentsDir, kiroAgentName+".json"), data, 0o600); err != nil {
+		return cleanup(err)
+	}
+	return home, nil
+}
+
+func kiroArgs(cliInput string) []string {
+	return []string{"chat", "--no-interactive", "--agent", kiroAgentName, "--wrap", "never", cliInput}
+}
+
+func kiroEnv(home string) []string {
+	env := os.Environ()
+	filtered := make([]string, 0, len(env)+3)
+	for _, entry := range env {
+		if strings.HasPrefix(entry, "KIRO_HOME=") || strings.HasPrefix(entry, "KIRO_LOG_NO_COLOR=") || strings.HasPrefix(entry, "NO_COLOR=") {
+			continue
+		}
+		filtered = append(filtered, entry)
+	}
+	return append(filtered, "KIRO_HOME="+home, "KIRO_LOG_NO_COLOR=1", "NO_COLOR=1")
+}
+
+func (r *Runner) runKiro(task *Task, agent Agent, project Project, card Card, handle *procHandle, cliInput string) error {
+	home, err := createKiroHome(agent)
+	if err != nil {
+		return fmt.Errorf("cannot prepare Kiro runtime: %w", err)
+	}
+	defer os.RemoveAll(home)
+
+	cliInput = prefixAgentContext(agent, project, card, cliInput)
+	return r.runTextCLI(task, agent, handle, "kiro-cli", kiroArgs(cliInput), kiroEnv(home))
+}
 
 func copilotArgs(agent Agent, cliInput string) []string {
 	args := []string{
@@ -1118,30 +1322,102 @@ func copilotArgs(agent Agent, cliInput string) []string {
 	return append(args, "-p", cliInput)
 }
 
-func antigravityArgs(agent Agent, cliInput string) []string {
-	args := []string{"--print", "--sandbox", "--print-timeout=60m"}
+// antigravityArgs construit la ligne de commande d'agy. Trois pièges du CLI :
+//
+//   - `--print` prend le prompt en valeur (c'est un alias de `--prompt`, pas un
+//     booléen). Il doit donc rester en dernier : `--print --sandbox <prompt>`
+//     fait exécuter le prompt « --sandbox » et l'agent répond à côté.
+//   - en mode sandbox, agy ignore le répertoire de travail du process et
+//     retombe sur son espace de travail interne (`~/.gemini/antigravity-cli/scratch`).
+//     Sans `--add-dir <worktree>`, la tâche écrit ses fichiers hors du dépôt et
+//     le diff reste vide.
+//   - le sandbox ne montre que les répertoires ajoutés. Le worktree d'une tâche
+//     est un worktree lié : son vrai dossier git est celui du dépôt d'origine,
+//     hors du sandbox, donc tout git y échoue par « ce n'est pas un dépôt git ».
+//     Le modèle relance alors la commande hors sandbox (`BypassSandbox`), ce que
+//     le mode headless auto-refuse : la session s'arrête sans rien produire.
+//     D'où `--add-dir <gitCommonDir>`.
+//
+// Ce dossier git n'ouvre aucune porte (invariant 1) : agy monte un `--add-dir`
+// hors espace de travail principal **en lecture seule** (vérifié : `touch` y
+// répond « système de fichiers accessible en lecture seulement », et `git
+// commit` échoue sur `index.lock`), et son sandbox n'a pas de réseau (la
+// résolution DNS y échoue). L'agent gagne donc exactement les lectures git de
+// l'allowlist claude (status, log, diff, show), ni écriture de hooks ou de
+// config, ni push.
+func antigravityArgs(agent Agent, worktreeDir, gitCommonDir, cliInput string) []string {
+	args := []string{"--sandbox", "--print-timeout=60m"}
+	if worktreeDir != "" {
+		args = append(args, "--add-dir", worktreeDir)
+	}
+	if gitCommonDir != "" {
+		args = append(args, "--add-dir", gitCommonDir)
+	}
 	if agent.Model != "" {
 		args = append(args, "--model", agent.Model)
 	}
-	return append(args, cliInput)
+	return append(args, "--print", cliInput)
 }
 
 func (r *Runner) runCopilot(task *Task, agent Agent, project Project, card Card, handle *procHandle, cliInput string) error {
 	cliInput = prefixAgentContext(agent, project, card, cliInput)
-	return r.runTextCLI(task, agent, handle, "copilot", copilotArgs(agent, cliInput))
+	return r.runTextCLI(task, agent, handle, "copilot", copilotArgs(agent, cliInput), copilotEnv())
 }
 
+// antigravityWorktreeNote prévient l'agent de la particularité de son
+// répertoire qui l'a déjà fait échouer : une tâche travaille dans un worktree
+// git lié, où `.git` est un fichier d'une ligne qui pointe ailleurs. Un modèle
+// qui explore essaie de l'ouvrir ; agy traite ce chemin comme sensible et exige
+// une confirmation, impossible en mode headless, donc la session s'arrête sur
+// le champ sans rien produire. Aucune règle d'autorisation générale ne couvre
+// le cas : `permissions.allow` n'accepte pas de motif de chemin
+// (`read_file(<dossier>/*)` ne correspond à rien), seulement des chemins
+// exacts, qui changent à chaque tâche. Le prévenir coûte deux lignes de prompt.
+//
+// La note couvre aussi la sortie de bac à sable, qui tue la session de la même
+// façon : une commande bloquée dans le bac à sable (le réseau y est coupé)
+// pousse le modèle à la relancer hors bac à sable, ce que le mode headless
+// auto-refuse. Mieux vaut qu'il rapporte l'échec que de finir muet.
+const antigravityWorktreeNote = "Environment: your working directory is a linked git worktree, so `.git` is a one-line pointer file, not a directory. Never open it: that read is refused and ends your session without any answer. Read-only git commands (`git status`, `git log`, `git diff`, `git show`) work here; `git add`, `git commit` and anything writing to git do not, and you never need them: your work is committed for you. Your sandbox also has no network access. Never re-run a command outside the sandbox (no bypass-sandbox, no unsandboxed execution): such a request is auto-denied and ends your session without any answer. Report the failure in your answer instead."
+
 func (r *Runner) runAntigravity(task *Task, agent Agent, project Project, card Card, handle *procHandle, cliInput string) error {
-	cliInput = prefixAgentContext(agent, project, card, cliInput)
-	return r.runTextCLI(task, agent, handle, "agy", antigravityArgs(agent, cliInput))
+	cliInput = prefixAgentContext(agent, project, card, antigravityWorktreeNote+"\n\n"+cliInput)
+	// Best-effort : sans le dossier git commun, agy travaille quand même sur les
+	// fichiers, il perd seulement les commandes git.
+	gitCommonDir, _ := GitCommonDir(task.WorktreeDir)
+	args := antigravityArgs(agent, task.WorktreeDir, gitCommonDir, cliInput)
+	return r.runTextCLI(task, agent, handle, "agy", args, nil)
+}
+
+// copilotEnv strips a classic GitHub PAT (the "ghp_" prefix) from GITHUB_TOKEN
+// before it reaches the copilot binary. The CLI refuses to start at all when
+// it finds one ("Classic Personal Access Tokens are not supported"), even
+// though this token is never needed inside the sandbox: copilotDeniedTools
+// already blocks git push/gh/glab, and Sillage itself never reads this
+// variable. Leaving it set otherwise breaks every copilot task on a machine
+// where GITHUB_TOKEN happens to hold an old classic PAT for unrelated tools.
+// Fine-grained PATs and an unset GITHUB_TOKEN pass through untouched, so
+// gh's own auth (gh auth login, copilot's /login) keeps working.
+func copilotEnv() []string {
+	env := os.Environ()
+	filtered := make([]string, 0, len(env))
+	for _, kv := range env {
+		if strings.HasPrefix(kv, "GITHUB_TOKEN=ghp_") {
+			continue
+		}
+		filtered = append(filtered, kv)
+	}
+	return filtered
 }
 
 // runTextCLI runs a non-interactive CLI whose stdout is its final answer.
-// Copilot and Antigravity currently do not expose token accounting in this
+// Copilot, Antigravity, and Kiro currently do not expose token accounting in this
 // mode, so the adapter deliberately records only the response and exit error.
-func (r *Runner) runTextCLI(task *Task, agent Agent, handle *procHandle, binary string, args []string) error {
+// A nil env makes the child inherit the process environment unchanged.
+func (r *Runner) runTextCLI(task *Task, agent Agent, handle *procHandle, binary string, args []string, env []string) error {
 	cmd := exec.Command(binary, args...)
 	cmd.Dir = task.WorktreeDir
+	cmd.Env = env
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 
 	stdout, err := cmd.StdoutPipe()
@@ -1168,7 +1444,8 @@ func (r *Runner) runTextCLI(task *Task, agent Agent, handle *procHandle, binary 
 		waitErr = scanErr
 	}
 
-	if response := strings.TrimSpace(stdoutBuf.String()); response != "" {
+	response := strings.TrimSpace(stdoutBuf.String())
+	if response != "" {
 		msg, updated, err := r.store.AddMessage(task.ID, "agent", agent.Name, response)
 		if err == nil {
 			r.publishMessage(msg)
@@ -1176,12 +1453,25 @@ func (r *Runner) runTextCLI(task *Task, agent Agent, handle *procHandle, binary 
 			r.publishTask(*task)
 		}
 	}
-	if waitErr != nil && !handle.interrupted.Load() {
+	if handle.interrupted.Load() {
+		return nil
+	}
+	if waitErr != nil {
 		message := strings.TrimSpace(stderrBuf.String())
 		if message == "" {
 			message = waitErr.Error()
 		}
 		return fmt.Errorf("%s", message)
+	}
+	// Un adaptateur texte qui sort en succès sans rien écrire est un échec : la
+	// conversation resterait vide, sans le moindre indice. C'est le cas quand
+	// agy auto-refuse une confirmation d'outil (mode print) : il explique alors
+	// la marche à suivre sur stderr, que le succès de sortie ferait perdre.
+	if response == "" {
+		if message := strings.TrimSpace(stderrBuf.String()); message != "" {
+			return fmt.Errorf("%s", message)
+		}
+		return fmt.Errorf("%s produced no output", binary)
 	}
 	return nil
 }

@@ -13,7 +13,7 @@ internal/server/
   auth.go                    // bcrypt, sessions, middleware, rate-limit login
   sse.go                     // Hub SSE
   git.go                     // worktrees, diff parse, commits, push
-  runner.go                  // adaptateurs claude / codex / copilot / agy / fake
+  runner.go                  // adaptateurs claude / codex / copilot / agy / kiro / fake
   preview.go                 // superviseur des recettes manuelles (process + journal)
   preview_handlers.go        // routes de recette
   update.go                  // version, détection de mise à jour, application, redémarrage
@@ -40,6 +40,7 @@ Tokens : cumulés dans Task.tokens ; agrégats projet/global calculés en somman
 - Au chargement, `FormatVersion > stateFormatVersion` fait échouer `loadStoreFile` avec `ErrStateTooNew`, **avant la moindre écriture** : `NewStore` sauvegarde immédiatement après avoir chargé, donc laisser passer un fichier trop récent le mutilerait à la seconde près (les champs exportés du Store sont sérialisés tels quels : ce que le binaire ne connaît pas disparaît). `main` refuse alors de démarrer, avec le message et la sortie de secours (`brew upgrade sillage`, ou un autre `-data`).
 - `CloneWorkspace` applique le même refus au `state.json` du clone **avant** `ReplaceWorkspaceFiles` : sinon le rapatriement laisserait le répertoire de données avec un fichier illisible sous un serveur qui tourne encore.
 - `Store.WrittenBy` garde la version de Sillage qui a écrit le fichier en dernier ("dev" pour une compilation locale). `DowngradeWarning()` prévient au démarrage quand le fichier vient d'une version publiée plus récente que le binaire **à format égal** : le chargement réussit, mais les champs apparus entre les deux tomberont à la première sauvegarde. Silencieux dès qu'une version "dev" est en jeu, faute de pouvoir comparer.
+- `resetTransientTaskFlags` clôt le chargement (après les migrations) en éteignant ce qui ne décrivait qu'un processus du serveur précédent : `Task.Rebasing`, et les tâches `running`, qui repassent en `review` non lues, sans `liveActivity`, avec un marqueur `[interrupted:server-restart]` au fil (`appendMessage`, sans verrou ni sauvegarde : personne ne voit encore le Store) et leurs compteurs relus par `TaskWorkCounts` (git.go, best-effort : worktree disparu = zéros). Un `recomputeAll` suit, les compteurs de carte dépendant du statut. Voir SPEC-API.md § « Cycle de vie des tâches » pour le pourquoi côté produit.
 - Limite à connaître : le garde-fou n'existe qu'entre binaires qui le portent tous les deux. Une version antérieure à son introduction ignore `FormatVersion` et le supprime même du fichier en le réécrivant. Le filet de secours reste le dépôt git de l'espace de travail (commits `sillage: update`, throttlés à 15 min).
 
 ## Auth
@@ -112,8 +113,10 @@ Jamais de `--dangerously-skip-permissions`. Jamais `git push` dans allowedTools.
 
 ### Adaptateur codex (`cli:"codex"`), best-effort
 
-`codex exec --json -C <worktree> [--model <model>] <texte>` ; parser plusieurs formes de JSONL :
+`codex exec --json --sandbox <mode> -C <worktree> [--add-dir <git-dir>...] [--model <model>] <texte>` ; parser plusieurs formes de JSONL :
 `{"msg":{"type":"agent_message","message":"..."}}`, `{"type":"item.completed","item":{"type":"agent_message","text":"..."}}`, `token_count` → usage si présent. En cas d'échec de parsing, capturer stdout brut en un Message final. Pas de resume en v1 (chaque message relance `codex exec` avec le dernier texte).
+
+En mode `workspace-write`, les worktrees liés gardent leur index/HEAD et leurs objets/références Git hors du répertoire de tâche. Sillage résout ces chemins avec `git rev-parse` et les passe séparément via `--add-dir` : git-dir propre au worktree, puis `objects`, `refs`, `logs` et stockages optionnels existants du common-dir. Le common-dir entier n'est pas exposé pour un worktree lié, afin que `hooks` et la configuration du dépôt d'origine restent en lecture seule. La résolution est best-effort : un répertoire qui n'est plus un dépôt Git ne bloque pas le démarrage de Codex.
 
 Le quota de compte (`rate_limits`) n'est PAS porté par ce flux stdout, seulement par le fichier de session que codex écrit de son côté même en mode `exec` (`~/.codex/sessions/AAAA/MM/JJ/rollout-...-<thread_id>.jsonl`) : `readCodexRateLimits` retrouve ce fichier via le `thread_id` capturé sur l'événement `thread.started` du flux, lit son dernier `rate_limits` et met à jour `Store.CodexQuota` (best-effort, jamais bloquant). Voir SPEC-API.md « Quota des agents ».
 
@@ -125,7 +128,36 @@ Le texte contient les contextes agent, projet et chantier avant le prompt. Le st
 
 ### Adaptateur Antigravity (`cli:"agy"`)
 
-`agy --print --sandbox --print-timeout=60m [--model <model>] <texte>`. Le texte contient les contextes agent, projet et chantier avant le prompt ; le stdout texte devient un Message agent final. Pas de reprise de session ni de compteurs de tokens. Le mode sandbox est toujours forcé ; `--dangerously-skip-permissions` n'est jamais utilisé.
+`agy --sandbox --print-timeout=60m --add-dir <worktree> [--add-dir <dossier git commun>] [--model <model>] --print <texte>`. Le texte contient les contextes agent, projet et chantier avant le prompt ; le stdout texte devient un Message agent final. Pas de reprise de session ni de compteurs de tokens. Le mode sandbox est toujours forcé ; `--dangerously-skip-permissions` n'est jamais utilisé.
+
+Trois particularités du CLI dictent la ligne de commande :
+
+- `--print` est un alias de `--prompt` et prend le prompt **en valeur**, ce n'est pas un booléen. Il doit rester le dernier drapeau : `agy --print --sandbox <texte>` fait exécuter le prompt « --sandbox », l'agent répond une explication du mode sandbox et ne touche à rien.
+- en mode sandbox, agy ignore le répertoire de travail du process et retombe sur son espace interne (`~/.gemini/antigravity-cli/scratch`). `--add-dir <worktree>` est donc obligatoire, sinon la tâche écrit ses fichiers hors du dépôt et le diff reste vide.
+- le sandbox ne montre **que** les répertoires ajoutés. Le worktree d'une tâche est un worktree lié : son vrai dossier git est celui du dépôt d'origine, hors du sandbox, donc toute commande git y échoue par « ce n'est pas un dépôt git ». Le modèle relance alors la commande hors sandbox (`BypassSandbox: true`), demande auto-refusée en mode print : la session s'arrête sans rien produire (observé sur un simple `git status`). D'où le second `--add-dir`, le dossier git commun résolu par `GitCommonDir` (`git rev-parse --path-format=absolute --git-common-dir`), best-effort : sans lui l'agent travaille quand même sur les fichiers, il perd seulement git.
+
+Ce second répertoire n'ouvre aucune porte (invariant 1) : un `--add-dir` hors espace de travail principal est monté **en lecture seule** (vérifié : `touch` y répond « système de fichiers accessible en lecture seulement » et `git commit` échoue sur `index.lock`), et le sandbox n'a pas de réseau (la résolution DNS y échoue). L'agent gagne donc exactement les lectures git de l'allowlist claude (`status`, `log`, `diff`, `show`), sans écriture de hooks ni de config, et sans push. Le prompt le lui dit (`antigravityWorktreeNote`), avec la consigne de ne jamais relancer une commande hors sandbox mais de rapporter l'échec : c'est ce qui évite les tâches muettes.
+
+Les autorisations ne s'expriment **pas** en ligne de commande : le seul drapeau existant est `--dangerously-skip-permissions`, que Sillage n'utilise jamais. Tout vient de `~/.gemini/antigravity-cli/settings.json`. En mode print, **toute** demande de confirmation est auto-refusée et la session s'arrête aussitôt : stdout vide, sortie 0, explication sur stderr. Une seule demande suffit donc à rendre une tâche muette, et deux réglages sont nécessaires (`antigravityWorksHeadlessly` dans `store.go`) :
+
+- `toolPermission` (valeurs `always-proceed`, `request-review`, `strict`, `proceed-in-sandbox`) : le défaut `request-review` fait demander un accord à chaque commande. Sillage attend `proceed-in-sandbox`, cohérent avec le `--sandbox` toujours forcé.
+- deux règles dans `permissions.allow` : `read_file(<dataDir>/worktrees)` et `write_file(<dataDir>/worktrees)`. Les fichiers ordinaires du worktree passent sans règle, mais certains chemins demandent un accord : `.git`, qui dans un worktree lié est un fichier d'une ligne qu'un modèle en exploration essaie d'ouvrir (vérifié), et des modifications de fichiers existants (observé une fois sur `web/index.html`, non reproduit ; le message de la CLI demande exactement une règle `write_file(<cible>)`).
+
+Faits vérifiés sur la syntaxe des règles, qui expliquent la forme retenue : une cible **dossier** couvre tout ce qu'elle contient, les motifs (`read_file(<dossier>/*)`, `read_file(<racine>/**)`) ne correspondent à rien, et ajouter ces règles ne restreint rien par ailleurs (une lecture hors worktree était déjà refusée sans elles, elle l'est toujours avec). Deux règles sur la racine des worktrees suffisent donc, sans rien accorder au-delà du terrain de travail des agents.
+
+Sillage n'écrit ce fichier que sur clic explicite de l'humain (`POST /api/agents/{id}/fix-warning` → `fixAntigravityToolPermission`) : relecture des clés et des règles existantes, ajout de ce qui manque seulement, écriture atomique (fichier temporaire + rename) en conservant les droits, refus pur et simple si le JSON existant est illisible.
+
+Reste un mode d'échec assumé : un agent qui veut lire ou écrire **hors** de son worktree fait tomber sa session (par exemple `/etc/hostname`, vérifié). C'est le comportement souhaitable, et il est maintenant visible dans la conversation. L'adaptateur prévient aussi l'agent dans son prompt (`antigravityWorktreeNote`) que `.git` est un pointeur qu'il ne doit pas ouvrir.
+
+`runTextCLI` (partagé avec copilot, agy et kiro) traite une sortie 0 sans rien sur stdout comme un échec et remonte stderr : sans ça, la tâche finissait « à relire » avec une conversation vide, ce qui ne laissait aucune trace du refus.
+
+### Adaptateur Kiro (`cli:"kiro"`)
+
+`kiro-cli chat --no-interactive --agent sillage --wrap never <texte>`. Le texte contient les contextes agent, projet et chantier avant le prompt ; le stdout texte devient un Message agent final. Pas de reprise de session ni de compteurs de tokens : le transcript récent est rejoué dans le prompt comme pour les autres adaptateurs one-shot.
+
+Le mode headless exige `KIRO_API_KEY` dans l'environnement du processus Sillage. La santé de l'agent signale son absence avant le premier run.
+
+Chaque exécution reçoit un `KIRO_HOME` créé par `os.MkdirTemp`, distinct du dépôt et du profil Kiro de l'utilisateur. Il contient un agent `sillage.json` avec `read`, `write`, `shell`, `grep` et `glob`, sans MCP hérité (`includeMcpJson:false`). `write` n'est pas placé dans `allowedTools` : son `allowedPaths:["**"]` limite l'approbation automatique aux chemins relatifs au worktree. Même règle pour `shell`, qui passe par `toolsSettings` afin que les refus soient évalués avant l'autorisation générale des commandes locales. Les refus figés couvrent `git push` (y compris `git -C ... push`), `gh`, `glab` et les sous-commandes Kiro qui modifieraient agents, réglages ou intégrations. Ne jamais remplacer ce profil par `--trust-all-tools`, qui court-circuiterait cette granularité. Le `KIRO_HOME` temporaire est supprimé après la mort du process, succès, erreur ou interruption.
 
 ### Adaptateur fake (`cli:"fake"`)
 
@@ -159,7 +191,7 @@ Voir SPEC-API.md §« Mises à jour de Sillage » pour le contrat.
 
 ## Seed (premier lancement)
 
-Agents : Bolt 🐝 `#f2b705` claude/sonnet ; Muse 🦊 `#d0662f` claude/opus ; Otto 🦉 `#4f7d2f` codex/(modèle vide = défaut) ; Fably 🪶 `#6b4fbb` claude/fable ; Octo 🐙 `#24292f` copilot/(modèle par défaut) ; Astro 🚀 `#4285f4` agy/(modèle par défaut) ; Écho 🧪 `#777` fake (agent de test local, gratuit). Pas de projets seedés. Les deux agents externes ajoutés après le premier lancement sont migrés une seule fois via `AgentSeedVersion`, afin qu'une suppression volontaire reste définitive.
+Agents : Bolt 🐝 `#f2b705` claude/sonnet ; Muse 🦊 `#d0662f` claude/opus ; Otto 🦉 `#4f7d2f` codex/(modèle vide = défaut) ; Fably 🪶 `#6b4fbb` claude/fable ; Octo 🐙 `#24292f` copilot/(modèle par défaut) ; Astro 🚀 `#4285f4` agy/(modèle par défaut) ; Kiro 🟣 `#7c3aed` kiro/(modèle par défaut) ; Écho 🧪 `#777` fake (agent de test local, gratuit). Pas de projets seedés. Chaque nouvelle vague d'agents externes est migrée une seule fois via `AgentSeedVersion`, afin qu'une suppression volontaire reste définitive ; le passage de la version 1 à 2 n'ajoute que Kiro et ne recrée donc pas un profil Copilot ou Antigravity supprimé auparavant.
 
 ## Handlers
 

@@ -53,6 +53,8 @@
       'kanban.card.tasksLabel': 'tâches',
       'kanban.card.noTask': 'Aucune tâche',
       'kanban.card.reviewCount': '{n} à relire',
+      'kanban.card.awaitingShip': 'À livrer',
+      'inbox.awaitingShip.title': 'Chantiers à livrer',
       'column.soon': 'Bientôt',
       'column.doing': 'En cours',
       'column.done': 'Terminé',
@@ -251,6 +253,7 @@
       'chat.rebased': 'Rebasée automatiquement sur {branch} : cette tâche repart du travail accepté.',
       'chat.rebaseConflict': 'Rebase automatique impossible sur {files} (rien n\'a été modifié) : demandez à l\'agent de reprendre la base.',
       'chat.toolDenied': 'Outil refusé à l\'agent : {tool}. Pour l\'autoriser, ajoutez-le aux outils autorisés dans les réglages du projet.',
+      'chat.interrupted': 'Agent interrompu par un arrêt de Sillage : la tâche est repassée en revue. Ce qu\'il avait commité est là ; envoyez-lui un message pour qu\'il reprenne.',
       'conversation.empty': 'Aucun message pour l\'instant.',
       'diff.empty': 'Aucune modification.',
       'deliverables.code': 'Code',
@@ -319,6 +322,7 @@
       'agent.cli.codex': 'OpenAI Codex (codex)',
       'agent.cli.copilot': 'GitHub Copilot (copilot)',
       'agent.cli.agy': 'Google Antigravity (agy)',
+      'agent.cli.kiro': 'Kiro CLI (kiro)',
       'agent.cli.fake': 'Agent de test (fake)',
       'agent.model': 'Modèle',
       'agent.contextPrompt': 'Prompt de contexte',
@@ -331,6 +335,15 @@
       'agent.warning.copyCmd': 'Copier la commande',
       'agent.warning.codexSandboxFallback': 'Vous pouvez aussi contourner le problème en lançant Sillage avec la variable d\'environnement SILLAGE_CODEX_SANDBOX=danger-full-access ; le confinement restant est alors celui de Sillage (worktree dédié, pas de push par l\'agent).',
       'agent.warning.codexSandboxLink': 'En savoir plus (documentation OpenAI Codex)',
+      'agent.warning.agyPolicy': 'Antigravity demande votre accord avant chaque commande et devant certains fichiers, et personne ne peut le donner quand un agent travaille tout seul : l\'accord est refusé d\'office et la tâche se termine sans rien produire. Il lui faut deux réglages : une politique d\'exécution qui fait confiance au bac à sable, et le droit de lire et écrire dans les worktrees.',
+      'agent.warning.agyPolicyHint': 'Sillage peut les poser dans ~/.gemini/antigravity-cli/settings.json. Les commandes partiront alors sans question, mais seulement dans le bac à sable, que Sillage impose toujours à cet agent ; les droits sur les fichiers s\'arrêtent au dossier des worktrees, son terrain de travail. Vos autres réglages Antigravity sont conservés.',
+      'agent.warning.agyPolicyLink': 'Voir la documentation d’Antigravity CLI',
+      'agent.warning.agyPolicyFix': 'Régler pour moi',
+      'agent.warning.agyPolicyFixConfirm': 'Écrire dans settings.json ?',
+      'agent.warning.agyPolicyFixed': 'Réglé. Antigravity peut travailler dans son bac à sable.',
+      'agent.warning.kiroApiKey': 'Kiro CLI est installé, mais son mode headless exige une clé API dans la variable d’environnement KIRO_API_KEY. Les tâches confiées à cet agent ne peuvent pas démarrer sans elle.',
+      'agent.warning.kiroApiKeyHint': 'Ajoutez KIRO_API_KEY à l’environnement qui lance Sillage, puis relancez Sillage. La clé n’est ni affichée ni enregistrée dans l’espace de travail.',
+      'agent.warning.kiroApiKeyLink': 'Voir l’authentification de Kiro CLI',
       'agent.warning.cliNotFound': 'Agent non connecté : CLI {cli} introuvable dans le PATH.',
       'agent.warning.installHint': 'Installez le CLI, puis relancez Sillage :',
       'agent.warning.installLink': 'Voir la documentation d’installation',
@@ -493,6 +506,8 @@
       'kanban.card.tasksLabel': 'tasks',
       'kanban.card.noTask': 'No task',
       'kanban.card.reviewCount': '{n} to review',
+      'kanban.card.awaitingShip': 'Ready to ship',
+      'inbox.awaitingShip.title': 'Workstreams ready to ship',
       'column.soon': 'Soon',
       'column.doing': 'In progress',
       'column.done': 'Done',
@@ -691,6 +706,7 @@
       'chat.rebased': 'Rebased automatically onto {branch}: this task now starts from the accepted work.',
       'chat.rebaseConflict': 'Automatic rebase not possible on {files} (nothing was changed): ask the agent to rebase on the workstream branch.',
       'chat.toolDenied': 'Tool denied to the agent: {tool}. To allow it, add it to the allowed tools in the project settings.',
+      'chat.interrupted': 'Agent interrupted by a Sillage shutdown: the task went back to review. What it had committed is there; send it a message to pick the work back up.',
       'conversation.empty': 'No messages yet.',
       'diff.empty': 'No changes.',
       'deliverables.code': 'Code',
@@ -759,6 +775,7 @@
       'agent.cli.codex': 'OpenAI Codex (codex)',
       'agent.cli.copilot': 'GitHub Copilot (copilot)',
       'agent.cli.agy': 'Google Antigravity (agy)',
+      'agent.cli.kiro': 'Kiro CLI (kiro)',
       'agent.cli.fake': 'Test agent (fake)',
       'agent.model': 'Model',
       'agent.contextPrompt': 'Context prompt',
@@ -771,6 +788,15 @@
       'agent.warning.copyCmd': 'Copy command',
       'agent.warning.codexSandboxFallback': 'You can also work around this by starting Sillage with the SILLAGE_CODEX_SANDBOX=danger-full-access environment variable; the remaining containment is then Sillage\'s own (dedicated worktree, no push from the agent).',
       'agent.warning.codexSandboxLink': 'Learn more (OpenAI Codex documentation)',
+      'agent.warning.agyPolicy': 'Antigravity asks for your approval before every command and for some files, and nobody can give it while an agent works on its own: approval is denied outright and the task ends without producing anything. It needs two settings: an execution policy that trusts the sandbox, and permission to read and write inside the worktrees.',
+      'agent.warning.agyPolicyHint': 'Sillage can set both in ~/.gemini/antigravity-cli/settings.json. Commands will then run without asking, but only inside the sandbox, which Sillage always forces on this agent; the file permissions stop at the worktrees folder, which is where it works. Your other Antigravity settings are kept.',
+      'agent.warning.agyPolicyLink': 'Open the Antigravity CLI documentation',
+      'agent.warning.agyPolicyFix': 'Set it for me',
+      'agent.warning.agyPolicyFixConfirm': 'Write to settings.json?',
+      'agent.warning.agyPolicyFixed': 'Set. Antigravity can work inside its sandbox.',
+      'agent.warning.kiroApiKey': 'Kiro CLI is installed, but its headless mode requires an API key in the KIRO_API_KEY environment variable. Tasks assigned to this agent cannot start without it.',
+      'agent.warning.kiroApiKeyHint': 'Add KIRO_API_KEY to the environment that starts Sillage, then restart Sillage. The key is neither displayed nor stored in the workspace.',
+      'agent.warning.kiroApiKeyLink': 'Open the Kiro CLI authentication guide',
       'agent.warning.cliNotFound': 'Agent not connected: {cli} CLI not found in PATH.',
       'agent.warning.installHint': 'Install the CLI, then restart Sillage:',
       'agent.warning.installLink': 'Open the installation guide',
@@ -1258,6 +1284,7 @@
     var id = el.getAttribute('data-confirm-id');
     handleConfirmClick(key, function () {
       if (kind === 'agent-delete') doDeleteAgent(id);
+      else if (kind === 'agent-fix') doFixAgentWarning(id);
       else if (kind === 'workspace-sync') doWorkspaceSync();
       else if (kind === 'task-cancel') doCancelTask(id);
       else if (kind === 'task-delete') doDeleteTask(id);
@@ -1658,6 +1685,9 @@
     var liveHTML = c.liveActivity ? '<div class="card-live"><span class="live-dot"></span><span class="live-text mono">' +
       escapeHtml(c.liveActivity) + '</span></div>' : '';
     var attention = c.reviewCount ? '<span class="card-attention">' + escapeHtml(t('kanban.card.reviewCount', { n: c.reviewCount })) + '</span>' : '';
+    var awaitingShip = c.awaitingShip
+      ? '<span class="card-awaiting-ship">' + shipIconHTML() + escapeHtml(t('kanban.card.awaitingShip')) + '</span>'
+      : '';
     var others = COLUMN_ORDER.filter(function (k) { return k !== colKey; });
     var menuItemsHTML = others.map(function (k) {
       return '<button class="card-menu-item" data-action="move-card" data-card-id="' + c.id + '" data-column="' + k + '">' +
@@ -1680,6 +1710,7 @@
         (c.tasksTotal
           ? '<span>' + (c.tasksDone || 0) + '/' + c.tasksTotal + ' ' + escapeHtml(t('kanban.card.tasksLabel')) + '</span>'
           : '<span>' + escapeHtml(t('kanban.card.noTask')) + '</span>') +
+        awaitingShip +
         attention +
       '</div>' +
       progressHTML +
@@ -1918,7 +1949,7 @@
     var panelHTML = task ? buildDetailPanelHTML(task) : '';
     var card = state.cardId ? state.cardsById[state.cardId] : null;
     var bodyClass = 'view-body work-body' + (task ? ' has-panel' : '') + (task && state.panelExpanded ? ' panel-expanded' : '');
-    return buildHeaderHTML() + (card ? buildShipBarHTML(card) : '') +
+    return buildHeaderHTML() + (opts.bannerHTML || '') + (card ? buildShipBarHTML(card) : '') +
       '<div class="' + bodyClass + '" style="padding:0;">' +
       '<div class="task-list-pane">' + paneInnerHTML + '</div>' +
       panelHTML +
@@ -2811,10 +2842,31 @@
     if (state.screen === 'inbox') {
       return {
         tasksAll: state.tasks.filter(function (t) { return t.unread || t.status === 'review'; }),
-        opts: { showProject: true, emptyMsg: t('inbox.empty') }
+        opts: { showProject: true, emptyMsg: t('inbox.empty'), bannerHTML: buildAwaitingShipBannerHTML() }
       };
     }
     return null;
+  }
+
+  // Chantiers dont tout le travail est terminal mais qui n'ont pas été livrés
+  // (voir Card.awaitingShip) : sans ce bandeau, rien dans la boîte de réception
+  // ne les signale, puisque leurs tâches sont acceptées/refusées et n'y
+  // apparaissent donc jamais.
+  function buildAwaitingShipBannerHTML() {
+    var cards = state.cards.filter(function (c) { return c.awaitingShip; });
+    if (!cards.length) return '';
+    var rows = cards.map(function (c) {
+      var p = state.projectsById[c.projectId];
+      return '<div class="awaiting-ship-row" data-action="open-card" data-card-id="' + c.id + '">' +
+        shipIconHTML() +
+        '<span class="awaiting-ship-title">' + escapeHtml(c.title) + '</span>' +
+        (p ? '<span class="awaiting-ship-project">' + escapeHtml(p.name) + '</span>' : '') +
+        '</div>';
+    }).join('');
+    return '<div class="awaiting-ship-banner">' +
+      '<div class="awaiting-ship-head">' + escapeHtml(t('inbox.awaitingShip.title')) + '</div>' +
+      rows +
+      '</div>';
   }
 
   function buildWorkHTML() {
@@ -2905,6 +2957,8 @@
   function agentWarningText(warning) {
     if (!warning) return '';
     if (warning.indexOf('codex sandbox is blocked') !== -1) return t('agent.warning.codexSandbox');
+    if (warning.indexOf('agy cannot work headlessly') !== -1) return t('agent.warning.agyPolicy');
+    if (warning.indexOf('KIRO_API_KEY is not set') !== -1) return t('agent.warning.kiroApiKey');
     var m = /^(\S+) CLI not found in PATH$/.exec(warning);
     if (m) return t('agent.warning.cliNotFound', { cli: m[1] });
     return warning;
@@ -2930,9 +2984,13 @@
     agy: {
       command: 'curl -fsSL https://antigravity.google/cli/install.sh | bash',
       url: 'https://antigravity.google/docs/cli/install'
+    },
+    kiro: {
+      command: 'curl -fsSL https://cli.kiro.dev/install | bash',
+      url: 'https://kiro.dev/docs/cli/installation/'
     }
   };
-  function agentWarningExtrasHTML(warning) {
+  function agentWarningExtrasHTML(warning, agentId) {
     if (!warning) return '';
     var missing = /^(\S+) CLI not found in PATH$/.exec(warning);
     if (missing && AGENT_CLI_INSTALL[missing[1]]) {
@@ -2944,6 +3002,21 @@
         '</div>' +
         '<a class="agent-warning-link" href="' + escapeHtml(install.url) + '" target="_blank" rel="noopener noreferrer">' +
           escapeHtml(t('agent.warning.installLink')) + '</a>';
+    }
+    if (warning.indexOf('agy cannot work headlessly') !== -1) {
+      var fixKey = 'agent-fix:' + agentId;
+      var fixLabel = isPendingConfirm(fixKey) ? t('agent.warning.agyPolicyFixConfirm') : t('agent.warning.agyPolicyFix');
+      return '<div class="agent-warning-fallback">' + escapeHtml(t('agent.warning.agyPolicyHint')) + '</div>' +
+        '<div class="agent-warning-action">' +
+          '<button class="btn-outline" data-action="confirm-click" data-confirm-key="' + fixKey + '" data-confirm-action="agent-fix" data-confirm-id="' + escapeHtml(agentId) + '" data-default-label="' + escapeHtml(t('agent.warning.agyPolicyFix')) + '" data-confirm-label="' + escapeHtml(t('agent.warning.agyPolicyFixConfirm')) + '">' + escapeHtml(fixLabel) + '</button>' +
+        '</div>' +
+        '<a class="agent-warning-link" href="https://antigravity.google/docs/cli/reference" target="_blank" rel="noopener noreferrer">' +
+          escapeHtml(t('agent.warning.agyPolicyLink')) + '</a>';
+    }
+    if (warning.indexOf('KIRO_API_KEY is not set') !== -1) {
+      return '<div class="agent-warning-fallback">' + escapeHtml(t('agent.warning.kiroApiKeyHint')) + '</div>' +
+        '<a class="agent-warning-link" href="https://kiro.dev/docs/cli/authentication/" target="_blank" rel="noopener noreferrer">' +
+          escapeHtml(t('agent.warning.kiroApiKeyLink')) + '</a>';
     }
     if (warning.indexOf('codex sandbox is blocked') !== -1) {
       return '<div class="agent-warning-cmd">' +
@@ -3201,6 +3274,11 @@
     var deniedTool = parseMarker('tool-denied', m.text);
     if (deniedTool) {
       return '<div class="msg-system msg-system-warning">' + escapeHtml(t('chat.toolDenied', { tool: deniedTool })) + '</div>';
+    }
+    // Agent perdu avec le processus qui le portait : Sillage s'est arrêté
+    // pendant qu'il travaillait (voir resetTransientTaskFlags côté serveur).
+    if (parseMarker('interrupted', m.text)) {
+      return '<div class="msg-system msg-system-warning">' + escapeHtml(t('chat.interrupted')) + '</div>';
     }
     var isUser = m.author === 'user';
     var emoji = isUser ? '🙂' : (agent.emoji || '');
@@ -3805,7 +3883,7 @@
   function buildAgentChoiceWarningHTML(agent) {
     if (!agent || !agent.warning) return '';
     return '<div class="agent-choice-warning">⚠ ' + escapeHtml(agentWarningText(agent.warning)) +
-      agentWarningExtrasHTML(agent.warning) + '</div>';
+      agentWarningExtrasHTML(agent.warning, agent.id) + '</div>';
   }
 
   function buildNewTaskModalHTML(card) {
@@ -4356,7 +4434,7 @@
   function buildAgentModalHTML(agent) {
     var isEdit = !!agent;
     var title = isEdit ? t('agent.editTitle') : t('agent.newTitle');
-    var cliValues = ['claude', 'codex', 'copilot', 'agy', 'fake'];
+    var cliValues = ['claude', 'codex', 'copilot', 'agy', 'kiro', 'fake'];
     var cliOptions = cliValues.map(function (cli) {
       return '<option value="' + cli + '"' + (agent && agent.cli === cli ? ' selected' : '') + '>' + escapeHtml(t('agent.cli.' + cli)) + '</option>';
     }).join('');
@@ -4369,7 +4447,7 @@
         '<button class="delete-link" data-action="confirm-click" data-confirm-key="' + delKey + '" data-confirm-action="agent-delete" data-confirm-id="' + agent.id + '" data-default-label="' + escapeHtml(t('agent.delete')) + '" data-confirm-label="' + escapeHtml(t('agent.deleteConfirm')) + '">' + escapeHtml(delLabel) + '</button>' +
         '</div>';
     }
-    var warningExtras = agent ? agentWarningExtrasHTML(agent.warning) : '';
+    var warningExtras = agent ? agentWarningExtrasHTML(agent.warning, agent.id) : '';
     var warningBanner = (agent && agent.warning) ? '<div class="agent-warning-banner">⚠ ' + escapeHtml(agentWarningText(agent.warning)) + warningExtras + '</div>' : '';
     var quotaSection = isEdit ? buildAgentQuotaHTML(agent) : '';
     return '<div class="modal">' +
@@ -4426,6 +4504,39 @@
       renderSidebar();
     }).catch(function (e) {
       showAgentModalError((e instanceof ApiError && e.message) || t('agent.errorSaveFailed'));
+    });
+  }
+  // Correction de la configuration machine d'un agent (aujourd'hui : la
+  // politique d'exécution d'agy). L'avertissement disparaît sur place : la
+  // bannière devient sa propre confirmation, sans re-rendu de la modale ouverte
+  // (elle peut être celle de l'agent comme le choix d'agent d'une tâche).
+  function doFixAgentWarning(agentId) {
+    api('/api/agents/' + agentId + '/fix-warning', { method: 'POST' }).then(function (agent) {
+      var i = state.agents.findIndex(function (a) { return a.id === agent.id; });
+      if (i >= 0) state.agents[i] = agent;
+      reindex();
+      renderSidebar();
+      var banners = document.querySelectorAll('.agent-warning-banner, .agent-choice-warning');
+      for (var b = 0; b < banners.length; b++) {
+        banners[b].textContent = '✓ ' + t('agent.warning.agyPolicyFixed');
+      }
+    }).catch(function (e) {
+      // Un échec ici (settings.json illisible, droits) doit se voir là où on a
+      // cliqué : la modale d'agent a son emplacement d'erreur, le choix d'agent
+      // d'une nouvelle tâche non.
+      var msg = (e instanceof ApiError && e.message) || t('agent.errorSaveFailed');
+      showAgentModalError(msg);
+      var actions = document.querySelectorAll('.agent-warning-action');
+      for (var a = 0; a < actions.length; a++) {
+        var line = actions[a].querySelector('.agent-warning-error');
+        if (!line) {
+          line = document.createElement('div');
+          line.className = 'agent-warning-fallback agent-warning-error';
+          actions[a].appendChild(line);
+        }
+        line.textContent = msg;
+      }
+      patchConfirmButtons('agent-fix:' + agentId);
     });
   }
   function doDeleteAgent(agentId) {
