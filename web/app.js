@@ -1582,6 +1582,46 @@
   function renderSidebar() {
     var el = document.getElementById('sidebar');
     if (el) el.innerHTML = buildSidebarHTML();
+    updateFaviconBadge();
+  }
+
+  // Pastille rouge sur la favicon quand au moins une tâche est non lue :
+  // seul signal visible quand l'onglet n'est pas au premier plan. Positionnée
+  // dans le coin haut-gauche du logo (20x20), le seul entièrement libre de
+  // pixels (le tracé du logo n'occupe que x >= 9 sur les lignes y <= 7).
+  var faviconUnread = null;
+  var faviconSvgTextPromise = null;
+
+  function faviconSvgText() {
+    if (!faviconSvgTextPromise) {
+      faviconSvgTextPromise = fetch('favicon.svg').then(function (r) { return r.text(); });
+    }
+    return faviconSvgTextPromise;
+  }
+
+  // Remplacer le <link> (plutôt que muter son href) car certains navigateurs
+  // ignorent un changement de href sur un lien déjà chargé.
+  function setFaviconHref(href) {
+    var link = document.createElement('link');
+    link.rel = 'icon';
+    link.type = 'image/svg+xml';
+    link.href = href;
+    document.head.appendChild(link);
+    document.querySelectorAll('link[rel="icon"][type="image/svg+xml"]').forEach(function (el) {
+      if (el !== link) el.remove();
+    });
+  }
+
+  function updateFaviconBadge() {
+    var hasUnread = state.tasks.some(function (t) { return t.unread; });
+    if (hasUnread === faviconUnread) return;
+    faviconUnread = hasUnread;
+    if (!hasUnread) { setFaviconHref('favicon.svg'); return; }
+    faviconSvgText().then(function (svg) {
+      if (!faviconUnread) return;
+      var badged = svg.replace('</svg>', '<circle cx="4" cy="4" r="3.5" fill="#b0392f"/></svg>');
+      setFaviconHref('data:image/svg+xml,' + encodeURIComponent(badged));
+    }).catch(function () {});
   }
 
   function closeAllProjectMenus() {
