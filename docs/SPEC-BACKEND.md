@@ -16,6 +16,7 @@ internal/server/
   runner.go                  // adaptateurs claude / codex / copilot / agy / kiro / fake
   preview.go                 // superviseur des recettes manuelles (process + journal)
   preview_handlers.go        // routes de recette
+  attachments.go             // images jointes : disque, service HTTP, chemins passés au CLI
   update.go                  // version, détection de mise à jour, application, redémarrage
   handlers.go                // REST
   store_test.go, git_test.go // tests unitaires
@@ -86,6 +87,8 @@ Deux niveaux de worktree, un par branche (voir docs/SPEC-LIVRAISON.md) :
 5. Fin de process : lancer le check éventuel du projet (`Project.checkCmd`, timeout 120 s) → Task.checks ; statut → `review` (sauf si interrompu : déjà review) ; `unread=true` ; `liveActivity=null` ; SSE `task`, `cards`, `agents`, `activity(null)`.
 
 `Interrupt(taskID)` : SIGINT au groupe de process (Setpgid à la création), 5 s, puis SIGKILL. Statut → review.
+
+Images jointes : `Message`/`Start` reçoivent les `Attachment` déjà écrites sur le disque par le handler (attachments.go). Le Message stocké garde le texte de l'utilisateur ; le texte transmis au CLI reçoit en plus les chemins absolus (`withAttachmentPaths`), y compris quand le message passe par la file `pending`. Aucun adaptateur ne transporte l'image elle-même : tous lisent le fichier.
 
 ### Adaptateur claude (`cli:"claude"`)
 

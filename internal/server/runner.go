@@ -112,18 +112,20 @@ func NewRunner(store *Store, hub *Hub) *Runner {
 
 // Message ajoute un message utilisateur à la tâche et le transmet à l'agent :
 // immédiatement s'il est libre, sinon en file d'attente (queued=true), vidée
-// automatiquement dès la fin de l'exécution en cours.
-func (r *Runner) Message(taskID, text string) (queued bool, err error) {
+// automatiquement dès la fin de l'exécution en cours. atts porte les images
+// jointes : le fil garde le texte tel quel, le CLI reçoit leurs chemins en
+// plus (voir withAttachmentPaths).
+func (r *Runner) Message(taskID, text string, atts ...Attachment) (queued bool, err error) {
 	r.mu.Lock()
 	_, running := r.procs[taskID]
 	if running {
-		r.pending[taskID] = append(r.pending[taskID], text)
+		r.pending[taskID] = append(r.pending[taskID], withAttachmentPaths(text, atts))
 	}
 	r.mu.Unlock()
 
 	if running {
 		authorName := r.store.GetSettings().DisplayName
-		msg, updated, err := r.store.AddMessage(taskID, "user", authorName, text)
+		msg, updated, err := r.store.AddMessage(taskID, "user", authorName, text, atts...)
 		if err != nil {
 			return false, err
 		}
@@ -131,7 +133,7 @@ func (r *Runner) Message(taskID, text string) (queued bool, err error) {
 		r.publishTask(updated)
 		return true, nil
 	}
-	return false, r.Start(taskID, false, text)
+	return false, r.Start(taskID, false, text, atts...)
 }
 
 // RunningCount retourne le nombre d'agents en cours d'exécution. Compte des
@@ -179,7 +181,7 @@ func (r *Runner) publishProjectDeleted(projectID string) {
 // contenu, ajouté comme Message puis transmis à l'agent). L'AuthorName du
 // message utilisateur est le displayName des Settings (vide si non renseigné,
 // le frontend affiche alors "Vous"/"You").
-func (r *Runner) Start(taskID string, initial bool, text string) error {
+func (r *Runner) Start(taskID string, initial bool, text string, atts ...Attachment) error {
 	r.mu.Lock()
 	if _, exists := r.procs[taskID]; exists {
 		r.mu.Unlock()
@@ -206,7 +208,7 @@ func (r *Runner) Start(taskID string, initial bool, text string) error {
 	cliInput := text
 	if !initial {
 		authorName := r.store.GetSettings().DisplayName
-		msg, updated, err := r.store.AddMessage(taskID, "user", authorName, text)
+		msg, updated, err := r.store.AddMessage(taskID, "user", authorName, text, atts...)
 		if err != nil {
 			return err
 		}
@@ -214,7 +216,7 @@ func (r *Runner) Start(taskID string, initial bool, text string) error {
 		task = updated
 		r.publishTask(task)
 
-		cliInput = r.prepareCliInput(task, text)
+		cliInput = r.prepareCliInput(task, withAttachmentPaths(text, atts))
 	}
 
 	handle := &procHandle{done: make(chan struct{})}
@@ -427,6 +429,8 @@ func (r *Runner) deleteTaskQuiet(taskID string) (Task, error) {
 			}
 		}
 	}
+
+	removeTaskAttachments(r.store.DataDir(), taskID)
 
 	return r.store.DeleteTask(taskID)
 }

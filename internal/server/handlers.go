@@ -182,6 +182,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/tasks/{id}/cancel", s.handleCancel)
 	mux.HandleFunc("POST /api/tasks/{id}/reopen", s.handleReopen)
 	mux.HandleFunc("POST /api/tasks/{id}/read", s.handleRead)
+	mux.HandleFunc("GET /api/tasks/{id}/attachments/{attId}", s.handleGetAttachment)
 	mux.HandleFunc("GET /api/tasks/{id}/diff", s.handleDiff)
 	mux.HandleFunc("GET /api/tasks/{id}/deliverables", s.handleDeliverables)
 	mux.HandleFunc("POST /api/cards/{id}/preview", s.handleCardPreview)
@@ -1142,13 +1143,21 @@ func (s *Server) handlePostMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var body struct {
-		Text string `json:"text"`
+		Text        string            `json:"text"`
+		Attachments []attachmentInput `json:"attachments"`
 	}
-	if err := decodeJSON(r, &body); err != nil || strings.TrimSpace(body.Text) == "" {
+	// Une image seule vaut instruction ("regarde ça") : le texte n'est exigé
+	// que si le message est vide par ailleurs.
+	if err := decodeJSON(r, &body); err != nil || (strings.TrimSpace(body.Text) == "" && len(body.Attachments) == 0) {
 		writeError(w, http.StatusBadRequest, "text is required")
 		return
 	}
-	queued, err := s.runner.Message(id, body.Text)
+	atts, err := saveAttachments(s.dataDir, id, body.Attachments)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	queued, err := s.runner.Message(id, body.Text, atts...)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return

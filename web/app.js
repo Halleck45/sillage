@@ -258,6 +258,13 @@
       'chat.copyMessage': 'Copier le message',
       'chat.copyCode': 'Copier le code',
       'chat.copied': 'Copié',
+      'chat.attach': 'Joindre une image',
+      'chat.attachRemove': 'Retirer l\'image',
+      'chat.attachTooMany': 'Six images au maximum par message.',
+      'chat.attachTooLarge': '{name} : image trop lourde (8 Mo maximum).',
+      'chat.attachUnsupported': '{name} : format non pris en charge (PNG, JPEG, GIF ou WebP).',
+      'chat.attachFailed': 'Image illisible : {name}.',
+      'chat.imageOpen': 'Voir en grand',
       'chat.accepted': 'Acceptée : fusionnée dans {branch}',
       'chat.autoAccepted': 'Acceptée : son travail était déjà dans {branch}',
       'chat.mergeConflict': 'Conflit avec la branche du chantier sur {files} : demandez à l\'agent de reprendre la base.',
@@ -723,6 +730,13 @@
       'chat.copyMessage': 'Copy message',
       'chat.copyCode': 'Copy code',
       'chat.copied': 'Copied',
+      'chat.attach': 'Attach an image',
+      'chat.attachRemove': 'Remove image',
+      'chat.attachTooMany': 'Six images per message at most.',
+      'chat.attachTooLarge': '{name}: image too large (8 MB maximum).',
+      'chat.attachUnsupported': '{name}: unsupported format (PNG, JPEG, GIF or WebP).',
+      'chat.attachFailed': 'Unreadable image: {name}.',
+      'chat.imageOpen': 'View full size',
       'chat.accepted': 'Accepted: merged into {branch}',
       'chat.autoAccepted': 'Accepted: its work was already in {branch}',
       'chat.mergeConflict': 'Conflict with the workstream branch on {files}: ask the agent to rebase on it.',
@@ -1004,6 +1018,7 @@
     shipResultByCard: {}, // dernier résultat de livraison, affiché dans la modale
     catchUpErrorByCard: {}, // échec de rattrapage hors conflit, affiché dans la barre
     acceptingByTask: {}, // acceptation en vol : le bouton attend sa fusion, sans deuxième clic possible
+    attachDrafts: {}, // images jointes en attente d'envoi, par tâche : [{key, name, mime, size, dataUrl}]
     loading: {},
     screen: 'inbox', // 'inbox' | 'projects' | 'kanban' | 'work'
     projectId: null, cardId: null, taskId: null,
@@ -2319,6 +2334,21 @@
       '</svg>';
   }
 
+  // Trombone du bouton joindre : discret, au trait, comme les autres icônes de
+  // bouton (jamais d'emoji, illisible sous 16px).
+  function attachIconHTML() {
+    return '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false">' +
+      '<path fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" d="M11.9 7.3 7.2 12a2.55 2.55 0 0 1-3.6-3.6l4.9-4.9a1.7 1.7 0 0 1 2.4 2.4l-4.9 4.9a.85.85 0 0 1-1.2-1.2l4.5-4.5"/>' +
+      '</svg>';
+  }
+
+  // Croix de retrait d'une vignette jointe.
+  function closeIconHTML() {
+    return '<svg viewBox="0 0 16 16" width="11" height="11" aria-hidden="true" focusable="false">' +
+      '<path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" d="M4.2 4.2l7.6 7.6M11.8 4.2l-7.6 7.6"/>' +
+      '</svg>';
+  }
+
   function arrowDownIconHTML() {
     return '<svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true" focusable="false">' +
       '<path fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" d="M8 3.2v9.2M4.3 8.9 8 12.6l3.7-3.7"/>' +
@@ -3550,8 +3580,32 @@
       '<span class="msg-avatar" style="background:' + bg + '">' + emoji + '</span>' +
       '<div class="msg-body">' +
         '<div class="msg-head"><span class="msg-name">' + escapeHtml(name) + '</span><span class="msg-time">' + formatTime(m.createdAt) + '</span>' + actions + '</div>' +
-        '<div class="msg-text">' + renderMarkdown(m.text) + '</div>' +
+        (m.text ? '<div class="msg-text">' + renderMarkdown(m.text) + '</div>' : '') +
+        buildMessageAttachmentsHTML(m) +
       '</div></div>';
+  }
+
+  // Les images jointes s'affichent en vignettes sous le texte du message. La
+  // source est l'endpoint du serveur (le fichier est sur le disque, jamais dans
+  // l'état) ; le clic ouvre l'image en grand.
+  function buildMessageAttachmentsHTML(m) {
+    var atts = m.attachments || [];
+    if (!atts.length) return '';
+    var items = atts.map(function (a) {
+      var url = '/api/tasks/' + encodeURIComponent(m.taskId) + '/attachments/' + encodeURIComponent(a.id);
+      return '<button class="msg-image" data-action="open-attachment" data-src="' + escapeHtml(url) + '" data-name="' + escapeHtml(a.name || '') + '"' +
+        ' title="' + escapeHtml(t('chat.imageOpen')) + '">' +
+        '<img src="' + escapeHtml(url) + '" alt="' + escapeHtml(a.name || '') + '" loading="lazy">' +
+      '</button>';
+    }).join('');
+    return '<div class="msg-images">' + items + '</div>';
+  }
+
+  // Image en grand : une modale sans habillage, l'image seule sur le voile.
+  function openAttachmentModal(src, name) {
+    openModal('<div class="modal modal-image">' +
+      '<img src="' + escapeHtml(src) + '" alt="' + escapeHtml(name || '') + '">' +
+    '</div>');
   }
 
   // L'attente d'un agent prend le gabarit d'un message, au pied du fil, à la
@@ -3619,8 +3673,12 @@
     if (!items && !thinking) items = '<div class="empty-note">' + escapeHtml(t('conversation.empty')) + '</div>';
     return '<div class="conversation" id="conversation-list">' + items + thinking + '</div>' +
       '<div class="composer-wrap">' + buildConvJumpHTML() + '<div class="composer">' +
+        buildAttachDraftsHTML(task.id) +
         '<textarea id="composer-input" rows="1" placeholder="' + escapeHtml(t('chat.placeholder', { name: agent.name })) + '"></textarea>' +
         '<div class="composer-row">' +
+          '<button class="composer-attach" data-action="attach-image" data-task-id="' + task.id + '"' +
+            ' title="' + escapeHtml(t('chat.attach')) + '" aria-label="' + escapeHtml(t('chat.attach')) + '">' + attachIconHTML() + '</button>' +
+          '<input type="file" id="composer-file" class="hidden" accept="image/png,image/jpeg,image/gif,image/webp" multiple data-task-id="' + task.id + '">' +
           '<span class="composer-model"><span class="agent-avatar-sm" style="background:' + softColor(agent.color) + '">' + agent.emoji + '</span>' + escapeHtml(agent.model || '') + '</span>' +
           '<button class="btn-send" data-action="send-message" data-task-id="' + task.id + '" disabled>' + escapeHtml(t('chat.send')) + '</button>' +
         '</div>' +
@@ -3761,7 +3819,101 @@
     var el = document.getElementById('composer-input');
     if (!el) return;
     var btn = document.querySelector('.composer [data-action="send-message"]');
-    if (btn) btn.disabled = !el.value.trim();
+    if (!btn) return;
+    // Une image seule vaut instruction : le bouton s'allume aussi quand le
+    // champ est vide mais qu'une pièce jointe attend.
+    btn.disabled = !el.value.trim() && !attachDrafts(btn.getAttribute('data-task-id')).length;
+  }
+
+  // ---------------------------------------------------------------------
+  // Images jointes (Ctrl+V ou bouton joindre)
+  //
+  // Elles vivent en brouillon dans state.attachDrafts le temps qu'on écrive,
+  // en data-URI (la vignette et l'envoi lisent la même chose, aucun aller-
+  // retour serveur avant d'appuyer sur Envoyer). Au départ du message elles
+  // partent en base64 dans le corps JSON : le serveur les pose sur le disque
+  // et n'en donne que le chemin à l'agent.
+  // ---------------------------------------------------------------------
+
+  var ATTACH_MAX_BYTES = 8 * 1024 * 1024;
+  var ATTACH_MAX_COUNT = 6;
+  var ATTACH_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp'];
+  var attachKeyN = 0;
+
+  function attachDrafts(taskId) {
+    return (taskId && state.attachDrafts[taskId]) || [];
+  }
+
+  function buildAttachDraftsHTML(taskId) {
+    var drafts = attachDrafts(taskId);
+    if (!drafts.length) return '';
+    var items = drafts.map(function (a) {
+      return '<div class="attach-chip">' +
+        '<img src="' + escapeHtml(a.dataUrl) + '" alt="' + escapeHtml(a.name) + '">' +
+        '<button class="attach-remove" data-action="remove-attachment" data-task-id="' + taskId + '" data-key="' + a.key + '"' +
+          ' title="' + escapeHtml(t('chat.attachRemove')) + '" aria-label="' + escapeHtml(t('chat.attachRemove')) + '">' + closeIconHTML() + '</button>' +
+      '</div>';
+    }).join('');
+    return '<div class="attach-strip">' + items + '</div>';
+  }
+
+  // addAttachmentFiles lit des fichiers (presse-papiers ou sélecteur) et les
+  // ajoute au brouillon de la tâche. Ce qui est refusé le dit et n'entre pas.
+  function addAttachmentFiles(taskId, files) {
+    if (!taskId || !files || !files.length) return;
+    var drafts = state.attachDrafts[taskId] || [];
+    var queue = [];
+    for (var i = 0; i < files.length; i++) {
+      var f = files[i];
+      if (!f) continue;
+      var name = f.name || 'image';
+      if (ATTACH_TYPES.indexOf(f.type) === -1) {
+        showDetailError(taskId, t('chat.attachUnsupported', { name: name }));
+        continue;
+      }
+      if (f.size > ATTACH_MAX_BYTES) {
+        showDetailError(taskId, t('chat.attachTooLarge', { name: name }));
+        continue;
+      }
+      if (drafts.length + queue.length >= ATTACH_MAX_COUNT) {
+        showDetailError(taskId, t('chat.attachTooMany'));
+        break;
+      }
+      queue.push(f);
+    }
+    queue.forEach(function (file) {
+      var reader = new FileReader();
+      reader.onload = function () {
+        attachKeyN++;
+        var list = state.attachDrafts[taskId] || (state.attachDrafts[taskId] = []);
+        list.push({
+          key: 'a' + attachKeyN,
+          name: file.name || 'image',
+          mime: file.type,
+          size: file.size,
+          dataUrl: String(reader.result || '')
+        });
+        renderMain();
+      };
+      reader.onerror = function () { showDetailError(taskId, t('chat.attachFailed', { name: file.name || 'image' })); };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function removeAttachment(taskId, key) {
+    var list = attachDrafts(taskId).filter(function (a) { return a.key !== key; });
+    if (list.length) state.attachDrafts[taskId] = list;
+    else delete state.attachDrafts[taskId];
+    renderMain();
+  }
+
+  // Le corps JSON ne transporte que la charge utile base64, sans le préfixe
+  // « data:<mime>;base64, » que le lecteur de fichiers ajoute.
+  function attachPayload(taskId) {
+    return attachDrafts(taskId).map(function (a) {
+      var comma = a.dataUrl.indexOf(',');
+      return { name: a.name, mime: a.mime, data: comma === -1 ? '' : a.dataUrl.slice(comma + 1) };
+    });
   }
 
   function syncComposer() {
@@ -3789,11 +3941,19 @@
     var el = document.getElementById('composer-input');
     if (!el) return;
     var text = el.value.trim();
-    if (!text) return;
+    var attachments = attachPayload(taskId);
+    if (!text && !attachments.length) return;
     el.value = '';
+    // La bande de vignettes part avec le message : elle est rendue par le
+    // composeur, donc il faut le reconstruire.
+    if (attachments.length) {
+      delete state.attachDrafts[taskId];
+      renderMain();
+      el = document.getElementById('composer-input') || el;
+    }
     el.disabled = true;
     syncComposer();
-    api('/api/tasks/' + taskId + '/messages', { method: 'POST', body: { text: text } })
+    api('/api/tasks/' + taskId + '/messages', { method: 'POST', body: { text: text, attachments: attachments } })
       .catch(function () {})
       .then(function () {
         var el2 = document.getElementById('composer-input');
@@ -4117,8 +4277,10 @@
     mainEl.innerHTML = buildMainHTML();
 
     var newComposer = document.getElementById('composer-input');
-    if (newComposer && draft) {
-      newComposer.value = draft;
+    if (newComposer) {
+      if (draft) newComposer.value = draft;
+      // Le champ reprend la main même sans brouillon : coller une image le
+      // reconstruit alors qu'il est vide, et on écrit juste après.
       if (hadFocus) {
         newComposer.focus();
         if (selStart !== null) { try { newComposer.setSelectionRange(selStart, selStart); } catch (e) {} }
@@ -6149,6 +6311,9 @@
       case 'confirm-click': handleConfirmClickDispatch(el); break;
       case 'select-diff-file': selectDiffFile(el.getAttribute('data-task-id'), el.getAttribute('data-path')); break;
       case 'send-message': sendMessage(el.getAttribute('data-task-id')); break;
+      case 'attach-image': openAttachPicker(); break;
+      case 'remove-attachment': removeAttachment(el.getAttribute('data-task-id'), el.getAttribute('data-key')); break;
+      case 'open-attachment': openAttachmentModal(el.getAttribute('data-src'), el.getAttribute('data-name')); break;
       case 'jump-to-bottom': jumpConversationToBottom(); break;
       case 'copy-message': copyToClipboardIcon(el.getAttribute('data-copy') || '', el); break;
       case 'copy-code': copyCodeBlock(el); break;
@@ -6260,6 +6425,13 @@
   // active. On repeint les classes plutôt que le panneau, pour ne pas voler le
   // focus au bouton radio qu'on vient d'atteindre aux flèches.
   function onGlobalChange(e) {
+    if (e.target && e.target.id === 'composer-file') {
+      addAttachmentFiles(e.target.getAttribute('data-task-id'), e.target.files);
+      // Le champ est vidé pour que rechoisir le même fichier redéclenche
+      // l'événement (sinon la valeur ne change pas et rien ne se passe).
+      e.target.value = '';
+      return;
+    }
     if (e.target && e.target.name === 'project-delivery-mode') {
       markProjectDraftDirty();
       captureProjectDraftFromDOM();
@@ -6277,6 +6449,32 @@
     }
     var body = document.getElementById('project-modal-body');
     if (body && e.target && body.contains(e.target)) markProjectDraftDirty();
+  }
+
+  function openAttachPicker() {
+    var input = document.getElementById('composer-file');
+    if (input) input.click();
+  }
+
+  // Ctrl+V d'une image dans le composeur : la capture d'écran qu'on vient de
+  // prendre est le cas d'usage principal, elle n'a pas de fichier à choisir.
+  // Le collage de texte n'est jamais intercepté (aucun fichier image dedans).
+  function onGlobalPaste(e) {
+    var target = e.target;
+    if (!target || target.id !== 'composer-input') return;
+    var data = e.clipboardData;
+    if (!data) return;
+    var files = [];
+    var items = data.items || [];
+    for (var i = 0; i < items.length; i++) {
+      if (items[i].kind !== 'file') continue;
+      var file = items[i].getAsFile();
+      if (file && file.type && file.type.indexOf('image/') === 0) files.push(file);
+    }
+    if (!files.length) return;
+    e.preventDefault();
+    var btn = document.querySelector('.composer [data-action="send-message"]');
+    addAttachmentFiles(btn ? btn.getAttribute('data-task-id') : null, files);
   }
 
   // Le défilement du fil se capte à la racine (phase de capture : « scroll » ne
@@ -6335,6 +6533,7 @@
     document.addEventListener('click', onGlobalClick);
     document.addEventListener('change', onGlobalChange);
     document.addEventListener('input', onGlobalInput);
+    document.addEventListener('paste', onGlobalPaste);
     document.addEventListener('scroll', onGlobalScroll, true);
     document.addEventListener('keydown', onGlobalKeydown);
     window.addEventListener('hashchange', applyRoute);

@@ -21,7 +21,7 @@ import (
 // les champs exportés du Store sont sérialisés tels quels, une version qui ne
 // connaît pas un champ le fait disparaître du fichier à sa première
 // sauvegarde, en silence (voir ErrStateTooNew).
-const stateFormatVersion = 4
+const stateFormatVersion = 5
 
 // agentSeedVersion tracks one-time additions to the built-in agent profiles.
 // Unlike checking for an ID at every startup, this lets users delete a seeded
@@ -1215,6 +1215,24 @@ func (s *Store) GetMessages(taskID string) []Message {
 	return out
 }
 
+// FindAttachment retrouve une pièce jointe par son id dans le fil d'une tâche.
+func (s *Store) FindAttachment(taskID, attID string) (Attachment, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, m := range s.Messages[taskID] {
+		for _, a := range m.Attachments {
+			if a.ID == attID {
+				return a, true
+			}
+		}
+	}
+	return Attachment{}, false
+}
+
+// DataDir retourne le répertoire de données (state.json, worktrees, pièces
+// jointes).
+func (s *Store) DataDir() string { return s.dataDir }
+
 // GetWorkspace retourne l'état persisté de synchronisation git de l'espace de travail.
 func (s *Store) GetWorkspace() Workspace {
 	s.mu.Lock()
@@ -1879,11 +1897,12 @@ func (s *Store) ReassignTask(id, agentID string) (Task, error) {
 
 // AddMessage ajoute un message au fil d'une tâche et retourne le message et la tâche mises à jour.
 // authorName est le nom affiché dans le fil (nom de l'utilisateur pour author="user",
-// nom de l'agent pour author="agent").
-func (s *Store) AddMessage(taskID, author, authorName, text string) (Message, Task, error) {
+// nom de l'agent pour author="agent"). atts porte les images jointes, déjà
+// écrites sur le disque (voir attachments.go).
+func (s *Store) AddMessage(taskID, author, authorName, text string, atts ...Attachment) (Message, Task, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	m, ok := s.appendMessage(taskID, author, authorName, text)
+	m, ok := s.appendMessage(taskID, author, authorName, text, atts...)
 	if !ok {
 		return Message{}, Task{}, fmt.Errorf("task not found")
 	}
@@ -1897,13 +1916,13 @@ func (s *Store) AddMessage(taskID, author, authorName, text string) (Message, Ta
 // appendMessage ajoute un message au fil d'une tâche et met à jour son
 // compteur, sans recalcul dérivé ni sauvegarde : à n'appeler que verrou tenu
 // (AddMessage) ou pendant le chargement, avant que le Store ne soit visible.
-func (s *Store) appendMessage(taskID, author, authorName, text string) (Message, bool) {
+func (s *Store) appendMessage(taskID, author, authorName, text string, atts ...Attachment) (Message, bool) {
 	t, ok := s.Tasks[taskID]
 	if !ok {
 		return Message{}, false
 	}
 	s.NextMessageN++
-	m := Message{ID: fmt.Sprintf("m%d", s.NextMessageN), TaskID: taskID, Author: author, AuthorName: authorName, Text: text, CreatedAt: time.Now().UTC()}
+	m := Message{ID: fmt.Sprintf("m%d", s.NextMessageN), TaskID: taskID, Author: author, AuthorName: authorName, Text: text, CreatedAt: time.Now().UTC(), Attachments: atts}
 	s.Messages[taskID] = append(s.Messages[taskID], m)
 	t.MessagesCount = len(s.Messages[taskID])
 	t.UpdatedAt = time.Now().UTC()

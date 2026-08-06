@@ -184,7 +184,8 @@ button, input, textarea { font-family: inherit; }
 .btn-primary:active, .btn-green:active, .btn-send:active, .btn-action:active,
 .btn-danger:active, .btn-outline:active, .btn-neutral:active, .row-btn:active,
 .icon-btn:active, .icon-btn-sm:active, .msg-copy:active, .code-copy:active,
-.conv-jump:active, #login-form button[type="submit"]:active {
+.conv-jump:active, .composer-attach:active, .attach-remove:active,
+#login-form button[type="submit"]:active {
   transform: scale(0.96);
 }
 .pill:active, .nav-item:active, .project-item:active, .agent-item:active,
@@ -1007,6 +1008,15 @@ button, input, textarea { font-family: inherit; }
 /* Une conversation est faite pour être lue : interligne généreux, largeur de
    ligne limitée par le panneau, et rien d'autre autour. */
 .msg-text { margin-top: 4px; font-size: 13.5px; line-height: 1.62; color: #33322f; }
+/* Une image jointe se lit comme une pièce posée sous le message : assez grande
+   pour être reconnue, jamais assez pour manger le fil. Le clic l'ouvre en grand. */
+.msg-images { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 7px; }
+.msg-image {
+  padding: 0; border: 1px solid var(--border-2); border-radius: 10px; overflow: hidden;
+  background: transparent; cursor: zoom-in; line-height: 0;
+}
+.msg-image img { display: block; max-width: 180px; max-height: 140px; object-fit: cover; }
+.msg-image:hover { border-color: var(--muted-5); }
 .msg-text p { margin: 0 0 7px; }
 .msg-text p:last-child { margin-bottom: 0; }
 .msg-text ul { margin: 5px 0; padding-left: 18px; }
@@ -1101,7 +1111,27 @@ button, input, textarea { font-family: inherit; }
   min-height: 20px; max-height: 168px; padding: 0; background: transparent; line-height: 1.5;
   overflow-y: auto;
 }
+/* Bande des images jointes en attente d'envoi, au-dessus du champ : ce qui
+   part avec le message se voit avant de partir, et se retire d'un clic. */
+.attach-strip { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+.attach-chip { position: relative; width: 56px; height: 56px; border-radius: 9px; overflow: hidden; border: 1px solid var(--border-2); }
+.attach-chip img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.attach-remove {
+  position: absolute; top: 2px; right: 2px; width: 18px; height: 18px; padding: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 0; border-radius: 50%; cursor: pointer;
+  background: rgba(25, 25, 23, 0.62); color: #fff;
+}
+.attach-remove:hover { background: rgba(25, 25, 23, 0.82); }
 .composer-row { display: flex; align-items: center; gap: 8px; margin-top: 12px; }
+/* Joindre est une action rare à côté d'écrire : une icône au trait, de la
+   couleur du texte secondaire, qui ne se réveille qu'au survol. */
+.composer-attach {
+  flex: none; width: 26px; height: 26px; padding: 0; border: 0; border-radius: 8px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: transparent; color: var(--muted-2); cursor: pointer;
+}
+.composer-attach:hover { background: var(--hover); color: var(--text); }
 .composer-model { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
 .btn-send {
   margin-left: auto; flex: none; height: 29px; padding: 0 13px; border: 0; border-radius: 9px;
@@ -1182,6 +1212,10 @@ button, input, textarea { font-family: inherit; }
   max-height: calc(100vh - 110px); overflow-y: auto;
 }
 .modal-sm { width: min(440px, 100%); }
+/* Une image en grand n'a rien à dire autour d'elle : pas de panneau, pas de
+   titre, l'image seule sur le voile flouté (un clic à côté referme). */
+.modal-image { width: auto; max-width: 100%; padding: 0; background: transparent; border: 0; box-shadow: none; overflow: visible; }
+.modal-image img { display: block; max-width: 100%; max-height: calc(100vh - 130px); border-radius: 14px; box-shadow: var(--shadow-3); }
 .modal-section-hint { margin-top: 3px; font-size: 11.5px; line-height: 1.4; color: var(--muted-3); }
 
 /* Modale à panneaux (réglages d'un projet) : la colonne de navigation EST le
@@ -1672,7 +1706,8 @@ button, input, textarea { font-family: inherit; }
 .add-card-btn, .project-tile-add, .icon-btn, .icon-btn-sm, .search-btn,
 .search-result, .card-menu-item, .project-menu-item, .reassign-item, .ptab,
 .onboarding-card-head, .diff-file-tab, .agent-manage-row, .composer,
-.msg-actions, .msg-copy, .code-copy, .conv-jump,
+.msg-actions, .msg-copy, .code-copy, .conv-jump, .composer-attach,
+.attach-remove, .msg-image,
 #login-form button[type="submit"] {
   transition-property: background-color, box-shadow, border-color, color, opacity, filter, transform;
   transition-duration: .2s;

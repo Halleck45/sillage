@@ -59,6 +59,8 @@ internal/server/
   runner.go                 adaptateurs claude / codex / copilot / agy / kiro / fake, un process max par tâche
   preview.go                recette manuelle : un process par worktree, journal en mémoire
   preview_handlers.go       routes de recette (lancer, arrêter, journal)
+  attachments.go            images jointes aux messages : écriture sur disque, service HTTP,
+                            chemins ajoutés au texte envoyé au CLI
   git.go                    worktrees (chantier + tâche), parser de diff unifié, commits, fusions
                             (MergeBranch, MergeLocal, MergeAndPush), pushBranch + SyncPush
                             (les deux seuls push), Ship, OpenPR (gh/glab)
@@ -168,4 +170,4 @@ Le parser de diff se teste sur une fixture inline (`TestParseDiffFixture`).
 
 ## Données à l'exécution
 
-`~/.local/share/sillage/` : `state.json` (tout l'état), `config.json` (`passwordHash`), `worktrees/<taskId>/` (un worktree git par tâche), `worktrees/ws-<cardId>-<repo>/` (un par branche de chantier), `worktrees/.merge-<cardId>-<repo>/` (transitoire, mode de livraison « fusion locale »), et optionnellement un dépôt git de l'espace de travail qui ne versionne que `state.json`, `config.json` et `.gitignore`.
+`~/.local/share/sillage/` : `state.json` (tout l'état), `config.json` (`passwordHash`), `worktrees/<taskId>/` (un worktree git par tâche), `worktrees/ws-<cardId>-<repo>/` (un par branche de chantier), `worktrees/.merge-<cardId>-<repo>/` (transitoire, mode de livraison « fusion locale »), `attachments/<taskId>/` (les images jointes aux messages, supprimées avec la tâche), et optionnellement un dépôt git de l'espace de travail qui ne versionne que `state.json`, `config.json` et `.gitignore`.

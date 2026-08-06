@@ -109,9 +109,17 @@ Task    { "id": "t1", "cardId": "c1", "projectId": "p1", "ref": 482, "title": ".
           //   d'exécution), persiste : c'est l'onglet "Historique" du panneau de tâche.
 
 Message { "id": "m1", "taskId": "t1", "author": "user|agent", "authorName": "Bolt",
-          "text": "markdown...", "createdAt": "..." }
+          "text": "markdown...", "createdAt": "...", "attachments": [Attachment] }
           // authorName : nom de l'agent pour author="agent" ; displayName des Settings pour
           // author="user" (vide si non renseigné, le frontend affiche alors "Vous"/"You")
+          // attachments : images jointes au message (absent si aucune) ; voir « Images
+          // jointes » ci-dessous
+
+Attachment { "id": "9f2c...", "name": "capture.png", "mime": "image/png",
+             "size": 20481, "path": "/home/…/attachments/t1/9f2c….png" }
+             // Le fichier vit sur le disque, jamais dans state.json : l'état ne porte que
+             // ce descripteur. path est le chemin absolu passé à l'agent ; le frontend,
+             // lui, affiche l'image via GET /api/tasks/{id}/attachments/{attId}
 
 WorkspaceStatus { "setupDone": true, "gitEnabled": true, "remote": "git@host:org/repo.git",
                   "dirty": false, "lastCommitAt": "..." | null, "lastSyncAt": "..." | null,
@@ -196,7 +204,8 @@ PreviewRun { "id": "pv1", "projectId": "p1", "cardId": "c1", "taskId": "",
 | PATCH | `/api/tasks/{id}` | `{agentId}` | Task : réassigne l'agent (voir « Réassignation » ci-dessous). 400 si `status=running` (`"interrupt the agent before reassigning"`) ou si l'agent est inconnu |
 | DELETE | `/api/tasks/{id}` | `{confirm:true}` | 204 (voir « Suppressions » ci-dessous). **Validation humaine obligatoire** : refus 400 sans `confirm` |
 | GET | `/api/tasks/{id}` | | `{task, messages}` |
-| POST | `/api/tasks/{id}/messages` | `{text}` | 202 ; relance l'agent (statut → running) |
+| POST | `/api/tasks/{id}/messages` | `{text, attachments?}` | 202 ; relance l'agent (statut → running). `attachments` : `[{name, mime, data}]`, images en base64 (voir « Images jointes »). 400 `"text is required"` si le message est vide de texte **et** d'image |
+| GET | `/api/tasks/{id}/attachments/{attId}` | | L'image elle-même (`Content-Type` de la pièce jointe). 404 si l'id est inconnu ou si le fichier a disparu |
 | POST | `/api/tasks/{id}/interrupt` | | Task (running → review) |
 | POST | `/api/tasks/{id}/start` | | Task (waiting → running) : démarre manuellement une tâche en attente sans attendre sa dépendance (voir « Démarrage différé d'une tâche »). 400 si `status≠waiting` |
 | POST | `/api/tasks/{id}/accept` | | `{task, workstreamBranch, output}` : commite le worktree de la tâche puis fusionne sa branche dans celle du chantier. Accepté depuis `review` uniquement (400 sinon). **Aucune confirmation** : action locale, réversible par `/reopen`. 409 en cas de conflit (voir ci-dessous) |
@@ -270,6 +279,26 @@ Les autres adaptateurs ne consomment pas `Project.allowedTools`. Codex utilise s
 `PATCH /api/tasks/{id} {agentId}` : refusé si la tâche est `running` (l'interrompre d'abord via `/interrupt`) ou si l'agent est inconnu. Effets : `task.agentId` change, `task.sessionId` est vidé (le nouvel agent ne peut pas reprendre la session CLI de l'ancien), et un Message est ajouté au fil avec `author="agent"`, `authorName=""` et un texte figé `"[reassigned:<agentId>]"` : le frontend détecte ce marqueur et affiche une ligne système localisée (`author`/`authorName` volontairement neutres pour rester i18n-propre côté backend). SSE `task` + `message` + `agents`.
 
 Départ frais : quand la session CLI est vide (lancement initial, ou premier message après une réassignation), le texte envoyé au CLI est préfixé par un rappel minimal : `Task: <title>\n\n<texte>` (pas de préfixe si le texte est vide).
+
+### Images jointes à un message
+
+Envoi : `POST /api/tasks/{id}/messages {text, attachments}`, avec `attachments: [{name, mime, data}]` où `data` est le contenu de l'image en base64 (sans préfixe `data:`). Le multipart n'est pas accepté : toute mutation exige `Content-Type: application/json` (protection CSRF).
+
+Limites, refusées en 400 sans rien écrire (les images déjà écrites d'un même message sont retirées) :
+
+- formats acceptés : `image/png`, `image/jpeg`, `image/gif`, `image/webp` (`"unsupported image type"`) ;
+- 8 Mo par image (`"image too large"`), 6 images par message (`"too many attachments"`) ;
+- base64 invalide ou image vide (`"invalid image data"`, `"empty image"`).
+
+Un message sans texte mais avec au moins une image est valide (l'image vaut instruction) ; un message vide des deux est refusé.
+
+Stockage : le fichier est écrit dans `<dataDir>/attachments/<taskId>/<attId>.<ext>`, en 0600, sous un nom tiré au hasard (`name` n'est qu'une étiquette affichée, jamais un nom de fichier). `state.json` ne garde que le descriptif Attachment. La suppression d'une tâche efface son répertoire d'images.
+
+Transmission à l'agent : le texte envoyé au CLI reçoit, une seule fois, les chemins absolus des images en fin de message (`"Attached images (local files, read them):"` puis une ligne `- <chemin>` par image). L'agent lit les fichiers lui-même ; le Message stocké, lui, garde le texte de l'utilisateur tel quel. Une image jointe pendant qu'un agent travaille suit la file d'attente habituelle (`pending`).
+
+Affichage : `GET /api/tasks/{id}/attachments/{attId}` sert l'image (authentification de session comme le reste de l'API). Tout chemin qui sortirait de `<dataDir>/attachments/<taskId>/` est refusé en 404.
+
+Côté UI : Ctrl+V d'une image dans le composeur, ou bouton joindre (trombone) à gauche de la ligne du composeur. Les images en attente s'affichent en vignettes au-dessus du champ, retirables une par une, et partent avec le message. Dans le fil, elles s'affichent en vignettes sous le texte du message ; le clic ouvre l'image en grand.
 
 ### Suppressions (tâches, chantiers, projets)
 

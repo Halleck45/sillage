@@ -313,12 +313,26 @@ type PreviewLogEvent struct {
 }
 
 type Message struct {
-	ID         string    `json:"id"`
-	TaskID     string    `json:"taskId"`
-	Author     string    `json:"author"` // user|agent
-	AuthorName string    `json:"authorName"`
-	Text       string    `json:"text"`
-	CreatedAt  time.Time `json:"createdAt"`
+	ID          string       `json:"id"`
+	TaskID      string       `json:"taskId"`
+	Author      string       `json:"author"` // user|agent
+	AuthorName  string       `json:"authorName"`
+	Text        string       `json:"text"`
+	CreatedAt   time.Time    `json:"createdAt"`
+	Attachments []Attachment `json:"attachments,omitempty"`
+}
+
+// Attachment est une image jointe à un message. Le fichier vit sur le disque
+// (<dataDir>/attachments/<taskId>/), jamais dans state.json : l'état ne porte
+// que son descripteur. Path est le chemin absolu passé à l'agent, qui lit
+// l'image lui-même ; le frontend, lui, l'affiche via
+// GET /api/tasks/{id}/attachments/{attId}.
+type Attachment struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	Mime string `json:"mime"`
+	Size int64  `json:"size"`
+	Path string `json:"path"`
 }
 
 // Workspace est l'état de synchronisation git persisté de l'espace de

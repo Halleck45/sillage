@@ -12,7 +12,7 @@ import (
 
 // workspaceGitignore est le contenu figé du .gitignore de l'espace de
 // travail : seuls state.json, config.json et .gitignore sont versionnés.
-const workspaceGitignore = "worktrees/\n*.tmp\n"
+const workspaceGitignore = "worktrees/\nattachments/\n*.tmp\n"
 
 // WorkspaceGitEnabled indique si dataDir est initialisé comme dépôt git.
 func WorkspaceGitEnabled(dataDir string) bool {
