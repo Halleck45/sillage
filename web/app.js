@@ -34,6 +34,7 @@
       'sidebar.projectMenuTooltip': 'Actions du projet',
       'sidebar.markAllRead': 'Tout marquer comme lu',
       'sidebar.agentsHeading': 'Agents',
+      'sidebar.agentsAtWork': 'Au travail',
       'sidebar.newAgentTooltip': 'Nouvel agent',
       'sidebar.noAgents': 'Aucun agent',
       'aria.menu': 'Menu',
@@ -50,6 +51,7 @@
       'kanban.empty': 'Aucun chantier pour l\'instant.',
       'kanban.emptyAction': 'Créer le premier chantier',
       'kanban.card.tasksLabel': 'tâches',
+      'kanban.card.noTask': 'Aucune tâche',
       'kanban.card.reviewCount': '{n} à relire',
       'column.soon': 'Bientôt',
       'column.doing': 'En cours',
@@ -145,6 +147,9 @@
       'action.cancelTaskConfirm': 'Confirmer l\'annulation ?',
       'task.delete': 'Supprimer la tâche',
       'task.deleteConfirm': 'Confirmer la suppression ?',
+      'task.moreActions': 'Autres actions',
+      'task.filesCount.one': '{n} fichier',
+      'task.filesCount.other': '{n} fichiers',
       'ship.button': 'Livrer',
       'ship.subtext.pr': 'Pousse {branch} et ouvre une pull request vers {base}',
       'ship.subtext.mr': 'Pousse {branch} et ouvre une merge request vers {base}',
@@ -189,6 +194,7 @@
       'ship.pushedBranch': 'Branche {branch} poussée',
       'ship.errorFailed': 'Échec de la livraison.',
       'preview.button': 'Recette',
+      'preview.buttonCard': 'Recette du chantier',
       'preview.tooltip': 'Lancer ce chantier pour s\'en servir',
       'preview.taskTooltip': 'Lancer cette tâche pour s\'en servir',
       'preview.cardTitle': 'Recette : {title}',
@@ -468,6 +474,7 @@
       'sidebar.projectMenuTooltip': 'Project actions',
       'sidebar.markAllRead': 'Mark all as read',
       'sidebar.agentsHeading': 'Agents',
+      'sidebar.agentsAtWork': 'At work',
       'sidebar.newAgentTooltip': 'New agent',
       'sidebar.noAgents': 'No agents',
       'aria.menu': 'Menu',
@@ -484,6 +491,7 @@
       'kanban.empty': 'No workstreams yet.',
       'kanban.emptyAction': 'Create the first workstream',
       'kanban.card.tasksLabel': 'tasks',
+      'kanban.card.noTask': 'No task',
       'kanban.card.reviewCount': '{n} to review',
       'column.soon': 'Soon',
       'column.doing': 'In progress',
@@ -579,6 +587,9 @@
       'action.cancelTaskConfirm': 'Confirm cancellation?',
       'task.delete': 'Delete the task',
       'task.deleteConfirm': 'Confirm deletion?',
+      'task.moreActions': 'More actions',
+      'task.filesCount.one': '{n} file',
+      'task.filesCount.other': '{n} files',
       'ship.button': 'Ship',
       'ship.subtext.pr': 'Pushes {branch} and opens a pull request against {base}',
       'ship.subtext.mr': 'Pushes {branch} and opens a merge request against {base}',
@@ -623,6 +634,7 @@
       'ship.pushedBranch': 'Branch {branch} pushed',
       'ship.errorFailed': 'Failed to ship.',
       'preview.button': 'Preview',
+      'preview.buttonCard': 'Workstream preview',
       'preview.tooltip': 'Run this workstream to try it out',
       'preview.taskTooltip': 'Run this task to try it out',
       'preview.cardTitle': 'Preview: {title}',
@@ -1462,7 +1474,14 @@
       '</div>';
     }).join('');
 
-    var agentsHTML = state.agents.map(function (a) {
+    // La barre latérale sert à naviguer, pas à configurer. Elle ne montre donc
+    // que les agents dont l'état change quelque chose maintenant : ceux qui
+    // travaillent, et ceux dont le CLI est mal installé (un avertissement qu'on
+    // ne peut pas se permettre de cacher). Le reste de la liste vit dans les
+    // réglages, onglet Agents. Sept lignes d'agents au repos, c'était la moitié
+    // de la barre pour une information qu'on ne relit jamais.
+    var shownAgents = state.agents.filter(function (a) { return a.active || a.warning; });
+    var agentsHTML = shownAgents.map(function (a) {
       var warn = a.warning ? '<span class="agent-warning-sm" title="' + escapeHtml(agentWarningText(a.warning)) + '">⚠</span>' : '';
       return '<div class="agent-item" data-action="edit-agent" data-agent-id="' + a.id + '">' +
         '<span class="agent-avatar" style="background:' + softColor(a.color) + '">' + a.emoji + '</span>' +
@@ -1471,11 +1490,16 @@
         (a.active ? '<span class="agent-dot"></span>' : '') +
         '</div>';
     }).join('');
+    // Quand personne ne travaille, la section entière disparaît plutôt que
+    // d'afficher un titre au-dessus du vide.
+    var agentsSectionHTML = agentsHTML
+      ? '<div class="sidebar-section-head"><span>' + escapeHtml(t('sidebar.agentsAtWork')) + '</span></div>' +
+        '<div class="agent-list">' + agentsHTML + '</div>'
+      : '';
 
     return '' +
       '<div class="sidebar-brand">' +
         '<span class="brand-mark"></span><span class="brand-name">Sillage</span>' +
-        '<button class="sidebar-shortcuts-link" data-action="open-shortcuts" title="' + escapeHtml(t('shortcuts.title')) + '">' + escapeHtml(t('shortcuts.hint')) + '</button>' +
       '</div>' +
       '<div class="sidebar-search-wrap">' +
         '<button class="search-btn" data-action="open-search"><span>⌕</span><span class="search-btn-label">' + escapeHtml(t('search.buttonLabel')) + '</span>' +
@@ -1485,16 +1509,17 @@
       '<div class="sidebar-section-head"><span>' + escapeHtml(t('sidebar.projectsHeading')) + '</span>' +
       '<button class="icon-btn-sm" data-action="open-new-project" title="' + escapeHtml(t('sidebar.newProjectTooltip')) + '" aria-label="' + escapeHtml(t('sidebar.newProjectTooltip')) + '">+</button></div>' +
       '<nav class="project-list">' + (projectsHTML || '<div class="empty-note-sm">' + escapeHtml(t('sidebar.noProjects')) + '</div>') + '</nav>' +
-      '<div class="sidebar-section-head"><span>' + escapeHtml(t('sidebar.agentsHeading')) + '</span>' +
-      '<button class="icon-btn-sm" data-action="open-new-agent" title="' + escapeHtml(t('sidebar.newAgentTooltip')) + '" aria-label="' + escapeHtml(t('sidebar.newAgentTooltip')) + '">+</button></div>' +
-      '<div class="agent-list">' + (agentsHTML || '<div class="empty-note-sm">' + escapeHtml(t('sidebar.noAgents')) + '</div>') + '</div>' +
+      agentsSectionHTML +
+      // Le pied ne garde que ce qui appelle une action : une recette en cours, une
+      // mise à jour disponible, et la porte des réglages. Les liens du dépôt et
+      // du sponsoring ont rejoint l'onglet Général : on ne les ouvre pas en
+      // travaillant, ils n'ont donc pas à être visibles en permanence.
       '<div class="sidebar-footer">' +
         buildPreviewCounterHTML() +
         buildUpdateLineHTML() +
         '<button class="settings-btn" data-action="open-workspace-modal">⚙ ' + escapeHtml(t('sidebar.settingsButton')) + '</button>' +
         '<div class="sidebar-footer-actions">' +
-          '<a class="icon-link" href="https://github.com/Halleck45/sillage" target="_blank" rel="noopener noreferrer" title="' + escapeHtml(t('sidebar.repoTooltip')) + '" aria-label="' + escapeHtml(t('sidebar.repoTooltip')) + '">' + repoIconHTML() + '</a>' +
-          '<a class="icon-link" href="https://github.com/sponsors/Halleck45/" target="_blank" rel="noopener noreferrer" title="' + escapeHtml(t('sidebar.sponsorTooltip')) + '" aria-label="' + escapeHtml(t('sidebar.sponsorTooltip')) + '">' + sponsorIconHTML() + '</a>' +
+          '<button class="icon-btn-sm" data-action="open-shortcuts" title="' + escapeHtml(t('shortcuts.title')) + '" aria-label="' + escapeHtml(t('shortcuts.title')) + '">?</button>' +
         '</div>' +
       '</div>';
   }
@@ -1620,7 +1645,16 @@
     var runningGlyph = agents.length
       ? '<span class="task-glyph task-glyph-running" title="' + escapeHtml(t('status.running')) + '"><span class="task-spinner"></span></span>'
       : '';
-    var barColor = colKey === 'done' ? 'var(--green-live)' : 'var(--accent)';
+    // Une barre de progression n'est pas une alerte : de l'encre grise tant que
+    // le chantier avance, le vert seulement quand il est livré. Le bleu accent
+    // reste réservé aux liens et aux anneaux de focus.
+    var barColor = colKey === 'done' ? 'var(--green-live)' : 'var(--muted-3)';
+    // Le rail n'apparaît qu'une fois qu'il a quelque chose à montrer. À zéro il
+    // ne dit rien, et sur une carte aussi légère il devient le trait le plus
+    // fort de la carte : un trait qui ne veut rien dire attire l'œil pour rien.
+    var progressHTML = (c.tasksTotal && c.progress)
+      ? '<div class="progress-track"><div class="progress-fill" style="width:' + c.progress + '%; background:' + barColor + '"></div></div>'
+      : '';
     var liveHTML = c.liveActivity ? '<div class="card-live"><span class="live-dot"></span><span class="live-text mono">' +
       escapeHtml(c.liveActivity) + '</span></div>' : '';
     var attention = c.reviewCount ? '<span class="card-attention">' + escapeHtml(t('kanban.card.reviewCount', { n: c.reviewCount })) + '</span>' : '';
@@ -1638,13 +1672,17 @@
         '<div class="card-menu hidden" data-card-menu="' + c.id + '">' + menuItemsHTML + '</div>' +
       '</div>' +
       liveHTML +
+      // Une carte porte une décision, pas un tableau de bord. Restent l'avancement
+      // (combien de tâches sont passées) et ce qui attend un humain ; les
+      // compteurs de livrables et de messages ne décidaient de rien et se lisent
+      // dans le chantier. Une carte sans tâche ne dit même pas « 0/0 ».
       '<div class="card-meta">' +
-        '<span>' + (c.tasksDone || 0) + '/' + (c.tasksTotal || 0) + ' ' + escapeHtml(t('kanban.card.tasksLabel')) + '</span>' +
-        '<span>▤ ' + (c.docsCount || 0) + '</span>' +
-        '<span>💬 ' + (c.messagesCount || 0) + '</span>' +
+        (c.tasksTotal
+          ? '<span>' + (c.tasksDone || 0) + '/' + c.tasksTotal + ' ' + escapeHtml(t('kanban.card.tasksLabel')) + '</span>'
+          : '<span>' + escapeHtml(t('kanban.card.noTask')) + '</span>') +
         attention +
       '</div>' +
-      '<div class="progress-track"><div class="progress-fill" style="width:' + (c.progress || 0) + '%; background:' + barColor + '"></div></div>' +
+      progressHTML +
       '</article>';
   }
 
@@ -1739,10 +1777,26 @@
         '</div>' +
       '</div>' +
       buildTaskRowStateHTML(t) +
-      '<div class="task-counts"><span>◆ ' + (t.filesCount || 0) + '</span>' +
-        '<span>' + escapeHtml(tCount('ship.commits', t.commitsCount || 0)) + '</span>' +
-        '<span>💬 ' + (t.messagesCount || 0) + '</span></div>' +
+      buildTaskCountsHTML(t) +
       '</div>';
+  }
+
+  // Compteurs d'une ligne de tâche. Un zéro n'apprend rien : « 0 nouveaux
+  // commits » sur chaque ligne, c'est du texte à sauter des yeux à chaque fois.
+  // Ne restent que les deux nombres qui disent l'ampleur du travail rendu, et
+  // seulement quand ils existent. Le nombre de messages se lit dans l'onglet
+  // Conversation, qui le porte déjà.
+  function buildTaskCountsHTML(task) {
+    var parts = [];
+    if (task.filesCount) {
+      parts.push('<span title="' + escapeHtml(tCount('task.filesCount', task.filesCount)) + '">' +
+        escapeHtml(tCount('task.filesCount', task.filesCount)) + '</span>');
+    }
+    if (task.commitsCount) {
+      parts.push('<span>' + escapeHtml(tCount('ship.commits', task.commitsCount)) + '</span>');
+    }
+    if (!parts.length) return '';
+    return '<div class="task-counts">' + parts.join('') + '</div>';
   }
 
   // Pastille d'état d'une tâche : le repère qu'on cherche des yeux en balayant
@@ -2470,13 +2524,16 @@
   // Bouton de l'en-tête de chantier. Une pastille apparaît quand une recette de
   // ce chantier tourne : c'est l'information qu'on cherche des yeux en revenant
   // sur l'écran.
+  // Le libellé nomme la portée : les deux boutons de recette (chantier et tâche)
+  // sont visibles en même temps dès qu'une tâche est ouverte, et deux boutons
+  // « Recette » côte à côte n'apprennent pas lequel lance quoi.
   function buildPreviewButtonHTML(card) {
     var running = previewRunning().some(function (r) { return r.cardId === card.id; });
     return '<button class="btn-outline preview-btn' + (running ? ' preview-btn-on' : '') + '"' +
       ' data-action="open-card-preview" data-card-id="' + card.id + '"' +
       ' title="' + escapeHtml(t('preview.tooltip')) + '">' +
       (running ? '<span class="preview-dot preview-dot-on"></span>' : '') +
-      escapeHtml(t('preview.button')) + '</button>';
+      escapeHtml(t('preview.buttonCard')) + '</button>';
   }
 
   // Bouton du panneau de détail : la recette d'une tâche tourne dans le worktree
@@ -2485,9 +2542,10 @@
     if (!task.worktreeDir) return '';
     var run = previewRunForDir(task.worktreeDir);
     var running = !!run && run.status === 'running';
-    // Secondaire, à largeur fixe : l'action principale d'une tâche reste
-    // Accepter, la recette est ce qui aide à en décider.
-    return '<button class="btn-neutral preview-task-btn' + (running ? ' preview-btn-on' : '') + '"' +
+    // Secondaire, à largeur fixe, et du même poids que Refuser : ce sont les deux
+    // options qui accompagnent Accepter. Un aplat gris se lisait plus fort que
+    // Refuser, alors que refuser engage bien davantage.
+    return '<button class="btn-outline preview-task-btn' + (running ? ' preview-btn-on' : '') + '"' +
       ' data-action="open-task-preview" data-task-id="' + task.id + '"' +
       ' title="' + escapeHtml(t('preview.taskTooltip')) + '">' +
       (running ? '<span class="preview-dot preview-dot-on"></span>' : '') +
@@ -2991,23 +3049,28 @@
       waitingRow = '<div class="behind-row"><span class="behind-text">' + escapeHtml(waitText) + '</span></div>';
     }
 
-    var linksRow = '';
+    // Refuser (ou annuler) est l'autre issue de la revue : un vrai bouton à côté
+    // de l'action principale, plus un lien perdu sous elle. Même action côté API
+    // (/cancel), seul le libellé change selon le contexte.
+    var secondaryBtnHTML = '';
     if (task.status === 'waiting' || task.status === 'running' || task.status === 'review') {
-      var refusing = task.status === 'review';
-      var cancelDefault = refusing ? t('action.refuse') : t('action.cancelTask');
+      var cancelDefault = task.status === 'review' ? t('action.refuse') : t('action.cancelTask');
       var cancelKey = 'task-cancel:' + task.id;
       var cancelLabel = isPendingConfirm(cancelKey) ? t('action.cancelTaskConfirm') : cancelDefault;
-      linksRow = '<div class="detail-link-row">' +
-        '<button class="detail-link" data-action="confirm-click" data-confirm-key="' + cancelKey + '" data-confirm-action="task-cancel" data-confirm-id="' + task.id + '" data-default-label="' + escapeHtml(cancelDefault) + '" data-confirm-label="' + escapeHtml(t('action.cancelTaskConfirm')) + '">' + escapeHtml(cancelLabel) + '</button>' +
-        '</div>';
+      secondaryBtnHTML = '<button class="btn-outline btn-action-secondary" data-action="confirm-click" data-confirm-key="' + cancelKey + '" data-confirm-action="task-cancel" data-confirm-id="' + task.id + '" data-default-label="' + escapeHtml(cancelDefault) + '" data-confirm-label="' + escapeHtml(t('action.cancelTaskConfirm')) + '">' + escapeHtml(cancelLabel) + '</button>';
     }
 
+    // La suppression part dans le menu « ⋯ » de l'en-tête : une action qu'on
+    // fait une fois n'a pas à occuper une ligne rouge au-dessus des onglets
+    // qu'on ouvre vingt fois par jour.
     var deleteTaskKey = 'task-delete:' + task.id;
-    var deleteTaskPending = isPendingConfirm(deleteTaskKey);
-    var deleteTaskLabel = deleteTaskPending ? t('task.deleteConfirm') : t('task.delete');
-    var deleteRow = '<div class="detail-delete-row">' +
-      '<button class="detail-link detail-link-danger" data-action="confirm-click" data-confirm-key="' + deleteTaskKey + '" data-confirm-action="task-delete" data-confirm-id="' + task.id + '" data-default-label="' + escapeHtml(t('task.delete')) + '" data-confirm-label="' + escapeHtml(t('task.deleteConfirm')) + '">' + escapeHtml(deleteTaskLabel) + '</button>' +
-      '</div>';
+    var deleteTaskLabel = isPendingConfirm(deleteTaskKey) ? t('task.deleteConfirm') : t('task.delete');
+    var menuHTML = '<div class="detail-menu-wrap">' +
+      '<button class="icon-btn" data-action="toggle-task-menu" title="' + escapeHtml(t('task.moreActions')) + '" aria-label="' + escapeHtml(t('task.moreActions')) + '">⋯</button>' +
+      '<div class="card-menu detail-menu hidden" data-task-menu="' + task.id + '">' +
+        '<button class="card-menu-item card-menu-item-danger" data-action="confirm-click" data-confirm-key="' + deleteTaskKey + '" data-confirm-action="task-delete" data-confirm-id="' + task.id + '" data-default-label="' + escapeHtml(t('task.delete')) + '" data-confirm-label="' + escapeHtml(t('task.deleteConfirm')) + '">' + escapeHtml(deleteTaskLabel) + '</button>' +
+      '</div>' +
+    '</div>';
 
     return '<div class="detail-head">' +
         '<div class="detail-head-row">' +
@@ -3021,6 +3084,7 @@
               (task.commitsCount ? '<span class="repo-chip">' + escapeHtml(tCount('ship.commits', task.commitsCount)) + '</span>' : '') +
             '</div>' +
           '</div>' +
+          menuHTML +
           '<button class="icon-btn" data-action="toggle-panel-expand" aria-label="' + escapeHtml(state.panelExpanded ? t('panel.collapse') : t('panel.expand')) + '" title="' + escapeHtml(state.panelExpanded ? t('panel.collapse') : t('panel.expand')) + '">' + (state.panelExpanded ? '⤡' : '⤢') + '</button>' +
           '<button class="icon-btn" data-action="close-panel" aria-label="' + escapeHtml(t('common.close')) + '">✕</button>' +
         '</div>' +
@@ -3028,11 +3092,10 @@
         behindRow +
         waitingRow +
         '<div class="action-row">' + primaryBtnHTML +
+          secondaryBtnHTML +
           buildTaskPreviewButtonHTML(task) +
           '<span class="checks">' + renderChecks(task.checks) + '</span>' +
         '</div>' +
-        linksRow +
-        deleteRow +
         '<div class="tabs">' + tabsHTML + '</div>' +
       '</div>';
   }
@@ -3483,6 +3546,14 @@
   }
   function toggleCardMenu(cardId) {
     var el = document.querySelector('.card-menu[data-card-menu="' + cardId + '"]');
+    if (!el) return;
+    var willOpen = el.classList.contains('hidden');
+    closeAllCardMenus();
+    if (willOpen) el.classList.remove('hidden');
+  }
+  // Un seul panneau de détail est ouvert à la fois : pas besoin d'identifiant.
+  function toggleTaskMenu() {
+    var el = document.querySelector('.detail-menu');
     if (!el) return;
     var willOpen = el.classList.contains('hidden');
     closeAllCardMenus();
@@ -4709,6 +4780,7 @@
   function buildSettingsTabsHTML() {
     var tabs = [
       { key: 'general', label: t('settings.tabGeneral') },
+      { key: 'agents', label: t('sidebar.agentsHeading') },
       { key: 'update', label: t('update.title') },
       { key: 'stats', label: t('settings.tabStats') }
     ];
@@ -4719,8 +4791,32 @@
     }).join('') + '</div>';
   }
   function setSettingsTab(tabKey) {
-    settingsModalTab = (tabKey === 'stats' || tabKey === 'update') ? tabKey : 'general';
+    settingsModalTab = (tabKey === 'stats' || tabKey === 'update' || tabKey === 'agents') ? tabKey : 'general';
     refreshWorkspaceModalBody();
+  }
+
+  // Onglet Agents : la liste complète, sortie de la barre latérale où elle ne
+  // servait qu'à ouvrir cette même modale d'édition. Une ligne par agent, son
+  // modèle en sous-titre, son avertissement d'installation s'il en a un.
+  function buildSettingsAgentsHTML() {
+    var rows = state.agents.map(function (a) {
+      var warn = a.warning
+        ? '<span class="agent-warning-sm" title="' + escapeHtml(agentWarningText(a.warning)) + '">⚠</span>'
+        : '';
+      return '<button class="agent-manage-row" data-action="edit-agent" data-agent-id="' + a.id + '">' +
+        '<span class="agent-avatar" style="background:' + softColor(a.color) + '">' + a.emoji + '</span>' +
+        '<span class="agent-manage-main">' +
+          '<span class="agent-manage-name">' + escapeHtml(a.name) + warn + '</span>' +
+          '<span class="agent-manage-model">' + escapeHtml(a.model || a.cli || '') + '</span>' +
+        '</span>' +
+        (a.active ? '<span class="agent-dot"></span>' : '') +
+      '</button>';
+    }).join('');
+    return '<div class="agent-manage-list">' +
+        (rows || '<div class="empty-note-sm">' + escapeHtml(t('sidebar.noAgents')) + '</div>') +
+      '</div>' +
+      '<div class="secondary-row"><button class="btn-outline btn-block" data-action="open-new-agent">+ ' +
+        escapeHtml(t('sidebar.newAgentTooltip')) + '</button></div>';
   }
 
   function buildSettingsGeneralHTML() {
@@ -4773,11 +4869,18 @@
       '</div>' +
       dirtyNote +
       '<div class="preferences-divider"></div>' +
-      '<button class="btn-outline btn-block" data-action="logout">' + escapeHtml(t('nav.logout')) + '</button>';
+      '<button class="btn-outline btn-block" data-action="logout">' + escapeHtml(t('nav.logout')) + '</button>' +
+      // Le dépôt et le sponsoring : à leur place ici, où l'on vient une fois,
+      // plutôt qu'en permanence dans le pied de la barre latérale.
+      '<div class="about-links">' +
+        '<a href="https://github.com/Halleck45/sillage" target="_blank" rel="noopener noreferrer">' + repoIconHTML() + escapeHtml(t('sidebar.repoTooltip')) + '</a>' +
+        '<a href="https://github.com/sponsors/Halleck45/" target="_blank" rel="noopener noreferrer">' + sponsorIconHTML() + escapeHtml(t('sidebar.sponsorTooltip')) + '</a>' +
+      '</div>';
   }
   function buildWorkspaceModalBodyHTML() {
     var inner = settingsModalTab === 'stats' ? buildStatsSectionHTML()
       : settingsModalTab === 'update' ? buildUpdateSectionHTML()
+      : settingsModalTab === 'agents' ? buildSettingsAgentsHTML()
       : buildSettingsGeneralHTML();
     return buildSettingsTabsHTML() + '<div class="settings-tab-body">' + inner + '</div>';
   }
@@ -5393,7 +5496,9 @@
     var el = e.target.closest('[data-action]');
     if (!el) { closeAllCardMenus(); closeAllReassignMenus(); closeAllProjectMenus(); return; }
     var action = el.getAttribute('data-action');
-    if (action !== 'toggle-card-menu') closeAllCardMenus();
+    // Le menu « ⋯ » du détail d'une tâche partage la classe .card-menu (donc sa
+    // fermeture au clic ailleurs) : il faut exempter les deux bascules.
+    if (action !== 'toggle-card-menu' && action !== 'toggle-task-menu') closeAllCardMenus();
     if (action !== 'toggle-reassign-menu') closeAllReassignMenus();
     if (action !== 'toggle-project-menu') closeAllProjectMenus();
     switch (action) {
@@ -5408,6 +5513,7 @@
       case 'set-filter': setFilter(el.getAttribute('data-filter')); break;
       case 'set-tab': setTab(el.getAttribute('data-panel-tab')); break;
       case 'toggle-card-menu': toggleCardMenu(el.getAttribute('data-card-id')); break;
+      case 'toggle-task-menu': toggleTaskMenu(); break;
       case 'toggle-reassign-menu': toggleReassignMenu(el.getAttribute('data-task-id')); break;
       case 'reassign-task': doReassignTask(el.getAttribute('data-task-id'), el.getAttribute('data-agent-id')); break;
       case 'toggle-project-menu': toggleProjectMenu(el.getAttribute('data-project-id')); break;
