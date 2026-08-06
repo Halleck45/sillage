@@ -1,6 +1,7 @@
 package server
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -110,7 +111,7 @@ func TestStoreRoundtripSaveLoad(t *testing.T) {
 	if _, ok := s2.GetAgent("bolt"); !ok {
 		t.Fatalf("l'agent seedé 'bolt' doit être présent après rechargement")
 	}
-	for id, wantName := range map[string]string{"github-copilot": "Octo", "antigravity": "Astro"} {
+	for id, wantName := range map[string]string{"github-copilot": "Octo", "antigravity": "Astro", "kiro": "Kiro"} {
 		if agent, ok := s2.GetAgent(id); !ok {
 			t.Fatalf("seeded agent %q should be present after reload", id)
 		} else if agent.Name != wantName {
@@ -157,6 +158,97 @@ func TestAgentSeedMigrationRunsOnce(t *testing.T) {
 	}
 	if _, ok := reloaded.GetAgent("antigravity"); ok {
 		t.Fatal("a deleted seeded agent should not be recreated")
+	}
+}
+
+func TestKiroSeedMigrationDoesNotRecreateEarlierDeletedAgents(t *testing.T) {
+	dir := t.TempDir()
+	legacy := `{
+  "FormatVersion": 2,
+  "AgentSeedVersion": 1,
+  "Projects": {}, "Cards": {}, "Tasks": {}, "Messages": {},
+  "Agents": {
+    "github-copilot": {"id":"github-copilot","name":"Custom Copilot","cli":"copilot"}
+  }
+}`
+	if err := os.WriteFile(filepath.Join(dir, "state.json"), []byte(legacy), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	s, err := NewStore(dir)
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+	if _, ok := s.GetAgent("kiro"); !ok {
+		t.Fatal("Kiro should be added to a workspace with seed version 1")
+	}
+	if _, ok := s.GetAgent("antigravity"); ok {
+		t.Fatal("a previously deleted Antigravity profile must not be recreated by the Kiro migration")
+	}
+	if agent, ok := s.GetAgent("github-copilot"); !ok || agent.Name != "Custom Copilot" {
+		t.Fatalf("existing profiles should stay untouched, got %+v", agent)
+	}
+}
+
+// TestRunningTaskComesBackToReviewOnLoad : un statut « running » sur disque
+// décrit un processus, pas un travail. Au chargement suivant ce processus n'est
+// plus là, et sans cette remise à plat la tâche reste « en cours » pour
+// toujours : aucune sortie n'arrive plus et « Interrompre l'agent » échoue,
+// faute de processus à interrompre.
+func TestRunningTaskComesBackToReviewOnLoad(t *testing.T) {
+	dir := t.TempDir()
+	state := `{
+  "FormatVersion": ` + fmt.Sprint(stateFormatVersion) + `,
+  "Projects": {"p1": {"id":"p1","name":"demo"}},
+  "Cards": {"c1": {"id":"c1","projectId":"p1","title":"Chantier","column":"doing"}},
+  "Tasks": {"t1": {"id":"t1","cardId":"c1","projectId":"p1","title":"Design","status":"running","liveActivity":"Bash · git status","rebasing":true}},
+  "Messages": {}, "Agents": {}
+}`
+	if err := os.WriteFile(filepath.Join(dir, "state.json"), []byte(state), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	s, err := NewStore(dir)
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+	task, ok := s.GetTask("t1")
+	if !ok {
+		t.Fatal("tâche t1 introuvable après rechargement")
+	}
+	if task.Status != "review" || !task.Unread {
+		t.Fatalf("tâche attendue en revue et non lue, reçu status=%q unread=%v", task.Status, task.Unread)
+	}
+	if task.LiveActivity != nil {
+		t.Fatalf("la ligne d'activité d'un agent disparu ne doit pas survivre, reçu %q", *task.LiveActivity)
+	}
+	if task.Rebasing {
+		t.Fatal("le fuseau de rebase ne doit pas survivre à un rechargement")
+	}
+
+	msgs := s.GetMessages("t1")
+	if len(msgs) != 1 || msgs[0].Text != "[interrupted:server-restart]" {
+		t.Fatalf("marqueur [interrupted:server-restart] attendu au fil, reçu %+v", msgs)
+	}
+	if !isMarkerMessage(msgs[0].Text) {
+		t.Fatal("le marqueur d'interruption doit être exclu du transcript rejoué")
+	}
+	if task.MessagesCount != 1 {
+		t.Fatalf("messagesCount = %d, want 1", task.MessagesCount)
+	}
+	// Les compteurs dérivés du chantier doivent suivre le nouveau statut.
+	if card, _ := s.GetCard("c1"); card.ReviewCount != 1 {
+		t.Fatalf("reviewCount du chantier = %d, want 1", card.ReviewCount)
+	}
+
+	// Deuxième chargement : plus rien à remettre à plat, donc aucun marqueur de
+	// plus (sinon chaque redémarrage empilerait une ligne dans le fil).
+	again, err := NewStore(dir)
+	if err != nil {
+		t.Fatalf("NewStore (2e): %v", err)
+	}
+	if msgs := again.GetMessages("t1"); len(msgs) != 1 {
+		t.Fatalf("un seul marqueur attendu après deux chargements, reçu %d", len(msgs))
 	}
 }
 
@@ -465,7 +557,7 @@ func TestAddAgentSlugUniqueAndValidation(t *testing.T) {
 	if a.ID != "nova" {
 		t.Fatalf("id attendu 'nova', reçu %q", a.ID)
 	}
-	for _, cli := range []string{"copilot", "agy"} {
+	for _, cli := range []string{"copilot", "agy", "kiro"} {
 		if _, err := s.AddAgent("Custom "+cli, "", "", cli, "", ""); err != nil {
 			t.Fatalf("AddAgent should accept cli %q: %v", cli, err)
 		}
@@ -830,14 +922,20 @@ func TestCardAutoMoveToDoneAndBack(t *testing.T) {
 	if !c.ShipReady {
 		t.Fatalf("le chantier devrait être livrable (blocage %q)", c.ShipBlocker)
 	}
+	if !c.AwaitingShip {
+		t.Fatalf("le chantier devrait être signalé comme non livré (tout est terminal)")
+	}
 
-	// Livraison : la carte passe en "done".
+	// Livraison : la carte passe en "done" et n'est plus signalée en attente.
 	if _, err := s.MarkCardBranchShipped(card.ID, "p", "https://example.com/pr/1", time.Now().UTC()); err != nil {
 		t.Fatalf("MarkCardBranchShipped: %v", err)
 	}
 	c, _ = s.GetCard(card.ID)
 	if c.Column != "done" {
 		t.Fatalf("colonne attendue 'done' après livraison, reçue %q", c.Column)
+	}
+	if c.AwaitingShip {
+		t.Fatalf("le chantier livré ne devrait plus être signalé comme non livré")
 	}
 
 	// Réouvrir T1 : la carte doit repasser en doing.
@@ -866,6 +964,36 @@ func TestCardAutoMoveToDoneAndBack(t *testing.T) {
 	c, _ = s.GetCard(card.ID)
 	if c.Column != "doing" {
 		t.Fatalf("colonne attendue 'doing' après nouvelle tâche sur carte done, reçue %q", c.Column)
+	}
+}
+
+// --- AwaitingShip : un chantier entièrement refusé n'a rien à livrer ---
+
+func TestCardAwaitingShipFalseWhenNothingAccepted(t *testing.T) {
+	dir := t.TempDir()
+	s, err := NewStore(dir)
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+	project, err := s.AddProject("p", "", "", []Repo{{Path: "/tmp/p"}}, nil, nil)
+	if err != nil {
+		t.Fatalf("AddProject: %v", err)
+	}
+	card, err := s.AddCard(project.ID, "Carte", "", "")
+	if err != nil {
+		t.Fatalf("AddCard: %v", err)
+	}
+	if _, err := s.SetCardBranch(card.ID, CardBranch{RepoName: "p", Branch: "sillage/ws-1-carte", Base: "main", WorktreeDir: "/tmp/ws"}); err != nil {
+		t.Fatalf("SetCardBranch: %v", err)
+	}
+	mkTaskWithStatus(t, s, card.ID, project.ID, "cancelled")
+
+	c, ok := s.GetCard(card.ID)
+	if !ok {
+		t.Fatalf("carte introuvable")
+	}
+	if c.AwaitingShip {
+		t.Fatalf("un chantier entièrement refusé n'a rien à livrer, ne devrait pas être signalé")
 	}
 }
 
@@ -1026,20 +1154,21 @@ func TestAgentWarningCodexSandboxBlockedByAppArmor(t *testing.T) {
 	origLookPath := lookPath
 	defer func() { lookPath = origLookPath }()
 
+	wtDir := t.TempDir()
 	t.Setenv("SILLAGE_CODEX_SANDBOX", "")
 	lookPath = func(string) (string, error) { return "", fmt.Errorf("not found") }
-	if got := agentWarning(Agent{Cli: "codex"}); got != "codex CLI not found in PATH" {
+	if got := agentWarning(Agent{Cli: "codex"}, wtDir); got != "codex CLI not found in PATH" {
 		t.Fatalf("a missing CLI should take priority over sandbox diagnostics, got %q", got)
 	}
 
 	lookPath = func(string) (string, error) { return "/usr/bin/codex", nil }
 	want := "codex sandbox is blocked on this machine (AppArmor); see README (SILLAGE_CODEX_SANDBOX)"
-	if got := agentWarning(Agent{Cli: "codex"}); got != want {
+	if got := agentWarning(Agent{Cli: "codex"}, wtDir); got != want {
 		t.Fatalf("warning attendu %q, reçu %q", want, got)
 	}
 
 	t.Setenv("SILLAGE_CODEX_SANDBOX", "danger-full-access")
-	if got := agentWarning(Agent{Cli: "codex"}); got == want {
+	if got := agentWarning(Agent{Cli: "codex"}, wtDir); got == want {
 		t.Fatalf("SILLAGE_CODEX_SANDBOX définie ne devrait plus déclencher l'avertissement AppArmor")
 	}
 }
@@ -1052,21 +1181,179 @@ func TestAgentWarningMissingBinary(t *testing.T) {
 	origLookPath := lookPath
 	defer func() { lookPath = origLookPath }()
 	lookPath = func(string) (string, error) { return "", fmt.Errorf("not found") }
+	wtDir := t.TempDir()
 
-	if got := agentWarning(Agent{Cli: "claude"}); got != "claude CLI not found in PATH" {
+	if got := agentWarning(Agent{Cli: "claude"}, wtDir); got != "claude CLI not found in PATH" {
 		t.Fatalf("warning attendu 'claude CLI not found in PATH', reçu %q", got)
 	}
-	if got := agentWarning(Agent{Cli: "codex"}); got != "codex CLI not found in PATH" {
+	if got := agentWarning(Agent{Cli: "codex"}, wtDir); got != "codex CLI not found in PATH" {
 		t.Fatalf("warning attendu 'codex CLI not found in PATH', reçu %q", got)
 	}
-	if got := agentWarning(Agent{Cli: "copilot"}); got != "copilot CLI not found in PATH" {
+	if got := agentWarning(Agent{Cli: "copilot"}, wtDir); got != "copilot CLI not found in PATH" {
 		t.Fatalf("warning = %q, want missing Copilot CLI", got)
 	}
-	if got := agentWarning(Agent{Cli: "agy"}); got != "agy CLI not found in PATH" {
+	if got := agentWarning(Agent{Cli: "agy"}, wtDir); got != "agy CLI not found in PATH" {
 		t.Fatalf("warning = %q, want missing Antigravity CLI", got)
 	}
-	if got := agentWarning(Agent{Cli: "fake"}); got != "" {
+	if got := agentWarning(Agent{Cli: "kiro"}, wtDir); got != "kiro CLI not found in PATH" {
+		t.Fatalf("warning = %q, want missing Kiro CLI", got)
+	}
+	if got := agentWarning(Agent{Cli: "fake"}, wtDir); got != "" {
 		t.Fatalf("l'agent fake ne devrait jamais avoir d'avertissement, reçu %q", got)
+	}
+}
+
+func TestAgentWarningKiroRequiresAPIKey(t *testing.T) {
+	origLookPath := lookPath
+	defer func() { lookPath = origLookPath }()
+	lookPath = func(file string) (string, error) { return "/usr/bin/" + file, nil }
+	t.Setenv("KIRO_API_KEY", "")
+
+	if got := agentWarning(Agent{Cli: "kiro"}, t.TempDir()); got != "KIRO_API_KEY is not set for headless Kiro CLI" {
+		t.Fatalf("unexpected Kiro authentication warning: %q", got)
+	}
+	t.Setenv("KIRO_API_KEY", "test-key")
+	if got := agentWarning(Agent{Cli: "kiro"}, t.TempDir()); got != "" {
+		t.Fatalf("Kiro should be healthy with its binary and API key, got %q", got)
+	}
+}
+
+// TestAgentWarningAntigravityPermissions : agy a besoin de deux choses pour
+// travailler sans humain devant l'écran, une politique d'exécution qui ne
+// demande rien et des autorisations de fichier sur les worktrees. Les motifs de
+// chemin ne comptent pas (la CLI ne les connaît pas), un dossier couvre ce qu'il
+// contient.
+func TestAgentWarningAntigravityPermissions(t *testing.T) {
+	origLookPath := lookPath
+	defer func() { lookPath = origLookPath }()
+	lookPath = func(file string) (string, error) { return "/usr/bin/" + file, nil }
+
+	origSettings := antigravitySettingsPath
+	defer func() { antigravitySettingsPath = origSettings }()
+	dir := t.TempDir()
+	antigravitySettingsPath = filepath.Join(dir, "settings.json")
+	wtDir := filepath.Join(dir, "data", "worktrees")
+
+	// Fichier absent : la CLI applique ses réglages par défaut, qui auto-refusent
+	// en mode headless.
+	if got := agentWarning(Agent{Cli: "agy"}, wtDir); got != antigravityPolicyWarning {
+		t.Fatalf("warning = %q, want the permissions warning", got)
+	}
+
+	files := fmt.Sprintf(`"read_file(%s)","write_file(%s)"`, wtDir, wtDir)
+	cases := []struct {
+		settings string
+		want     string
+	}{
+		// Politique manquante ou insuffisante.
+		{fmt.Sprintf(`{"permissions":{"allow":[%s]}}`, files), antigravityPolicyWarning},
+		{fmt.Sprintf(`{"toolPermission":"request-review","permissions":{"allow":[%s]}}`, files), antigravityPolicyWarning},
+		{fmt.Sprintf(`{"toolPermission":"strict","permissions":{"allow":[%s]}}`, files), antigravityPolicyWarning},
+		// Autorisations de fichier manquantes ou hors sujet.
+		{`{"toolPermission":"proceed-in-sandbox"}`, antigravityPolicyWarning},
+		{`{"toolPermission":"proceed-in-sandbox","permissions":{"allow":["read_file(/elsewhere)","write_file(/elsewhere)"]}}`, antigravityPolicyWarning},
+		{fmt.Sprintf(`{"toolPermission":"proceed-in-sandbox","permissions":{"allow":["read_file(%s/*)","write_file(%s/*)"]}}`, wtDir, wtDir), antigravityPolicyWarning},
+		{fmt.Sprintf(`{"toolPermission":"proceed-in-sandbox","permissions":{"allow":["read_file(%s)"]}}`, wtDir), antigravityPolicyWarning},
+		// Tout est là.
+		{fmt.Sprintf(`{"toolPermission":"proceed-in-sandbox","permissions":{"allow":[%s]}}`, files), ""},
+		{fmt.Sprintf(`{"toolPermission":"always-proceed","permissions":{"allow":[%s]}}`, files), ""},
+		{`{"toolPermission":"proceed-in-sandbox","permissions":{"allow":["read_file(*)","write_file(*)"]}}`, ""},
+		// Un dossier parent couvre ce qu'il contient, une règle sur les commandes
+		// remplace la politique.
+		{fmt.Sprintf(`{"permissions":{"allow":["command(*)","read_file(%s)","write_file(%s)"]}}`, dir, dir), ""},
+	}
+	for _, c := range cases {
+		if err := os.WriteFile(antigravitySettingsPath, []byte(c.settings), 0o644); err != nil {
+			t.Fatalf("écriture settings : %v", err)
+		}
+		if got := agentWarning(Agent{Cli: "agy"}, wtDir); got != c.want {
+			t.Fatalf("settings %s: warning = %q, want %q", c.settings, got, c.want)
+		}
+	}
+}
+
+func TestFixAntigravityToolPermission(t *testing.T) {
+	origSettings := antigravitySettingsPath
+	defer func() { antigravitySettingsPath = origSettings }()
+	dir := t.TempDir()
+	antigravitySettingsPath = filepath.Join(dir, "nested", "settings.json")
+	wtDir := filepath.Join(dir, "data", "worktrees")
+
+	// Fichier (et dossier) absents : le correctif les crée.
+	if err := fixAntigravityToolPermission(wtDir); err != nil {
+		t.Fatalf("fixAntigravityToolPermission: %v", err)
+	}
+	if !antigravityWorksHeadlessly(wtDir) {
+		t.Fatal("agy should be able to work headlessly after the fix")
+	}
+
+	// Les autres clés de l'utilisateur survivent, comme ses propres règles.
+	kept := `{"enableTelemetry":false,"trustedWorkspaces":["/home/me/repo"],"toolPermission":"request-review",` +
+		`"permissions":{"allow":["command(git)"],"deny":["url(*)"]}}`
+	if err := os.WriteFile(antigravitySettingsPath, []byte(kept), 0o600); err != nil {
+		t.Fatalf("écriture settings : %v", err)
+	}
+	if err := os.Chmod(antigravitySettingsPath, 0o600); err != nil { // le fichier existait déjà : WriteFile ne change pas ses droits
+		t.Fatalf("chmod settings : %v", err)
+	}
+	if err := fixAntigravityToolPermission(wtDir); err != nil {
+		t.Fatalf("fixAntigravityToolPermission: %v", err)
+	}
+	data, err := os.ReadFile(antigravitySettingsPath)
+	if err != nil {
+		t.Fatalf("relecture settings : %v", err)
+	}
+	var got struct {
+		EnableTelemetry   bool     `json:"enableTelemetry"`
+		TrustedWorkspaces []string `json:"trustedWorkspaces"`
+		ToolPermission    string   `json:"toolPermission"`
+		Permissions       struct {
+			Allow []string `json:"allow"`
+			Deny  []string `json:"deny"`
+		} `json:"permissions"`
+	}
+	if err := json.Unmarshal(data, &got); err != nil {
+		t.Fatalf("settings illisibles après correctif : %v", err)
+	}
+	if got.ToolPermission != "proceed-in-sandbox" {
+		t.Fatalf("toolPermission = %q, want proceed-in-sandbox", got.ToolPermission)
+	}
+	if got.EnableTelemetry || len(got.TrustedWorkspaces) != 1 || got.TrustedWorkspaces[0] != "/home/me/repo" {
+		t.Fatalf("the other keys should survive untouched, got %s", data)
+	}
+	if len(got.Permissions.Deny) != 1 || got.Permissions.Deny[0] != "url(*)" {
+		t.Fatalf("deny rules should survive untouched, got %s", data)
+	}
+	wantAllow := []string{"command(git)", "read_file(" + wtDir + ")", "write_file(" + wtDir + ")"}
+	if strings.Join(got.Permissions.Allow, "|") != strings.Join(wantAllow, "|") {
+		t.Fatalf("allow rules = %v, want %v", got.Permissions.Allow, wantAllow)
+	}
+	// Deuxième passage : rien à ajouter, aucune règle en double.
+	if err := fixAntigravityToolPermission(wtDir); err != nil {
+		t.Fatalf("fixAntigravityToolPermission (2e passage) : %v", err)
+	}
+	data, _ = os.ReadFile(antigravitySettingsPath)
+	got.Permissions.Allow = nil
+	if err := json.Unmarshal(data, &got); err != nil {
+		t.Fatalf("settings illisibles : %v", err)
+	}
+	if len(got.Permissions.Allow) != len(wantAllow) {
+		t.Fatalf("the fix should be idempotent, got %v", got.Permissions.Allow)
+	}
+	if info, err := os.Stat(antigravitySettingsPath); err != nil || info.Mode().Perm() != 0o600 {
+		t.Fatalf("file mode should be preserved, got %v (%v)", info.Mode().Perm(), err)
+	}
+
+	// Fichier illisible : refuser plutôt que perdre la configuration.
+	broken := []byte("{ not json")
+	if err := os.WriteFile(antigravitySettingsPath, broken, 0o600); err != nil {
+		t.Fatalf("écriture settings : %v", err)
+	}
+	if err := fixAntigravityToolPermission(wtDir); err == nil {
+		t.Fatal("an unreadable settings file should be an error, not an overwrite")
+	}
+	if data, _ := os.ReadFile(antigravitySettingsPath); string(data) != string(broken) {
+		t.Fatalf("the unreadable file should be left untouched, got %s", data)
 	}
 }
 
@@ -1078,18 +1365,30 @@ func TestAgentWarningHealthy(t *testing.T) {
 	origLookPath := lookPath
 	defer func() { lookPath = origLookPath }()
 	lookPath = func(file string) (string, error) { return "/usr/bin/" + file, nil }
+	t.Setenv("KIRO_API_KEY", "test-key")
 
-	if got := agentWarning(Agent{Cli: "codex"}); got != "" {
+	origSettings := antigravitySettingsPath
+	defer func() { antigravitySettingsPath = origSettings }()
+	antigravitySettingsPath = filepath.Join(t.TempDir(), "settings.json")
+	wtDir := t.TempDir()
+	if err := fixAntigravityToolPermission(wtDir); err != nil {
+		t.Fatalf("fixAntigravityToolPermission: %v", err)
+	}
+
+	if got := agentWarning(Agent{Cli: "codex"}, wtDir); got != "" {
 		t.Fatalf("aucun avertissement attendu, reçu %q", got)
 	}
-	if got := agentWarning(Agent{Cli: "claude"}); got != "" {
+	if got := agentWarning(Agent{Cli: "claude"}, wtDir); got != "" {
 		t.Fatalf("aucun avertissement attendu, reçu %q", got)
 	}
-	if got := agentWarning(Agent{Cli: "copilot"}); got != "" {
+	if got := agentWarning(Agent{Cli: "copilot"}, wtDir); got != "" {
 		t.Fatalf("healthy Copilot should have no warning, got %q", got)
 	}
-	if got := agentWarning(Agent{Cli: "agy"}); got != "" {
+	if got := agentWarning(Agent{Cli: "agy"}, wtDir); got != "" {
 		t.Fatalf("healthy Antigravity should have no warning, got %q", got)
+	}
+	if got := agentWarning(Agent{Cli: "kiro"}, wtDir); got != "" {
+		t.Fatalf("healthy Kiro should have no warning, got %q", got)
 	}
 }
 

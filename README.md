@@ -5,7 +5,7 @@
 [![Go version](https://img.shields.io/github/go-mod/go-version/Halleck45/sillage)](go.mod)
 [![License: MIT](https://img.shields.io/badge/license-MIT-2f7d54)](LICENSE)
 
-**A calm web dashboard to pilot AI coding agents (Claude Code, Codex CLI, GitHub Copilot, Antigravity) across your projects.**
+**A calm web dashboard to pilot AI coding agents (Claude Code, Codex CLI, GitHub Copilot, Antigravity, Kiro CLI) across your projects.**
 
 Sillage runs your agents in isolated git worktrees, streams their activity live, and never lets anything leave your machine without your explicit approval. **One self-contained binary, zero dependencies, zero configuration**: download, run, open a browser tab.
 
@@ -35,7 +35,7 @@ Also: multiple repositories per project, task reassignment, agent health warning
 
 ## Quickstart
 
-Sillage is a single static binary with the web UI embedded: no database, no runtime, no config files to write. The only things it talks to are `git` and the agent CLIs you choose: [Claude Code](https://docs.anthropic.com/en/docs/claude-code), [Codex CLI](https://github.com/openai/codex), [GitHub Copilot CLI](https://github.com/github/copilot-cli), and [Antigravity CLI](https://antigravity.google/product/antigravity-cli). The built-in free agent works without any external CLI.
+Sillage is a single static binary with the web UI embedded: no database, no runtime, no config files to write. The only things it talks to are `git` and the agent CLIs you choose: [Claude Code](https://docs.anthropic.com/en/docs/claude-code), [Codex CLI](https://github.com/openai/codex), [GitHub Copilot CLI](https://github.com/github/copilot-cli), [Antigravity CLI](https://antigravity.google/product/antigravity-cli), and [Kiro CLI](https://kiro.dev/docs/cli/). The built-in free agent works without any external CLI.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Halleck45/sillage/main/install.sh | sh
@@ -70,11 +70,15 @@ Add a project (any local git repository), create a card, create a task, pick an 
 - Data lives in `~/.local/share/sillage` (JSON state, atomic writes) plus one git worktree per task.
 - The only network call Sillage makes on its own is the daily update check: one read of GitHub's latest release number. No data from your machine is sent, no identifier, no telemetry, and you can switch it off in Settings. A binary it downloads for you is never installed without checking its sha256 against the release's `checksums.txt`.
 
-Note for codex agents: Sillage runs them with `--sandbox workspace-write`. On machines where AppArmor blocks bubblewrap (`bwrap: Operation not permitted`), either allow unprivileged user namespaces (`sudo sysctl kernel.apparmor_restrict_unprivileged_userns=0`) or start Sillage with `SILLAGE_CODEX_SANDBOX=danger-full-access`, knowing that the remaining containment is Sillage's own (dedicated worktree, no push, human validation).
+Note for codex agents: Sillage runs them with `--sandbox workspace-write`. Task directories are linked Git worktrees, so Sillage automatically grants Codex write access to the external Git metadata required for local commits while keeping repository hooks and configuration protected. On machines where AppArmor blocks bubblewrap (`bwrap: Operation not permitted`), either allow unprivileged user namespaces (`sudo sysctl kernel.apparmor_restrict_unprivileged_userns=0`) or start Sillage with `SILLAGE_CODEX_SANDBOX=danger-full-access`, knowing that the remaining containment is Sillage's own (dedicated worktree, no push, human validation).
+
+Note for Antigravity agents: `agy` asks for approval before every terminal command and for some file operations, and headless nobody can grant it, so a single request ends the run without producing anything. Its permissions live in `~/.gemini/antigravity-cli/settings.json`, not in flags: `"toolPermission": "proceed-in-sandbox"` (commands run without prompting, but only inside the terminal sandbox that Sillage always forces) plus `read_file` and `write_file` allow-rules on the worktrees folder, which is where agents work and nowhere else. Sillage never passes the permission-bypass flag; until both are set, the agent carries a warning with a button that writes them for you (your other settings and rules are preserved, and an unreadable file is never overwritten). An agent that tries to reach outside its worktree still stops, and now says so in the conversation.
+
+Note for Kiro agents: Kiro's headless mode requires `KIRO_API_KEY` in the environment that starts Sillage. Each run gets a fresh, temporary `KIRO_HOME` containing a Sillage-owned agent profile: local read, write, and shell tools are available without an approval prompt, while `git push`, `gh`, `glab`, Kiro self-configuration, and inherited MCP servers stay disabled. The temporary profile is outside the project and is removed when the run ends.
 
 ## Agents
 
-Seven editable agents are seeded. Existing workspaces receive the two new external profiles once; deleting either profile remains permanent.
+Eight editable agents are seeded. Existing workspaces receive each newly introduced external profile once; deleting one remains permanent.
 
 | Agent | CLI | Role |
 |---|---|---|
@@ -84,6 +88,7 @@ Seven editable agents are seeded. Existing workspaces receive the two new extern
 | Fably 🪶 | claude (fable) | pragmatic developer |
 | Octo 🐙 | copilot | pragmatic developer |
 | Astro 🚀 | agy | pragmatic developer |
+| Kiro 🟣 | kiro-cli | pragmatic developer |
 | Écho 🧪 | built-in fake | free local agent for demos and tests |
 
 Each agent has an editable context prompt and model. A missing CLI is shown as not connected; clicking the agent gives you its installation command. Claude resumes its CLI session, while one-shot adapters replay the recent conversation for follow-up messages.
