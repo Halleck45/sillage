@@ -4565,7 +4565,7 @@
     api('/api/cards', { method: 'POST', body: { projectId: state.projectId, title: title, contextPrompt: contextPrompt } }).then(function (card) {
       upsertCard(card);
       closeModal();
-      renderMain();
+      goCard(card.id);
     }).catch(function (e) {
       errEl.textContent = (e instanceof ApiError && e.message) || t('newCard.errorCreateFailed');
       errEl.classList.remove('hidden');
