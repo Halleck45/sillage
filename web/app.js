@@ -1639,7 +1639,14 @@
     if (!el) return;
     var willOpen = el.classList.contains('hidden');
     closeAllProjectMenus();
-    if (willOpen) el.classList.remove('hidden');
+    if (willOpen) {
+      el.classList.remove('hidden');
+      // Le menu vit dans .project-list (overflow-y: auto) : ouvert sur un projet
+      // proche du bas, il déborderait du scrollport plutôt que de la liste
+      // elle-même. On ramène la liste de ce qu'il faut pour le montrer entier,
+      // au lieu de laisser l'utilisateur découvrir qu'il doit scroller.
+      el.scrollIntoView({ block: 'nearest' });
+    }
   }
   // Optimiste : les tâches locales passent lues tout de suite, l'appel serveur
   // suit sans bloquer (comme markTaskRead sur l'ouverture d'une tâche).
