@@ -393,7 +393,8 @@ button, input, textarea { font-family: inherit; }
   border-radius: 6px; color: var(--muted-3); cursor: pointer; font-size: 13px; line-height: 1;
   opacity: 0; transition: opacity .12s ease;
 }
-.project-item-wrap:hover .project-menu-btn, .project-tile-wrap:hover .project-menu-btn, .project-menu-btn:focus-visible { opacity: 1; }
+.project-item-wrap:hover .project-menu-btn, .project-tile-wrap:hover .project-menu-btn,
+.project-menu-btn:focus-visible, .project-menu-btn-open { opacity: 1; }
 .project-menu-btn:hover { background: var(--border-3); }
 /* Même bouton « ⋯ », posé dans le coin d'une tuile plutôt qu'au milieu d'une ligne. */
 .project-tile-menu-btn { top: 12px; right: 12px; transform: none; }

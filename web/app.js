@@ -1652,6 +1652,10 @@
   function closeAllProjectMenus() {
     var root = document.getElementById('menu-root');
     if (root) { root.innerHTML = ''; delete root.dataset.openProjectMenu; }
+    // Le bouton « ⋯ » n'est révélé qu'au survol de son wrap (voir style.css) ;
+    // le menu vivant ailleurs dans le DOM, il resterait affiché après que la
+    // souris l'ait quitté pour aller cliquer dans le menu sans ce rappel.
+    document.querySelectorAll('.project-menu-btn-open').forEach(function (b) { b.classList.remove('project-menu-btn-open'); });
   }
   function toggleProjectMenu(projectId, btnEl, scope) {
     var root = document.getElementById('menu-root');
@@ -1663,6 +1667,7 @@
     if (!btnEl) return;
     var rect = btnEl.getBoundingClientRect();
     root.dataset.openProjectMenu = projectId;
+    btnEl.classList.add('project-menu-btn-open');
     root.innerHTML = '<div class="project-menu" style="position:fixed; top:' + (rect.bottom + 4) +
       'px; right:' + (document.documentElement.clientWidth - rect.right) + 'px;">' +
       projectMenuItemsHTML(projectId, scope) + '</div>';
