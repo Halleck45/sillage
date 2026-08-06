@@ -4584,9 +4584,11 @@
       // vignettes du composeur, au même endroit de la lecture (sous le champ
       // qu'elles accompagnent).
       '<div class="modal-attach-row">' +
-        '<button class="composer-attach" data-action="attach-image" data-target="new-task-file"' +
-          ' title="' + escapeHtml(t('chat.attach')) + '" aria-label="' + escapeHtml(t('chat.attach')) + '">' + attachIconHTML() + '</button>' +
-        '<span class="modal-attach-hint">' + escapeHtml(t('newTask.attachHint')) + '</span>' +
+        // Le libellé fait partie du bouton : une icône seule de 14px est une
+        // cible trop petite, et le texte à côté donnait envie de cliquer là où
+        // il ne se passait rien.
+        '<button class="attach-btn" data-action="attach-image" data-target="new-task-file">' +
+          attachIconHTML() + '<span>' + escapeHtml(t('newTask.attachHint')) + '</span></button>' +
         '<input type="file" id="new-task-file" class="hidden" accept="image/png,image/jpeg,image/gif,image/webp" multiple data-scope="new-task">' +
       '</div>' +
       '<div class="attach-strip" id="new-task-attach-strip">' + buildAttachStripHTML(modalAttachments, 'new-task') + '</div>' +

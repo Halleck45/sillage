@@ -185,7 +185,7 @@ button, input, textarea { font-family: inherit; }
 .btn-danger:active, .btn-outline:active, .btn-neutral:active, .row-btn:active,
 .icon-btn:active, .icon-btn-sm:active, .msg-copy:active, .code-copy:active,
 .conv-jump:active, .composer-attach:active, .attach-remove:active,
-#login-form button[type="submit"]:active {
+.attach-btn:active, #login-form button[type="submit"]:active {
   transform: scale(0.96);
 }
 .pill:active, .nav-item:active, .project-item:active, .agent-item:active,
@@ -1115,10 +1115,15 @@ button, input, textarea { font-family: inherit; }
    part avec le message se voit avant de partir, et se retire d'un clic. */
 .attach-strip { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
 .attach-strip:empty { display: none; }
-/* Modale de création : le trombone et son rappel sous le champ de description,
-   la bande de vignettes juste dessous. */
-.modal-attach-row { display: flex; align-items: center; gap: 7px; margin-top: 7px; margin-bottom: 8px; }
-.modal-attach-hint { font-size: 11.5px; color: var(--muted-3); }
+/* Modale de création : le trombone et son libellé forment un seul bouton, sous
+   le champ de description, la bande de vignettes juste dessous. */
+.modal-attach-row { display: flex; align-items: center; margin-top: 7px; margin-bottom: 8px; }
+.attach-btn {
+  display: inline-flex; align-items: center; gap: 7px; height: 28px; padding: 0 10px 0 8px;
+  border: 0; border-radius: 8px; background: transparent; color: var(--muted-2);
+  font-size: 11.5px; cursor: pointer;
+}
+.attach-btn:hover { background: var(--hover); color: var(--text); }
 .attach-chip { position: relative; width: 56px; height: 56px; border-radius: 9px; overflow: hidden; border: 1px solid var(--border-2); }
 .attach-chip img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .attach-remove {
@@ -1712,7 +1717,7 @@ button, input, textarea { font-family: inherit; }
 .search-result, .card-menu-item, .project-menu-item, .reassign-item, .ptab,
 .onboarding-card-head, .diff-file-tab, .agent-manage-row, .composer,
 .msg-actions, .msg-copy, .code-copy, .conv-jump, .composer-attach,
-.attach-remove, .msg-image,
+.attach-remove, .attach-btn, .msg-image,
 #login-form button[type="submit"] {
   transition-property: background-color, box-shadow, border-color, color, opacity, filter, transform;
   transition-duration: .2s;
