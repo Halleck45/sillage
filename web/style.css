@@ -199,6 +199,35 @@ button, input, textarea { font-family: inherit; }
   transform: scale(0.994);
 }
 
+/* Le sillage : la récompense des deux gestes qui font avancer le travail,
+   accepter une tâche et livrer un chantier. Une onde verte traverse une fois
+   la surface qui vient de changer (la ligne de la tâche et son bandeau d'état,
+   l'emplacement de livraison et sa barre), puis plus rien : c'est un geste
+   ponctuel, pas un état à surveiller. Le vert est déjà celui de l'accepté et
+   du livré, donc aucune couleur nouvelle à apprendre.
+   L'onde est un fond animé (background-position sur un ::after posé en inset 0),
+   jamais un enfant déplacé : rien ne déborde, rien ne se relayoute, et les
+   `overflow` des conteneurs autour n'ont pas à s'en occuper. */
+@keyframes om-wake {
+  0% { background-position: 100% 0; opacity: 0; }
+  20% { opacity: 1; }
+  100% { background-position: 0 0; opacity: 0; }
+}
+.wake { position: relative; }
+.wake::after {
+  content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+  background-image: linear-gradient(100deg, transparent 38%, rgba(47, 125, 84, 0.17) 50%, transparent 62%);
+  background-repeat: no-repeat; background-size: 300% 100%;
+  animation: om-wake .66s ease-out forwards;
+}
+/* Livraison en cours : la seule action du produit qui parle au réseau, donc la
+   seule qui peut faire attendre devant l'écran. Le bouton garde sa place et son
+   icône ; c'est le bateau qui avance et revient, au rythme d'une houle. Sans
+   ça, deux secondes de push ressemblent à un clic sans effet. */
+@keyframes om-sail { 0%, 100% { transform: translateX(0); } 50% { transform: translateX(2.5px); } }
+.btn-sailing .btn-icon { animation: om-sail 1.5s ease-in-out infinite; }
+.btn-green.btn-sailing:disabled { opacity: 0.72; }
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.001ms !important;
@@ -796,10 +825,18 @@ button, input, textarea { font-family: inherit; }
   transition: background-color .18s ease, border-color .18s ease;
 }
 .row-btn:hover { background: #fff; border-color: var(--muted-5); }
+/* Acceptation en vol : les deux boutons se figent en s'affadissant, sans changer
+   de taille ni de libellé (la ligne entière se relayouterait pour un dixième de
+   seconde). Ils restent visibles même si la souris a quitté la ligne : le geste
+   en cours ne doit pas disparaître de l'écran. */
+.row-btn:disabled { cursor: default; opacity: .55; }
+.row-btn:disabled:hover { background: var(--glass-float); border-color: var(--border-3); }
+.task-row-actions-busy { opacity: 1; }
 /* Accepter est l'action de la ligne : seul bouton plein, noir comme les autres.
    Refuser reste blanc bordé, en retrait. */
 .row-btn-accept { border-color: var(--solid); background: var(--solid); color: #fff; }
 .row-btn-accept:hover { background: var(--solid-hover); }
+.row-btn-accept:disabled:hover { background: var(--solid); border-color: var(--solid); }
 
 /* ---------- Bandeau des chantiers à livrer (boîte de réception) ---------- */
 

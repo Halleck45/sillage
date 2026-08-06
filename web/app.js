@@ -129,6 +129,7 @@
       'action.interrupt': 'Interrompre l\'agent',
       'action.startNow': 'Démarrer maintenant',
       'action.accept': 'Accepter',
+      'action.accepting': 'Acceptation…',
       'action.acceptTooltip': 'Fusionner dans la branche du chantier',
       'action.refuse': 'Refuser',
       'action.refuseTooltip': 'Écarter cette tâche du chantier',
@@ -187,6 +188,7 @@
       'catchUp.taskPrompt': 'La branche de ce chantier est en retard sur {base} et ne peut plus être fusionnée : {files} entre en conflit. Fusionne {base} dans la branche du chantier, règle les conflits en gardant les deux intentions, puis relance les vérifications du projet.',
       'ship.modalTitle': 'Livrer le chantier',
       'ship.modalConfirm': 'Livrer',
+      'ship.shipping': 'Livraison…',
       'ship.repoNothing': 'Rien à livrer',
       'ship.repoShipped': 'Déjà livré',
       'ship.commits.one': '{n} nouveau commit',
@@ -592,6 +594,7 @@
       'action.interrupt': 'Stop the agent',
       'action.startNow': 'Start now',
       'action.accept': 'Accept',
+      'action.accepting': 'Accepting…',
       'action.acceptTooltip': 'Merge into the workstream branch',
       'action.refuse': 'Refuse',
       'action.refuseTooltip': 'Leave this task out of the workstream',
@@ -650,6 +653,7 @@
       'catchUp.taskPrompt': 'This workstream\'s branch is behind {base} and can no longer be merged: {files} conflicts. Merge {base} into the workstream branch, settle the conflicts keeping both intents, then run the project checks again.',
       'ship.modalTitle': 'Ship the workstream',
       'ship.modalConfirm': 'Ship',
+      'ship.shipping': 'Shipping…',
       'ship.repoNothing': 'Nothing to ship',
       'ship.repoShipped': 'Already shipped',
       'ship.commits.one': '{n} new commit',
@@ -999,6 +1003,7 @@
     deliveryByCard: {}, // aperçu de livraison (GET /api/cards/{id}/delivery), non persisté
     shipResultByCard: {}, // dernier résultat de livraison, affiché dans la modale
     catchUpErrorByCard: {}, // échec de rattrapage hors conflit, affiché dans la barre
+    acceptingByTask: {}, // acceptation en vol : le bouton attend sa fusion, sans deuxième clic possible
     loading: {},
     screen: 'inbox', // 'inbox' | 'projects' | 'kanban' | 'work'
     projectId: null, cardId: null, taskId: null,
@@ -1050,6 +1055,23 @@
 
   // Libellé de la touche de modification (badges et infobulles des raccourcis).
   function modKeyLabel() { return isMac() ? '⌘' : 'Ctrl'; }
+
+  // playWake : l'onde verte qui traverse une fois une surface qui vient de
+  // changer (voir « Le sillage » dans style.css). Toujours appelée après le
+  // rendu qui a reconstruit la surface, sinon la classe part avec l'ancien
+  // nœud. La classe est retirée en fin d'animation pour qu'un second geste la
+  // rejoue : reposée sur un nœud qui la porte déjà, elle ne relancerait rien.
+  function playWake(el) {
+    if (!el || prefersReducedMotion()) return;
+    el.classList.add('wake');
+    // Le nom de l'animation est vérifié parce que l'événement remonte des
+    // enfants : une pastille qui bat dans la surface la retirerait sinon.
+    el.addEventListener('animationend', function done(e) {
+      if (e.animationName !== 'om-wake') return;
+      el.classList.remove('wake');
+      el.removeEventListener('animationend', done);
+    });
+  }
 
   // Fallback favicon (liens épinglés) : référencé depuis un attribut onerror
   // généré côté chaîne HTML, doit donc être une fonction globale réelle.
@@ -2020,9 +2042,14 @@
       return '<div class="task-row-state task-row-state-waiting" title="' + escapeHtml(waitLabel) + '">' + escapeHtml(t2('status.waiting')) + '</div>';
     }
     if (t.status === 'review') {
-      return '<div class="task-row-actions">' +
-        '<button class="row-btn row-btn-accept" data-action="accept-task" data-task-id="' + t.id + '" title="' + escapeHtml(t2('action.acceptTooltip')) + '">' + escapeHtml(t2('action.accept')) + '</button>' +
-        '<button class="row-btn" data-action="refuse-task" data-task-id="' + t.id + '" title="' + escapeHtml(t2('action.refuseTooltip')) + '">' + escapeHtml(t2('action.refuse')) + '</button>' +
+      // Acceptation en vol : les deux boutons se figent le temps de la fusion,
+      // sans changer de libellé (« Acceptation… » élargirait la ligne entière
+      // pour un dixième de seconde). Le retour, c'est l'onde de playWake.
+      var busy = !!state.acceptingByTask[t.id];
+      var busyAttr = busy ? ' disabled' : '';
+      return '<div class="task-row-actions' + (busy ? ' task-row-actions-busy' : '') + '">' +
+        '<button class="row-btn row-btn-accept"' + busyAttr + ' data-action="accept-task" data-task-id="' + t.id + '" title="' + escapeHtml(t2('action.acceptTooltip')) + '">' + escapeHtml(t2('action.accept')) + '</button>' +
+        '<button class="row-btn"' + busyAttr + ' data-action="refuse-task" data-task-id="' + t.id + '" title="' + escapeHtml(t2('action.refuseTooltip')) + '">' + escapeHtml(t2('action.refuse')) + '</button>' +
         '</div>';
     }
     if (t.status === 'accepted' || t.status === 'cancelled') {
@@ -2144,6 +2171,9 @@
       // complet, pour ne pas toucher au fil de conversation ni au composeur.
       if (state.cardId === cardId) refreshTaskListAndFilters();
       if (state.taskId) patchDetailHead(state.taskId);
+      // Toutes les surfaces du sillage viennent d'être reconstruites : c'est le
+      // moment de l'onde, jamais avant (voir armWake).
+      playPendingWake();
     });
   }
 
@@ -2553,12 +2583,36 @@
     openModal(buildShipModalHTML(card, prev));
   }
 
+  // markShipSailing : le temps de la livraison, le bouton de la modale ne se
+  // reclique pas (pousser deux fois n'a rien de gratuit) et dit qu'il travaille,
+  // son bateau avançant au rythme d'une houle. Un push peut prendre plusieurs
+  // secondes : sans ça, le clic paraît sans effet.
+  function markShipSailing() {
+    var btn = document.querySelector('[data-action="submit-ship"]');
+    if (!btn) return;
+    btn.disabled = true;
+    btn.classList.add('btn-sailing');
+    btn.innerHTML = shipIconHTML() + escapeHtml(t('ship.shipping'));
+  }
+
+  // La modale survit à un échec (elle porte le message d'erreur) : le bouton
+  // doit y redevenir cliquable, sinon la seule sortie serait de tout refermer.
+  function restoreShipButton() {
+    var btn = document.querySelector('[data-action="submit-ship"]');
+    if (!btn) return;
+    btn.disabled = false;
+    btn.classList.remove('btn-sailing');
+    btn.innerHTML = shipIconHTML() + escapeHtml(t('ship.modalConfirm'));
+  }
+
   function submitShip(cardId) {
     var errEl = document.getElementById('ship-modal-error');
+    markShipSailing();
     api('/api/cards/' + cardId + '/ship', { method: 'POST', body: { confirm: true } }).then(function (res) {
       if (res && res.card) upsertCard(res.card);
       state.shipResultByCard[cardId] = res;
       var failed = (res.repos || []).filter(function (r) { return r.error; });
+      if (!failed.length) armWake('ship', cardId);
       loadDelivery(cardId);
       if (failed.length) {
         var card = state.cardsById[cardId];
@@ -2569,6 +2623,7 @@
       closeModal();
       renderMain();
     }).catch(function (e) {
+      restoreShipButton();
       if (!errEl) return;
       errEl.textContent = (e instanceof ApiError && e.message) || t('ship.errorFailed');
       errEl.classList.remove('hidden');
@@ -3288,7 +3343,12 @@
         (isNew ? '<span class="tab-dot"></span>' : '') + '</button>';
     }).join('');
 
-    var primaryBtnHTML = '<button id="task-primary-action" class="btn-action ' + action.cls + '" data-action="' + action.action + '" data-task-id="' + task.id + '">' + escapeHtml(action.label) + '</button>';
+    // Acceptation en vol : contrairement à la ligne de liste, le bouton du
+    // détail est seul sur sa ligne et peut porter le libellé de l'attente.
+    var accepting = task.status === 'review' && !!state.acceptingByTask[task.id];
+    var primaryBtnHTML = '<button id="task-primary-action" class="btn-action ' + action.cls + '"' +
+      (accepting ? ' disabled' : '') + ' data-action="' + action.action + '" data-task-id="' + task.id + '">' +
+      escapeHtml(accepting ? t('action.accepting') : action.label) + '</button>';
 
     // Refuser une tâche en revue, ou annuler une tâche en cours : même action
     // côté API (/cancel), seul le libellé change selon le contexte.
@@ -3323,7 +3383,7 @@
       var cancelDefault = task.status === 'review' ? t('action.refuse') : t('action.cancelTask');
       var cancelKey = 'task-cancel:' + task.id;
       var cancelLabel = isPendingConfirm(cancelKey) ? t('action.cancelTaskConfirm') : cancelDefault;
-      secondaryBtnHTML = '<button class="btn-outline btn-action-secondary" data-action="confirm-click" data-confirm-key="' + cancelKey + '" data-confirm-action="task-cancel" data-confirm-id="' + task.id + '" data-default-label="' + escapeHtml(cancelDefault) + '" data-confirm-label="' + escapeHtml(t('action.cancelTaskConfirm')) + '">' + escapeHtml(cancelLabel) + '</button>';
+      secondaryBtnHTML = '<button class="btn-outline btn-action-secondary"' + (accepting ? ' disabled' : '') + ' data-action="confirm-click" data-confirm-key="' + cancelKey + '" data-confirm-action="task-cancel" data-confirm-id="' + task.id + '" data-default-label="' + escapeHtml(cancelDefault) + '" data-confirm-label="' + escapeHtml(t('action.cancelTaskConfirm')) + '">' + escapeHtml(cancelLabel) + '</button>';
     }
 
     // La suppression part dans le menu « ⋯ » de l'en-tête : une action qu'on
@@ -3912,6 +3972,50 @@
       renderMain();
     }).catch(function (e) { if (e instanceof ApiError) showDetailError(taskId, e.message || t('errors.genericFailed')); });
   }
+  // Le sillage se joue après le rafraîchissement qui a reconstruit les surfaces,
+  // pas au retour du POST : l'aperçu de livraison arrive juste derrière et
+  // remplace la ligne de la tâche, l'en-tête du détail et la barre du chantier,
+  // ce qui emporterait une onde lancée trop tôt. D'où ce drapeau, armé par
+  // l'acceptation ou la livraison et consommé par loadDelivery. Un aperçu déjà
+  // en vol au moment de l'armement fait aussi bien l'affaire : sa propre fin
+  // reconstruit les mêmes surfaces.
+  var pendingWake = null; // { kind: 'accept' | 'ship', id }
+  function armWake(kind, id) {
+    pendingWake = { kind: kind, id: id };
+    // Périmé au bout de trois secondes : passé ce délai, plus rien à l'écran ne
+    // rattacherait l'onde au geste qui l'a déclenchée.
+    setTimeout(function () {
+      if (pendingWake && pendingWake.kind === kind && pendingWake.id === id) pendingWake = null;
+    }, 3000);
+  }
+  function playPendingWake() {
+    var w = pendingWake;
+    if (!w) return;
+    pendingWake = null;
+    if (w.kind === 'accept') playAcceptWake(w.id);
+    else playShipWake(w.id);
+  }
+
+  // playAcceptWake : l'onde passe là où quelque chose vient de changer, et
+  // nulle part ailleurs. La ligne de la tâche (les deux boutons y ont laissé
+  // place à « Acceptée ») et, si le détail est ouvert sur cette tâche, son
+  // bandeau d'état.
+  function playAcceptWake(taskId) {
+    playWake(document.querySelector('.task-row[data-task-id="' + taskId + '"]'));
+    if (state.taskId === taskId) playWake(document.querySelector('.detail-panel .status-badge'));
+  }
+
+  // playShipWake : le chantier vient de partir. L'onde traverse l'emplacement
+  // de livraison de l'en-tête (le bouton y a cédé la place à l'ancre) et la
+  // barre de livraison quand elle a quelque chose à montrer (les liens de pull
+  // request) ; sur une barre masquée, elle n'aurait aucune surface.
+  function playShipWake(cardId) {
+    if (state.cardId !== cardId) return;
+    playWake(document.querySelector('.ship-slot'));
+    var bar = document.querySelector('.ship-bar');
+    if (bar && !bar.classList.contains('ship-bar-empty')) playWake(bar);
+  }
+
   // acceptErrorText localise le conflit de fusion (le seul échec attendu),
   // avec le message de l'API en repli pour tout le reste.
   function acceptErrorText(e) {
@@ -3925,12 +4029,20 @@
   function doAcceptTask(taskId) {
     var task = state.tasksById[taskId];
     var cardId = task ? task.cardId : null;
+    if (state.acceptingByTask[taskId]) return;
+    state.acceptingByTask[taskId] = true;
+    renderMain();
     api('/api/tasks/' + taskId + '/accept', { method: 'POST' }).then(function (res) {
+      delete state.acceptingByTask[taskId];
       if (res && res.task) upsertTask(res.task);
+      armWake('accept', taskId);
       if (cardId) loadDelivery(cardId);
       renderMain();
+      // Sans chantier à recharger, personne ne viendra consommer le drapeau.
+      if (!cardId) playPendingWake();
     }).catch(function (e) {
-      if (!(e instanceof ApiError)) return;
+      delete state.acceptingByTask[taskId];
+      if (!(e instanceof ApiError)) { renderMain(); return; }
       // Le message marqueur de conflit arrive par SSE : rien à recharger ici.
       // L'erreur s'affiche dans le panneau de détail : si l'acceptation venait
       // de la liste (panneau fermé), ouvrir la tâche, sinon le message serait

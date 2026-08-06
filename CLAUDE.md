@@ -117,6 +117,10 @@ SPA vanilla d'un seul fichier, dans une IIFE, découpée en sections commentées
   - un message reçu pendant qu'on lit plus haut ne déplace personne : il allume la pastille « Nouveau message » (`refreshConvJump`, alimentée par un écouteur de défilement en phase de capture pour survivre aux rendus). Son clic est le seul défilement animé de l'interface ;
   - copier un message d'agent ou un bloc de code se révèle au survol (opacité seule) et se confirme par une coche (`copyToClipboardIcon`) ;
   - le composeur grandit avec le texte (`autoGrowComposer`) et son bouton d'envoi s'efface quand il n'y a rien à envoyer.
+- **Le sillage des deux gestes qui valident du travail** (accepter une tâche, livrer un chantier), la seule animation du produit déclenchée par un succès et non par un clic :
+  - une onde verte traverse une fois les surfaces qui viennent de changer (`playWake`, classe `.wake` et `@keyframes om-wake`) : la ligne de la tâche et le bandeau d'état du détail pour une acceptation (`playAcceptWake`), l'emplacement de livraison et la barre du chantier pour une livraison (`playShipWake`). C'est un fond animé sur un `::after` en `inset 0`, jamais un enfant déplacé : rien ne déborde, rien ne se relayoute, et une animation qui ne part pas finit invisible ;
+  - l'onde se joue **après** le rafraîchissement qui a reconstruit les surfaces, pas au retour du POST : l'aperçu de livraison arrive juste derrière et remplace la ligne, l'en-tête du détail et la barre du chantier. D'où le drapeau `pendingWake`, armé par `armWake` et consommé à la fin de `loadDelivery`, périmé au bout de trois secondes ;
+  - les deux gestes ne se recliquent pas pendant leur aller-retour : `state.acceptingByTask` fige les boutons de la ligne et le bouton primaire du détail (« Acceptation… »), et le bouton de la modale de livraison passe en `.btn-sailing` (« Livraison… », son bateau au rythme d'une houle) puisqu'un push peut prendre plusieurs secondes.
 
 ### Le design (`web/style.css`)
 
