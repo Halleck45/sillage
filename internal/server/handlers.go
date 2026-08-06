@@ -11,6 +11,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -171,6 +172,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/cards/{id}/delivery", s.handleCardDelivery)
 	mux.HandleFunc("POST /api/cards/{id}/ship", s.handleCardShip)
 	mux.HandleFunc("POST /api/cards/{id}/catch-up", s.handleCardCatchUp)
+	mux.HandleFunc("POST /api/cards/{id}/plan", s.handleCardPlan)
 	mux.HandleFunc("POST /api/tasks", s.handleCreateTask)
 	mux.HandleFunc("PATCH /api/tasks/{id}", s.handleReassignTask)
 	mux.HandleFunc("DELETE /api/tasks/{id}", s.handleDeleteTask)
@@ -915,6 +917,57 @@ func (s *Server) handleDeleteCard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// handleCardPlan demande à un agent de découper le chantier en une succession
+// d'étapes. Aucune tâche n'est créée ici, aucune branche non plus : la
+// proposition remonte à l'humain, qui la relit, la corrige et déclenche les
+// créations lui-même par POST /api/tasks. L'appel est synchrone et peut durer
+// quelques minutes (voir planTimeout).
+func (s *Server) handleCardPlan(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		AgentID  string `json:"agentId"`
+		RepoName string `json:"repoName"`
+		Prompt   string `json:"prompt"`
+	}
+	if err := decodeJSON(r, &body); err != nil || body.AgentID == "" {
+		writeError(w, http.StatusBadRequest, "agentId is required")
+		return
+	}
+	card, project, ok := s.cardWithProject(w, r.PathValue("id"))
+	if !ok {
+		return
+	}
+	agent, ok := s.store.GetAgent(body.AgentID)
+	if !ok {
+		writeError(w, http.StatusBadRequest, "agent not found")
+		return
+	}
+	if !canPlan(agent.Cli) {
+		writeError(w, http.StatusBadRequest, "this agent cannot plan")
+		return
+	}
+	repo, err := s.store.ResolveTaskRepo(project.ID, body.RepoName)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	// Planifier ne fait que lire : on se contente du worktree du chantier s'il
+	// existe déjà, et on lit le dépôt du projet sinon, plutôt que de créer une
+	// branche de chantier pour une lecture. Planifier avant la première tâche
+	// est justement le cas courant.
+	dir := repo.Path
+	if cb, ok := s.store.GetCardBranch(card.ID, repo.Name); ok && cb.WorktreeDir != "" {
+		if _, err := os.Stat(cb.WorktreeDir); err == nil {
+			dir = cb.WorktreeDir
+		}
+	}
+	steps, err := ProposePlan(r.Context(), agent, project, card, dir, body.Prompt)
+	if err != nil {
+		writeError(w, http.StatusBadGateway, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, PlanResponse{CardID: card.ID, AgentID: agent.ID, RepoName: repo.Name, Steps: steps})
 }
 
 // --- Tâches ---

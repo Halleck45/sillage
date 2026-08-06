@@ -708,6 +708,10 @@ button, input, textarea { font-family: inherit; }
 
 .filter-pills-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
 .filter-pills { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+/* Les deux boutons de création se tiennent ensemble à droite : sans ce
+   conteneur, space-between les écarterait l'un de l'autre. */
+.filter-pills-actions { display: flex; align-items: center; gap: 8px; }
+.filter-pills-actions .plan-btn { height: 30px; }
 .pill {
   flex: none; white-space: nowrap; height: 27px; padding: 0 12px; border: 0; background: transparent;
   color: var(--muted); border-radius: 9px; font-size: 12.5px; font-weight: 400; cursor: pointer;
@@ -1330,6 +1334,46 @@ button, input, textarea { font-family: inherit; }
 .modal-foot .btn-outline:first-of-type { margin-left: auto; }
 .modal-label-row { display: flex; align-items: baseline; gap: 8px; }
 .modal-label-hint { margin-left: auto; font-weight: 400; font-size: 11px; color: var(--muted-4); }
+
+/* Plan de tâches : une étape par bloc, son titre modifiable en tête et le
+   brief de l'agent dessous. Le numéro n'est pas décoratif : enchaînées, les
+   tâches démarrent dans cet ordre. Les blocs sont du verre de carte posé sur
+   la modale, comme partout ailleurs, pour qu'une étape se lise comme un objet
+   qu'on peut retirer. */
+.plan-steps { display: flex; flex-direction: column; gap: 10px; margin-top: 8px; }
+.plan-step {
+  background: var(--glass-card); border: 1px solid var(--border-3);
+  border-radius: 12px; padding: 10px 11px;
+}
+.plan-step-head { display: flex; align-items: center; gap: 8px; }
+.plan-step-num {
+  flex: none; width: 20px; height: 20px; border-radius: 7px;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--hover); color: var(--muted); font-size: 11px; font-weight: 600;
+}
+.plan-step-title { flex: 1; min-width: 0; margin-top: 0; height: 34px; font-size: 13.5px; }
+.plan-chain-row {
+  display: flex; align-items: center; gap: 8px; margin-top: 16px; font-size: 12.5px;
+  color: var(--text-2); cursor: pointer;
+}
+.plan-chain-row input[type="checkbox"] { cursor: pointer; }
+
+/* Attendre un plan, c'est attendre un agent : même objet que dans une
+   conversation (.msg-thinking), posé sur un bloc de verre à la place que la
+   proposition occupera. Une modale qui ne bouge pas pendant deux minutes se lit
+   comme une modale plantée, et c'est là qu'on vient de cliquer. */
+.plan-thinking {
+  margin-top: 14px; padding: 12px 13px; border-radius: 12px;
+  background: var(--glass-card); border: 1px solid var(--border-3);
+}
+/* Le compteur, lui, avance même quand prefers-reduced-motion a tout éteint :
+   c'est la seule preuve que le temps passe et que rien n'est bloqué. */
+.thinking-elapsed { margin-left: 8px; font-size: 11.5px; color: var(--muted-4); }
+.plan-thinking-note { margin-top: 5px; font-size: 11.5px; line-height: 1.4; color: var(--muted-4); }
+/* Les points du bouton prennent sa couleur de texte : sur un bouton plein,
+   l'encre de la conversation serait invisible. */
+.btn-dots { margin-left: 7px; vertical-align: middle; }
+.btn-dots i { background: currentColor; opacity: .9; }
 
 .agent-quota-box {
   margin-top: 8px; background: var(--glass-card); border: 1px solid var(--border-3);

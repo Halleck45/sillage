@@ -151,6 +151,16 @@ ServiceStatus { "registered": false, "isThisOne": false, "customFlags": true,
           // réponse n'est pas sûre : installation autre que Homebrew, ou brew injoignable /
           // muet. Voir "Lancement à l'ouverture de session" ci-dessous.
 
+PlanStep { "title": "Poser le modèle", "prompt": "Ajouter les structs et les tests." }
+          // Le titre et le prompt d'une FUTURE tâche, proposés par un agent. Rien n'existe
+          // encore côté serveur : voir "Plan de tâches" ci-dessous.
+
+PlanResponse { "cardId": "c1", "agentId": "bolt", "repoName": "api", "steps": [PlanStep] }
+          // Réponse de POST /api/cards/{id}/plan. agentId et repoName sont renvoyés parce
+          // que le serveur a pu résoudre le dépôt lui-même (projet à un seul dépôt) :
+          // l'UI crée ensuite les tâches sur ce même dépôt.
+          // JAMAIS persisté : une proposition, pas un état.
+
 PreviewRun { "id": "pv1", "projectId": "p1", "cardId": "c1", "taskId": "",
              "repoName": "api", "cmd": "make serve PORT=4101",
              "url": "http://127.0.0.1:4101", "dir": ".../worktrees/ws-c1-api",
@@ -203,6 +213,7 @@ PreviewRun { "id": "pv1", "projectId": "p1", "cardId": "c1", "taskId": "",
 | GET | `/api/cards/{id}/delivery` | | DeliveryPreview : ce que la livraison ferait, avant tout clic (voir « Livraison d'un chantier »). Lecture seule |
 | POST | `/api/cards/{id}/ship` | `{confirm:true}` | ShipResponse : **la seule action sortante du produit** (push + pull request, ou fusion locale). 400 sans `confirm`, 409 si le chantier n'est pas livrable |
 | POST | `/api/cards/{id}/catch-up` | | CatchUpResponse : fusionne la branche de destination dans celle du chantier pour débloquer la livraison (voir « Livraison d'un chantier »). Local, aucune confirmation ; un conflit est annulé et rapporté par dépôt |
+| POST | `/api/cards/{id}/plan` | `{agentId, repoName?, prompt?}` | PlanResponse : un agent propose un découpage du chantier en tâches. **Ne crée rien** (ni tâche, ni branche de chantier), **lecture seule**. Synchrone, jusqu'à 5 min. 400 si `agentId` manque, est inconnu, ou si son CLI ne sait pas planifier (`"this agent cannot plan"`) ; 400 sur `repoName` inconnu/manquant ; 502 si l'agent échoue, expire ou ne rend pas de plan. Voir « Plan de tâches » ci-dessous |
 | POST | `/api/tasks` | `{cardId, title, agentId, prompt?, repoName?, waitsForTaskId?, attachments?}` | Task (créée `running`, agent lancé avec title+prompt). `attachments` : mêmes règles et mêmes limites que pour un message (voir « Images jointes »). `repoName` optionnel si le projet n'a qu'un repo ; sinon 400 `"repoName required (project has several repositories)"` ou 400 si inconnu. `waitsForTaskId` : voir « Démarrage différé d'une tâche » ci-dessous |
 | PATCH | `/api/tasks/{id}` | `{agentId}` | Task : réassigne l'agent (voir « Réassignation » ci-dessous). 400 si `status=running` (`"interrupt the agent before reassigning"`) ou si l'agent est inconnu |
 | DELETE | `/api/tasks/{id}` | `{confirm:true}` | 204 (voir « Suppressions » ci-dessous). **Validation humaine obligatoire** : refus 400 sans `confirm` |
@@ -252,6 +263,23 @@ Pendant l'opération, `Task.rebasing` vaut `true` (événement SSE `task` à l'e
 Résultat au fil de la tâche : `"[rebased:<workstreamBranch>]"` en cas de succès. En cas de conflit, `git rebase --abort` remet le worktree exactement dans son état d'avant (rien n'est modifié, la branche est inchangée), le marqueur est `"[rebase-conflict:<fichiers séparés par des espaces>]"`, et comme pour un conflit à l'acceptation (voir ci-dessus), l'agent reçoit aussitôt l'instruction de reprendre la base : la tâche repasse en `running` au lieu de rester en `review` avec un marqueur que personne ne lit. Un échec sans conflit ne pose aucun marqueur (et ne relance rien).
 
 Après chaque changement de statut de tâche, la carte est automatiquement replacée : si elle a au moins une tâche, qu'elles sont toutes terminales (`accepted`/`cancelled`) **et** que le chantier a été livré, `card.column` passe à `"done"` ; sinon elle passe (ou reste) en `"doing"`. La colonne « Terminé » veut donc dire livré, pas seulement relu. Une carte déjà livrée en ressort dès qu'un travail nouveau y apparaît (voir « Continuer un chantier déjà livré »). Les cartes antérieures aux branches de chantier (`branches` vide) sont considérées livrées, pour garder leur colonne historique. Le déplacement manuel (PATCH `/api/cards/{id}`) reste indépendant de cette règle. Chaque changement republie l'événement SSE `cards`.
+
+### Plan de tâches
+
+`POST /api/cards/{id}/plan` demande à un agent de découper un chantier en une succession de tâches. **La route ne crée rien** : elle rend une proposition (`PlanResponse`), l'humain la relit, la corrige, en retire ce qu'il ne veut pas, puis crée les tâches lui-même par `POST /api/tasks`. Sillage ne lance jamais un agent sur une tâche que personne n'a validée, et un plan ne fait pas exception.
+
+**La planification est en lecture seule**, garanti par Sillage et non par la bonne volonté du modèle. C'est nécessaire parce qu'un planificateur ne tourne pas dans la branche jetable d'une tâche relue avant sortie : il lit le worktree de la branche du chantier s'il existe déjà pour ce dépôt, et le dépôt du projet lui-même sinon (planifier avant la première tâche est le cas courant, et créer une branche de chantier pour une simple lecture n'aurait pas de sens). Rien de ce qu'il écrirait ne passerait donc par une revue. D'où :
+
+- `claude` : allowlist figée `planAllowedTools` (`Read,Glob,Grep` et les seules commandes git de lecture), sans `Edit` ni `Write`, plus le refus figé `claudeDeniedTools` (voir « Outils autorisés aux agents »).
+- `codex` : `--sandbox read-only`, en dur. `SILLAGE_CODEX_SANDBOX` n'est **pas** consulté : ce réglage existe pour élargir les droits d'écriture d'une tâche, ce dont un plan n'a aucun besoin. Sur une machine où le sandbox de codex ne démarre pas (AppArmor, voir « Santé des agents »), planifier avec codex échoue comme n'importe quelle tâche codex.
+- `fake` : réponse simulée, sans process externe, pour éprouver le flux sans coût.
+- Tout autre CLI (`copilot`, `agy`, `kiro`) : 400 `"this agent cannot plan"`. Sillage n'y pose pas lui-même de cran d'arrêt en écriture, et un plan ne vaut pas d'y renoncer.
+
+Le prompt de planification porte le titre du chantier, le contexte du projet et celui du chantier (mêmes blocs que pour une tâche, voir « Modèles »), les précisions facultatives de l'humain (`prompt`), et demande une réponse terminée par un seul objet JSON `{"steps":[{"title","prompt"}]}`. La langue n'est pas imposée par un réglage : elle est alignée sur celle du titre du chantier.
+
+Lecture de la réponse : le serveur cherche l'objet JSON dans le texte de l'agent, en tentant chaque accolade ouvrante et en gardant le **dernier** objet exploitable (les CLI encadrent leur JSON de prose ou de barrières ```` ```json ````, et certains modèles recopient d'abord l'exemple du prompt). La proposition est ensuite mise aux normes : les étapes sans titre tombent, un titre est tronqué à 120 caractères, le plan est plafonné à 8 étapes. Tronquer plutôt que refuser, un plan presque bon restant éditable ; un plan vide, en revanche, est un échec (502).
+
+Côté UI, la succession se traduit par le chaînage déjà existant : les tâches sont créées dans l'ordre, chacune avec `waitsForTaskId` sur la précédente (voir « Démarrage différé d'une tâche »), donc **seule la première démarre un agent**. Le chaînage est une case à cocher, décochable : sans elle, toutes les tâches partent en même temps.
 
 ### Lecture d'une tâche : `updatedAt` inchangé
 
@@ -588,3 +616,13 @@ Règles qui tiennent ce découpage :
 
 - Aucun raccourci d'écran ne se déclenche pendant une saisie (champ, zone de texte, liste déroulante) ni avant l'authentification.
 - Le sélecteur d'agent est un groupe de radios (`role="radiogroup"`, `aria-checked`) à tabulation roulante : un seul arrêt de `Tab` pour tout le groupe, les flèches déplacent la sélection et le focus ensemble.
+
+### Plan de tâches : la proposition est un brouillon
+
+- Deux entrées, pas trois : un bouton « Plan de tâches » à côté de « Nouvelle tâche » sur la page d'un chantier, et un bouton « Créer et planifier » dans la modale « Nouveau chantier », qui crée le chantier puis ouvre la modale de plan. Le geste est le même que « Nouvelle tâche » à une autre échelle, d'où le voisinage ; la barre du haut du chantier reste réservée à Recette et Livrer.
+- La modale a deux temps dans le même cadre : un formulaire (précisions facultatives, dépôt à lire, agent), puis la proposition.
+- **L'attente est l'attente d'un agent, et se montre comme telle** : le même objet que dans une conversation (`.msg-thinking`, voir « Micro-interactions » dans CLAUDE.md), à la place que la proposition occupera. L'avatar de l'agent respire, les trois points battent, le libellé ondule, et un compteur `m:ss` avance à côté. Le bouton cliqué porte lui aussi les trois points : c'est le premier endroit où l'on croit l'interface bloquée. Le compteur est le seul élément qui survit à `prefers-reduced-motion` (qui éteint toutes les animations), et c'est lui qui distingue vraiment « ça travaille » de « c'est figé » : lire un dépôt prend parfois deux minutes. Aucune barre de progression : on ne sait pas où en est l'agent, seul l'ordre de grandeur est annoncé, une fois. Fermer la modale arrête le minuteur et périme la réponse en vol, qui ne peut donc pas la rouvrir plus tard.
+- Le sélecteur d'agent ne liste que les agents capables de planifier (voir « Plan de tâches » dans les endpoints). Aucun agent capable : la modale le dit et ne propose rien à remplir. L'agent choisi planifie **et** fait ensuite le travail (une tâche se réassigne après coup si besoin).
+- La proposition est un brouillon : chaque étape est un bloc au titre et au prompt modifiables, avec une croix pour la retirer. Ce qui a été corrigé à la main est relu avant tout re-rendu (retirer une étape réécrit la liste). Retirer la dernière étape ramène au formulaire.
+- Une seule case à cocher, cochée par défaut : « Enchaîner : chaque tâche démarre quand la précédente est acceptée ». C'est ce qui fait d'une liste d'étapes une succession, et donc un seul agent au travail à la fois.
+- Le bouton de création dit combien de tâches il crée (« Créer les 3 tâches »). Les créations sont séquentielles ; une erreur en cours de route garde les étapes restantes dans la modale et annonce combien de tâches sont déjà créées, plutôt que de tout perdre.
