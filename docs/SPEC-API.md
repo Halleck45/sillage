@@ -39,13 +39,15 @@ Project { "id": "p1", "name": "sillage", "description": "...", "repos": [Repo, .
           "links": [Link, ...], "unread": 2,
           "tokens": Tokens, "checkCmd": "go test ./...", "contextPrompt": "...",
           "allowedTools": ["Bash(pytest:*)", "Bash(ruff:*)"],
-          "delivery": Delivery, "deliveryWarning": "..." }
+          "delivery": Delivery, "deliveryWarning": "...", "hiddenFromSidebar": false }
           // description : une phrase, affichée sous le nom. checkCmd/contextPrompt/description peuvent être vides.
           // allowedTools : outils supplémentaires accordés aux agents de ce projet, en plus
           // du socle du binaire (voir "Outils autorisés aux agents"). Vide par défaut.
           // links : au plus 12, http(s) uniquement (voir "Liens épinglés" ci-dessous).
           // deliveryWarning : calculé à chaque lecture (jamais persisté), vide si tout va
           // bien ; voir "Santé de la livraison" ci-dessous.
+          // hiddenFromSidebar : retire le projet de la barre latérale sans le supprimer ;
+          // il reste listé (et modifiable) depuis la page "Tous les projets". Faux par défaut.
 
 CardBranch { "repoName": "api", "branch": "sillage/ws-101-refonte-auth", "base": "main",
              "worktreeDir": "...", "prUrl": "", "shippedAt": null }
@@ -181,7 +183,7 @@ PreviewRun { "id": "pv1", "projectId": "p1", "cardId": "c1", "taskId": "",
 | DELETE | `/api/agents/{id}` | | 204 (400 si une tâche référence encore l'agent) |
 | POST | `/api/agents/{id}/fix-warning` | | AgentOut, avertissement recalculé (donc vide si le correctif a marché). Applique le seul correctif de configuration machine que Sillage sait poser, dans `~/.gemini/antigravity-cli/settings.json` : `"toolPermission": "proceed-in-sandbox"` et les règles `read_file(<dataDir>/worktrees)` / `write_file(<dataDir>/worktrees)` ajoutées à `permissions.allow`. 404 agent inconnu, 400 `"no automatic fix for this agent"` si `cli != "agy"`, 500 si le fichier existe mais n'est pas du JSON valide (il n'est alors **pas** écrasé). Les autres clés et les règles déjà présentes sont conservées ; l'opération est idempotente. SSE : `agents` |
 | POST | `/api/projects` | `{name?, path}` ou `{name?, repos:[{name?,path}, ...], description?, contextPrompt?, links?:[{url,title?}, ...], delivery?}` | Project (400 si aucun dépôt, un path invalide/pas un dépôt git, noms de repo dupliqués, mode de livraison inconnu, ou lien invalide/en trop grand nombre). Seul le chemin d'un dépôt est requis : `name` absent ou vide = basename du premier dépôt, `delivery` absent = déduit des remotes des dépôts (voir « Livraison d'un chantier ») |
-| PATCH | `/api/projects/{id}` | `{name?, description?, checkCmd?, contextPrompt?, allowedTools?, repos?, links?, delivery?}` | Project (repos/links/allowedTools, si fournis, remplacent la liste entière ; retirer un repo ne casse pas les tâches existantes ; `previewCmd`/`previewUrl` se posent sur chaque Repo, et une `previewUrl` non http(s) est refusée en 400) |
+| PATCH | `/api/projects/{id}` | `{name?, description?, checkCmd?, contextPrompt?, allowedTools?, repos?, links?, delivery?, hiddenFromSidebar?}` | Project (repos/links/allowedTools, si fournis, remplacent la liste entière ; retirer un repo ne casse pas les tâches existantes ; `previewCmd`/`previewUrl` se posent sur chaque Repo, et une `previewUrl` non http(s) est refusée en 400) |
 | DELETE | `/api/projects/{id}` | `{confirm:true}` | 204 (voir « Suppressions » ci-dessous). **Validation humaine obligatoire** : refus 400 sans `confirm` |
 | POST | `/api/projects/{id}/mark-all-read` | | 204 (marque `unread=false` sur toutes les tâches non lues du projet, ne modifie jamais `updatedAt` : même règle que `/api/tasks/{id}/read`). **Aucune confirmation** : action locale et réversible |
 | POST | `/api/cards` | `{projectId, title, column?, contextPrompt?}` | Card. `column`, si fourni, doit valoir `"soon"` (400 `"cards are created in the soon column"` sinon) : les cartes se créent toujours dans "Bientôt" |

@@ -393,8 +393,10 @@ button, input, textarea { font-family: inherit; }
   border-radius: 6px; color: var(--muted-3); cursor: pointer; font-size: 13px; line-height: 1;
   opacity: 0; transition: opacity .12s ease;
 }
-.project-item-wrap:hover .project-menu-btn, .project-menu-btn:focus-visible { opacity: 1; }
+.project-item-wrap:hover .project-menu-btn, .project-tile-wrap:hover .project-menu-btn, .project-menu-btn:focus-visible { opacity: 1; }
 .project-menu-btn:hover { background: var(--border-3); }
+/* Même bouton « ⋯ », posé dans le coin d'une tuile plutôt qu'au milieu d'une ligne. */
+.project-tile-menu-btn { top: 12px; right: 12px; transform: none; }
 /* Menus flottants : le verre le plus dense du produit. Un menu doit couper le
    lien avec ce qu'il recouvre, sinon on lit deux choses à la fois. */
 .project-menu, .card-menu, .reassign-menu {
@@ -633,7 +635,17 @@ button, input, textarea { font-family: inherit; }
 /* ---------- All projects ---------- */
 
 .project-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 16px; }
+/* La tuile reste le seul élément cliquable (nav-project) ; le bouton "..." et
+   son menu flottent en position absolue par-dessus, portés par un wrap dédié
+   (même construction que .project-item-wrap) pour ne pas emboîter un bouton
+   dans un autre : sinon un clic sur "..." enfonce aussi la tuile entière. */
+/* display:flex sur le wrap : c'est lui que la grille étire à la hauteur de
+   la rangée (élément stretch par défaut), et c'est ce flex qui repasse cet
+   étirement à la tuile elle-même (flex:1) pour que les cartes d'une même
+   rangée restent alignées, wrap ou non. */
+.project-tile-wrap { position: relative; display: flex; }
 .project-tile {
+  flex: 1;
   background: var(--glass-card); border: 1px solid var(--border); border-top-color: var(--glass-line);
   border-radius: 14px; padding: 17px;
   cursor: pointer; text-align: left; display: flex; flex-direction: column; gap: 10px;
@@ -646,6 +658,7 @@ button, input, textarea { font-family: inherit; }
 .project-tile-top h3 { margin: 0; font-size: 14.5px; font-weight: 600; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .project-hash { color: var(--muted-5); }
 .project-tile-meta { display: flex; gap: 14px; font-size: 12px; color: var(--muted-2); flex-wrap: wrap; }
+.project-tile-hidden-note { color: var(--muted-3); }
 .project-tile-add {
   border: 1px dashed var(--border-3); background: transparent; color: var(--muted-3);
   align-items: center; justify-content: center; font-size: 13px; box-shadow: none;

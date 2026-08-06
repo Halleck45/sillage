@@ -577,7 +577,7 @@ func TestUpdateProjectFields(t *testing.T) {
 
 	name := "Nouveau nom"
 	checkCmd := "go test ./..."
-	updated, err := s.UpdateProject(p.ID, &name, nil, &checkCmd, nil, nil, nil, nil, nil)
+	updated, err := s.UpdateProject(p.ID, &name, nil, &checkCmd, nil, nil, nil, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("UpdateProject: %v", err)
 	}
@@ -589,12 +589,55 @@ func TestUpdateProjectFields(t *testing.T) {
 	}
 
 	newRepos := []Repo{{Name: "a", Path: "/tmp/a"}, {Name: "b", Path: "/tmp/b"}}
-	updated, err = s.UpdateProject(p.ID, nil, nil, nil, nil, nil, &newRepos, nil, nil)
+	updated, err = s.UpdateProject(p.ID, nil, nil, nil, nil, nil, &newRepos, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("UpdateProject (repos): %v", err)
 	}
 	if len(updated.Repos) != 2 {
 		t.Fatalf("repos attendus au nombre de 2, reçu %+v", updated.Repos)
+	}
+}
+
+func TestUpdateProjectHiddenFromSidebar(t *testing.T) {
+	dir := t.TempDir()
+	s, err := NewStore(dir)
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+	p, err := s.AddProject("sillage", "", "", []Repo{{Path: "/tmp/sillage"}}, nil, nil)
+	if err != nil {
+		t.Fatalf("AddProject: %v", err)
+	}
+	if p.HiddenFromSidebar {
+		t.Fatalf("un projet neuf doit être visible dans la barre latérale")
+	}
+
+	hidden := true
+	updated, err := s.UpdateProject(p.ID, nil, nil, nil, nil, nil, nil, nil, nil, &hidden)
+	if err != nil {
+		t.Fatalf("UpdateProject: %v", err)
+	}
+	if !updated.HiddenFromSidebar {
+		t.Fatalf("le projet devrait être masqué de la barre latérale")
+	}
+
+	// nil (champ non fourni) ne touche pas à l'état existant.
+	name := "sillage2"
+	updated, err = s.UpdateProject(p.ID, &name, nil, nil, nil, nil, nil, nil, nil, nil)
+	if err != nil {
+		t.Fatalf("UpdateProject (sans hiddenFromSidebar): %v", err)
+	}
+	if !updated.HiddenFromSidebar {
+		t.Fatalf("hiddenFromSidebar ne devrait pas changer quand le champ est absent")
+	}
+
+	visible := false
+	updated, err = s.UpdateProject(p.ID, nil, nil, nil, nil, nil, nil, nil, nil, &visible)
+	if err != nil {
+		t.Fatalf("UpdateProject (remise en visible): %v", err)
+	}
+	if updated.HiddenFromSidebar {
+		t.Fatalf("le projet devrait être de nouveau visible dans la barre latérale")
 	}
 }
 
@@ -614,7 +657,7 @@ func TestUpdateProjectDescriptionAndContextPrompt(t *testing.T) {
 
 	desc := "Nouvelle description"
 	ctx := "Nouveau contexte"
-	updated, err := s.UpdateProject(p.ID, nil, &desc, nil, &ctx, nil, nil, nil, nil)
+	updated, err := s.UpdateProject(p.ID, nil, &desc, nil, &ctx, nil, nil, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("UpdateProject: %v", err)
 	}
@@ -1714,7 +1757,7 @@ func TestUpdateProjectAllowedTools(t *testing.T) {
 	}
 
 	tools := []string{"Bash(pytest:*)", "  "}
-	updated, err := s.UpdateProject(p.ID, nil, nil, nil, nil, &tools, nil, nil, nil)
+	updated, err := s.UpdateProject(p.ID, nil, nil, nil, nil, &tools, nil, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("UpdateProject: %v", err)
 	}
@@ -1723,7 +1766,7 @@ func TestUpdateProjectAllowedTools(t *testing.T) {
 	}
 
 	// nil (champ non fourni) ne touche pas à la liste existante.
-	updated, err = s.UpdateProject(p.ID, nil, nil, nil, nil, nil, nil, nil, nil)
+	updated, err = s.UpdateProject(p.ID, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("UpdateProject (sans allowedTools): %v", err)
 	}
@@ -1733,7 +1776,7 @@ func TestUpdateProjectAllowedTools(t *testing.T) {
 
 	// Liste vide fournie : l'utilisateur retire tout, et ça se persiste.
 	none := []string{}
-	updated, err = s.UpdateProject(p.ID, nil, nil, nil, nil, &none, nil, nil, nil)
+	updated, err = s.UpdateProject(p.ID, nil, nil, nil, nil, &none, nil, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("UpdateProject (liste vide): %v", err)
 	}

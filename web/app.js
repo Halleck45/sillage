@@ -33,6 +33,8 @@
       'sidebar.noProjects': 'Aucun projet',
       'sidebar.projectMenuTooltip': 'Actions du projet',
       'sidebar.markAllRead': 'Tout marquer comme lu',
+      'sidebar.hideProject': 'Masquer de la barre latérale',
+      'sidebar.showProject': 'Afficher dans la barre latérale',
       'sidebar.agentsHeading': 'Agents',
       'sidebar.agentsAtWork': 'Au travail',
       'sidebar.newAgentTooltip': 'Nouvel agent',
@@ -46,6 +48,7 @@
       'allProjects.emptySub': 'Créez votre premier projet pour commencer.',
       'allProjects.cardCount.one': '{n} chantier',
       'allProjects.cardCount.other': '{n} chantiers',
+      'allProjects.hiddenBadge': 'Masqué de la barre latérale',
       'inbox.empty': 'Boîte de réception vide. Tout est à jour !',
       'kanban.addCard': '+ Ajouter',
       'kanban.empty': 'Aucun chantier pour l\'instant.',
@@ -493,6 +496,8 @@
       'sidebar.noProjects': 'No projects',
       'sidebar.projectMenuTooltip': 'Project actions',
       'sidebar.markAllRead': 'Mark all as read',
+      'sidebar.hideProject': 'Hide from sidebar',
+      'sidebar.showProject': 'Show in sidebar',
       'sidebar.agentsHeading': 'Agents',
       'sidebar.agentsAtWork': 'At work',
       'sidebar.newAgentTooltip': 'New agent',
@@ -506,6 +511,7 @@
       'allProjects.emptySub': 'Create your first project to get started.',
       'allProjects.cardCount.one': '{n} workstream',
       'allProjects.cardCount.other': '{n} workstreams',
+      'allProjects.hiddenBadge': 'Hidden from sidebar',
       'inbox.empty': 'Inbox is empty. All caught up!',
       'kanban.addCard': '+ Add',
       'kanban.empty': 'No workstreams yet.',
@@ -1509,7 +1515,7 @@
         '<span class="nav-icon">' + n.icon + '</span>' + escapeHtml(n.label) + '</button>';
     }).join('');
 
-    var projectsHTML = state.projects.map(function (p) {
+    var projectsHTML = state.projects.filter(function (p) { return !p.hiddenFromSidebar; }).map(function (p) {
       var active = (state.screen === 'kanban' || state.screen === 'work') && state.projectId === p.id;
       var unread = projectUnread(p.id);
       // Le fuseau remplace le dièse quand un agent travaille dans le projet :
@@ -1525,6 +1531,7 @@
         '<button class="project-menu-btn" data-action="toggle-project-menu" data-project-id="' + p.id + '" title="' + escapeHtml(t('sidebar.projectMenuTooltip')) + '" aria-label="' + escapeHtml(t('sidebar.projectMenuTooltip')) + '">⋯</button>' +
         '<div class="project-menu hidden" data-project-menu="' + p.id + '">' +
           '<button class="project-menu-item" data-action="mark-project-read" data-project-id="' + p.id + '">' + escapeHtml(t('sidebar.markAllRead')) + '</button>' +
+          '<button class="project-menu-item" data-action="toggle-project-sidebar-visibility" data-project-id="' + p.id + '">' + escapeHtml(t('sidebar.hideProject')) + '</button>' +
         '</div>' +
       '</div>';
     }).join('');
@@ -1643,6 +1650,25 @@
     api('/api/projects/' + projectId + '/mark-all-read', { method: 'POST' }).catch(function () {});
   }
 
+  // Bascule le projet hors ou dans la barre latérale : optimiste, avec retour
+  // en arrière silencieux si l'appel échoue (le menu qui l'a déclenché n'existe
+  // parfois plus après le re-rendu, ex. depuis la page "Tous les projets").
+  function toggleProjectSidebarVisibility(projectId) {
+    closeAllProjectMenus();
+    var p = state.projectsById[projectId];
+    if (!p) return;
+    var hidden = !p.hiddenFromSidebar;
+    p.hiddenFromSidebar = hidden;
+    render();
+    api('/api/projects/' + projectId, { method: 'PATCH', body: { hiddenFromSidebar: hidden } }).then(function (project) {
+      upsertProject(project);
+      render();
+    }).catch(function () {
+      p.hiddenFromSidebar = !hidden;
+      render();
+    });
+  }
+
   // ---------------------------------------------------------------------
   // Rendu : en-tête commun
   // ---------------------------------------------------------------------
@@ -1715,11 +1741,20 @@
     var tiles = state.projects.map(function (p) {
       var cardCount = state.cards.filter(function (c) { return c.projectId === p.id; }).length;
       var unread = projectUnread(p.id);
-      return '<article class="project-tile" data-action="nav-project" data-project-id="' + p.id + '">' +
-        '<div class="project-tile-top"><span class="project-hash">#</span><h3>' + escapeHtml(p.name) + '</h3>' +
-        (unread ? '<span class="badge-unread">' + unread + '</span>' : '') + '</div>' +
-        '<div class="project-tile-meta"><span>' + escapeHtml(tCount('allProjects.cardCount', cardCount)) + '</span></div>' +
-        '</article>';
+      var visibilityLabel = p.hiddenFromSidebar ? t('sidebar.showProject') : t('sidebar.hideProject');
+      return '<div class="project-tile-wrap">' +
+        '<article class="project-tile" data-action="nav-project" data-project-id="' + p.id + '">' +
+          '<div class="project-tile-top"><span class="project-hash">#</span><h3>' + escapeHtml(p.name) + '</h3>' +
+          (unread ? '<span class="badge-unread">' + unread + '</span>' : '') + '</div>' +
+          '<div class="project-tile-meta"><span>' + escapeHtml(tCount('allProjects.cardCount', cardCount)) + '</span>' +
+          (p.hiddenFromSidebar ? '<span class="project-tile-hidden-note">' + escapeHtml(t('allProjects.hiddenBadge')) + '</span>' : '') +
+          '</div>' +
+        '</article>' +
+        '<button class="project-menu-btn project-tile-menu-btn" data-action="toggle-project-menu" data-project-id="' + p.id + '" title="' + escapeHtml(t('sidebar.projectMenuTooltip')) + '" aria-label="' + escapeHtml(t('sidebar.projectMenuTooltip')) + '">⋯</button>' +
+        '<div class="project-menu hidden" data-project-menu="' + p.id + '">' +
+          '<button class="project-menu-item" data-action="toggle-project-sidebar-visibility" data-project-id="' + p.id + '">' + escapeHtml(visibilityLabel) + '</button>' +
+        '</div>' +
+      '</div>';
     }).join('');
     return buildHeaderHTML() + '<div class="view-body all-projects-body"><div class="project-grid">' + tiles +
       '<button class="project-tile project-tile-add" data-action="open-new-project">' + escapeHtml(t('header.newProject')) + '</button>' +
@@ -5925,6 +5960,7 @@
       case 'reassign-task': doReassignTask(el.getAttribute('data-task-id'), el.getAttribute('data-agent-id')); break;
       case 'toggle-project-menu': toggleProjectMenu(el.getAttribute('data-project-id')); break;
       case 'mark-project-read': markProjectAllRead(el.getAttribute('data-project-id')); break;
+      case 'toggle-project-sidebar-visibility': toggleProjectSidebarVisibility(el.getAttribute('data-project-id')); break;
       case 'move-card': moveCard(el.getAttribute('data-card-id'), el.getAttribute('data-column')); break;
       case 'open-new-card': openNewCardModal(); break;
       case 'open-new-task': if (state.cardId) openNewTaskModal(state.cardId); break;

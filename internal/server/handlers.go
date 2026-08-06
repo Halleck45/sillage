@@ -772,14 +772,15 @@ func detectDelivery(repos []Repo) Delivery {
 func (s *Server) handleUpdateProject(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	var body struct {
-		Name          *string   `json:"name"`
-		Description   *string   `json:"description"`
-		CheckCmd      *string   `json:"checkCmd"`
-		ContextPrompt *string   `json:"contextPrompt"`
-		AllowedTools  *[]string `json:"allowedTools"`
-		Repos         *[]Repo   `json:"repos"`
-		Links         *[]Link   `json:"links"`
-		Delivery      *Delivery `json:"delivery"`
+		Name              *string   `json:"name"`
+		Description       *string   `json:"description"`
+		CheckCmd          *string   `json:"checkCmd"`
+		ContextPrompt     *string   `json:"contextPrompt"`
+		AllowedTools      *[]string `json:"allowedTools"`
+		Repos             *[]Repo   `json:"repos"`
+		Links             *[]Link   `json:"links"`
+		Delivery          *Delivery `json:"delivery"`
+		HiddenFromSidebar *bool     `json:"hiddenFromSidebar"`
 	}
 	if err := decodeJSON(r, &body); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid request body")
@@ -808,7 +809,7 @@ func (s *Server) handleUpdateProject(w http.ResponseWriter, r *http.Request) {
 		links = fillMissingLinkTitles(links)
 		body.Links = &links
 	}
-	project, err := s.store.UpdateProject(id, body.Name, body.Description, body.CheckCmd, body.ContextPrompt, body.AllowedTools, body.Repos, body.Links, body.Delivery)
+	project, err := s.store.UpdateProject(id, body.Name, body.Description, body.CheckCmd, body.ContextPrompt, body.AllowedTools, body.Repos, body.Links, body.Delivery, body.HiddenFromSidebar)
 	if err != nil {
 		writeError(w, statusForStoreError(err), err.Error())
 		return

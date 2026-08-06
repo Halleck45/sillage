@@ -88,6 +88,11 @@ type Project struct {
 
 	// Delivery définit ce que livrer veut dire pour ce projet (voir Delivery).
 	Delivery Delivery `json:"delivery"`
+
+	// HiddenFromSidebar retire le projet de la barre latérale sans le
+	// supprimer : il reste listé (et accessible) depuis la page "Tous les
+	// projets", seul endroit d'où on peut le remettre dans la barre.
+	HiddenFromSidebar bool `json:"hiddenFromSidebar"`
 }
 
 // ProjectOut est la représentation d'un Project exposée par l'API : les mêmes

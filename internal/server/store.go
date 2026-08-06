@@ -21,7 +21,7 @@ import (
 // les champs exportés du Store sont sérialisés tels quels, une version qui ne
 // connaît pas un champ le fait disparaître du fichier à sa première
 // sauvegarde, en silence (voir ErrStateTooNew).
-const stateFormatVersion = 3
+const stateFormatVersion = 4
 
 // agentSeedVersion tracks one-time additions to the built-in agent profiles.
 // Unlike checking for an ID at every startup, this lets users delete a seeded
@@ -1408,12 +1408,13 @@ func NormalizeAllowedTools(tools []string) []string {
 }
 
 // UpdateProject modifie le nom, la description, la commande de vérification,
-// le contexte agent, les outils autorisés, la liste des dépôts et/ou les liens
-// épinglés d'un projet. Les champs nil ne sont pas modifiés ; allowedTools,
-// repos et links, s'ils sont fournis (même vides), remplacent entièrement la
-// liste existante (mêmes validations que AddProject). Retirer un repo ne casse
-// pas les tâches existantes : leur worktree déjà créé vit sa vie indépendamment.
-func (s *Store) UpdateProject(id string, name, description, checkCmd, contextPrompt *string, allowedTools *[]string, repos *[]Repo, links *[]Link, delivery *Delivery) (Project, error) {
+// le contexte agent, les outils autorisés, la liste des dépôts, les liens
+// épinglés et/ou la visibilité dans la barre latérale d'un projet. Les champs
+// nil ne sont pas modifiés ; allowedTools, repos et links, s'ils sont fournis
+// (même vides), remplacent entièrement la liste existante (mêmes validations
+// que AddProject). Retirer un repo ne casse pas les tâches existantes : leur
+// worktree déjà créé vit sa vie indépendamment.
+func (s *Store) UpdateProject(id string, name, description, checkCmd, contextPrompt *string, allowedTools *[]string, repos *[]Repo, links *[]Link, delivery *Delivery, hiddenFromSidebar *bool) (Project, error) {
 	var normalized []Repo
 	if repos != nil {
 		var err error
@@ -1470,6 +1471,9 @@ func (s *Store) UpdateProject(id string, name, description, checkCmd, contextPro
 	}
 	if delivery != nil {
 		p.Delivery = normalizedDelivery
+	}
+	if hiddenFromSidebar != nil {
+		p.HiddenFromSidebar = *hiddenFromSidebar
 	}
 	s.Projects[id] = p
 	if err := s.save(); err != nil {
