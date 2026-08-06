@@ -429,6 +429,7 @@
       'sidebar.repoTooltip': 'Voir le dépôt sur GitHub',
       'sidebar.sponsorTooltip': 'Sponsoriser le projet',
       'settings.tabGeneral': 'Général',
+      'settings.tabSync': 'Sauvegarde',
       'settings.tabStats': 'Statistiques',
       'usage.empty': 'Aucun projet.',
       'update.sidebarAvailable': 'Mise à jour disponible',
@@ -888,6 +889,7 @@
       'sidebar.repoTooltip': 'View the repository on GitHub',
       'sidebar.sponsorTooltip': 'Sponsor the project',
       'settings.tabGeneral': 'General',
+      'settings.tabSync': 'Backup',
       'settings.tabStats': 'Statistics',
       'usage.empty': 'No projects yet.',
       'update.sidebarAvailable': 'Update available',
@@ -1014,7 +1016,7 @@
   var projectDraftDirty = false;
   var searchIndex = 0; // résultat de recherche actif (navigation aux flèches)
   var onboardingExpanded = null;
-  var settingsModalTab = 'general'; // 'general' | 'stats' | 'update'
+  var settingsModalTab = 'general'; // 'general' | 'sync' | 'agents' | 'stats' | 'update'
   var sseOpenedOnce = false;
 
   // ---------------------------------------------------------------------
@@ -5126,6 +5128,7 @@
   function buildSettingsTabsHTML() {
     var tabs = [
       { key: 'general', label: t('settings.tabGeneral') },
+      { key: 'sync', label: t('settings.tabSync') },
       { key: 'agents', label: t('sidebar.agentsHeading') },
       { key: 'update', label: t('update.title') },
       { key: 'stats', label: t('settings.tabStats') }
@@ -5137,7 +5140,7 @@
     }).join('') + '</div>';
   }
   function setSettingsTab(tabKey) {
-    settingsModalTab = (tabKey === 'stats' || tabKey === 'update' || tabKey === 'agents') ? tabKey : 'general';
+    settingsModalTab = (tabKey === 'stats' || tabKey === 'update' || tabKey === 'agents' || tabKey === 'sync') ? tabKey : 'general';
     refreshWorkspaceModalBody();
   }
 
@@ -5166,6 +5169,13 @@
   }
 
   function buildSettingsGeneralHTML() {
+    return buildPreferencesSectionHTML() +
+      '<button class="btn-outline btn-block" data-action="logout">' + escapeHtml(t('nav.logout')) + '</button>';
+  }
+
+  // Onglet Sauvegarde : synchronisation git de l'espace de travail, séparée
+  // des préférences pour qu'on ne la croise qu'en la cherchant.
+  function buildSettingsSyncHTML() {
     var ws = state.workspace || {};
     var gitEnabled = !!ws.gitEnabled;
     var hasRemote = !!ws.remote;
@@ -5195,8 +5205,7 @@
         lastSyncErrorHTML;
     }
 
-    return buildPreferencesSectionHTML() +
-      '<div class="workspace-state">' + escapeHtml(stateLabel) + '</div>' +
+    return '<div class="workspace-state">' + escapeHtml(stateLabel) + '</div>' +
       '<div class="modal-label">' + escapeHtml(t('workspace.remoteLabel')) + '</div>' +
       '<div class="workspace-remote-row">' +
         '<input id="workspace-remote-input" class="modal-input mono" placeholder="git@github.com:vous/sillage-workspace.git" value="' + escapeHtml(ws.remote || '') + '">' +
@@ -5213,22 +5222,24 @@
         '<span>' + escapeHtml(t('workspace.lastCommit', { time: lastCommit })) + '</span>' +
         '<span>' + escapeHtml(t('workspace.lastSync', { time: lastSync })) + '</span>' +
       '</div>' +
-      dirtyNote +
-      '<div class="preferences-divider"></div>' +
-      '<button class="btn-outline btn-block" data-action="logout">' + escapeHtml(t('nav.logout')) + '</button>' +
-      // Le dépôt et le sponsoring : à leur place ici, où l'on vient une fois,
-      // plutôt qu'en permanence dans le pied de la barre latérale.
-      '<div class="about-links">' +
-        '<a href="https://github.com/Halleck45/sillage" target="_blank" rel="noopener noreferrer">' + repoIconHTML() + escapeHtml(t('sidebar.repoTooltip')) + '</a>' +
-        '<a href="https://github.com/sponsors/Halleck45/" target="_blank" rel="noopener noreferrer">' + sponsorIconHTML() + escapeHtml(t('sidebar.sponsorTooltip')) + '</a>' +
-      '</div>';
+      dirtyNote;
+  }
+
+  // Le dépôt et le sponsoring : sur tous les onglets de la modale, pas
+  // seulement Général, pour rester accessibles quel que soit l'onglet ouvert.
+  function buildAboutLinksHTML() {
+    return '<div class="about-links">' +
+      '<a href="https://github.com/Halleck45/sillage" target="_blank" rel="noopener noreferrer">' + repoIconHTML() + escapeHtml(t('sidebar.repoTooltip')) + '</a>' +
+      '<a href="https://github.com/sponsors/Halleck45/" target="_blank" rel="noopener noreferrer">' + sponsorIconHTML() + escapeHtml(t('sidebar.sponsorTooltip')) + '</a>' +
+    '</div>';
   }
   function buildWorkspaceModalBodyHTML() {
     var inner = settingsModalTab === 'stats' ? buildStatsSectionHTML()
       : settingsModalTab === 'update' ? buildUpdateSectionHTML()
       : settingsModalTab === 'agents' ? buildSettingsAgentsHTML()
+      : settingsModalTab === 'sync' ? buildSettingsSyncHTML()
       : buildSettingsGeneralHTML();
-    return buildSettingsTabsHTML() + '<div class="settings-tab-body">' + inner + '</div>';
+    return buildSettingsTabsHTML() + '<div class="settings-tab-body">' + inner + '</div>' + buildAboutLinksHTML();
   }
   function buildWorkspaceModalHTML() {
     return '<div class="modal modal-sm">' +
@@ -5239,7 +5250,6 @@
   function openWorkspaceModal() {
     settingsModalTab = 'general';
     openModal(buildWorkspaceModalHTML());
-    setTimeout(function () { var el = document.getElementById('workspace-remote-input'); if (el) el.focus(); }, 0);
   }
   function refreshWorkspaceModalBody() {
     var body = document.getElementById('workspace-modal-body');
