@@ -1528,11 +1528,7 @@
           hashHTML + '<span class="project-name">' + escapeHtml(p.name) + '</span>' +
           (unread ? '<span class="badge-unread">' + unread + '</span>' : '') +
         '</button>' +
-        '<button class="project-menu-btn" data-action="toggle-project-menu" data-project-id="' + p.id + '" title="' + escapeHtml(t('sidebar.projectMenuTooltip')) + '" aria-label="' + escapeHtml(t('sidebar.projectMenuTooltip')) + '">⋯</button>' +
-        '<div class="project-menu hidden" data-project-menu="' + p.id + '">' +
-          '<button class="project-menu-item" data-action="mark-project-read" data-project-id="' + p.id + '">' + escapeHtml(t('sidebar.markAllRead')) + '</button>' +
-          '<button class="project-menu-item" data-action="toggle-project-sidebar-visibility" data-project-id="' + p.id + '">' + escapeHtml(t('sidebar.hideProject')) + '</button>' +
-        '</div>' +
+        '<button class="project-menu-btn" data-action="toggle-project-menu" data-project-id="' + p.id + '" data-menu-scope="sidebar" title="' + escapeHtml(t('sidebar.projectMenuTooltip')) + '" aria-label="' + escapeHtml(t('sidebar.projectMenuTooltip')) + '">⋯</button>' +
       '</div>';
     }).join('');
 
@@ -1631,22 +1627,45 @@
     }).catch(function () {});
   }
 
-  function closeAllProjectMenus() {
-    document.querySelectorAll('.project-menu').forEach(function (m) { m.classList.add('hidden'); });
+  // Le contenu du menu « ⋯ » d'un projet : « Tout marquer comme lu » n'a de
+  // sens que depuis la barre latérale (scope "sidebar"), la bascule de
+  // visibilité est proposée partout, avec un libellé qui dépend de l'état
+  // courant du projet.
+  function projectMenuItemsHTML(projectId, scope) {
+    var p = state.projectsById[projectId];
+    var markReadHTML = scope === 'sidebar'
+      ? '<button class="project-menu-item" data-action="mark-project-read" data-project-id="' + projectId + '">' + escapeHtml(t('sidebar.markAllRead')) + '</button>'
+      : '';
+    var visibilityLabel = (p && p.hiddenFromSidebar) ? t('sidebar.showProject') : t('sidebar.hideProject');
+    return markReadHTML +
+      '<button class="project-menu-item" data-action="toggle-project-sidebar-visibility" data-project-id="' + projectId + '">' + escapeHtml(visibilityLabel) + '</button>';
   }
-  function toggleProjectMenu(projectId) {
-    var el = document.querySelector('.project-menu[data-project-menu="' + projectId + '"]');
-    if (!el) return;
-    var willOpen = el.classList.contains('hidden');
+
+  // Le menu « ⋯ » d'un projet est construit à la volée dans #menu-root, un
+  // conteneur au niveau de la page plutôt qu'un enfant caché du bouton :
+  // ouvert depuis .project-list (overflow-y: auto dans la barre latérale) ou
+  // depuis la grille de la page "Tous les projets", un menu absolu resterait
+  // pris dans le scroll de son conteneur et déborderait, forçant à scroller
+  // pour en voir la fin. En position fixe, ancré sur la position réelle du
+  // bouton au moment du clic, il flotte par-dessus tout, sans dépendre de la
+  // hauteur restante du conteneur qui l'a ouvert.
+  function closeAllProjectMenus() {
+    var root = document.getElementById('menu-root');
+    if (root) { root.innerHTML = ''; delete root.dataset.openProjectMenu; }
+  }
+  function toggleProjectMenu(projectId, btnEl, scope) {
+    var root = document.getElementById('menu-root');
+    if (!root) return;
+    var wasOpenForThis = root.dataset.openProjectMenu === projectId;
     closeAllProjectMenus();
-    if (willOpen) {
-      el.classList.remove('hidden');
-      // Le menu vit dans .project-list (overflow-y: auto) : ouvert sur un projet
-      // proche du bas, il déborderait du scrollport plutôt que de la liste
-      // elle-même. On ramène la liste de ce qu'il faut pour le montrer entier,
-      // au lieu de laisser l'utilisateur découvrir qu'il doit scroller.
-      el.scrollIntoView({ block: 'nearest' });
-    }
+    if (wasOpenForThis) return;
+    if (!btnEl) btnEl = document.querySelector('.project-menu-btn[data-project-id="' + projectId + '"]');
+    if (!btnEl) return;
+    var rect = btnEl.getBoundingClientRect();
+    root.dataset.openProjectMenu = projectId;
+    root.innerHTML = '<div class="project-menu" style="position:fixed; top:' + (rect.bottom + 4) +
+      'px; right:' + (document.documentElement.clientWidth - rect.right) + 'px;">' +
+      projectMenuItemsHTML(projectId, scope) + '</div>';
   }
   // Optimiste : les tâches locales passent lues tout de suite, l'appel serveur
   // suit sans bloquer (comme markTaskRead sur l'ouverture d'une tâche).
@@ -1748,7 +1767,6 @@
     var tiles = state.projects.map(function (p) {
       var cardCount = state.cards.filter(function (c) { return c.projectId === p.id; }).length;
       var unread = projectUnread(p.id);
-      var visibilityLabel = p.hiddenFromSidebar ? t('sidebar.showProject') : t('sidebar.hideProject');
       return '<div class="project-tile-wrap">' +
         '<article class="project-tile" data-action="nav-project" data-project-id="' + p.id + '">' +
           '<div class="project-tile-top"><span class="project-hash">#</span><h3>' + escapeHtml(p.name) + '</h3>' +
@@ -1757,10 +1775,7 @@
           (p.hiddenFromSidebar ? '<span class="project-tile-hidden-note">' + escapeHtml(t('allProjects.hiddenBadge')) + '</span>' : '') +
           '</div>' +
         '</article>' +
-        '<button class="project-menu-btn project-tile-menu-btn" data-action="toggle-project-menu" data-project-id="' + p.id + '" title="' + escapeHtml(t('sidebar.projectMenuTooltip')) + '" aria-label="' + escapeHtml(t('sidebar.projectMenuTooltip')) + '">⋯</button>' +
-        '<div class="project-menu hidden" data-project-menu="' + p.id + '">' +
-          '<button class="project-menu-item" data-action="toggle-project-sidebar-visibility" data-project-id="' + p.id + '">' + escapeHtml(visibilityLabel) + '</button>' +
-        '</div>' +
+        '<button class="project-menu-btn project-tile-menu-btn" data-action="toggle-project-menu" data-project-id="' + p.id + '" data-menu-scope="tile" title="' + escapeHtml(t('sidebar.projectMenuTooltip')) + '" aria-label="' + escapeHtml(t('sidebar.projectMenuTooltip')) + '">⋯</button>' +
       '</div>';
     }).join('');
     return buildHeaderHTML() + '<div class="view-body all-projects-body"><div class="project-grid">' + tiles +
@@ -5965,7 +5980,7 @@
       case 'toggle-task-menu': toggleTaskMenu(); break;
       case 'toggle-reassign-menu': toggleReassignMenu(el.getAttribute('data-task-id')); break;
       case 'reassign-task': doReassignTask(el.getAttribute('data-task-id'), el.getAttribute('data-agent-id')); break;
-      case 'toggle-project-menu': toggleProjectMenu(el.getAttribute('data-project-id')); break;
+      case 'toggle-project-menu': toggleProjectMenu(el.getAttribute('data-project-id'), el, el.getAttribute('data-menu-scope')); break;
       case 'mark-project-read': markProjectAllRead(el.getAttribute('data-project-id')); break;
       case 'toggle-project-sidebar-visibility': toggleProjectSidebarVisibility(el.getAttribute('data-project-id')); break;
       case 'move-card': moveCard(el.getAttribute('data-card-id'), el.getAttribute('data-column')); break;
@@ -6151,6 +6166,10 @@
   // remonte pas), pour survivre à la recréation du conteneur à chaque rendu.
   function onGlobalScroll(e) {
     if (e.target && e.target.id === 'conversation-list') refreshConvJump();
+    // Le menu « ⋯ » d'un projet est en position fixe, ancrée sur son bouton au
+    // moment du clic : un défilement du conteneur qui le contient le laisserait
+    // flotter loin de ce bouton plutôt que de le suivre.
+    if (e.target && e.target.classList && (e.target.classList.contains('project-list') || e.target.classList.contains('view-body'))) closeAllProjectMenus();
   }
 
   function onGlobalKeydown(e) {
