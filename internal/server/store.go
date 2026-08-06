@@ -152,15 +152,42 @@ func migrateAgentSeeds(s *Store) {
 }
 
 // resetTransientTaskFlags remet à zéro les états de tâche qui ne décrivent
-// qu'une opération en cours dans le processus : un rebase interrompu par un
-// arrêt brutal ne doit pas laisser un fuseau tourner indéfiniment côté UI.
+// qu'une opération en cours dans le processus : ils sont faux dès que ce
+// processus n'existe plus (arrêt brutal, redémarrage, mise à jour en place).
+//
+// Un rebase interrompu ne doit pas laisser un fuseau tourner indéfiniment côté
+// UI. Et une tâche « running » sans agent est un cul-de-sac : aucune sortie
+// n'arrivera plus, « Interrompre l'agent » échoue (le Runner ne connaît aucun
+// processus pour elle), sa colonne reste figée et ses compteurs restent à zéro
+// alors que le travail est peut-être commité, puisqu'ils ne sont écrits qu'à la
+// fin d'une exécution. Elle repasse donc en revue, non lue, avec un marqueur
+// dans le fil qui dit pourquoi et des compteurs relus depuis git : ce que
+// l'agent avait commité est relisible et acceptable tout de suite.
 func resetTransientTaskFlags(s *Store) {
+	var interrupted []string
 	for id, t := range s.Tasks {
 		if t.Rebasing {
 			t.Rebasing = false
 			s.Tasks[id] = t
 		}
+		if t.Status == "running" {
+			interrupted = append(interrupted, id)
+		}
 	}
+	if len(interrupted) == 0 {
+		return
+	}
+	sort.Slice(interrupted, func(i, j int) bool { return idNum(interrupted[i]) < idNum(interrupted[j]) })
+	for _, id := range interrupted {
+		t := s.Tasks[id]
+		t.Status = "review"
+		t.Unread = true
+		t.LiveActivity = nil
+		t.FilesCount, t.DocsCount, t.CommitsCount = TaskWorkCounts(t.WorktreeDir, t.Base)
+		s.Tasks[id] = t
+		s.appendMessage(id, "agent", "", "[interrupted:server-restart]")
+	}
+	s.recomputeAll()
 }
 
 // migrateCardRefs donne une référence aux chantiers antérieurs au champ Ref :
@@ -1821,9 +1848,24 @@ func (s *Store) ReassignTask(id, agentID string) (Task, error) {
 func (s *Store) AddMessage(taskID, author, authorName, text string) (Message, Task, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	t, ok := s.Tasks[taskID]
+	m, ok := s.appendMessage(taskID, author, authorName, text)
 	if !ok {
 		return Message{}, Task{}, fmt.Errorf("task not found")
+	}
+	s.recomputeCard(s.Tasks[taskID].CardID)
+	if err := s.save(); err != nil {
+		return Message{}, Task{}, err
+	}
+	return m, s.Tasks[taskID], nil
+}
+
+// appendMessage ajoute un message au fil d'une tâche et met à jour son
+// compteur, sans recalcul dérivé ni sauvegarde : à n'appeler que verrou tenu
+// (AddMessage) ou pendant le chargement, avant que le Store ne soit visible.
+func (s *Store) appendMessage(taskID, author, authorName, text string) (Message, bool) {
+	t, ok := s.Tasks[taskID]
+	if !ok {
+		return Message{}, false
 	}
 	s.NextMessageN++
 	m := Message{ID: fmt.Sprintf("m%d", s.NextMessageN), TaskID: taskID, Author: author, AuthorName: authorName, Text: text, CreatedAt: time.Now().UTC()}
@@ -1831,11 +1873,7 @@ func (s *Store) AddMessage(taskID, author, authorName, text string) (Message, Ta
 	t.MessagesCount = len(s.Messages[taskID])
 	t.UpdatedAt = time.Now().UTC()
 	s.Tasks[taskID] = t
-	s.recomputeCard(t.CardID)
-	if err := s.save(); err != nil {
-		return Message{}, Task{}, err
-	}
-	return m, s.Tasks[taskID], nil
+	return m, true
 }
 
 var slugRe = regexp.MustCompile(`[^a-z0-9]+`)

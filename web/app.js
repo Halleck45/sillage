@@ -247,6 +247,7 @@
       'chat.rebased': 'Rebasée automatiquement sur {branch} : cette tâche repart du travail accepté.',
       'chat.rebaseConflict': 'Rebase automatique impossible sur {files} (rien n\'a été modifié) : demandez à l\'agent de reprendre la base.',
       'chat.toolDenied': 'Outil refusé à l\'agent : {tool}. Pour l\'autoriser, ajoutez-le aux outils autorisés dans les réglages du projet.',
+      'chat.interrupted': 'Agent interrompu par un arrêt de Sillage : la tâche est repassée en revue. Ce qu\'il avait commité est là ; envoyez-lui un message pour qu\'il reprenne.',
       'conversation.empty': 'Aucun message pour l\'instant.',
       'diff.empty': 'Aucune modification.',
       'deliverables.code': 'Code',
@@ -693,6 +694,7 @@
       'chat.rebased': 'Rebased automatically onto {branch}: this task now starts from the accepted work.',
       'chat.rebaseConflict': 'Automatic rebase not possible on {files} (nothing was changed): ask the agent to rebase on the workstream branch.',
       'chat.toolDenied': 'Tool denied to the agent: {tool}. To allow it, add it to the allowed tools in the project settings.',
+      'chat.interrupted': 'Agent interrupted by a Sillage shutdown: the task went back to review. What it had committed is there; send it a message to pick the work back up.',
       'conversation.empty': 'No messages yet.',
       'diff.empty': 'No changes.',
       'deliverables.code': 'Code',
@@ -3209,6 +3211,11 @@
     var deniedTool = parseMarker('tool-denied', m.text);
     if (deniedTool) {
       return '<div class="msg-system msg-system-warning">' + escapeHtml(t('chat.toolDenied', { tool: deniedTool })) + '</div>';
+    }
+    // Agent perdu avec le processus qui le portait : Sillage s'est arrêté
+    // pendant qu'il travaillait (voir resetTransientTaskFlags côté serveur).
+    if (parseMarker('interrupted', m.text)) {
+      return '<div class="msg-system msg-system-warning">' + escapeHtml(t('chat.interrupted')) + '</div>';
     }
     var isUser = m.author === 'user';
     var emoji = isUser ? '🙂' : (agent.emoji || '');

@@ -45,6 +45,22 @@ func IsGitRepo(path string) bool {
 	return err == nil
 }
 
+// GitCommonDir retourne le dossier git partagé du dépôt auquel dir appartient
+// (le `.git` du dépôt d'origine quand dir est un worktree lié, où `.git` n'est
+// qu'un fichier pointeur). Sert à donner ce dossier à un agent qui travaille
+// dans un bac à sable ne montrant que les répertoires qu'on lui ajoute : sans
+// lui, toute commande git échoue par « ce n'est pas un dépôt git ».
+func GitCommonDir(dir string) (string, error) {
+	if dir == "" {
+		return "", errors.New("empty directory")
+	}
+	out, err := runGit(dir, gitDefaultTimeout, "rev-parse", "--path-format=absolute", "--git-common-dir")
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(out), nil
+}
+
 // currentBranch retourne la branche courante d'un dépôt.
 func currentBranch(repoPath string) (string, error) {
 	out, err := runGit(repoPath, gitDefaultTimeout, "rev-parse", "--abbrev-ref", "HEAD")
@@ -240,6 +256,28 @@ func Commits(dir, base string) ([]CommitInfo, error) {
 		commits = append(commits, CommitInfo{Hash: parts[0], Subject: parts[1], RelTime: parts[2]})
 	}
 	return commits, nil
+}
+
+// TaskWorkCounts compte ce que la branche d'une tâche a produit par rapport à
+// sa base : fichiers touchés, documents parmi eux, et commits. Best-effort, car
+// ces trois nombres ne sont qu'un affichage : un worktree disparu ou une base
+// inconnue rendent des zéros plutôt qu'une erreur.
+func TaskWorkCounts(worktreeDir, base string) (files, docs, commits int) {
+	if worktreeDir == "" || base == "" {
+		return 0, 0, 0
+	}
+	if changed, err := Diff(worktreeDir, base); err == nil {
+		files = len(changed)
+		for _, f := range changed {
+			if isDocFile(f.Path) {
+				docs++
+			}
+		}
+	}
+	if log, err := Commits(worktreeDir, base); err == nil {
+		commits = len(log)
+	}
+	return files, docs, commits
 }
 
 // CommitAll indexe tout l'arbre de travail de dir et commite s'il y a quelque
