@@ -4803,6 +4803,14 @@
   // saisis, ils se lisent seuls et la phrase n'est plus que du bruit. Les deux
   // colonnes portent alors un en-tête, sans quoi une ligne remplie ne dit plus
   // lequel des deux champs est le nom (les placeholders sont masqués).
+  // La branche de base vit ici, pas dans Livraison : le serveur s'en sert aussi
+  // comme point de départ des branches de chantier (voir CreateCardWorktree),
+  // c'est donc un réglage des dépôts, pas un sous-réglage de la livraison.
+  function buildBaseBranchFieldHTML() {
+    return fieldRowHTML('project.baseBranch', 'project-delivery-target',
+        '<input id="project-delivery-target" class="modal-input mono" placeholder="' + escapeHtml(t('delivery.targetPlaceholder')) + '" value="' + escapeHtml(projectDraft.target) + '">') +
+      '<div class="modal-note">' + escapeHtml(t('project.baseBranchHint')) + '</div>';
+  }
   function buildRepoSectionHTML() {
     var hasPath = modalRepos.some(function (r) { return (r.path || '').trim(); });
     var head = hasPath
@@ -4816,7 +4824,8 @@
     return head +
       '<div id="repo-rows">' + buildRepoRowsHTML() + '</div>' +
       '<button class="add-repo-link" data-action="add-repo-row">' + escapeHtml(t('project.addRepo')) + '</button>' +
-      buildPreviewHintHTML();
+      buildPreviewHintHTML() +
+      buildBaseBranchFieldHTML();
   }
   function collectReposForSubmit() {
     captureRepoRowsFromDOM();
@@ -4985,6 +4994,10 @@
       upsertProject(project);
       closeModal();
       goProject(project.id);
+      // On force la modale sur Livraison : c'est le seul réglage qu'un nouveau
+      // projet ne devine pas correctement tout seul (mode déduit des remotes,
+      // à confirmer), et le seul qu'on ne veut pas laisser passer.
+      openEditProjectModal('delivery', project.id);
     }).catch(function (e) {
       errEl.textContent = (e instanceof ApiError && e.message) || t('newProject.errorCreateFailed');
       errEl.classList.remove('hidden');
@@ -5263,18 +5276,11 @@
       '<div class="field-row-input">' + inputHTML + '</div></div>';
   }
 
-  // La branche de base est ici et non dans Livraison : le serveur s'en sert aussi
-  // comme point de départ des branches de chantier (voir CreateCardWorktree),
-  // c'est donc la branche de référence du projet, pas un sous-réglage de la
-  // livraison.
   function buildProjectGeneralPanelHTML() {
     return fieldRowHTML('project.name', 'project-edit-name',
         '<input id="project-edit-name" class="modal-input" value="' + escapeHtml(projectDraft.name) + '">') +
       fieldRowHTML('project.description', 'project-description',
-        '<input id="project-description" class="modal-input" placeholder="' + escapeHtml(t('project.descriptionPlaceholder')) + '" value="' + escapeHtml(projectDraft.description) + '">') +
-      fieldRowHTML('project.baseBranch', 'project-delivery-target',
-        '<input id="project-delivery-target" class="modal-input mono" placeholder="' + escapeHtml(t('delivery.targetPlaceholder')) + '" value="' + escapeHtml(projectDraft.target) + '">') +
-      '<div class="modal-note">' + escapeHtml(t('project.baseBranchHint')) + '</div>';
+        '<input id="project-description" class="modal-input" placeholder="' + escapeHtml(t('project.descriptionPlaceholder')) + '" value="' + escapeHtml(projectDraft.description) + '">');
   }
 
   function buildProjectInstructionsPanelHTML() {
@@ -5292,11 +5298,13 @@
     var deleteLabel = isPendingConfirm(deleteKey) ? t('project.deleteConfirm') : t('project.delete');
     var cardCount = state.cards.filter(function (c) { return c.projectId === project.id; }).length;
     var taskCount = state.tasks.filter(function (tk) { return tk.projectId === project.id; }).length;
-    return '<div class="modal-section-hint">' + escapeHtml(t('project.deleteSubtext', { cards: cardCount, tasks: taskCount })) + '</div>' +
+    return '<div class="danger-box">' +
+      '<div class="modal-section-hint">' + escapeHtml(t('project.deleteSubtext', { cards: cardCount, tasks: taskCount })) + '</div>' +
       '<div class="modal-note">' + escapeHtml(t('project.deleteWarning')) + '</div>' +
       '<div class="danger-panel-action">' +
         '<button class="btn-danger" data-action="confirm-click" data-confirm-key="' + deleteKey + '" data-confirm-action="project-delete" data-confirm-id="' + project.id + '" data-default-label="' + escapeHtml(t('project.delete')) + '" data-confirm-label="' + escapeHtml(t('project.deleteConfirm')) + '">' + escapeHtml(deleteLabel) + '</button>' +
-      '</div>';
+      '</div>' +
+    '</div>';
   }
 
   function buildProjectPanelHTML(project) {
@@ -5375,10 +5383,10 @@
     if (body) body.innerHTML = buildProjectModalBodyHTML(project);
   }
 
-  function openEditProjectModal() {
-    var project = state.projectsById[state.projectId];
+  function openEditProjectModal(initialTab, projectId) {
+    var project = state.projectsById[projectId || state.projectId];
     if (!project) return;
-    projectModalTab = 'general';
+    projectModalTab = initialTab || 'general';
     projectDraftDirty = false;
     projectDraft = {
       name: project.name || '',

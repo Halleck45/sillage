@@ -1273,6 +1273,14 @@ button, input, textarea { font-family: inherit; }
 .choice-card-title { font-size: 13px; font-weight: 600; color: var(--text); }
 .choice-card-desc { font-size: 11.5px; line-height: 1.4; color: var(--muted-3); }
 
+/* Le panneau de suppression se détache du reste par une bordure rouge diluée,
+   pas seulement par l'onglet : on ne veut pas qu'un défilement rapide confonde
+   ce panneau avec un réglage ordinaire. */
+.danger-box {
+  padding: 13px 14px; border: 1px solid var(--red-border); border-radius: 12px;
+  background: var(--red-bg);
+}
+.danger-box .modal-section-hint:first-child { margin-top: 0; }
 .danger-panel-action { margin-top: 16px; }
 .btn-danger {
   height: 32px; padding: 0 14px; border-radius: 9px; border: 1px solid var(--red-border);
