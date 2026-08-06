@@ -811,6 +811,68 @@ func TestDeliveryPreviewTargetPosition(t *testing.T) {
 	}
 }
 
+// TestDeliveryConstatesManualShip : un chantier fusionné à la main dans sa
+// destination cesse d'être « à livrer ». Sans ça, seul Ship() pose ShippedAt :
+// la carte garderait son badge « À livrer » et ne rejoindrait jamais la colonne
+// « Terminé », alors que l'aperçu affiche déjà « Déjà sur main ».
+func TestDeliveryConstatesManualShip(t *testing.T) {
+	f := newDeliveryFixture(t, Delivery{Mode: "merge", Target: "main"})
+
+	taskID, cb := f.addTask(t, "Ajoute une feature", "feature.txt", "contenu\n")
+	if w := f.accept(t, taskID); w.Code != http.StatusOK {
+		t.Fatalf("accept: attendu 200, reçu %d (%s)", w.Code, w.Body.String())
+	}
+
+	// Tant que rien n'est arrivé dans main, le chantier reste à livrer.
+	f.delivery(t)
+	card, _ := f.srv.store.GetCard(f.card.ID)
+	if !card.AwaitingShip || card.Branches[0].ShippedAt != nil {
+		t.Fatalf("chantier attendu encore à livrer, reçu %+v", card)
+	}
+
+	// Fusion à la main dans main, hors de Sillage, puis main avance encore :
+	// le chantier est arrivé et en retard en même temps.
+	runTestGit(t, f.repo, "merge", "--no-edit", cb.Branch)
+	if err := os.WriteFile(filepath.Join(f.repo, "ailleurs.txt"), []byte("autre\n"), 0o644); err != nil {
+		t.Fatalf("écriture impossible : %v", err)
+	}
+	runTestGit(t, f.repo, "add", "-A")
+	runTestGit(t, f.repo, "commit", "-m", "avance sur main")
+
+	prev := f.delivery(t)
+	if !prev.Repos[0].MergedIntoTarget {
+		t.Fatalf("branche fusionnée à la main : arrivée attendue, reçu %+v", prev.Repos[0])
+	}
+	if prev.Repos[0].ShippedAt == nil {
+		t.Fatalf("l'aperçu devrait rapporter la livraison constatée, reçu %+v", prev.Repos[0])
+	}
+	card, _ = f.srv.store.GetCard(f.card.ID)
+	if card.AwaitingShip {
+		t.Fatalf("un chantier arrivé à destination n'est plus à livrer, reçu %+v", card)
+	}
+	if card.Column != "done" {
+		t.Fatalf("colonne attendue done, reçue %q", card.Column)
+	}
+}
+
+// TestDeliveryDoesNotShipEmptyCardBranch : la constatation ci-dessus ne doit
+// pas déclarer livré un chantier qui n'a encore rien produit. Une branche de
+// chantier sans commit est contenue dans sa destination par construction ;
+// c'est shipReady (au moins une tâche acceptée) qui l'écarte.
+func TestDeliveryDoesNotShipEmptyCardBranch(t *testing.T) {
+	f := newDeliveryFixture(t, Delivery{Mode: "merge", Target: "main"})
+
+	f.addTask(t, "Ajoute une feature", "feature.txt", "contenu\n") // laissée en revue
+
+	prev := f.delivery(t)
+	if !prev.Repos[0].MergedIntoTarget {
+		t.Fatalf("une branche vide est contenue dans main par construction, reçu %+v", prev.Repos[0])
+	}
+	if prev.Repos[0].ShippedAt != nil {
+		t.Fatalf("un chantier sans tâche acceptée ne peut pas être constaté livré, reçu %+v", prev.Repos[0])
+	}
+}
+
 // TestCatchUpUnblocksShip : quand la destination a avancé, le rattrapage la
 // fusionne dans la branche du chantier, ce qui rend la fusion fast-forward (donc
 // la livraison) possible à nouveau. L'historique du chantier n'est pas réécrit :

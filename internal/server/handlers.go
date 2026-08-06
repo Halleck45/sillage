@@ -1464,16 +1464,58 @@ func (s *Server) autoAcceptMergedTasks(card Card) bool {
 	return accepted
 }
 
+// autoShipMergedCardBranches marque « livrée » toute branche de chantier déjà
+// entièrement contenue dans sa branche de destination : le pendant, un cran
+// plus haut, de autoAcceptMergedTasks. Une livraison faite à la main (fusion
+// dans main depuis un terminal, pull request fusionnée sur la forge) n'a aucune
+// raison de laisser le chantier « à livrer » à vie : sans ça, seul Ship() pose
+// ShippedAt, donc la carte ne quitte jamais « En cours » et le badge « À
+// livrer » ment jusqu'à la fin des temps.
+//
+// Deux garde-fous : le chantier doit être livrable (au moins une tâche
+// acceptée, voir shipReadiness) sinon une branche encore vide serait « déjà
+// arrivée » par construction, et la branche doit être effectivement contenue
+// dans la destination. Aucune écriture git : on ne fait que constater, comme
+// l'UI qui affiche déjà « Déjà sur <destination> » dans ce cas.
+func (s *Server) autoShipMergedCardBranches(card Card, project Project) bool {
+	if !card.ShipReady {
+		return false
+	}
+	shipped := false
+	for _, b := range card.Branches {
+		if b.ShippedAt != nil {
+			continue
+		}
+		if !IsBranchMergedInto(b.WorktreeDir, b.Branch, deliveryTarget(project, b)) {
+			continue
+		}
+		if _, err := s.store.MarkCardBranchShipped(card.ID, b.RepoName, "", time.Now().UTC()); err != nil {
+			continue
+		}
+		shipped = true
+	}
+	if shipped {
+		s.runner.publishCards(card.ProjectID)
+	}
+	return shipped
+}
+
 // handleCardDelivery est l'aperçu de livraison d'un chantier : ce qui va se
 // passer, sur quels dépôts, et ce qui bloque le cas échéant. Aucune commande
-// d'écriture git ; l'appel constate au passage les branches déjà fusionnées à
-// la main (voir autoAcceptMergedTasks) avant de calculer l'aperçu.
+// d'écriture git ; l'appel constate au passage ce qui a été fusionné à la main,
+// tâche par tâche (autoAcceptMergedTasks) puis chantier par chantier
+// (autoShipMergedCardBranches), avant de calculer l'aperçu. L'ordre compte :
+// une tâche acceptée au passage peut rendre le chantier livrable, donc
+// constatable comme déjà livré.
 func (s *Server) handleCardDelivery(w http.ResponseWriter, r *http.Request) {
 	card, project, ok := s.cardWithProject(w, r.PathValue("id"))
 	if !ok {
 		return
 	}
 	if s.autoAcceptMergedTasks(card) {
+		card, _ = s.store.GetCard(card.ID)
+	}
+	if s.autoShipMergedCardBranches(card, project) {
 		card, _ = s.store.GetCard(card.ID)
 	}
 	writeJSON(w, http.StatusOK, s.deliveryPreview(card, project))
