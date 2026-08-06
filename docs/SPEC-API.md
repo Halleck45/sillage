@@ -211,6 +211,8 @@ Statuts : `waiting → running → review → accepted`, plus `cancelled` (via `
 
 Compatibilité, au chargement de state.json : `ready` (antérieur à la v0.3.4) migre vers `review` ; `shipped` et `done` migrent vers `accepted`.
 
+**Une tâche `running` ne survit pas à un arrêt du serveur.** `running` décrit un processus, pas un travail : au chargement de state.json, ce processus n'existe plus (arrêt, redémarrage, mise à jour en place). Chaque tâche trouvée `running` repasse donc en `review`, `unread=true`, `liveActivity=null`, avec un message marqueur `"[interrupted:server-restart]"` au fil (`author="agent"`, `authorName=""`, ligne système localisée côté frontend) et ses compteurs `filesCount`/`docsCount`/`commitsCount` relus depuis git, puisqu'ils ne sont écrits qu'à la fin d'une exécution. Sans cette remise à plat la tâche est un cul-de-sac : plus aucune sortie n'arrive, `/interrupt` répond 400 `"no agent is running for this task"` faute de processus, la colonne du chantier reste figée et un travail commité s'affiche « 0 fichier ». Le travail lui-même n'est jamais perdu : il est dans la branche de la tâche. Un message envoyé à la tâche relance l'agent, avec reprise de session pour les CLI qui la portent (`claude`).
+
 #### Démarrage différé d'une tâche
 
 `POST /api/tasks` accepte `waitsForTaskId`, l'identifiant d'une autre tâche du même chantier, pas encore terminale (400 `"waitsForTaskId must reference a task of the same workstream"` sinon, ou `"waitsForTaskId task is already finished"` si elle est déjà `accepted`/`cancelled`). Le worktree et la branche de la tâche sont créés normalement, mais l'agent n'est pas lancé : la tâche reste `waiting`, et `Task.waitsForTaskId` porte l'identifiant attendu.

@@ -534,9 +534,9 @@ func slicesContain(values []string, target string) bool {
 }
 
 func TestAntigravityArgsUseSandbox(t *testing.T) {
-	args := antigravityArgs(Agent{Model: "gemini-test"}, "/tmp/wt", "Fix the bug")
+	args := antigravityArgs(Agent{Model: "gemini-test"}, "/tmp/wt", "/tmp/repo/.git", "Fix the bug")
 	joined := strings.Join(args, " ")
-	for _, required := range []string{"--print", "--sandbox", "--print-timeout=60m", "--model gemini-test", "--add-dir /tmp/wt"} {
+	for _, required := range []string{"--print", "--sandbox", "--print-timeout=60m", "--model gemini-test", "--add-dir /tmp/wt", "--add-dir /tmp/repo/.git"} {
 		if !strings.Contains(joined, required) {
 			t.Fatalf("Antigravity arguments should contain %q: %v", required, args)
 		}
@@ -548,6 +548,16 @@ func TestAntigravityArgsUseSandbox(t *testing.T) {
 	// sinon agy exécute le drapeau suivant comme prompt.
 	if len(args) < 2 || args[len(args)-2] != "--print" || args[len(args)-1] != "Fix the bug" {
 		t.Fatalf("Antigravity prompt arguments are malformed: %v", args)
+	}
+	// Dépôt introuvable : pas de --add-dir vide, qui ferait échouer le lancement.
+	bare := antigravityArgs(Agent{}, "/tmp/wt", "", "Fix the bug")
+	for i, a := range bare {
+		if a == "--add-dir" && (i+1 >= len(bare) || bare[i+1] == "") {
+			t.Fatalf("--add-dir sans valeur : %v", bare)
+		}
+	}
+	if strings.Count(strings.Join(bare, " "), "--add-dir") != 1 {
+		t.Fatalf("un seul --add-dir attendu sans dossier git : %v", bare)
 	}
 }
 
@@ -595,6 +605,10 @@ func TestAntigravityPromptWarnsAboutLinkedWorktree(t *testing.T) {
 	prompt := prefixAgentContext(Agent{}, Project{}, Card{}, antigravityWorktreeNote+"\n\nTask: x")
 	if !strings.Contains(prompt, "linked git worktree") || !strings.Contains(prompt, "`.git`") {
 		t.Fatalf("the antigravity prompt should warn about .git: %q", prompt)
+	}
+	// Une sortie de bac à sable est auto-refusée : la session meurt muette.
+	if !strings.Contains(prompt, "outside the sandbox") {
+		t.Fatalf("the antigravity prompt should forbid unsandboxed retries: %q", prompt)
 	}
 	if !strings.HasSuffix(prompt, "Task: x") {
 		t.Fatalf("the note must not come after the task text: %q", prompt)
