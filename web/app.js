@@ -324,6 +324,36 @@
       'newCard.titlePlaceholder': 'Titre du chantier',
       'newCard.errorTitleRequired': 'Le titre est requis.',
       'newCard.errorCreateFailed': 'Erreur lors de la création du chantier.',
+      'newCard.submitAndPlan': 'Créer et planifier',
+      'newCard.submitAndPlanTooltip': 'Créer le chantier, puis demander un plan de tâches à une IA',
+      'plan.button': 'Plan de tâches',
+      'plan.buttonTooltip': 'Demander à une IA de découper ce chantier en étapes',
+      'plan.title': 'Plan de tâches',
+      'plan.intro': 'L\'agent lit le dépôt et propose un découpage en étapes. Il n\'écrit rien : rien n\'est créé avant que vous ne validiez.',
+      'plan.extraLabel': 'Précisions (facultatif)',
+      'plan.extraPlaceholder': 'Par où commencer, ce que le découpage doit respecter, ce qu\'il ne doit pas toucher…',
+      'plan.repoLabel': 'Dépôt à lire',
+      'plan.agentLabel': 'Agent',
+      'plan.agentHint': 'Il planifiera, puis fera le travail',
+      'plan.propose': 'Proposer un plan',
+      'plan.proposing': 'Lecture du dépôt…',
+      'plan.waitNote': 'L\'agent lit le dépôt. Cela prend souvent une minute ou deux.',
+      'plan.errorNoAgent': 'Aucun agent ne sait planifier. Les agents Claude et Codex le savent, ainsi que l\'agent de test.',
+      'plan.errorAgentRequired': 'Choisissez un agent.',
+      'plan.errorFailed': 'Le plan n\'a pas abouti.',
+      'plan.stepsTitle.one': '1 étape proposée',
+      'plan.stepsTitle.other': '{n} étapes proposées',
+      'plan.stepTitlePlaceholder': 'Titre de la tâche',
+      'plan.stepPromptPlaceholder': 'Ce que l\'agent doit faire',
+      'plan.removeStep': 'Retirer cette étape',
+      'plan.chainLabel': 'Enchaîner : chaque tâche démarre quand la précédente est acceptée',
+      'plan.chainHint': 'Décoché, toutes les tâches démarrent en même temps.',
+      'plan.again': 'Recommencer',
+      'plan.create.one': 'Créer la tâche',
+      'plan.create.other': 'Créer les {n} tâches',
+      'plan.creating': 'Création…',
+      'plan.errorEmpty': 'Il ne reste aucune étape à créer.',
+      'plan.errorPartial': '{n} tâche(s) créée(s), puis une erreur : {msg}',
       'workstream.editTooltip': 'Modifier le chantier',
       'workstream.editTitle': 'Chantier',
       'workstream.errorSaveFailed': 'Erreur lors de l\'enregistrement.',
@@ -797,6 +827,36 @@
       'newCard.titlePlaceholder': 'Workstream title',
       'newCard.errorTitleRequired': 'A title is required.',
       'newCard.errorCreateFailed': 'Failed to create the workstream.',
+      'newCard.submitAndPlan': 'Create and plan',
+      'newCard.submitAndPlanTooltip': 'Create the workstream, then ask an AI for a task plan',
+      'plan.button': 'Task plan',
+      'plan.buttonTooltip': 'Ask an AI to split this workstream into steps',
+      'plan.title': 'Task plan',
+      'plan.intro': 'The agent reads the repository and proposes a split into steps. It writes nothing: nothing is created until you approve it.',
+      'plan.extraLabel': 'Details (optional)',
+      'plan.extraPlaceholder': 'Where to start, what the split must respect, what it must not touch…',
+      'plan.repoLabel': 'Repository to read',
+      'plan.agentLabel': 'Agent',
+      'plan.agentHint': 'It will plan, then do the work',
+      'plan.propose': 'Propose a plan',
+      'plan.proposing': 'Reading the repository…',
+      'plan.waitNote': 'The agent is reading the repository. This often takes a minute or two.',
+      'plan.errorNoAgent': 'No agent can plan. Claude and Codex agents can, and so can the test agent.',
+      'plan.errorAgentRequired': 'Pick an agent.',
+      'plan.errorFailed': 'The plan did not come through.',
+      'plan.stepsTitle.one': '1 step proposed',
+      'plan.stepsTitle.other': '{n} steps proposed',
+      'plan.stepTitlePlaceholder': 'Task title',
+      'plan.stepPromptPlaceholder': 'What the agent has to do',
+      'plan.removeStep': 'Remove this step',
+      'plan.chainLabel': 'Chain them: each task starts once the previous one is accepted',
+      'plan.chainHint': 'Unchecked, every task starts at once.',
+      'plan.again': 'Start over',
+      'plan.create.one': 'Create the task',
+      'plan.create.other': 'Create the {n} tasks',
+      'plan.creating': 'Creating…',
+      'plan.errorEmpty': 'No step left to create.',
+      'plan.errorPartial': '{n} task(s) created, then an error: {msg}',
       'workstream.editTooltip': 'Edit workstream',
       'workstream.editTitle': 'Workstream',
       'workstream.errorSaveFailed': 'Failed to save.',
@@ -1037,6 +1097,17 @@
   var modalAttachments = []; // images jointes en attente, modale de création de tâche
   var modalRepos = []; // [{name, path}] pour les onglets de la modale de projet
   var modalLinks = []; // [{url, title}] liens épinglés, modale de projet
+  // Modale de plan de tâches. planDraft porte la proposition en cours de
+  // relecture : elle vit hors du DOM parce que retirer une étape réécrit la
+  // liste, et que ce qui a été corrigé à la main ne doit pas repartir.
+  var planCardId = null;
+  var planDraft = null; // null (formulaire) | { steps: [{title, prompt}], repoName, chain }
+  var planBusy = false; // un aller-retour est en cours : les boutons sont figés
+  // Ce qui a été saisi dans le formulaire, gardé hors du DOM : la modale se
+  // re-rend pendant l'attente puis en cas d'échec, et un plan qui n'aboutit pas
+  // ne doit pas effacer les précisions qu'on venait d'écrire.
+  var planExtra = '';
+  var planRepoName = '';
   // Onglet actif et brouillon des champs simples de la modale de projet. Les
   // panneaux se rendent un par un : sans ce brouillon, changer d'onglet
   // perdrait ce qui vient d'être saisi dans le panneau qu'on quitte.
@@ -2107,7 +2178,15 @@
     var filterHTML = filters.map(function (f) {
       return '<button class="pill ' + (state.taskFilter === f.key ? 'pill-active' : '') + '" data-action="set-filter" data-filter="' + f.key + '">' + escapeHtml(f.label) + '</button>';
     }).join('');
-    var newTaskHTML = state.cardId ? buildCreateButtonHTML('open-new-task', t('header.newTask'), t('header.newTaskTooltip'), 'btn-outline') : '';
+    // Le plan se tient à côté de « Nouvelle tâche », pas dans la barre du haut
+    // déjà occupée par Recette et Livrer : les deux boutons créent du travail,
+    // c'est le même geste à deux échelles (une tâche, ou le découpage entier).
+    var newTaskHTML = state.cardId
+      ? '<div class="filter-pills-actions">' +
+        '<button class="btn-neutral plan-btn" data-action="open-plan" title="' + escapeHtml(t('plan.buttonTooltip')) + '">' + escapeHtml(t('plan.button')) + '</button>' +
+        buildCreateButtonHTML('open-new-task', t('header.newTask'), t('header.newTaskTooltip'), 'btn-outline') +
+        '</div>'
+      : '';
     var visible = tasksAll.filter(function (t) { return taskMatchesFilter(t, state.taskFilter); })
       .sort(compareTasksForList);
     var rowsHTML;
@@ -4536,10 +4615,11 @@
       agentWarningExtrasHTML(agent.warning, agent.id) + '</div>';
   }
 
-  function buildNewTaskModalHTML(card) {
-    // Groupe de radios : un seul arrêt de tabulation, les flèches changent
-    // d'agent (tabindex roulant, cf. moveAgentChoice).
-    var agentChoices = state.agents.map(function (a) {
+  // Groupe de radios : un seul arrêt de tabulation, les flèches changent
+  // d'agent (tabindex roulant, cf. moveAgentChoice). Partagé par la modale de
+  // création de tâche et celle du plan de tâches, qui n'en montre qu'une partie.
+  function buildAgentChoicesHTML(agents) {
+    return agents.map(function (a) {
       var isSel = a.id === modalAgentId;
       var warn = a.warning ? '<span class="agent-warning" title="' + escapeHtml(agentWarningText(a.warning)) + '">⚠</span>' : '';
       return '<button class="agent-choice ' + (isSel ? 'selected' : '') + '" data-action="pick-agent" data-agent-id="' + a.id + '"' +
@@ -4548,6 +4628,10 @@
         '<span class="agent-choice-info"><span class="agent-choice-name">' + escapeHtml(a.name) + warn + '</span>' +
         '<span class="agent-choice-model mono">' + escapeHtml(a.model || '') + '</span></span></button>';
     }).join('');
+  }
+
+  function buildNewTaskModalHTML(card) {
+    var agentChoices = buildAgentChoicesHTML(state.agents);
     var selected = state.agentsById[modalAgentId];
     var project = state.projectsById[card.projectId];
     var repos = (project && project.repos) || [];
@@ -5014,6 +5098,10 @@
       '<textarea id="new-card-context" class="modal-textarea" rows="3" placeholder="' + escapeHtml(t('project.contextPromptPlaceholder')) + '"></textarea>' +
       '<div id="new-card-error" class="modal-error hidden"></div>' +
       '<div class="modal-foot"><button class="btn-outline" data-action="close-modal">' + escapeHtml(t('common.cancel')) + '</button>' +
+      // Planifier tout de suite est le prolongement naturel de la création :
+      // le titre du chantier vient d'être écrit, c'est là qu'on sait le moins
+      // par quoi commencer.
+      '<button class="btn-neutral" data-action="submit-new-card-plan" title="' + escapeHtml(t('newCard.submitAndPlanTooltip')) + '">' + escapeHtml(t('newCard.submitAndPlan')) + '</button>' +
       '<button class="btn-green" data-action="submit-new-card">' + escapeHtml(t('common.create')) + '</button></div>' +
       '</div>';
   }
@@ -5022,7 +5110,9 @@
     openModal(buildNewCardModalHTML());
     setTimeout(function () { var el = document.getElementById('new-card-title'); if (el) el.focus(); }, 0);
   }
-  function submitNewCard() {
+  // mode 'plan' : le chantier créé, la modale de plan prend la place de
+  // celle-ci, sur la page du chantier.
+  function submitNewCard(mode) {
     var titleEl = document.getElementById('new-card-title');
     var contextEl = document.getElementById('new-card-context');
     var errEl = document.getElementById('new-card-error');
@@ -5033,9 +5123,223 @@
       upsertCard(card);
       closeModal();
       goCard(card.id);
+      if (mode === 'plan') openPlanModal(card.id);
     }).catch(function (e) {
       errEl.textContent = (e instanceof ApiError && e.message) || t('newCard.errorCreateFailed');
       errEl.classList.remove('hidden');
+    });
+  }
+
+  // Plan de tâches : demander à une IA de découper le chantier en une
+  // succession d'étapes. La proposition n'est jamais appliquée toute seule,
+  // c'est un brouillon relu et corrigé dans la modale avant que la moindre
+  // tâche existe (voir docs/SPEC-API.md, « Plan de tâches »).
+
+  // Les CLI dont Sillage garantit la lecture seule pendant une planification
+  // (canPlan dans internal/server/plan.go) : la route refuse les autres, la
+  // liste ne les propose donc pas.
+  var PLAN_CAPABLE_CLIS = ['claude', 'codex', 'fake'];
+
+  function planCapableAgents() {
+    return state.agents.filter(function (a) { return PLAN_CAPABLE_CLIS.indexOf(a.cli) >= 0; });
+  }
+
+  function buildPlanFormHTML(card) {
+    var agents = planCapableAgents();
+    if (!agents.length) {
+      return '<div class="modal-error">' + escapeHtml(t('plan.errorNoAgent')) + '</div>' +
+        '<div class="modal-foot"><button class="btn-outline" data-action="close-modal">' + escapeHtml(t('common.close')) + '</button></div>';
+    }
+    var project = state.projectsById[card.projectId];
+    var repos = (project && project.repos) || [];
+    var repoSelectHTML = '';
+    if (repos.length > 1) {
+      var repoOptions = repos.map(function (r) {
+        return '<option value="' + escapeHtml(r.name) + '"' + (r.name === planRepoName ? ' selected' : '') + '>' + escapeHtml(r.name) + '</option>';
+      }).join('');
+      repoSelectHTML = '<div class="modal-label">' + escapeHtml(t('plan.repoLabel')) + '</div>' +
+        '<select id="plan-repo" class="modal-input">' + repoOptions + '</select>';
+    }
+    return '<div class="modal-hint">' + escapeHtml(t('plan.intro')) + '</div>' +
+      '<div class="modal-label">' + escapeHtml(t('plan.extraLabel')) + '</div>' +
+      '<textarea id="plan-extra" class="modal-textarea" rows="3" placeholder="' + escapeHtml(t('plan.extraPlaceholder')) + '"' + (planBusy ? ' disabled' : '') + '>' + escapeHtml(planExtra) + '</textarea>' +
+      repoSelectHTML +
+      '<div class="modal-label modal-label-row"><span>' + escapeHtml(t('plan.agentLabel')) + '</span>' +
+      '<span class="modal-label-hint">' + escapeHtml(t('plan.agentHint')) + '</span></div>' +
+      '<div class="agent-choices" id="agent-choices" role="radiogroup" aria-label="' + escapeHtml(t('plan.agentLabel')) + '">' +
+      buildAgentChoicesHTML(agents) + '</div>' +
+      '<div id="agent-choice-warning">' + buildAgentChoiceWarningHTML(state.agentsById[modalAgentId]) + '</div>' +
+      '<div id="plan-error" class="modal-error hidden"></div>' +
+      (planBusy ? '<div class="modal-note" role="status" aria-live="polite">' + escapeHtml(t('plan.waitNote')) + '</div>' : '') +
+      '<div class="modal-foot"><button class="btn-outline" data-action="close-modal">' + escapeHtml(t('common.cancel')) + '</button>' +
+      '<button class="btn-green" data-action="submit-plan"' + (planBusy ? ' disabled' : '') + '>' +
+      escapeHtml(planBusy ? t('plan.proposing') : t('plan.propose')) + '</button></div>';
+  }
+
+  function buildPlanProposalHTML() {
+    var stepsHTML = planDraft.steps.map(function (s, i) {
+      return '<div class="plan-step">' +
+        '<div class="plan-step-head">' +
+          '<span class="plan-step-num">' + (i + 1) + '</span>' +
+          '<input class="modal-input plan-step-title" data-index="' + i + '" value="' + escapeHtml(s.title) + '" placeholder="' + escapeHtml(t('plan.stepTitlePlaceholder')) + '">' +
+          '<button class="icon-btn" data-action="plan-remove-step" data-index="' + i + '" title="' + escapeHtml(t('plan.removeStep')) + '" aria-label="' + escapeHtml(t('plan.removeStep')) + '">✕</button>' +
+        '</div>' +
+        '<textarea class="modal-textarea plan-step-prompt" data-index="' + i + '" rows="3" placeholder="' + escapeHtml(t('plan.stepPromptPlaceholder')) + '">' + escapeHtml(s.prompt) + '</textarea>' +
+        '</div>';
+    }).join('');
+    return '<div class="modal-label">' + escapeHtml(tCount('plan.stepsTitle', planDraft.steps.length)) + '</div>' +
+      '<div class="plan-steps">' + stepsHTML + '</div>' +
+      '<label class="plan-chain-row">' +
+        '<input type="checkbox" id="plan-chain"' + (planDraft.chain ? ' checked' : '') + '>' +
+        '<span>' + escapeHtml(t('plan.chainLabel')) + '</span>' +
+      '</label>' +
+      '<div class="modal-note">' + escapeHtml(t('plan.chainHint')) + '</div>' +
+      '<div id="plan-error" class="modal-error hidden"></div>' +
+      '<div class="modal-foot"><button class="btn-outline" data-action="close-modal">' + escapeHtml(t('common.cancel')) + '</button>' +
+      '<button class="btn-neutral" data-action="plan-restart"' + (planBusy ? ' disabled' : '') + '>' + escapeHtml(t('plan.again')) + '</button>' +
+      '<button class="btn-green" data-action="plan-create-tasks"' + (planBusy ? ' disabled' : '') + '>' +
+      escapeHtml(planBusy ? t('plan.creating') : tCount('plan.create', planDraft.steps.length)) + '</button></div>';
+  }
+
+  function buildPlanModalHTML(card) {
+    return '<div class="modal">' +
+      '<div class="modal-head"><span class="modal-title">' + escapeHtml(t('plan.title')) + '</span>' +
+      '<span class="modal-sub">' + escapeHtml(card.title) + '</span>' +
+      '<button class="icon-btn" data-action="close-modal" aria-label="' + escapeHtml(t('common.close')) + '">✕</button></div>' +
+      (planDraft ? buildPlanProposalHTML() : buildPlanFormHTML(card)) +
+      '</div>';
+  }
+
+  function renderPlanModal() {
+    var card = state.cardsById[planCardId];
+    if (!card) { closeModal(); return; }
+    openModal(buildPlanModalHTML(card));
+  }
+
+  function openPlanModal(cardId) {
+    var card = state.cardsById[cardId];
+    if (!card) return;
+    planCardId = cardId;
+    planDraft = null;
+    planBusy = false;
+    planExtra = '';
+    planRepoName = '';
+    // L'agent déjà choisi ailleurs est repris s'il sait planifier, sinon le
+    // premier agent en bon état de la liste.
+    var agents = planCapableAgents();
+    var kept = agents.filter(function (a) { return a.id === modalAgentId; })[0];
+    var fallback = agents.filter(function (a) { return !a.warning; })[0] || agents[0];
+    modalAgentId = (kept || fallback || {}).id || null;
+    renderPlanModal();
+  }
+
+  function planErrorText(e, fallbackKey) {
+    return (e instanceof ApiError && e.message) || t(fallbackKey);
+  }
+
+  function showPlanError(text) {
+    var el = document.getElementById('plan-error');
+    if (!el) return;
+    el.textContent = text;
+    el.classList.remove('hidden');
+  }
+
+  function submitPlan() {
+    if (planBusy) return;
+    var card = state.cardsById[planCardId];
+    if (!card) return;
+    if (!modalAgentId) { showPlanError(t('plan.errorAgentRequired')); return; }
+    var extraEl = document.getElementById('plan-extra');
+    var repoEl = document.getElementById('plan-repo');
+    planExtra = extraEl ? extraEl.value.trim() : '';
+    planRepoName = repoEl ? repoEl.value : '';
+    var body = { agentId: modalAgentId };
+    if (planExtra) body.prompt = planExtra;
+    if (planRepoName) body.repoName = planRepoName;
+    planBusy = true;
+    renderPlanModal();
+    api('/api/cards/' + planCardId + '/plan', { method: 'POST', body: body }).then(function (plan) {
+      planBusy = false;
+      planDraft = { steps: plan.steps || [], repoName: plan.repoName || '', chain: true };
+      renderPlanModal();
+    }).catch(function (e) {
+      planBusy = false;
+      renderPlanModal();
+      showPlanError(planErrorText(e, 'plan.errorFailed'));
+    });
+  }
+
+  // Ce qui a été corrigé à la main dans la modale est relu avant tout
+  // re-rendu : retirer une étape réécrit la liste entière.
+  function syncPlanDraftFromDOM() {
+    if (!planDraft) return;
+    document.querySelectorAll('.plan-step-title').forEach(function (el) {
+      var s = planDraft.steps[parseInt(el.getAttribute('data-index'), 10)];
+      if (s) s.title = el.value.trim();
+    });
+    document.querySelectorAll('.plan-step-prompt').forEach(function (el) {
+      var s = planDraft.steps[parseInt(el.getAttribute('data-index'), 10)];
+      if (s) s.prompt = el.value.trim();
+    });
+    var chainEl = document.getElementById('plan-chain');
+    if (chainEl) planDraft.chain = chainEl.checked;
+  }
+
+  function removePlanStep(index) {
+    if (!planDraft || planBusy) return;
+    syncPlanDraftFromDOM();
+    planDraft.steps.splice(index, 1);
+    if (!planDraft.steps.length) { planDraft = null; }
+    renderPlanModal();
+  }
+
+  function restartPlan() {
+    if (planBusy) return;
+    planDraft = null;
+    renderPlanModal();
+  }
+
+  // Les tâches sont créées une par une, dans l'ordre : chaînées, chacune
+  // attend l'acceptation de la précédente, donc seule la première démarre un
+  // agent. Une erreur en cours de route garde les étapes restantes dans la
+  // modale plutôt que de tout perdre.
+  function createPlanTasks() {
+    if (!planDraft || planBusy) return;
+    syncPlanDraftFromDOM();
+    var steps = planDraft.steps.filter(function (s) { return s.title; });
+    if (!steps.length) { showPlanError(t('plan.errorEmpty')); return; }
+    var chain = planDraft.chain;
+    var repoName = planDraft.repoName;
+    planBusy = true;
+    renderPlanModal();
+
+    var i = 0;
+    var previousId = null;
+    function createNext() {
+      if (i >= steps.length) return Promise.resolve();
+      var body = { cardId: planCardId, title: steps[i].title, agentId: modalAgentId };
+      if (steps[i].prompt) body.prompt = steps[i].prompt;
+      if (repoName) body.repoName = repoName;
+      if (chain && previousId) body.waitsForTaskId = previousId;
+      return api('/api/tasks', { method: 'POST', body: body }).then(function (task) {
+        upsertTask(task);
+        previousId = task.id;
+        i += 1;
+        return createNext();
+      });
+    }
+    createNext().then(function () {
+      planBusy = false;
+      planDraft = null;
+      closeModal();
+      renderSidebar();
+      renderMain();
+    }).catch(function (e) {
+      planBusy = false;
+      planDraft.steps = steps.slice(i);
+      renderPlanModal();
+      showPlanError(t('plan.errorPartial', { n: i, msg: planErrorText(e, 'plan.errorFailed') }));
+      renderSidebar();
     });
   }
 
@@ -6340,6 +6644,11 @@
       case 'move-card': moveCard(el.getAttribute('data-card-id'), el.getAttribute('data-column')); break;
       case 'open-new-card': openNewCardModal(); break;
       case 'open-new-task': if (state.cardId) openNewTaskModal(state.cardId); break;
+      case 'open-plan': if (state.cardId) openPlanModal(state.cardId); break;
+      case 'submit-plan': submitPlan(); break;
+      case 'plan-remove-step': removePlanStep(parseInt(el.getAttribute('data-index'), 10)); break;
+      case 'plan-restart': restartPlan(); break;
+      case 'plan-create-tasks': createPlanTasks(); break;
       case 'open-new-project': openNewProjectModal(); break;
       case 'open-edit-project': openEditProjectModal(); break;
       case 'set-project-tab': setProjectTab(el.getAttribute('data-project-tab')); break;
@@ -6360,6 +6669,7 @@
       case 'open-shortcuts': openShortcutsModal(); break;
       case 'submit-new-project': submitNewProject(); break;
       case 'submit-new-card': submitNewCard(); break;
+      case 'submit-new-card-plan': submitNewCard('plan'); break;
       case 'interrupt': doInterrupt(el.getAttribute('data-task-id')); break;
       case 'start-task': doStartWaitingTask(el.getAttribute('data-task-id')); break;
       case 'reopen': doReopen(el.getAttribute('data-task-id')); break;
@@ -6479,6 +6789,10 @@
       // Sauf dans le champ d'ajout d'un lien, dont la validation est l'ajout :
       // enregistrer le projet y perdrait l'URL qu'on vient de taper.
       if (e.target.id === 'new-link-url') { e.preventDefault(); addLinkRow(); return; }
+      // Sauf dans le titre d'une étape de plan : la validation y créerait toutes
+      // les tâches (worktrees compris) alors qu'on est en train de relire la
+      // proposition, étape par étape.
+      if (e.target.classList.contains('plan-step-title')) { e.preventDefault(); return; }
       var primary = primarySubmitButton(modal);
       if (primary) { e.preventDefault(); primary.click(); }
       return;

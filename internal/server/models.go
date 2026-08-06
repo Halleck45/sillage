@@ -554,6 +554,24 @@ type CatchUpResponse struct {
 	Repos []CatchUpRepoResult `json:"repos"`
 }
 
+// PlanStep est une étape proposée par POST /api/cards/{id}/plan : le titre et
+// le prompt d'une future tâche, tels quels. Rien n'est créé côté serveur, c'est
+// l'humain qui déclenche les créations depuis la proposition.
+type PlanStep struct {
+	Title  string `json:"title"`
+	Prompt string `json:"prompt"`
+}
+
+// PlanResponse est la réponse de POST /api/cards/{id}/plan. RepoName et AgentID
+// sont renvoyés parce que le serveur peut les avoir résolus lui-même (dépôt par
+// défaut du projet) : l'UI crée ensuite les tâches sur le même dépôt.
+type PlanResponse struct {
+	CardID   string     `json:"cardId"`
+	AgentID  string     `json:"agentId"`
+	RepoName string     `json:"repoName"`
+	Steps    []PlanStep `json:"steps"`
+}
+
 // DeliveryRepoPreview décrit ce que la livraison ferait sur un dépôt donné.
 // Commits/Files (contenu de la livraison, base..branche) et Pending (ce qui
 // reste réellement à livrer) sont calculés à la volée par git.
