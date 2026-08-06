@@ -111,7 +111,7 @@ func TestStoreRoundtripSaveLoad(t *testing.T) {
 	if _, ok := s2.GetAgent("bolt"); !ok {
 		t.Fatalf("l'agent seedé 'bolt' doit être présent après rechargement")
 	}
-	for id, wantName := range map[string]string{"github-copilot": "Octo", "antigravity": "Astro"} {
+	for id, wantName := range map[string]string{"github-copilot": "Octo", "antigravity": "Astro", "kiro": "Kiro"} {
 		if agent, ok := s2.GetAgent(id); !ok {
 			t.Fatalf("seeded agent %q should be present after reload", id)
 		} else if agent.Name != wantName {
@@ -158,6 +158,35 @@ func TestAgentSeedMigrationRunsOnce(t *testing.T) {
 	}
 	if _, ok := reloaded.GetAgent("antigravity"); ok {
 		t.Fatal("a deleted seeded agent should not be recreated")
+	}
+}
+
+func TestKiroSeedMigrationDoesNotRecreateEarlierDeletedAgents(t *testing.T) {
+	dir := t.TempDir()
+	legacy := `{
+  "FormatVersion": 2,
+  "AgentSeedVersion": 1,
+  "Projects": {}, "Cards": {}, "Tasks": {}, "Messages": {},
+  "Agents": {
+    "github-copilot": {"id":"github-copilot","name":"Custom Copilot","cli":"copilot"}
+  }
+}`
+	if err := os.WriteFile(filepath.Join(dir, "state.json"), []byte(legacy), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	s, err := NewStore(dir)
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+	if _, ok := s.GetAgent("kiro"); !ok {
+		t.Fatal("Kiro should be added to a workspace with seed version 1")
+	}
+	if _, ok := s.GetAgent("antigravity"); ok {
+		t.Fatal("a previously deleted Antigravity profile must not be recreated by the Kiro migration")
+	}
+	if agent, ok := s.GetAgent("github-copilot"); !ok || agent.Name != "Custom Copilot" {
+		t.Fatalf("existing profiles should stay untouched, got %+v", agent)
 	}
 }
 
@@ -466,7 +495,7 @@ func TestAddAgentSlugUniqueAndValidation(t *testing.T) {
 	if a.ID != "nova" {
 		t.Fatalf("id attendu 'nova', reçu %q", a.ID)
 	}
-	for _, cli := range []string{"copilot", "agy"} {
+	for _, cli := range []string{"copilot", "agy", "kiro"} {
 		if _, err := s.AddAgent("Custom "+cli, "", "", cli, "", ""); err != nil {
 			t.Fatalf("AddAgent should accept cli %q: %v", cli, err)
 		}
@@ -1104,8 +1133,26 @@ func TestAgentWarningMissingBinary(t *testing.T) {
 	if got := agentWarning(Agent{Cli: "agy"}, wtDir); got != "agy CLI not found in PATH" {
 		t.Fatalf("warning = %q, want missing Antigravity CLI", got)
 	}
+	if got := agentWarning(Agent{Cli: "kiro"}, wtDir); got != "kiro CLI not found in PATH" {
+		t.Fatalf("warning = %q, want missing Kiro CLI", got)
+	}
 	if got := agentWarning(Agent{Cli: "fake"}, wtDir); got != "" {
 		t.Fatalf("l'agent fake ne devrait jamais avoir d'avertissement, reçu %q", got)
+	}
+}
+
+func TestAgentWarningKiroRequiresAPIKey(t *testing.T) {
+	origLookPath := lookPath
+	defer func() { lookPath = origLookPath }()
+	lookPath = func(file string) (string, error) { return "/usr/bin/" + file, nil }
+	t.Setenv("KIRO_API_KEY", "")
+
+	if got := agentWarning(Agent{Cli: "kiro"}, t.TempDir()); got != "KIRO_API_KEY is not set for headless Kiro CLI" {
+		t.Fatalf("unexpected Kiro authentication warning: %q", got)
+	}
+	t.Setenv("KIRO_API_KEY", "test-key")
+	if got := agentWarning(Agent{Cli: "kiro"}, t.TempDir()); got != "" {
+		t.Fatalf("Kiro should be healthy with its binary and API key, got %q", got)
 	}
 }
 
@@ -1256,6 +1303,7 @@ func TestAgentWarningHealthy(t *testing.T) {
 	origLookPath := lookPath
 	defer func() { lookPath = origLookPath }()
 	lookPath = func(file string) (string, error) { return "/usr/bin/" + file, nil }
+	t.Setenv("KIRO_API_KEY", "test-key")
 
 	origSettings := antigravitySettingsPath
 	defer func() { antigravitySettingsPath = origSettings }()
@@ -1276,6 +1324,9 @@ func TestAgentWarningHealthy(t *testing.T) {
 	}
 	if got := agentWarning(Agent{Cli: "agy"}, wtDir); got != "" {
 		t.Fatalf("healthy Antigravity should have no warning, got %q", got)
+	}
+	if got := agentWarning(Agent{Cli: "kiro"}, wtDir); got != "" {
+		t.Fatalf("healthy Kiro should have no warning, got %q", got)
 	}
 }
 

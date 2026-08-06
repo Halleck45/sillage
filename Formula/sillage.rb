@@ -39,7 +39,7 @@ class Sillage < Formula
     keep_alive true
     log_path var/"log/sillage.log"
     error_log_path var/"log/sillage.log"
-    # Sillage lance des CLI (claude, codex, copilot, agy, git, gh, glab). Sans PATH explicite,
+    # Sillage lance des CLI (claude, codex, copilot, agy, kiro-cli, git, gh, glab). Sans PATH explicite,
     # un service ne voit qu'un PATH minimal et tous les agents seraient signalés
     # « binaire absent du PATH ». On ajoute ~/.local/bin, où atterrissent la
     # plupart des installeurs de CLI d'agents.

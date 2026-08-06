@@ -436,6 +436,103 @@ func TestCopilotArgsAreAutonomousButKeepOutboundCommandsDenied(t *testing.T) {
 	}
 }
 
+func TestKiroArgsUseHeadlessIsolatedAgent(t *testing.T) {
+	args := kiroArgs("Fix the bug")
+	joined := strings.Join(args, " ")
+	for _, required := range []string{"chat", "--no-interactive", "--agent " + kiroAgentName, "--wrap never"} {
+		if !strings.Contains(joined, required) {
+			t.Fatalf("Kiro arguments should contain %q: %v", required, args)
+		}
+	}
+	for _, forbidden := range []string{"--trust-all-tools", "--trust-tools"} {
+		if strings.Contains(joined, forbidden) {
+			t.Fatalf("Kiro arguments should not bypass profile permissions with %q: %v", forbidden, args)
+		}
+	}
+	if args[len(args)-1] != "Fix the bug" {
+		t.Fatalf("Kiro prompt should be the final argument: %v", args)
+	}
+}
+
+func TestKiroProfileAllowsLocalWorkButDeniesOutboundCommands(t *testing.T) {
+	config := newKiroAgentConfig(Agent{Model: "kiro-test"})
+	if config.Model != "kiro-test" || config.IncludeMCPJSON {
+		t.Fatalf("unexpected Kiro profile settings: %+v", config)
+	}
+	if slicesContain(config.AllowedTools, "write") || slicesContain(config.AllowedTools, "shell") {
+		t.Fatalf("write and shell must use granular settings, not blanket trust: %v", config.AllowedTools)
+	}
+	if len(config.ToolsSettings.Write.AllowedPaths) != 1 || config.ToolsSettings.Write.AllowedPaths[0] != "**" {
+		t.Fatalf("Kiro writes should stay relative to the worktree: %+v", config.ToolsSettings.Write)
+	}
+	if !config.ToolsSettings.Shell.DenyByDefault || len(config.ToolsSettings.Shell.AllowedCommands) != 1 {
+		t.Fatalf("unexpected Kiro shell policy: %+v", config.ToolsSettings.Shell)
+	}
+	denied := strings.Join(config.ToolsSettings.Shell.DeniedCommands, "\n")
+	for _, required := range []string{"git\\s+push", "gh", "glab", "kiro-cli"} {
+		if !strings.Contains(denied, required) {
+			t.Fatalf("Kiro deny rules should cover %q: %v", required, config.ToolsSettings.Shell.DeniedCommands)
+		}
+	}
+}
+
+func TestCreateKiroHomeWritesPrivateRuntimeProfile(t *testing.T) {
+	home, err := createKiroHome(Agent{Model: "kiro-test"})
+	if err != nil {
+		t.Fatalf("createKiroHome: %v", err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(home) })
+
+	path := filepath.Join(home, "agents", kiroAgentName+".json")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read Kiro profile: %v", err)
+	}
+	var config kiroAgentConfig
+	if err := json.Unmarshal(data, &config); err != nil {
+		t.Fatalf("unmarshal Kiro profile: %v", err)
+	}
+	if config.Name != kiroAgentName || config.Model != "kiro-test" {
+		t.Fatalf("unexpected Kiro profile: %+v", config)
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("stat Kiro profile: %v", err)
+	}
+	if info.Mode().Perm() != 0o600 {
+		t.Fatalf("Kiro profile mode = %o, want 600", info.Mode().Perm())
+	}
+}
+
+func TestKiroEnvIsolatesHomeAndPreservesAPIKey(t *testing.T) {
+	t.Setenv("KIRO_HOME", "/old")
+	t.Setenv("KIRO_API_KEY", "secret-test-key")
+	t.Setenv("NO_COLOR", "old")
+	env := kiroEnv("/tmp/new-kiro-home")
+	values := map[string]string{}
+	for _, entry := range env {
+		parts := strings.SplitN(entry, "=", 2)
+		if len(parts) == 2 {
+			values[parts[0]] = parts[1]
+		}
+	}
+	if values["KIRO_HOME"] != "/tmp/new-kiro-home" || values["KIRO_API_KEY"] != "secret-test-key" {
+		t.Fatalf("Kiro environment should isolate home and preserve authentication: %+v", values)
+	}
+	if values["NO_COLOR"] != "1" || values["KIRO_LOG_NO_COLOR"] != "1" {
+		t.Fatalf("Kiro environment should disable terminal colors: %+v", values)
+	}
+}
+
+func slicesContain(values []string, target string) bool {
+	for _, value := range values {
+		if value == target {
+			return true
+		}
+	}
+	return false
+}
+
 func TestAntigravityArgsUseSandbox(t *testing.T) {
 	args := antigravityArgs(Agent{Model: "gemini-test"}, "/tmp/wt", "Fix the bug")
 	joined := strings.Join(args, " ")

@@ -74,7 +74,7 @@ type Project struct {
 	CheckCmd string `json:"checkCmd"`
 
 	// ContextPrompt est un texte libre transmis aux agents (voir runner.go :
-	// ajouté au system prompt claude, préfixe du prompt codex/copilot/agy,
+	// ajouté au system prompt claude, préfixe du prompt codex/copilot/agy/kiro,
 	// ignoré par fake).
 	ContextPrompt string `json:"contextPrompt"`
 
@@ -83,7 +83,7 @@ type Project struct {
 	// Saisi par l'humain dans les réglages, jamais lu depuis un fichier du dépôt
 	// (invariant 5 de CONTRIBUTING.md) : ces fichiers sont écrits par les agents.
 	// Le refus figé (claudeDeniedTools) l'emporte sur toute entrée d'ici.
-	// Ignoré par codex, copilot, agy et fake.
+	// Ignoré par codex, copilot, agy, kiro et fake.
 	AllowedTools []string `json:"allowedTools"`
 
 	// Delivery définit ce que livrer veut dire pour ce projet (voir Delivery).
@@ -152,12 +152,12 @@ type Card struct {
 	AwaitingShip bool `json:"awaitingShip"`
 
 	// ContextPrompt est un texte libre transmis aux agents (voir runner.go :
-	// ajouté au system prompt claude, préfixe du prompt codex/copilot/agy,
+	// ajouté au system prompt claude, préfixe du prompt codex/copilot/agy/kiro,
 	// ignoré par fake).
 	ContextPrompt string `json:"contextPrompt"`
 }
 
-// Agent est un profil d'agent IA (claude, codex, copilot, agy ou fake).
+// Agent est un profil d'agent IA (claude, codex, copilot, agy, kiro ou fake).
 type Agent struct {
 	ID            string `json:"id"`
 	Name          string `json:"name"`
@@ -192,7 +192,7 @@ type AgentQuotaWindow struct {
 // readCodexRateLimits, lue dans le fichier de session codex après chaque
 // exécution : le flux `codex exec --json` ne la porte pas). C'est un quota de
 // compte OpenAI, donc partagé par tous les agents cli=codex, jamais calculé
-// par agent. claude, copilot, agy et fake n'ont pas de source :
+// par agent. claude, copilot, agy, kiro et fake n'ont pas de source :
 // AgentOut.Quota reste nil.
 type AgentQuota struct {
 	UpdatedAt time.Time          `json:"updatedAt"`

@@ -77,7 +77,7 @@ Agent   { "id": "bolt", "name": "Bolt", "emoji": "🐝", "color": "#f2b705",
           // active = une tâche running lui est assignée. warning : calculé à chaque
           // liste d'agents (jamais persisté dans state.json), vide si tout va bien ;
           // voir "Santé des agents" ci-dessous. quota : voir "Quota des agents"
-          // ci-dessous, absent/null pour cli ∈ {claude, copilot, agy, fake} et pour un agent
+          // ci-dessous, absent/null pour cli ∈ {claude, copilot, agy, kiro, fake} et pour un agent
           // codex sans exécution encore observée.
 
 Task    { "id": "t1", "cardId": "c1", "projectId": "p1", "ref": 482, "title": "...",
@@ -172,7 +172,7 @@ PreviewRun { "id": "pv1", "projectId": "p1", "cardId": "c1", "taskId": "",
 | GET | `/api/update` | | UpdateStatus. Lecture du cache mémoire uniquement : **aucun appel réseau** |
 | POST | `/api/update/check` | `{}` | UpdateStatus après un appel à l'API GitHub. 400 sur une compilation locale (rien à comparer), 502 si GitHub est injoignable |
 | POST | `/api/update/apply` | `{confirm:true}` | `{output, version, restarting, note}` : installe la version publiée puis remplace le process. 400 sans `confirm`, 502 si l'installation échoue ou n'est pas possible en un clic (voir ci-dessous) |
-| POST | `/api/agents` | `{name, emoji?, color?, cli, model?, contextPrompt?}` | Agent (name et cli requis ; cli ∈ {claude, codex, copilot, agy, fake} ; id = slug du name, 400 si déjà pris) |
+| POST | `/api/agents` | `{name, emoji?, color?, cli, model?, contextPrompt?}` | Agent (name et cli requis ; cli ∈ {claude, codex, copilot, agy, kiro, fake} ; id = slug du name, 400 si déjà pris) |
 | PATCH | `/api/agents/{id}` | mêmes champs, tous optionnels | Agent |
 | DELETE | `/api/agents/{id}` | | 204 (400 si une tâche référence encore l'agent) |
 | POST | `/api/agents/{id}/fix-warning` | | AgentOut, avertissement recalculé (donc vide si le correctif a marché). Applique le seul correctif de configuration machine que Sillage sait poser, dans `~/.gemini/antigravity-cli/settings.json` : `"toolPermission": "proceed-in-sandbox"` et les règles `read_file(<dataDir>/worktrees)` / `write_file(<dataDir>/worktrees)` ajoutées à `permissions.allow`. 404 agent inconnu, 400 `"no automatic fix for this agent"` si `cli != "agy"`, 500 si le fichier existe mais n'est pas du JSON valide (il n'est alors **pas** écrasé). Les autres clés et les règles déjà présentes sont conservées ; l'opération est idempotente. SSE : `agents` |
@@ -255,7 +255,7 @@ Migration : les projets antérieurs au champ (`allowedTools` absent du `state.js
 
 Quand un outil est refusé, un Message marqueur est ajouté au fil de la tâche (`author="agent"`, `authorName=""`, texte figé `"[tool-denied:<outil demandé>]"`), suivi de l'événement SSE `message`. Sans lui, un refus reste invisible : l'agent s'excuse, contourne, et l'humain constate seulement une tâche qui a pris trois tours de plus. Le frontend affiche une ligne système localisée qui nomme l'outil et renvoie vers les réglages du projet. C'est ce marqueur qui apprend à l'utilisateur quoi mettre dans `allowedTools` ; sans lui, le champ n'est découvrable qu'en lisant un transcript.
 
-Les agents `codex` ne sont pas concernés : ils n'ont pas d'allowlist mais un sandbox (`--sandbox`, voir `SPEC-BACKEND.md`). `allowedTools` est ignoré pour eux, et le champ le dit dans l'UI.
+Les autres adaptateurs ne consomment pas `Project.allowedTools`. Codex utilise son sandbox ; Copilot, Antigravity et Kiro ont leurs propres politiques headless (voir `SPEC-BACKEND.md`). Le champ le dit dans l'UI.
 
 ### Réassignation d'une tâche à un autre agent
 
@@ -276,18 +276,19 @@ Actions destructives, jamais déclenchées depuis les listes : confirmation doub
 
 `Agent.warning` (dans `AgentOut`, jamais `Agent` lui-même : le champ n'existe pas dans le modèle persisté) est recalculé à chaque liste d'agents (`GET /api/state`, événement SSE `agents`) :
 - `cli=codex` : si `/proc/sys/kernel/apparmor_restrict_unprivileged_userns` vaut `1` et que `SILLAGE_CODEX_SANDBOX` n'est pas définie → `"codex sandbox is blocked on this machine (AppArmor); see README (SILLAGE_CODEX_SANDBOX)"`.
-- `cli=codex`, `cli=claude`, `cli=copilot` ou `cli=agy` : si le binaire correspondant est introuvable dans le PATH → `"<cli> CLI not found in PATH"`.
+- `cli=codex`, `cli=claude`, `cli=copilot`, `cli=agy` ou `cli=kiro` : si le binaire correspondant est introuvable dans le PATH (`kiro-cli` pour Kiro) → `"<cli> CLI not found in PATH"`.
 - `cli=agy` : si `~/.gemini/antigravity-cli/settings.json` ne permet pas de travailler sans confirmation, fichier absent inclus → `"agy cannot work headlessly with its current permissions; see ~/.gemini/antigravity-cli/settings.json"`. Il faut **les deux** conditions : une politique de commandes qui ne demande rien (`toolPermission` ∈ {`proceed-in-sandbox`, `always-proceed`} ou une règle `command(...)` dans `permissions.allow`) **et** une règle `read_file(...)` et `write_file(...)` couvrant la racine des worktrees (`<dataDir>/worktrees`). Une règle couvre un chemin si sa cible est `*`, le chemin exact, ou un dossier parent ; les motifs (`read_file(<dossier>/*)`) ne comptent pas, la CLI ne les interprète pas.
+- `cli=kiro` : si `KIRO_API_KEY` est absente ou vide → `"KIRO_API_KEY is not set for headless Kiro CLI"`. Le mode headless officiel exige cette variable ; Sillage ne la lit jamais au-delà du test vide/non vide, ne l'affiche pas et ne la persiste pas.
 - Sinon (ou `cli=fake`) : chaîne vide.
 
-Un seul de ces avertissements se corrige en un clic (`POST /api/agents/{id}/fix-warning`) : la politique d'agy, parce qu'elle n'est qu'une ligne dans un fichier de configuration. Installer une CLI absente ou lever une restriction AppArmor demande une installation ou un `sudo` : ces deux avertissements restent expliqués, avec leur commande à copier, et Sillage ne les exécute pas.
+Un seul de ces avertissements se corrige en un clic (`POST /api/agents/{id}/fix-warning`) : la politique d'agy, parce qu'elle n'est qu'une ligne dans un fichier de configuration. Installer une CLI absente, fournir une clé Kiro au processus ou lever une restriction AppArmor demande une action extérieure : ces avertissements restent expliqués, avec commande ou documentation, et Sillage ne les exécute pas.
 
 ### Quota des agents
 
 `Agent.quota` (dans `AgentOut`, jamais persisté) reflète le dernier instantané de quota connu chez le fournisseur du cli, quand ce dernier le publie :
 
 - `cli=codex` : après chaque exécution, Sillage lit le fichier de session que codex écrit de son côté (`~/.codex/sessions/AAAA/MM/JJ/rollout-...-<thread_id>.jsonl`, même en mode `codex exec --json` qui ne porte pas cette info sur son flux stdout) et en extrait le dernier `rate_limits` vu : deux fenêtres glissantes, `"5h"` (300 min) et `"week"` (10080 min), chacune avec `usedPercent` et `resetsAt`. C'est un quota de compte OpenAI, donc identique pour tous les agents `cli=codex` (`Store.CodexQuota`, un seul instantané partagé). `quota` reste `null` tant qu'aucune tâche codex n'a encore tourné sur cette instance.
-- `cli=claude`, `cli=copilot`, `cli=agy` et `cli=fake` : toujours `null`. Ces adaptateurs ne publient aucune information de quota exploitable ; l'UI affiche un message "non disponible" plutôt que d'inventer une donnée.
+- `cli=claude`, `cli=copilot`, `cli=agy`, `cli=kiro` et `cli=fake` : toujours `null`. Ces adaptateurs ne publient aucune information de quota exploitable ; l'UI affiche un message "non disponible" plutôt que d'inventer une donnée.
 
 Forme de `quota` quand non nul : `{ "updatedAt": "...", "windows": [ { "label": "5h", "usedPercent": 44.0, "resetsAt": "..." }, { "label": "week", "usedPercent": 49.0, "resetsAt": "..." } ] }`.
 

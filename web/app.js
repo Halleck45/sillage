@@ -315,6 +315,7 @@
       'agent.cli.codex': 'OpenAI Codex (codex)',
       'agent.cli.copilot': 'GitHub Copilot (copilot)',
       'agent.cli.agy': 'Google Antigravity (agy)',
+      'agent.cli.kiro': 'Kiro CLI (kiro)',
       'agent.cli.fake': 'Agent de test (fake)',
       'agent.model': 'Modèle',
       'agent.contextPrompt': 'Prompt de contexte',
@@ -333,6 +334,9 @@
       'agent.warning.agyPolicyFix': 'Régler pour moi',
       'agent.warning.agyPolicyFixConfirm': 'Écrire dans settings.json ?',
       'agent.warning.agyPolicyFixed': 'Réglé. Antigravity peut travailler dans son bac à sable.',
+      'agent.warning.kiroApiKey': 'Kiro CLI est installé, mais son mode headless exige une clé API dans la variable d’environnement KIRO_API_KEY. Les tâches confiées à cet agent ne peuvent pas démarrer sans elle.',
+      'agent.warning.kiroApiKeyHint': 'Ajoutez KIRO_API_KEY à l’environnement qui lance Sillage, puis relancez Sillage. La clé n’est ni affichée ni enregistrée dans l’espace de travail.',
+      'agent.warning.kiroApiKeyLink': 'Voir l’authentification de Kiro CLI',
       'agent.warning.cliNotFound': 'Agent non connecté : CLI {cli} introuvable dans le PATH.',
       'agent.warning.installHint': 'Installez le CLI, puis relancez Sillage :',
       'agent.warning.installLink': 'Voir la documentation d’installation',
@@ -757,6 +761,7 @@
       'agent.cli.codex': 'OpenAI Codex (codex)',
       'agent.cli.copilot': 'GitHub Copilot (copilot)',
       'agent.cli.agy': 'Google Antigravity (agy)',
+      'agent.cli.kiro': 'Kiro CLI (kiro)',
       'agent.cli.fake': 'Test agent (fake)',
       'agent.model': 'Model',
       'agent.contextPrompt': 'Context prompt',
@@ -775,6 +780,9 @@
       'agent.warning.agyPolicyFix': 'Set it for me',
       'agent.warning.agyPolicyFixConfirm': 'Write to settings.json?',
       'agent.warning.agyPolicyFixed': 'Set. Antigravity can work inside its sandbox.',
+      'agent.warning.kiroApiKey': 'Kiro CLI is installed, but its headless mode requires an API key in the KIRO_API_KEY environment variable. Tasks assigned to this agent cannot start without it.',
+      'agent.warning.kiroApiKeyHint': 'Add KIRO_API_KEY to the environment that starts Sillage, then restart Sillage. The key is neither displayed nor stored in the workspace.',
+      'agent.warning.kiroApiKeyLink': 'Open the Kiro CLI authentication guide',
       'agent.warning.cliNotFound': 'Agent not connected: {cli} CLI not found in PATH.',
       'agent.warning.installHint': 'Install the CLI, then restart Sillage:',
       'agent.warning.installLink': 'Open the installation guide',
@@ -2890,6 +2898,7 @@
     if (!warning) return '';
     if (warning.indexOf('codex sandbox is blocked') !== -1) return t('agent.warning.codexSandbox');
     if (warning.indexOf('agy cannot work headlessly') !== -1) return t('agent.warning.agyPolicy');
+    if (warning.indexOf('KIRO_API_KEY is not set') !== -1) return t('agent.warning.kiroApiKey');
     var m = /^(\S+) CLI not found in PATH$/.exec(warning);
     if (m) return t('agent.warning.cliNotFound', { cli: m[1] });
     return warning;
@@ -2915,6 +2924,10 @@
     agy: {
       command: 'curl -fsSL https://antigravity.google/cli/install.sh | bash',
       url: 'https://antigravity.google/docs/cli/install'
+    },
+    kiro: {
+      command: 'curl -fsSL https://cli.kiro.dev/install | bash',
+      url: 'https://kiro.dev/docs/cli/installation/'
     }
   };
   function agentWarningExtrasHTML(warning, agentId) {
@@ -2939,6 +2952,11 @@
         '</div>' +
         '<a class="agent-warning-link" href="https://antigravity.google/docs/cli/reference" target="_blank" rel="noopener noreferrer">' +
           escapeHtml(t('agent.warning.agyPolicyLink')) + '</a>';
+    }
+    if (warning.indexOf('KIRO_API_KEY is not set') !== -1) {
+      return '<div class="agent-warning-fallback">' + escapeHtml(t('agent.warning.kiroApiKeyHint')) + '</div>' +
+        '<a class="agent-warning-link" href="https://kiro.dev/docs/cli/authentication/" target="_blank" rel="noopener noreferrer">' +
+          escapeHtml(t('agent.warning.kiroApiKeyLink')) + '</a>';
     }
     if (warning.indexOf('codex sandbox is blocked') !== -1) {
       return '<div class="agent-warning-cmd">' +
@@ -4338,7 +4356,7 @@
   function buildAgentModalHTML(agent) {
     var isEdit = !!agent;
     var title = isEdit ? t('agent.editTitle') : t('agent.newTitle');
-    var cliValues = ['claude', 'codex', 'copilot', 'agy', 'fake'];
+    var cliValues = ['claude', 'codex', 'copilot', 'agy', 'kiro', 'fake'];
     var cliOptions = cliValues.map(function (cli) {
       return '<option value="' + cli + '"' + (agent && agent.cli === cli ? ' selected' : '') + '>' + escapeHtml(t('agent.cli.' + cli)) + '</option>';
     }).join('');
