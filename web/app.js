@@ -1108,6 +1108,14 @@
   // ne doit pas effacer les précisions qu'on venait d'écrire.
   var planExtra = '';
   var planRepoName = '';
+  // Attente d'un plan : de quoi la rendre visiblement vivante (voir
+  // buildPlanThinkingHTML). planRunToken périme la réponse d'un aller-retour
+  // dont la modale a été fermée entre-temps : sans lui, elle se rouvrirait
+  // toute seule quelques minutes plus tard.
+  var planRunToken = 0;
+  var planStartedAt = 0;
+  var planTicker = null;
+  var planWaitKey = 'plan.proposing'; // libellé de l'attente en cours
   // Onglet actif et brouillon des champs simples de la modale de projet. Les
   // panneaux se rendent un par un : sans ce brouillon, changer d'onglet
   // perdrait ce qui vient d'être saisi dans le panneau qu'on quitte.
@@ -4553,6 +4561,7 @@
   function closeModal() {
     state.modal = null;
     state.previewScope = null;
+    resetPlanWait();
     var root = document.getElementById('modal-root');
     root.innerHTML = '';
   }
@@ -5170,10 +5179,76 @@
       buildAgentChoicesHTML(agents) + '</div>' +
       '<div id="agent-choice-warning">' + buildAgentChoiceWarningHTML(state.agentsById[modalAgentId]) + '</div>' +
       '<div id="plan-error" class="modal-error hidden"></div>' +
-      (planBusy ? '<div class="modal-note" role="status" aria-live="polite">' + escapeHtml(t('plan.waitNote')) + '</div>' : '') +
+      buildPlanThinkingHTML() +
       '<div class="modal-foot"><button class="btn-outline" data-action="close-modal">' + escapeHtml(t('common.cancel')) + '</button>' +
       '<button class="btn-green" data-action="submit-plan"' + (planBusy ? ' disabled' : '') + '>' +
-      escapeHtml(planBusy ? t('plan.proposing') : t('plan.propose')) + '</button></div>';
+      (planBusy ? planPendingLabelHTML(t('plan.proposing')) : escapeHtml(t('plan.propose'))) + '</button></div>';
+  }
+
+  // L'attente d'un plan est la même attente que celle d'un agent dans une
+  // conversation, et se montre donc de la même façon (voir buildThinkingHTML) :
+  // l'avatar de l'agent qui respire, son nom, les trois points, et une ligne
+  // qui ondule sous lui. Elle prend la place que la proposition occupera, pour
+  // que rien ne saute quand elle arrive.
+  // Le compteur est ce qui distingue vraiment « ça travaille » de « c'est
+  // figé » : lire un dépôt prend parfois deux minutes, et une animation seule
+  // ne dit pas si elle tourne depuis cinq secondes ou depuis cinq minutes. Il
+  // survit à prefers-reduced-motion, qui éteint tout le reste.
+  function buildPlanThinkingHTML() {
+    if (!planBusy) return '';
+    var agent = state.agentsById[modalAgentId] || { emoji: '', name: '', color: '#ccc' };
+    return '<div class="msg-thinking plan-thinking" id="plan-thinking">' +
+      '<span class="msg-avatar" style="background:' + softColor(agent.color) + '">' + (agent.emoji || '') + '</span>' +
+      '<div class="msg-body">' +
+        '<div class="msg-head"><span class="msg-name">' + escapeHtml(agent.name || '') + '</span>' +
+          '<span class="thinking-dots" aria-hidden="true"><i></i><i></i><i></i></span></div>' +
+        '<div class="thinking-line" aria-live="polite">' +
+          '<span class="thinking-label">' + escapeHtml(t(planWaitKey)) + '</span>' +
+          '<span class="thinking-elapsed mono">' + escapeHtml(planElapsedText()) + '</span>' +
+        '</div>' +
+        // L'ordre de grandeur annoncé une fois vaut mieux qu'une barre de
+        // progression inventée : on ne sait pas où en est l'agent.
+        (planWaitKey === 'plan.proposing' ? '<div class="plan-thinking-note">' + escapeHtml(t('plan.waitNote')) + '</div>' : '') +
+      '</div></div>';
+  }
+
+  // Trois points dans le bouton lui-même : un bouton grisé au libellé fixe est
+  // le premier endroit où l'on croit l'interface bloquée, parce que c'est là
+  // qu'on vient de cliquer.
+  function planPendingLabelHTML(label) {
+    return escapeHtml(label) + '<span class="thinking-dots btn-dots" aria-hidden="true"><i></i><i></i><i></i></span>';
+  }
+
+  function planElapsedText() {
+    if (!planStartedAt) return '';
+    var s = Math.max(0, Math.round((Date.now() - planStartedAt) / 1000));
+    var m = Math.floor(s / 60);
+    var rest = s % 60;
+    return m + ':' + (rest < 10 ? '0' : '') + rest;
+  }
+
+  // Seul le texte du compteur est réécrit, jamais la ligne entière : réinjecter
+  // le libellé relancerait son ondulation à zéro chaque seconde.
+  function startPlanTicker(waitKey) {
+    planWaitKey = waitKey;
+    planStartedAt = Date.now();
+    stopPlanTicker();
+    planTicker = setInterval(function () {
+      var el = document.querySelector('#plan-thinking .thinking-elapsed');
+      if (!el) { stopPlanTicker(); return; }
+      el.textContent = planElapsedText();
+    }, 1000);
+  }
+
+  function stopPlanTicker() {
+    if (planTicker) { clearInterval(planTicker); planTicker = null; }
+  }
+
+  // Appelé par closeModal : une modale fermée ne laisse ni minuteur qui tourne,
+  // ni réponse en vol capable de la rouvrir.
+  function resetPlanWait() {
+    stopPlanTicker();
+    if (planBusy) { planBusy = false; planRunToken += 1; }
   }
 
   function buildPlanProposalHTML() {
@@ -5195,10 +5270,11 @@
       '</label>' +
       '<div class="modal-note">' + escapeHtml(t('plan.chainHint')) + '</div>' +
       '<div id="plan-error" class="modal-error hidden"></div>' +
+      buildPlanThinkingHTML() +
       '<div class="modal-foot"><button class="btn-outline" data-action="close-modal">' + escapeHtml(t('common.cancel')) + '</button>' +
       '<button class="btn-neutral" data-action="plan-restart"' + (planBusy ? ' disabled' : '') + '>' + escapeHtml(t('plan.again')) + '</button>' +
       '<button class="btn-green" data-action="plan-create-tasks"' + (planBusy ? ' disabled' : '') + '>' +
-      escapeHtml(planBusy ? t('plan.creating') : tCount('plan.create', planDraft.steps.length)) + '</button></div>';
+      (planBusy ? planPendingLabelHTML(t('plan.creating')) : escapeHtml(tCount('plan.create', planDraft.steps.length))) + '</button></div>';
   }
 
   function buildPlanModalHTML(card) {
@@ -5224,6 +5300,7 @@
     planBusy = false;
     planExtra = '';
     planRepoName = '';
+    stopPlanTicker();
     // L'agent déjà choisi ailleurs est repris s'il sait planifier, sinon le
     // premier agent en bon état de la liste.
     var agents = planCapableAgents();
@@ -5257,13 +5334,19 @@
     if (planExtra) body.prompt = planExtra;
     if (planRepoName) body.repoName = planRepoName;
     planBusy = true;
+    var token = ++planRunToken;
+    startPlanTicker('plan.proposing');
     renderPlanModal();
     api('/api/cards/' + planCardId + '/plan', { method: 'POST', body: body }).then(function (plan) {
+      if (token !== planRunToken) return; // modale fermée entre-temps
       planBusy = false;
+      stopPlanTicker();
       planDraft = { steps: plan.steps || [], repoName: plan.repoName || '', chain: true };
       renderPlanModal();
     }).catch(function (e) {
+      if (token !== planRunToken) return;
       planBusy = false;
+      stopPlanTicker();
       renderPlanModal();
       showPlanError(planErrorText(e, 'plan.errorFailed'));
     });
@@ -5311,6 +5394,10 @@
     var chain = planDraft.chain;
     var repoName = planDraft.repoName;
     planBusy = true;
+    var token = ++planRunToken;
+    // Chaque tâche crée un worktree git : trois étapes se comptent en secondes,
+    // pas en millisecondes. Même attente, donc même indicateur.
+    startPlanTicker('plan.creating');
     renderPlanModal();
 
     var i = 0;
@@ -5329,13 +5416,17 @@
       });
     }
     createNext().then(function () {
+      if (token !== planRunToken) return;
       planBusy = false;
+      stopPlanTicker();
       planDraft = null;
       closeModal();
       renderSidebar();
       renderMain();
     }).catch(function (e) {
+      if (token !== planRunToken) return;
       planBusy = false;
+      stopPlanTicker();
       planDraft.steps = steps.slice(i);
       renderPlanModal();
       showPlanError(t('plan.errorPartial', { n: i, msg: planErrorText(e, 'plan.errorFailed') }));

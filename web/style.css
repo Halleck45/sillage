@@ -1358,6 +1358,23 @@ button, input, textarea { font-family: inherit; }
 }
 .plan-chain-row input[type="checkbox"] { cursor: pointer; }
 
+/* Attendre un plan, c'est attendre un agent : même objet que dans une
+   conversation (.msg-thinking), posé sur un bloc de verre à la place que la
+   proposition occupera. Une modale qui ne bouge pas pendant deux minutes se lit
+   comme une modale plantée, et c'est là qu'on vient de cliquer. */
+.plan-thinking {
+  margin-top: 14px; padding: 12px 13px; border-radius: 12px;
+  background: var(--glass-card); border: 1px solid var(--border-3);
+}
+/* Le compteur, lui, avance même quand prefers-reduced-motion a tout éteint :
+   c'est la seule preuve que le temps passe et que rien n'est bloqué. */
+.thinking-elapsed { margin-left: 8px; font-size: 11.5px; color: var(--muted-4); }
+.plan-thinking-note { margin-top: 5px; font-size: 11.5px; line-height: 1.4; color: var(--muted-4); }
+/* Les points du bouton prennent sa couleur de texte : sur un bouton plein,
+   l'encre de la conversation serait invisible. */
+.btn-dots { margin-left: 7px; vertical-align: middle; }
+.btn-dots i { background: currentColor; opacity: .9; }
+
 .agent-quota-box {
   margin-top: 8px; background: var(--glass-card); border: 1px solid var(--border-3);
   border-radius: 12px; padding: 4px 12px;
