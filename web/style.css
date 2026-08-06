@@ -144,6 +144,16 @@ button, input, textarea { font-family: inherit; }
 @keyframes om-spin { to { transform: rotate(360deg); } }
 @keyframes om-fade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
 @keyframes om-rise { from { opacity: 0; transform: translateY(8px) scale(0.985); } to { opacity: 1; transform: none; } }
+/* Les trois animations d'attente d'un agent : les points qui s'allument à tour
+   de rôle, l'onde qui traverse le libellé « travaille », et l'anneau qui respire
+   autour de son avatar. Toutes lentes, toutes en boucle, et toutes réservées au
+   temps où la machine parle : voir « Conversation : l'agent travaille ». */
+@keyframes om-dot { 0%, 70%, 100% { opacity: .2; } 35% { opacity: .85; } }
+@keyframes om-wave { from { background-position: 180% 0; } to { background-position: -80% 0; } }
+@keyframes om-halo {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(47, 125, 84, 0); }
+  50% { box-shadow: 0 0 0 3px rgba(47, 125, 84, 0.13); }
+}
 
 /* Le verre coûte cher à composer : là où il n'est pas disponible, on remonte
    l'opacité des surfaces plutôt que de laisser du texte sur un fond deviné. */
@@ -173,7 +183,8 @@ button, input, textarea { font-family: inherit; }
    doigt. Une carte est large : le même ratio ferait tanguer l'écran entier. */
 .btn-primary:active, .btn-green:active, .btn-send:active, .btn-action:active,
 .btn-danger:active, .btn-outline:active, .btn-neutral:active, .row-btn:active,
-.icon-btn:active, .icon-btn-sm:active, #login-form button[type="submit"]:active {
+.icon-btn:active, .icon-btn-sm:active, .msg-copy:active, .code-copy:active,
+.conv-jump:active, #login-form button[type="submit"]:active {
   transform: scale(0.96);
 }
 .pill:active, .nav-item:active, .project-item:active, .agent-item:active,
@@ -956,15 +967,88 @@ button, input, textarea { font-family: inherit; }
 }
 .code-block code { background: transparent; color: inherit; padding: 0; }
 
-.composer-wrap { flex: none; padding: 10px 16px 16px; }
+/* Un message qui arrive pendant qu'on lit monte de quelques pixels : il n'était
+   pas là. Seuls les messages ajoutés en direct portent cette classe ; ouvrir un
+   onglet n'anime jamais vingt messages d'un coup. */
+.msg-in { animation: om-fade .24s ease; }
+
+/* Copier un message ou un bloc de code : révélé par la seule opacité, sans
+   déplacement (survoler n'est pas une intention), et sans jamais décaler le
+   texte puisque le bouton garde sa place au repos. */
+.msg-actions { margin-left: auto; align-self: center; display: flex; gap: 2px; opacity: 0; }
+.message:hover .msg-actions, .msg-actions:focus-within { opacity: 1; }
+.msg-copy {
+  border: 0; background: transparent; color: var(--muted-3); border-radius: 6px;
+  width: 20px; height: 20px; display: inline-flex; align-items: center; justify-content: center; cursor: pointer;
+}
+.msg-copy:hover { background: var(--hover); color: var(--text-3); }
+.msg-copy.copied { color: var(--green-live); }
+/* La marge passe de <pre> à l'enveloppe : le bouton se place par rapport au bloc
+   lui-même, sans dépendre d'une fusion de marges. */
+.code-wrap { position: relative; margin: 9px 0 0; }
+.code-wrap .code-block { margin: 0; }
+.code-copy {
+  position: absolute; top: 7px; right: 7px; width: 24px; height: 24px; border: 0; border-radius: 7px;
+  display: inline-flex; align-items: center; justify-content: center; cursor: pointer;
+  background: rgba(255, 255, 255, 0.08); color: rgba(236, 234, 228, 0.62); opacity: 0;
+}
+.code-wrap:hover .code-copy, .code-copy:focus-visible { opacity: 1; }
+.code-copy:hover { background: rgba(255, 255, 255, 0.16); color: #eceae4; }
+.code-copy.copied { color: #8fce9f; }
+
+/* ---------- Conversation : l'agent travaille ---------- */
+
+/* L'attente prend le gabarit d'un message, à la place exacte qu'occupera la
+   réponse : quand elle arrive, rien ne saute. C'est le seul endroit de
+   l'interface où quelque chose bouge sans que l'utilisateur l'ait déclenché,
+   parce que c'est la seule information que l'attente porte. */
+.msg-thinking { display: flex; gap: 10px; animation: om-fade .22s ease; }
+.msg-thinking .msg-avatar { animation: om-halo 2.6s ease-in-out infinite; }
+.thinking-dots { display: inline-flex; align-items: center; gap: 3px; }
+.thinking-dots i { width: 4px; height: 4px; border-radius: 50%; background: var(--text-3); animation: om-dot 1.4s ease-in-out infinite; }
+.thinking-dots i:nth-child(2) { animation-delay: .18s; }
+.thinking-dots i:nth-child(3) { animation-delay: .36s; }
+.thinking-line { margin-top: 4px; min-width: 0; }
+/* L'onde traverse le libellé de gauche à droite : une phrase qui respire dit
+   « ça avance » sans rien affirmer sur la durée. Le dégradé reste lisible à
+   l'arrêt (bande sombre au centre), pour que `prefers-reduced-motion` ne laisse
+   pas un texte invisible. */
+.thinking-label { font-size: 12.5px; color: var(--muted-3); }
+@supports ((background-clip: text) or (-webkit-background-clip: text)) {
+  .thinking-label {
+    color: transparent;
+    background-image: linear-gradient(100deg, var(--muted-3) 0 42%, var(--text-3) 50%, var(--muted-3) 58% 100%);
+    background-size: 260% 100%;
+    -webkit-background-clip: text; background-clip: text;
+    animation: om-wave 2.8s linear infinite;
+  }
+}
+
+.composer-wrap { flex: none; padding: 10px 16px 16px; position: relative; }
+/* Rester en haut du fil pendant qu'un agent répond est un choix : on ne le
+   défait pas dans son dos. Cette pastille est le seul rappel qu'il se passe
+   quelque chose plus bas, et elle n'existe que dans ce cas. Ancrée au composeur
+   plutôt qu'au fil, elle garde sa place quand le champ grandit. */
+.conv-jump {
+  position: absolute; top: -14px; right: 22px; z-index: 2;
+  display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 11px;
+  border: 1px solid var(--border); border-radius: 999px; background: var(--glass-menu);
+  box-shadow: var(--shadow-2); color: var(--text-3); font-size: 12px; cursor: pointer;
+  animation: om-rise .18s ease;
+}
+.conv-jump:hover { color: var(--text); }
+.conv-jump-dot { width: 5px; height: 5px; border-radius: 50%; flex: none; background: var(--green-live); animation: om-pulse 2.4s ease-in-out infinite; }
 .composer {
   border: 1px solid var(--border-3); border-radius: 14px; padding: 12px 14px;
   background: var(--glass-float); transition: border-color .2s ease, box-shadow .2s ease;
 }
 .composer:focus-within { border-color: var(--muted-5); box-shadow: var(--shadow-1); }
+/* Le champ grandit avec ce qu'on écrit (voir autoGrowComposer) : pas de poignée
+   de redimensionnement à trouver, et jamais plus de la moitié du fil mangée. */
 .composer textarea {
-  width: 100%; border: 0; outline: none; resize: vertical; font-size: 13.5px; color: var(--text);
-  min-height: 20px; padding: 0; background: transparent; line-height: 1.5;
+  width: 100%; border: 0; outline: none; resize: none; font-size: 13.5px; color: var(--text);
+  min-height: 20px; max-height: 168px; padding: 0; background: transparent; line-height: 1.5;
+  overflow-y: auto;
 }
 .composer-row { display: flex; align-items: center; gap: 8px; margin-top: 12px; }
 .composer-model { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
@@ -974,6 +1058,10 @@ button, input, textarea { font-family: inherit; }
   transition: background-color .2s ease;
 }
 .btn-send:hover { background: var(--solid-hover); }
+/* Rien à envoyer : le bouton s'efface au lieu de disparaître, pour que la ligne
+   du composeur ne change pas de forme à chaque frappe. */
+.btn-send:disabled { opacity: .34; cursor: default; }
+.btn-send:disabled:hover { background: var(--solid); }
 
 /* ---------- Diff ---------- */
 
@@ -1533,6 +1621,7 @@ button, input, textarea { font-family: inherit; }
 .add-card-btn, .project-tile-add, .icon-btn, .icon-btn-sm, .search-btn,
 .search-result, .card-menu-item, .project-menu-item, .reassign-item, .ptab,
 .onboarding-card-head, .diff-file-tab, .agent-manage-row, .composer,
+.msg-actions, .msg-copy, .code-copy, .conv-jump,
 #login-form button[type="submit"] {
   transition-property: background-color, box-shadow, border-color, color, opacity, filter, transform;
   transition-duration: .2s;
@@ -1548,6 +1637,7 @@ button, input, textarea { font-family: inherit; }
 .icon-btn:active, .icon-btn-sm:active, .search-btn:active, .search-result:active,
 .card-menu-item:active, .project-menu-item:active, .reassign-item:active,
 .ptab:active, .tab:active, .diff-file-tab:active, .agent-manage-row:active,
+.msg-copy:active, .code-copy:active, .conv-jump:active,
 #login-form button[type="submit"]:active {
   transition-duration: .06s;
 }

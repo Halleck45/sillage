@@ -111,6 +111,12 @@ SPA vanilla d'un seul fichier, dans une IIFE, découpée en sections commentées
 - Confirmations en deux temps génériques (`data-action="confirm-click"`) pour la sync de l'espace de travail, le refus d'une tâche et les suppressions : le bouton devient « Confirmer ? » avant d'agir. La livraison d'un chantier n'utilise pas ce mécanisme : son récapitulatif **est** la confirmation (voir `openShipModal`).
 - Aucune image binaire dans `web/` : la marque (`.brand-mark`, barre latérale et page de connexion) est le logo `docs/logo-sillage.png` redessiné en SVG pixel par pixel, en data-URI dans `style.css`. Même principe pour les icônes de bouton (`shipIconHTML`, `anchorIconHTML`) : SVG inline en `currentColor`, jamais d'emoji (illisible sous 16px) ni de police d'icônes.
 - Barre de livraison du chantier (`buildShipBarHTML`) : l'état du bouton vient de la carte (`shipReady`/`shipBlocker`, à jour via SSE), l'annonce et les compteurs de commits viennent de `GET /api/cards/{id}/delivery`, rechargé à l'ouverture, à chaque changement de statut et toutes les 60 s (`syncDeliveryPolling`).
+- **Micro-interactions de la conversation**, toutes dans le prolongement du rendu incrémental (le fil n'est jamais reconstruit sur un événement SSE) :
+  - un message arrivé en direct monte de quelques pixels (`.msg-in`, posée par `appendMessageToConversationDOM` seulement) ; le fil reconstruit à l'ouverture d'un onglet n'anime rien ;
+  - l'attente d'un agent est une ligne au gabarit d'un message au pied du fil (`buildThinkingHTML`), qui porte l'outil en cours ou « Travaille… ». `patchConversationThinking` ne réécrit que sa ligne du bas, sinon l'animation des points repartirait de zéro à chaque événement d'activité ; elle reste le dernier élément du conteneur, les messages s'insèrent avant elle ;
+  - un message reçu pendant qu'on lit plus haut ne déplace personne : il allume la pastille « Nouveau message » (`refreshConvJump`, alimentée par un écouteur de défilement en phase de capture pour survivre aux rendus). Son clic est le seul défilement animé de l'interface ;
+  - copier un message d'agent ou un bloc de code se révèle au survol (opacité seule) et se confirme par une coche (`copyToClipboardIcon`) ;
+  - le composeur grandit avec le texte (`autoGrowComposer`) et son bouton d'envoi s'efface quand il n'y a rien à envoyer.
 
 ### Le design (`web/style.css`)
 

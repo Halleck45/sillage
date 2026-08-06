@@ -247,6 +247,12 @@
       'chat.you': 'Vous',
       'chat.placeholder': 'Répondre à {name}…',
       'chat.send': 'Envoyer ⏎',
+      'chat.working': 'Travaille…',
+      'chat.jumpToBottom': 'Revenir en bas',
+      'chat.newMessage': 'Nouveau message',
+      'chat.copyMessage': 'Copier le message',
+      'chat.copyCode': 'Copier le code',
+      'chat.copied': 'Copié',
       'chat.accepted': 'Acceptée : fusionnée dans {branch}',
       'chat.autoAccepted': 'Acceptée : son travail était déjà dans {branch}',
       'chat.mergeConflict': 'Conflit avec la branche du chantier sur {files} : demandez à l\'agent de reprendre la base.',
@@ -700,6 +706,12 @@
       'chat.you': 'You',
       'chat.placeholder': 'Reply to {name}…',
       'chat.send': 'Send ⏎',
+      'chat.working': 'Working…',
+      'chat.jumpToBottom': 'Jump to latest',
+      'chat.newMessage': 'New message',
+      'chat.copyMessage': 'Copy message',
+      'chat.copyCode': 'Copy code',
+      'chat.copied': 'Copied',
       'chat.accepted': 'Accepted: merged into {branch}',
       'chat.autoAccepted': 'Accepted: its work was already in {branch}',
       'chat.mergeConflict': 'Conflict with the workstream branch on {files}: ask the agent to rebase on it.',
@@ -984,6 +996,8 @@
     projectId: null, cardId: null, taskId: null,
     panelTab: 'chat', panelExpanded: false, taskFilter: 'all',
     pendingConversationScroll: false, // défiler vers le bas au prochain rendu (ouverture d'une conversation)
+    convUnseen: false, // un message est arrivé alors qu'on lisait plus haut dans le fil
+    convJumpState: null, // dernier état peint de la pastille de retour en bas ('off' | 'jump' | 'new')
     searchOpen: false, modal: null,
     pendingConfirm: null, // { key, timer }
     sidebarOpen: false // tiroir mobile (< 860px)
@@ -1018,6 +1032,12 @@
 
   function isMac() {
     return /Mac|iPod|iPhone|iPad/.test(navigator.platform || '');
+  }
+
+  // Le CSS coupe déjà toutes les animations (voir « Micro-interactions ») ; le
+  // défilement animé, lui, se pilote en JS et doit se couper de la même façon.
+  function prefersReducedMotion() {
+    return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
   }
 
   // Libellé de la touche de modification (badges et infobulles des raccourcis).
@@ -1124,7 +1144,11 @@
     if (inList) out.push('</ul>');
     html = out.join('');
     html = html.replace(/@@CODE(\d+)@@/g, function (m, idx) {
-      return '<pre class="code-block"><code>' + escapeHtml(blocks[Number(idx)]) + '</code></pre>';
+      // Le bouton de copie vit dans le bloc plutôt qu'à côté : c'est du code, on
+      // le prend en entier, et il ne se révèle qu'au survol du bloc.
+      return '<div class="code-wrap"><pre class="code-block"><code>' + escapeHtml(blocks[Number(idx)]) + '</code></pre>' +
+        '<button class="code-copy" data-action="copy-code" title="' + escapeHtml(t('chat.copyCode')) + '" aria-label="' + escapeHtml(t('chat.copyCode')) + '">' +
+        copyIconHTML() + '</button></div>';
     });
     return html;
   }
@@ -1383,6 +1407,8 @@
       // un chargement asynchrone (voir loadMessages -> renderMain).
       if (state.panelTab === 'chat' && (state.taskId !== prevTaskId || prevPanelTab !== 'chat')) {
         state.pendingConversationScroll = true;
+        // On repart en bas du fil : plus rien n'attend d'être vu plus bas.
+        state.convUnseen = false;
       }
     }
     closeSidebarDrawer();
@@ -2133,6 +2159,29 @@
       '</svg>';
   }
 
+  // Icônes de la conversation : mêmes règles que les autres (SVG en ligne, en
+  // currentColor, jamais d'emoji illisible sous 16px).
+  function copyIconHTML() {
+    return '<svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true" focusable="false">' +
+      '<path fill="currentColor" d="M6.25 1.5h4.9c.9 0 1.6.7 1.6 1.6v6.05c0 .9-.7 1.6-1.6 1.6h-4.9c-.9 0-1.6-.7-1.6-1.6V3.1c0-.9.7-1.6 1.6-1.6Zm0 1.3a.3.3 0 0 0-.3.3v6.05c0 .17.13.3.3.3h4.9a.3.3 0 0 0 .3-.3V3.1a.3.3 0 0 0-.3-.3h-4.9Z"/>' +
+      '<path fill="currentColor" d="M3.5 5.05a.65.65 0 0 1 .65.65v6.6c0 .17.13.3.3.3h5.2a.65.65 0 0 1 0 1.3h-5.2c-.9 0-1.6-.7-1.6-1.6V5.7a.65.65 0 0 1 .65-.65Z"/>' +
+      '</svg>';
+  }
+
+  // Coche nue de la confirmation de copie, à ne pas confondre avec la pastille
+  // cerclée des checks de projet (checkIconHTML plus bas).
+  function copiedIconHTML() {
+    return '<svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true" focusable="false">' +
+      '<path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M3.2 8.6l3 3L12.8 4.9"/>' +
+      '</svg>';
+  }
+
+  function arrowDownIconHTML() {
+    return '<svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true" focusable="false">' +
+      '<path fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" d="M8 3.2v9.2M4.3 8.9 8 12.6l3.7-3.7"/>' +
+      '</svg>';
+  }
+
   // Total de commits de la branche du chantier (base..branche), tous dépôts
   // confondus : un chantier multi-dépôts en a une somme, pas une liste.
   function deliveryTotalCommits(prev) {
@@ -2802,21 +2851,15 @@
     if (atBottom) el.scrollTop = el.scrollHeight;
   }
 
-  function copyPathToClipboard(path, el) {
-    var done = function () {
-      if (!el) return;
-      var before = el.textContent;
-      el.textContent = t('preview.copied');
-      setTimeout(function () { el.textContent = before; }, 1200);
-    };
+  function writeClipboard(text, done) {
     if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(path).then(done).catch(function () {});
+      navigator.clipboard.writeText(text).then(done).catch(function () {});
       return;
     }
     // Repli pour les contextes non sécurisés (http sur une IP de réseau local),
     // où l'API clipboard n'existe pas.
     var ta = document.createElement('textarea');
-    ta.value = path;
+    ta.value = text;
     ta.setAttribute('readonly', 'readonly');
     ta.style.position = 'fixed';
     ta.style.opacity = '0';
@@ -2824,6 +2867,43 @@
     ta.select();
     try { document.execCommand('copy'); done(); } catch (e) {}
     document.body.removeChild(ta);
+  }
+
+  function copyPathToClipboard(path, el) {
+    writeClipboard(path, function () {
+      if (!el) return;
+      var before = el.textContent;
+      el.textContent = t('preview.copied');
+      setTimeout(function () { el.textContent = before; }, 1200);
+    });
+  }
+
+  // Bouton de copie en icône : la coche remplace l'icône le temps d'un battement,
+  // seule confirmation possible sur un bouton de 20 px. Le libellé accessible
+  // suit, sinon un lecteur d'écran annoncerait encore « copier ».
+  function copyToClipboardIcon(text, el) {
+    if (!el || el.classList.contains('copied')) return;
+    writeClipboard(text, function () {
+      var beforeTitle = el.getAttribute('title') || '';
+      el.classList.add('copied');
+      el.innerHTML = copiedIconHTML();
+      el.setAttribute('title', t('chat.copied'));
+      el.setAttribute('aria-label', t('chat.copied'));
+      setTimeout(function () {
+        el.classList.remove('copied');
+        el.innerHTML = copyIconHTML();
+        el.setAttribute('title', beforeTitle);
+        el.setAttribute('aria-label', beforeTitle);
+      }, 1300);
+    });
+  }
+
+  // Le code copié se relit dans le DOM plutôt que dans un attribut : le bloc est
+  // déjà là, le dupliquer doublerait le poids du fil.
+  function copyCodeBlock(el) {
+    var wrap = el.closest('.code-wrap');
+    var code = wrap ? wrap.querySelector('code') : null;
+    if (code) copyToClipboardIcon(code.textContent, el);
   }
 
   // Contexte de liste courant (carte ou boîte de réception), utilisé à la fois
@@ -3284,12 +3364,75 @@
     var emoji = isUser ? '🙂' : (agent.emoji || '');
     var bg = isUser ? '#eeece6' : softColor(agent.color);
     var name = m.authorName || (isUser ? t('chat.you') : (agent.name || ''));
+    // Copier la réponse d'un agent est fréquent (on la porte ailleurs) ; copier
+    // sa propre question ne l'est pas. Le bouton ne s'affiche donc que sur les
+    // messages d'agent, et seulement au survol.
+    var actions = isUser ? '' :
+      '<span class="msg-actions">' +
+        '<button class="msg-copy" data-action="copy-message" data-copy="' + escapeHtml(m.text) + '"' +
+        ' title="' + escapeHtml(t('chat.copyMessage')) + '" aria-label="' + escapeHtml(t('chat.copyMessage')) + '">' +
+        copyIconHTML() + '</button>' +
+      '</span>';
     return '<div class="message">' +
       '<span class="msg-avatar" style="background:' + bg + '">' + emoji + '</span>' +
       '<div class="msg-body">' +
-        '<div class="msg-head"><span class="msg-name">' + escapeHtml(name) + '</span><span class="msg-time">' + formatTime(m.createdAt) + '</span></div>' +
+        '<div class="msg-head"><span class="msg-name">' + escapeHtml(name) + '</span><span class="msg-time">' + formatTime(m.createdAt) + '</span>' + actions + '</div>' +
         '<div class="msg-text">' + renderMarkdown(m.text) + '</div>' +
       '</div></div>';
+  }
+
+  // L'attente d'un agent prend le gabarit d'un message, au pied du fil, à la
+  // place exacte qu'occupera sa réponse : quand elle arrive, rien ne saute. La
+  // ligne du dessous dit ce qu'il fait à l'instant (l'outil en cours, la même
+  // information que le fil d'activité de la liste de tâches) ou, à défaut, qu'il
+  // travaille. Sans elle, un agent qui réfléchit trois minutes est indiscernable
+  // d'un agent bloqué.
+  function buildThinkingHTML(task, agent) {
+    if (!task || task.status !== 'running') return '';
+    return '<div class="msg-thinking" id="conversation-thinking">' +
+      '<span class="msg-avatar" style="background:' + softColor(agent.color) + '">' + (agent.emoji || '') + '</span>' +
+      '<div class="msg-body">' +
+        '<div class="msg-head"><span class="msg-name">' + escapeHtml(agent.name || '') + '</span>' +
+          '<span class="thinking-dots" aria-hidden="true"><i></i><i></i><i></i></span></div>' +
+        '<div class="thinking-line" aria-live="polite">' + thinkingLineInnerHTML(task, agent) + '</div>' +
+      '</div></div>';
+  }
+
+  function thinkingLineInnerHTML(task, agent) {
+    if (task.liveActivity) {
+      return '<span class="live-line mono"><span class="live-dot"></span>' + escapeHtml(task.liveActivity) + '</span>';
+    }
+    return '<span class="thinking-label">' + escapeHtml(t('chat.working')) + '</span>';
+  }
+
+  // Met l'indicateur à jour sans toucher aux messages. Appelé sur chaque
+  // événement de tâche et d'activité, donc plusieurs fois par seconde quand un
+  // agent travaille : seule la ligne du bas est réécrite, sinon l'animation des
+  // points repartirait de zéro à chaque outil.
+  function patchConversationThinking(taskId) {
+    if (state.taskId !== taskId || state.panelTab !== 'chat') return;
+    var container = document.getElementById('conversation-list');
+    if (!container) return;
+    var task = state.tasksById[taskId];
+    var agent = (task && state.agentsById[task.agentId]) || { emoji: '', name: '', color: '#ccc' };
+    var existing = document.getElementById('conversation-thinking');
+    if (!task || task.status !== 'running') {
+      if (existing) existing.remove();
+      if (!container.children.length) {
+        container.innerHTML = '<div class="empty-note">' + escapeHtml(t('conversation.empty')) + '</div>';
+      }
+      return;
+    }
+    var atBottom = isScrolledToBottom(container) && !isSelectionActiveIn(container);
+    if (existing) {
+      var line = existing.querySelector('.thinking-line');
+      if (line) line.innerHTML = thinkingLineInnerHTML(task, agent);
+    } else {
+      var emptyNote = container.querySelector('.empty-note');
+      if (emptyNote) emptyNote.remove();
+      container.insertAdjacentHTML('beforeend', buildThinkingHTML(task, agent));
+    }
+    if (atBottom) container.scrollTop = container.scrollHeight;
   }
 
   function buildConversationHTML(task, agent) {
@@ -3298,13 +3441,15 @@
       loadMessages(task.id);
       return '<div class="conv-loading">' + escapeHtml(t('common.loading')) + '</div>';
     }
-    var items = msgs.length ? msgs.map(function (m) { return buildMessageHTML(m, agent); }).join('') : '<div class="empty-note">' + escapeHtml(t('conversation.empty')) + '</div>';
-    return '<div class="conversation" id="conversation-list">' + items + '</div>' +
-      '<div class="composer-wrap"><div class="composer">' +
-        '<textarea id="composer-input" rows="2" placeholder="' + escapeHtml(t('chat.placeholder', { name: agent.name })) + '"></textarea>' +
+    var thinking = buildThinkingHTML(task, agent);
+    var items = msgs.map(function (m) { return buildMessageHTML(m, agent); }).join('');
+    if (!items && !thinking) items = '<div class="empty-note">' + escapeHtml(t('conversation.empty')) + '</div>';
+    return '<div class="conversation" id="conversation-list">' + items + thinking + '</div>' +
+      '<div class="composer-wrap">' + buildConvJumpHTML() + '<div class="composer">' +
+        '<textarea id="composer-input" rows="1" placeholder="' + escapeHtml(t('chat.placeholder', { name: agent.name })) + '"></textarea>' +
         '<div class="composer-row">' +
           '<span class="composer-model"><span class="agent-avatar-sm" style="background:' + softColor(agent.color) + '">' + agent.emoji + '</span>' + escapeHtml(agent.model || '') + '</span>' +
-          '<button class="btn-send" data-action="send-message" data-task-id="' + task.id + '">' + escapeHtml(t('chat.send')) + '</button>' +
+          '<button class="btn-send" data-action="send-message" data-task-id="' + task.id + '" disabled>' + escapeHtml(t('chat.send')) + '</button>' +
         '</div>' +
       '</div></div>';
   }
@@ -3366,8 +3511,91 @@
     var wrapper = document.createElement('div');
     wrapper.innerHTML = buildMessageHTML(m, agent);
     var node = wrapper.firstElementChild;
-    if (node) container.appendChild(node);
-    if (wasAtBottom) container.scrollTop = container.scrollHeight;
+    if (node) {
+      // Le message monte de quelques pixels en arrivant : il n'était pas là. Les
+      // messages déjà présents, eux, ne portent jamais cette classe (voir .msg-in).
+      node.classList.add('msg-in');
+      // L'indicateur d'attente reste le dernier élément du fil : l'agent qui
+      // vient de parler continue de travailler jusqu'à la fin de son tour.
+      var thinking = document.getElementById('conversation-thinking');
+      if (thinking) container.insertBefore(node, thinking);
+      else container.appendChild(node);
+    }
+    if (wasAtBottom) {
+      container.scrollTop = container.scrollHeight;
+    } else if (m.author !== 'user') {
+      // L'utilisateur lit plus haut : on ne le déplace pas, mais il doit savoir
+      // qu'il y a du nouveau en bas.
+      state.convUnseen = true;
+    }
+    refreshConvJump();
+  }
+
+  // ---------------------------------------------------------------------
+  // Retour en bas du fil
+  // ---------------------------------------------------------------------
+
+  function buildConvJumpHTML() {
+    return '<button class="conv-jump hidden" id="conv-jump" data-action="jump-to-bottom"></button>';
+  }
+
+  // La pastille n'existe que quand on n'est pas en bas d'un fil qui défile.
+  // Recalculée à chaque événement de défilement, elle ne réécrit son contenu que
+  // si son état a changé, sinon défiler repeindrait pour rien.
+  function refreshConvJump() {
+    var btn = document.getElementById('conv-jump');
+    var container = document.getElementById('conversation-list');
+    if (!btn || !container) return;
+    var visible = !isScrolledToBottom(container);
+    if (!visible) state.convUnseen = false;
+    var signature = visible ? (state.convUnseen ? 'new' : 'jump') : 'off';
+    if (state.convJumpState === signature) return;
+    state.convJumpState = signature;
+    btn.classList.toggle('hidden', !visible);
+    if (!visible) return;
+    var label = state.convUnseen ? t('chat.newMessage') : t('chat.jumpToBottom');
+    btn.innerHTML = (state.convUnseen ? '<span class="conv-jump-dot"></span>' : arrowDownIconHTML()) + escapeHtml(label);
+    btn.setAttribute('aria-label', label);
+  }
+
+  // Le seul défilement animé de l'interface : celui-là, l'utilisateur l'a
+  // demandé, et voir le fil passer lui dit d'où il revient.
+  function jumpConversationToBottom() {
+    var el = document.getElementById('conversation-list');
+    if (!el) return;
+    state.convUnseen = false;
+    if (prefersReducedMotion() || !el.scrollTo) {
+      el.scrollTop = el.scrollHeight;
+    } else {
+      el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+    }
+    refreshConvJump();
+  }
+
+  // ---------------------------------------------------------------------
+  // Composeur
+  // ---------------------------------------------------------------------
+
+  // Le champ suit ce qu'on écrit, jusqu'à la limite posée par le CSS
+  // (max-height) : au-delà, c'est lui qui défile, pas le fil qui disparaît.
+  function autoGrowComposer(el) {
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = el.scrollHeight + 'px';
+  }
+
+  function refreshComposerState() {
+    var el = document.getElementById('composer-input');
+    if (!el) return;
+    var btn = document.querySelector('.composer [data-action="send-message"]');
+    if (btn) btn.disabled = !el.value.trim();
+  }
+
+  function syncComposer() {
+    var el = document.getElementById('composer-input');
+    if (!el) return;
+    autoGrowComposer(el);
+    refreshComposerState();
   }
 
   // askRebase demande le rebase à l'agent au lieu de le faire côté serveur :
@@ -3391,11 +3619,13 @@
     if (!text) return;
     el.value = '';
     el.disabled = true;
+    syncComposer();
     api('/api/tasks/' + taskId + '/messages', { method: 'POST', body: { text: text } })
       .catch(function () {})
       .then(function () {
         var el2 = document.getElementById('composer-input');
         if (el2) el2.disabled = false;
+        syncComposer();
       });
   }
 
@@ -3677,7 +3907,12 @@
       } else if (prevScroll !== null) {
         newConv.scrollTop = prevScroll;
       }
+      // La pastille et le champ sont neufs : leur état peint est à refaire, quelle
+      // que soit la valeur retenue avant le rendu.
+      state.convJumpState = null;
+      refreshConvJump();
     }
+    if (newComposer) syncComposer();
   }
 
   // ---------------------------------------------------------------------
@@ -5409,6 +5644,7 @@
     refreshTaskListAndFilters();
     if (state.taskId === task.id) {
       patchDetailHead(task.id);
+      if (state.panelTab === 'chat') patchConversationThinking(task.id);
       if (state.panelTab === 'diff') patchDiffFooter(task.id);
     }
     if ((statusChanged || rebaseFinished) && state.cardId && task.cardId === state.cardId) {
@@ -5431,6 +5667,7 @@
     var task = state.tasksById[payload.taskId];
     if (task) task.liveActivity = payload.line;
     patchTaskRowLiveLine(payload.taskId, payload.line, task);
+    patchConversationThinking(payload.taskId);
   }
 
   function onTokensEvent(payload) {
@@ -5678,6 +5915,9 @@
       case 'confirm-click': handleConfirmClickDispatch(el); break;
       case 'select-diff-file': selectDiffFile(el.getAttribute('data-task-id'), el.getAttribute('data-path')); break;
       case 'send-message': sendMessage(el.getAttribute('data-task-id')); break;
+      case 'jump-to-bottom': jumpConversationToBottom(); break;
+      case 'copy-message': copyToClipboardIcon(el.getAttribute('data-copy') || '', el); break;
+      case 'copy-code': copyCodeBlock(el); break;
       case 'open-search': openSearch(); break;
       case 'search-goto-project': closeSearch(); goProject(el.getAttribute('data-project-id')); break;
       case 'search-goto-card': closeSearch(); goCard(el.getAttribute('data-card-id')); break;
@@ -5796,8 +6036,19 @@
   // Toute saisie dans la modale de réglages d'un projet allume la mention
   // « modifications non enregistrées » du pied.
   function onGlobalInput(e) {
+    if (e.target && e.target.id === 'composer-input') {
+      autoGrowComposer(e.target);
+      refreshComposerState();
+      return;
+    }
     var body = document.getElementById('project-modal-body');
     if (body && e.target && body.contains(e.target)) markProjectDraftDirty();
+  }
+
+  // Le défilement du fil se capte à la racine (phase de capture : « scroll » ne
+  // remonte pas), pour survivre à la recréation du conteneur à chaque rendu.
+  function onGlobalScroll(e) {
+    if (e.target && e.target.id === 'conversation-list') refreshConvJump();
   }
 
   function onGlobalKeydown(e) {
@@ -5846,6 +6097,7 @@
     document.addEventListener('click', onGlobalClick);
     document.addEventListener('change', onGlobalChange);
     document.addEventListener('input', onGlobalInput);
+    document.addEventListener('scroll', onGlobalScroll, true);
     document.addEventListener('keydown', onGlobalKeydown);
     window.addEventListener('hashchange', applyRoute);
     boot();
