@@ -155,6 +155,12 @@ type Card struct {
 	// ajouté au system prompt claude, préfixe du prompt codex/copilot/agy/kiro,
 	// ignoré par fake).
 	ContextPrompt string `json:"contextPrompt"`
+
+	// UpdatedAt est la dernière activité du chantier : mise à jour explicite
+	// (titre, colonne, contexte) ou, via recomputeCard, la plus récente
+	// UpdatedAt de ses tâches. Sert à trier les chantiers d'une colonne du plus
+	// récent au plus ancien (voir buildKanbanHTML côté frontend).
+	UpdatedAt time.Time `json:"updatedAt"`
 }
 
 // Agent est un profil d'agent IA (claude, codex, copilot, agy, kiro ou fake).

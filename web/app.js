@@ -1760,6 +1760,15 @@
     return '<div class="pinned-links">' + items + '</div>';
   }
 
+  // Tri stable et déterministe, comme compareTasksForList : updatedAt
+  // décroissant (les chantiers actifs remontent), ref décroissante en
+  // départage.
+  function compareCardsForColumn(a, b) {
+    var diff = new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+    if (diff !== 0) return diff;
+    return (b.ref || 0) - (a.ref || 0);
+  }
+
   function buildKanbanHTML() {
     var project = state.projectsById[state.projectId];
     var cards = state.cards.filter(function (c) { return c.projectId === state.projectId; });
@@ -1767,7 +1776,7 @@
     var colsHTML = COLUMN_ORDER.map(function (key) {
       var label = columnLabel(key);
       var color = key === 'soon' ? '#d3d0c8' : (key === 'doing' ? '#2f7d54' : '#c3c0b8');
-      var list = cards.filter(function (c) { return c.column === key; });
+      var list = cards.filter(function (c) { return c.column === key; }).sort(compareCardsForColumn);
       var addBtn = key === 'soon'
         ? '<button class="add-card-btn" data-action="open-new-card">' + escapeHtml(t('kanban.addCard')) + '</button>'
         : '';

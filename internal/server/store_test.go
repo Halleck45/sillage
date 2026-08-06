@@ -733,6 +733,51 @@ func TestUpdateCardTitleAndContextPrompt(t *testing.T) {
 	}
 }
 
+// TestCardUpdatedAtTracksTaskActivity vérifie que la dernière activité d'un
+// chantier suit celle de ses tâches (voir recomputeCard), pour que le tri des
+// chantiers d'une colonne par activité récente (buildKanbanHTML côté
+// frontend) fasse remonter celui qui vient de bouger.
+func TestCardUpdatedAtTracksTaskActivity(t *testing.T) {
+	dir := t.TempDir()
+	s, err := NewStore(dir)
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+	project, err := s.AddProject("p", "", "", []Repo{{Path: "/tmp/p"}}, nil, nil)
+	if err != nil {
+		t.Fatalf("AddProject: %v", err)
+	}
+
+	c, err := s.AddCard(project.ID, "Chantier", "", "")
+	if err != nil {
+		t.Fatalf("AddCard: %v", err)
+	}
+	if c.UpdatedAt.IsZero() {
+		t.Fatalf("une carte neuve devrait avoir une UpdatedAt non nulle")
+	}
+
+	id, ref := s.ReserveTaskID()
+	if _, err := s.CreateTask(id, ref, c.ID, project.ID, "T", "echo", "sillage/"+id, "main", "/tmp/wt-"+id, "p"); err != nil {
+		t.Fatalf("CreateTask: %v", err)
+	}
+	afterTask, _ := s.GetCard(c.ID)
+	if !afterTask.UpdatedAt.After(c.UpdatedAt) && !afterTask.UpdatedAt.Equal(c.UpdatedAt) {
+		t.Fatalf("l'activité de la tâche devrait porter la carte au moins à son niveau : carte=%v, tâche via carte=%v", c.UpdatedAt, afterTask.UpdatedAt)
+	}
+
+	task, err := s.UpdateTask(id, func(task *Task) { task.MessagesCount++ })
+	if err != nil {
+		t.Fatalf("UpdateTask: %v", err)
+	}
+	afterBump, _ := s.GetCard(c.ID)
+	if !afterBump.UpdatedAt.Equal(task.UpdatedAt) {
+		t.Fatalf("UpdatedAt de la carte attendue %v (celle de la tâche), reçue %v", task.UpdatedAt, afterBump.UpdatedAt)
+	}
+	if !afterBump.UpdatedAt.After(afterTask.UpdatedAt) {
+		t.Fatalf("l'activité récente devrait faire avancer UpdatedAt : avant=%v, après=%v", afterTask.UpdatedAt, afterBump.UpdatedAt)
+	}
+}
+
 // --- Cycle de vie des tâches : accept/cancel/reopen ---
 
 // mkTaskWithStatus crée une tâche sur la carte donnée puis force son statut

@@ -21,7 +21,7 @@ import (
 // les champs exportés du Store sont sérialisés tels quels, une version qui ne
 // connaît pas un champ le fait disparaître du fichier à sa première
 // sauvegarde, en silence (voir ErrStateTooNew).
-const stateFormatVersion = 2
+const stateFormatVersion = 3
 
 // agentSeedVersion tracks one-time additions to the built-in agent profiles.
 // Unlike checking for an ID at every startup, this lets users delete a seeded
@@ -131,6 +131,7 @@ func loadStoreFile(dataDir string) (*Store, error) {
 	migrateLegacyDelivery(s)
 	migrateProjectAllowedTools(s)
 	migrateCardRefs(s)
+	migrateCardUpdatedAt(s)
 	migrateAgentSeeds(s)
 	resetTransientTaskFlags(s)
 	return s, nil
@@ -206,6 +207,29 @@ func migrateCardRefs(s *Store) {
 		c := s.Cards[id]
 		s.NextRef++
 		c.Ref = s.NextRef
+		s.Cards[id] = c
+	}
+}
+
+// migrateCardUpdatedAt donne une dernière activité aux chantiers antérieurs
+// au champ UpdatedAt (sinon leur tri par activité récente n'aurait rien à
+// trier) : la plus récente UpdatedAt de leurs tâches, ou l'instant du
+// chargement si le chantier n'en a aucune.
+func migrateCardUpdatedAt(s *Store) {
+	for id, c := range s.Cards {
+		if !c.UpdatedAt.IsZero() {
+			continue
+		}
+		var latest time.Time
+		for _, t := range s.Tasks {
+			if t.CardID == id && t.UpdatedAt.After(latest) {
+				latest = t.UpdatedAt
+			}
+		}
+		if latest.IsZero() {
+			latest = time.Now().UTC()
+		}
+		c.UpdatedAt = latest
 		s.Cards[id] = c
 	}
 }
@@ -559,6 +583,9 @@ func (s *Store) recomputeCard(cardID string) {
 		hasTasks = true
 		docs += t.DocsCount
 		msgs += t.MessagesCount
+		if t.UpdatedAt.After(c.UpdatedAt) {
+			c.UpdatedAt = t.UpdatedAt
+		}
 		if live == nil && t.Status == "running" && t.LiveActivity != nil {
 			v := *t.LiveActivity
 			live = &v
@@ -1501,6 +1528,7 @@ func (s *Store) AddCard(projectID, title, column, contextPrompt string) (Card, e
 	c := Card{
 		ID: fmt.Sprintf("c%d", s.NextCardN), ProjectID: projectID, Ref: s.NextRef,
 		Column: column, Title: title, ContextPrompt: contextPrompt, Branches: []CardBranch{},
+		UpdatedAt: time.Now().UTC(),
 	}
 	s.Cards[c.ID] = c
 	s.recomputeCard(c.ID)
@@ -1534,6 +1562,9 @@ func (s *Store) UpdateCard(id string, column, title, contextPrompt *string) (Car
 	}
 	if contextPrompt != nil {
 		c.ContextPrompt = *contextPrompt
+	}
+	if column != nil || title != nil || contextPrompt != nil {
+		c.UpdatedAt = time.Now().UTC()
 	}
 	s.Cards[id] = c
 	if err := s.save(); err != nil {

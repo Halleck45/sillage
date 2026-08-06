@@ -60,12 +60,16 @@ Card    { "id": "c1", "projectId": "p1", "ref": 101, "column": "soon|doing|done"
           "branches": [CardBranch, ...], "shipReady": false,
           "shipBlocker": "|no-tasks|nothing-accepted|nothing-to-ship",
           "awaitingShip": false,
-          "contextPrompt": "..." }
+          "contextPrompt": "...", "updatedAt": "2026-08-02T10:00:00Z" }
           // Card = chantier (vocabulaire produit) ; nom technique inchangé. contextPrompt :
           // texte libre transmis aux agents (voir plus bas), peut être vide.
           // ref : référence courte du projet (compteur partagé avec les tâches), utilisée
           // dans le nom de la branche du chantier.
           // shipReady/shipBlocker : dérivés, état du bouton de livraison (voir plus bas).
+          // updatedAt : dernière activité du chantier (édition ou, dérivé, la plus récente
+          // updatedAt de ses tâches). Le frontend trie les chantiers de chaque colonne du
+          // kanban du plus récent au plus ancien avec ce champ (comme Task.updatedAt pour
+          // les listes de tâches).
           // awaitingShip : dérivé, vrai si toutes les tâches sont terminales (acceptées ou
           // refusées), qu'au moins une est acceptée, et que le chantier n'a pas été livré
           // (aucune branche shippedAt) ; c'est le signal affiché dans la liste des chantiers
