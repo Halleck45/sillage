@@ -25,11 +25,18 @@
      contenu), la carte (posée sur le panneau), le flottant (modales et menus,
      le plus dense car il doit couper le lien avec ce qu'il recouvre). */
   --glass: rgba(255, 255, 255, 0.6);
+  /* La barre latérale est le verre le plus fin : elle porte la navigation, pas
+     le travail, et doit donc laisser passer l'ambiance plus que le panneau. */
+  --glass-rail: rgba(255, 255, 255, 0.34);
   --glass-card: rgba(255, 255, 255, 0.52);
   /* 0.88 et pas moins : en dessous, le texte de ce qui est derrière fantôme au
      travers d'une modale dense, et deviner un mot sans pouvoir le lire est
      exactement la charge mentale qu'on cherche à retirer. */
   --glass-float: rgba(255, 255, 255, 0.88);
+  /* Un menu est encore plus dense qu'une modale, parce qu'il n'a pas de voile
+     pour l'aider : une modale s'ouvre sur un fond assombri et flouté, un menu
+     se pose directement sur le texte qu'il recouvre. */
+  --glass-menu: rgba(255, 255, 255, 0.97);
   /* Le liseré clair sur le bord haut d'une surface de verre : ce qui lui donne
      son épaisseur. Sans lui, une surface translucide n'a pas de bord. */
   --glass-line: rgba(255, 255, 255, 0.75);
@@ -132,13 +139,44 @@ button, input, textarea { font-family: inherit; }
   }
 }
 
-/* Le mouvement n'est jamais porteur de sens ici : il peut disparaître en entier. */
+/* ---------- Micro-interactions ---------- */
+
+/* Une seule règle départage tout : le mouvement est réservé à ce que l'utilisateur
+   déclenche lui-même. Un appui s'enfonce (il l'a voulu), une surface qui arrive
+   monte de quelques pixels (elle n'était pas là) ; mais rien ne bouge sous un
+   simple survol, parce que survoler n'est pas une intention. C'est ce qui permet
+   de balayer un écran de vingt cartes sans que rien ne frémisse.
+   La transition qui porte cet enfoncement est déclarée en toute fin de fichier
+   (voir « Transitions des éléments cliquables ») : `transition` est un raccourci,
+   et chaque règle qui en pose un plus bas écraserait `transform`. */
+/* Un bouton est petit : il lui faut un enfoncement net pour se sentir sous le
+   doigt. Une carte est large : le même ratio ferait tanguer l'écran entier. */
+.btn-primary:active, .btn-green:active, .btn-send:active, .btn-action:active,
+.btn-danger:active, .btn-outline:active, .btn-neutral:active, .row-btn:active,
+.icon-btn:active, .icon-btn-sm:active, #login-form button[type="submit"]:active {
+  transform: scale(0.96);
+}
+.pill:active, .nav-item:active, .project-item:active, .agent-item:active,
+.search-btn:active, .search-result:active, .card-menu-item:active,
+.project-menu-item:active, .reassign-item:active, .ptab:active, .tab:active,
+.diff-file-tab:active {
+  transform: scale(0.98);
+}
+.kanban-card:active, .project-tile:active, .task-row:active, .agent-choice:active,
+.choice-card:active, .add-card-btn:active, .project-tile-add:active,
+.onboarding-card-head:active {
+  transform: scale(0.994);
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.001ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.001ms !important;
   }
+  /* Même l'enfoncement disparaît : c'est du mouvement, et il n'apporte aucune
+     information que la teinte ne donne pas déjà. */
+  *:active { transform: none !important; }
 }
 
 /* ---------- Layout ---------- */
@@ -152,12 +190,22 @@ button, input, textarea { font-family: inherit; }
   overflow: hidden;
 }
 
+/* Deux lames de verre côte à côte, séparées par une rainure d'ambiance : c'est
+   cette rainure qui donne au verre son épaisseur, bien plus qu'un trait. */
 .sidebar {
-  width: 236px;
+  width: 244px;
   flex: none;
   display: flex;
   flex-direction: column;
-  padding: 10px 0 0;
+  margin: 10px 0 10px 10px;
+  padding: 7px 0 0;
+  background: var(--glass-rail);
+  -webkit-backdrop-filter: var(--blur);
+  backdrop-filter: var(--blur);
+  border: 1px solid var(--border);
+  border-top-color: var(--glass-line);
+  border-radius: var(--radius-panel);
+  box-shadow: var(--shadow-1);
   overflow: hidden;
 }
 
@@ -169,7 +217,7 @@ button, input, textarea { font-family: inherit; }
   min-width: 0;
   display: flex;
   flex-direction: column;
-  margin: 10px 10px 10px 0;
+  margin: 10px 10px 10px 10px;
   background: var(--glass);
   -webkit-backdrop-filter: var(--blur);
   backdrop-filter: var(--blur);
@@ -206,17 +254,6 @@ button, input, textarea { font-family: inherit; }
   background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cpath fill='%23122220' d='M4.4 0h11.2A4.4 4.4 0 0 1 20 4.4v11.2a4.4 4.4 0 0 1-4.4 4.4H4.4A4.4 4.4 0 0 1 0 15.6V4.4A4.4 4.4 0 0 1 4.4 0Z'/%3E%3Cg clip-path='url(%23c)'%3E%3Cpath fill='%23f0eae1' d='M9 2h1v1h-1z'/%3E%3Cpath fill='%23f0eae1' d='M9 3h2v1h-2z'/%3E%3Cpath fill='%23f0eae1' d='M9 4h3v1h-3z'/%3E%3Cpath fill='%23f0eae1' d='M9 5h4v1h-4z'/%3E%3Cpath fill='%23f0eae1' d='M9 6h5v1h-5z'/%3E%3Cpath fill='%23f0eae1' d='M9 7h6v1h-6z'/%3E%3Cpath fill='%23789799' d='M1 8h1v1h-1z'/%3E%3Cpath fill='%23f0eae1' d='M9 8h1v1h-1z'/%3E%3Cpath fill='%23789799' d='M18 8h1v1h-1z'/%3E%3Cpath fill='%23789799' d='M1 9h2v1h-2z'/%3E%3Cpath fill='%23f0eae1' d='M7 9h6v1h-6z'/%3E%3Cpath fill='%23789799' d='M17 9h2v1h-2z'/%3E%3Cpath fill='%23789799' d='M1 10h3v1h-3z'/%3E%3Cpath fill='%23f0eae1' d='M6 10h8v1h-8z'/%3E%3Cpath fill='%23789799' d='M16 10h3v1h-3z'/%3E%3Cpath fill='%23789799' d='M2 11h3v1h-3z'/%3E%3Cpath fill='%23f0eae1' d='M7 11h6v2h-6z'/%3E%3Cpath fill='%23789799' d='M15 11h3v1h-3z'/%3E%3Cpath fill='%23789799' d='M2 12h4v1h-4z'/%3E%3Cpath fill='%23789799' d='M14 12h4v1h-4z'/%3E%3Cpath fill='%23789799' d='M3 13h4v1h-4z'/%3E%3Cpath fill='%23789799' d='M13 13h4v1h-4z'/%3E%3Cpath fill='%23789799' d='M3 14h5v1h-5z'/%3E%3Cpath fill='%23789799' d='M12 14h5v1h-5z'/%3E%3Cpath fill='%23789799' d='M4 15h5v1h-5z'/%3E%3Cpath fill='%23789799' d='M11 15h5v1h-5z'/%3E%3Cpath fill='%23789799' d='M5 16h10v1h-10z'/%3E%3Cpath fill='%23789799' d='M6 17h8v1h-8z'/%3E%3Cpath fill='%23789799' d='M7 18h6v1h-6z'/%3E%3Cpath fill='%23789799' d='M8 19h4v1h-4z'/%3E%3C/g%3E%3CclipPath id='c'%3E%3Cpath d='M4.4 0h11.2A4.4 4.4 0 0 1 20 4.4v11.2a4.4 4.4 0 0 1-4.4 4.4H4.4A4.4 4.4 0 0 1 0 15.6V4.4A4.4 4.4 0 0 1 4.4 0Z'/%3E%3C/clipPath%3E%3C/svg%3E") center/contain no-repeat;
 }
 .brand-name { font-size: 14px; font-weight: 600; letter-spacing: -0.015em; }
-.sidebar-shortcuts-link {
-  margin-left: auto;
-  border: 0;
-  background: transparent;
-  color: var(--muted-3);
-  font-size: 11.5px;
-  cursor: pointer;
-  padding: 2px 4px;
-  white-space: nowrap;
-}
-.sidebar-shortcuts-link:hover { color: var(--text-2); text-decoration: underline; }
 
 .sidebar-search-wrap { padding: 4px 12px 12px; }
 .search-btn {
@@ -324,7 +361,7 @@ button, input, textarea { font-family: inherit; }
    lien avec ce qu'il recouvre, sinon on lit deux choses à la fois. */
 .project-menu, .card-menu, .reassign-menu {
   position: absolute; z-index: 6;
-  background: var(--glass-float);
+  background: var(--glass-menu);
   -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur);
   border: 1px solid var(--border); border-top-color: var(--glass-line);
   border-radius: 13px; box-shadow: var(--shadow-2);
@@ -802,22 +839,28 @@ button, input, textarea { font-family: inherit; }
 .status-badge-rebasing .status-badge-icon .task-spinner { border-color: rgba(154, 107, 13, 0.28); border-top-color: var(--amber); }
 .status-badge-note { font-size: 11.5px; color: var(--muted-2); }
 
-.action-row { display: flex; align-items: center; gap: 10px; margin-top: 14px; }
+.action-row { display: flex; align-items: center; gap: 8px; margin-top: 14px; }
+/* Refuser tient à côté d'Accepter, sans chercher à peser autant : le primaire
+   prend la place qui reste, le secondaire juste sa largeur de texte. */
+.btn-action-secondary { flex: none; height: 40px; padding: 0 16px; border-radius: 11px; font-size: 13px; }
+/* Le menu « ⋯ » du détail : ancré à droite de l'en-tête, sous le bouton. */
+.detail-menu-wrap { position: relative; flex: none; }
+.detail-menu { top: 30px; right: 0; min-width: 180px; }
+.card-menu-item-danger { color: var(--red); }
+.card-menu-item-danger:hover { background: var(--red-bg); }
 .btn-action {
   flex: 1; min-width: 0; height: 40px; padding: 0 16px; border: 0; border-radius: 11px;
   font-size: 14px; font-weight: 600; letter-spacing: -0.01em; cursor: pointer;
-  transition: filter .2s ease;
+  /* transform doit rester dans la liste : le bloc des micro-interactions le pose
+     plus haut, et une propriété `transition` en raccourci l'écraserait. */
+  transition: filter .2s ease, transform .14s ease;
 }
 .btn-action:hover { filter: brightness(0.96); }
 .btn-action:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .secondary-row { margin-top: 8px; }
 .btn-block { width: 100%; height: 36px; }
-.detail-link-row { display: flex; gap: 16px; margin-top: 8px; }
 .detail-link { border: 0; background: transparent; color: var(--muted-3); font-size: 12px; cursor: pointer; padding: 2px 2px; }
 .detail-link:hover { color: var(--text-2); text-decoration: underline; }
-.detail-delete-row { margin-top: 8px; }
-.detail-link-danger { color: var(--red); opacity: 0.8; }
-.detail-link-danger:hover { color: var(--red); opacity: 1; }
 .checks { flex: none; white-space: nowrap; display: flex; gap: 6px; }
 .check { display: inline-flex; align-items: center; cursor: help; }
 .check-svg { display: block; }
@@ -1238,6 +1281,31 @@ button, input, textarea { font-family: inherit; }
 
 .settings-tab-body { margin-top: 12px; }
 
+/* Onglet Agents des réglages : la liste complète des agents, sortie de la barre
+   latérale (qui ne garde que ceux qui travaillent ou qui sont mal installés). */
+.agent-manage-list { display: flex; flex-direction: column; gap: 4px; margin-top: 4px; }
+.agent-manage-row {
+  display: flex; align-items: center; gap: 11px; width: 100%; padding: 9px 11px;
+  border: 1px solid var(--border); border-top-color: var(--glass-line); border-radius: 12px;
+  background: var(--glass-card); cursor: pointer; text-align: left; font: inherit;
+  transition: background-color .18s ease, border-color .18s ease, transform .14s ease;
+}
+.agent-manage-row:hover { background: var(--glass-float); border-color: var(--border-3); }
+.agent-manage-row:active { transform: scale(0.99); }
+.agent-manage-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.agent-manage-name { font-size: 13px; font-weight: 600; color: var(--text); }
+.agent-manage-model {
+  font-size: 11px; color: var(--muted-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+/* Dépôt et sponsoring : rangés en bas des réglages, en gris, sur une ligne. */
+.about-links { display: flex; align-items: center; gap: 18px; margin-top: 16px; flex-wrap: wrap; }
+.about-links a {
+  display: inline-flex; align-items: center; gap: 6px; font-size: 12px;
+  color: var(--muted-2); text-decoration: none; transition: color .18s ease;
+}
+.about-links a:hover { color: var(--text-2); text-decoration: underline; }
+
 /* ---------- Mise à jour ---------- */
 
 /* Pied de sidebar : un rappel de version en gris, qui devient un appel discret
@@ -1359,11 +1427,15 @@ button, input, textarea { font-family: inherit; }
   .sidebar {
     position: fixed;
     top: 0; left: 0;
-    width: min(260px, 82vw);
+    width: min(266px, 82vw);
     height: 100vh;
+    margin: 0;
+    padding-top: 10px;
     background: rgba(247, 245, 240, 0.9);
     -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur);
+    border: 0;
     border-right: 1px solid var(--border);
+    border-radius: 0;
     z-index: 30;
     transform: translateX(-100%);
     transition: transform .24s ease;
@@ -1400,4 +1472,37 @@ button, input, textarea { font-family: inherit; }
   .ptabs-panel { min-height: 0; }
   .field-row { display: block; }
   .field-row .modal-label { margin-bottom: 8px; }
+}
+
+/* ---------- Transitions des éléments cliquables ---------- */
+
+/* Ce bloc doit rester le dernier du fichier. `transition` est un raccourci :
+   il repose `transition-property` en entier, donc la moindre règle plus bas qui
+   en déclare un ferait disparaître `transform` de la liste, et l'enfoncement à
+   l'appui (voir « Micro-interactions ») redeviendrait sec. Une seule durée pour
+   tout ce qui se clique, aussi : c'est ce qui donne à l'interface une seule
+   vitesse, celle qu'on finit par ne plus remarquer. */
+.btn-primary, .btn-green, .btn-outline, .btn-neutral, .btn-action, .btn-send,
+.btn-danger, .row-btn, .pill, .nav-item, .project-item, .agent-item, .tab,
+.kanban-card, .project-tile, .task-row, .agent-choice, .choice-card,
+.add-card-btn, .project-tile-add, .icon-btn, .icon-btn-sm, .search-btn,
+.search-result, .card-menu-item, .project-menu-item, .reassign-item, .ptab,
+.onboarding-card-head, .diff-file-tab, .agent-manage-row, .composer,
+#login-form button[type="submit"] {
+  transition-property: background-color, box-shadow, border-color, color, opacity, filter, transform;
+  transition-duration: .2s;
+  transition-timing-function: ease;
+}
+/* L'enfoncement, lui, est plus court que le reste : un appui doit répondre tout
+   de suite, c'est le relâchement qui a le droit d'être doux. */
+.btn-primary:active, .btn-green:active, .btn-outline:active, .btn-neutral:active,
+.btn-action:active, .btn-send:active, .btn-danger:active, .row-btn:active,
+.pill:active, .nav-item:active, .project-item:active, .agent-item:active,
+.kanban-card:active, .project-tile:active, .task-row:active, .agent-choice:active,
+.choice-card:active, .add-card-btn:active, .project-tile-add:active,
+.icon-btn:active, .icon-btn-sm:active, .search-btn:active, .search-result:active,
+.card-menu-item:active, .project-menu-item:active, .reassign-item:active,
+.ptab:active, .tab:active, .diff-file-tab:active, .agent-manage-row:active,
+#login-form button[type="submit"]:active {
+  transition-duration: .06s;
 }

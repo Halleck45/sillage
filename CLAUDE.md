@@ -116,13 +116,24 @@ SPA vanilla d'un seul fichier, dans une IIFE, découpée en sections commentées
 Verre translucide, et le calme comme critère de décision : devant deux options, prendre celle qui demande le moins d'attention. Trois couches, décrites en tête de `style.css`, à respecter pour toute surface ajoutée :
 
 1. **L'ambiance** : le fond de la page (`body`), trois halos très étalés sur `--bg`, en `background-attachment: fixed`. `--bg` est franchement plus soutenu que les surfaces : du verre posé sur un fond aussi clair que lui donne un écran délavé où plus rien ne se distingue.
-2. **Le verre** : `--glass` (le panneau `.main`), `--glass-card` (cartes et champs posés dessus), `--glass-float` (modales et menus, le plus dense car il doit couper le lien avec ce qu'il recouvre ; en dessous de 0.88 le texte de derrière fantôme au travers). Toujours avec `backdrop-filter: var(--blur)` pour les surfaces flottantes, un trait `--border` autour et `border-top-color: var(--glass-line)` pour l'épaisseur.
+2. **Le verre**, par densité croissante : `--glass-rail` (la barre latérale, la plus fine : elle porte la navigation, pas le travail), `--glass` (le panneau `.main`), `--glass-card` (cartes et champs posés dessus), `--glass-float` (modales, 0.88 minimum : en dessous le texte de derrière fantôme au travers), `--glass-menu` (menus, 0.97 : un menu se pose directement sur du texte, sans le voile assombri d'une modale pour l'aider). Toujours avec `backdrop-filter: var(--blur)` pour les surfaces flottantes, un trait `--border` autour et `border-top-color: var(--glass-line)` pour l'épaisseur. Les deux panneaux (barre latérale et `.main`) sont séparés par une rainure d'ambiance de 10 px : c'est elle, plus qu'un trait, qui donne au verre son épaisseur.
 3. **L'encre** : le texte, les traits (`--border*`, `--hover`, tous des `rgba` d'encre diluée, jamais une couleur, pour se poser sur n'importe quelle densité de verre) et les voiles de sens (`--green-bg`, `--amber-bg`, `--red-bg`, translucides eux aussi).
 
-Deux règles qui en découlent :
+Trois règles qui en découlent :
 
-- **Rien ne se déplace au survol.** Pas de `transform` sur un bouton, une carte ou une ligne : seules la teinte et l'ombre changent, en .18–.22 s. Un écran qui compte dix boutons qui se soulèvent est un écran qu'on ne peut pas parcourir tranquillement. Les animations restantes (`om-pulse`, `om-spin`, `om-fade`, `om-rise`) sont lentes et toutes désactivées par `prefers-reduced-motion`.
+- **Le mouvement est réservé à ce que l'utilisateur déclenche.** Rien ne bouge au survol (pas de `transform` sur un bouton, une carte ou une ligne : seules la teinte et l'ombre changent) parce que survoler n'est pas une intention ; un appui, si, donc tout ce qui se clique s'enfonce d'un `scale()` (voir « Micro-interactions »), et une surface qui arrive monte de quelques pixels (`om-rise`, modales et menus) parce qu'elle n'était pas là. Les animations de fond (`om-pulse`, `om-spin`, `om-fade`) sont lentes, et `prefers-reduced-motion` désactive tout, y compris l'enfoncement.
+- **Le bloc « Transitions des éléments cliquables » reste le dernier du fichier.** `transition` est un raccourci qui repose `transition-property` en entier : toute règle plus bas qui en déclare un ferait disparaître `transform` de la liste et rendrait l'enfoncement sec.
 - **Pas de couleur pour décorer.** Le noir (`--solid`) pour les boutons pleins, le bleu `--accent` réservé aux liens et aux anneaux de focus, le vert au « livré », l'ambre au « en retard ». Un `@supports not (backdrop-filter)` remonte l'opacité des surfaces là où le verre n'existe pas.
+
+### Ce que les écrans ne montrent pas
+
+Épurer est une décision produit, pas un réglage de CSS. Les choix en vigueur, à ne pas défaire par inadvertance en rajoutant « juste une information » :
+
+- **La barre latérale ne liste que les agents qui travaillent ou qui sont mal installés** (`a.active || a.warning`), sous le titre « Au travail », et la section disparaît quand il n'y en a aucun. La liste complète vit dans Réglages → Agents (`buildSettingsAgentsHTML`), qui est aussi le seul endroit pour en créer un. Sept lignes d'agents au repos, c'était la moitié de la barre pour une information qu'on ne relit jamais.
+- **Une carte de kanban ne porte que l'avancement et ce qui attend un humain.** Pas de compteur de livrables ni de messages : ils ne décident de rien. Le rail de progression n'apparaît qu'au-dessus de 0 %.
+- **Une ligne de tâche ne montre aucun zéro** (`buildTaskCountsHTML`). « 0 nouveaux commits » sur chaque ligne, c'est du texte à sauter des yeux à chaque fois.
+- **Une action rare ne prend pas la place d'une action fréquente.** Supprimer une tâche est dans le menu « ⋯ » de l'en-tête du détail, pas en rouge au-dessus des onglets ; Refuser est un bouton à côté d'Accepter, pas un lien sous lui.
+- **Deux boutons voisins ne portent jamais le même libellé** : la recette du chantier et celle de la tâche sont visibles en même temps, d'où `preview.buttonCard` (« Recette du chantier ») face à `preview.button` (« Recette »).
 
 ## Conventions de langue
 
