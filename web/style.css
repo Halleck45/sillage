@@ -40,7 +40,16 @@
   /* Le liseré clair sur le bord haut d'une surface de verre : ce qui lui donne
      son épaisseur. Sans lui, une surface translucide n'a pas de bord. */
   --glass-line: rgba(255, 255, 255, 0.75);
-  --blur: saturate(155%) blur(22px);
+  --blur: saturate(185%) blur(24px);
+  /* Le reflet : une diagonale claire qui s'éteint avant la moitié de la surface,
+     comme une lumière rasante sur une vitre. C'est le signal le plus fort de
+     « c'est du verre », avant même le flou. */
+  --sheen: linear-gradient(152deg, rgba(255, 255, 255, 0.42), rgba(255, 255, 255, 0) 46%);
+  /* L'arête : un liseré clair à l'intérieur des bords haut et gauche, là où la
+     lumière frappe la tranche, et un rappel sombre en bas à droite. */
+  --glass-edge:
+    inset 1px 1px 0 rgba(255, 255, 255, 0.55),
+    inset -1px -1px 0 rgba(25, 25, 23, 0.04);
 
   /* Les traits sont de l'encre diluée, jamais une couleur : ils se posent sur
      n'importe quelle densité de verre sans jamais dessiner un rectangle. */
@@ -91,18 +100,25 @@ html, body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* L'ambiance. Trois halos très étalés et presque incolores (un blanc chaud, un
-   souffle du vert du logo, un beige) : de quoi donner au verre quelque chose à
-   diffracter, jamais de quoi être remarqué. Fixe, et sans animation : c'est un
-   décor, et un décor qui bouge se regarde. */
+/* L'ambiance : des taches franches et resserrées, pas des lavis. C'est une
+   erreur qu'on ne fait qu'une fois : un dégradé déjà lisse, une fois flouté,
+   redonne exactement le même dégradé, et le verre posé dessus n'a alors rien à
+   réfracter (il ne reste qu'un aplat un peu plus clair). Le flou a besoin de
+   bords pour se voir. Les taches sont donc courtes et colorées ; c'est le verre
+   par-dessus qui les rend discrètes, pas leur pâleur.
+   Deux d'entre elles tombent volontairement dans la colonne de gauche, pour que
+   la barre latérale ait une teinte qui varie du haut vers le bas au lieu d'un
+   aplat uniforme. Fixe, et sans animation : un décor qui bouge se regarde. */
 body {
   font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
   font-size: 13.5px;
   background-color: var(--bg);
   background-image:
-    radial-gradient(1100px 800px at 6% -14%, rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0) 60%),
-    radial-gradient(900px 720px at 96% 2%, rgba(120, 151, 153, 0.28), rgba(120, 151, 153, 0) 58%),
-    radial-gradient(1000px 900px at 62% 114%, rgba(196, 172, 136, 0.30), rgba(196, 172, 136, 0) 56%);
+    radial-gradient(420px 380px at 2% 10%, rgba(104, 143, 146, 0.40), rgba(104, 143, 146, 0) 68%),
+    radial-gradient(420px 400px at 3% 88%, rgba(198, 158, 104, 0.34), rgba(198, 158, 104, 0) 70%),
+    radial-gradient(620px 520px at 90% 6%, rgba(128, 158, 190, 0.30), rgba(128, 158, 190, 0) 68%),
+    radial-gradient(700px 560px at 74% 98%, rgba(202, 168, 132, 0.34), rgba(202, 168, 132, 0) 66%),
+    radial-gradient(760px 620px at 46% 44%, rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0) 72%);
   background-attachment: fixed;
   background-repeat: no-repeat;
 }
@@ -134,8 +150,12 @@ button, input, textarea { font-family: inherit; }
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   :root {
     --glass: rgba(255, 255, 255, 0.94);
+    /* Le rail reste le plus léger des trois, mais assez couvrant pour que la
+       navigation se lise : sans flou, l'ambiance passerait crue au travers. */
+    --glass-rail: rgba(255, 255, 255, 0.86);
     --glass-card: rgba(255, 255, 255, 0.88);
     --glass-float: #fff;
+    --glass-menu: #fff;
   }
 }
 
@@ -191,7 +211,12 @@ button, input, textarea { font-family: inherit; }
 }
 
 /* Deux lames de verre côte à côte, séparées par une rainure d'ambiance : c'est
-   cette rainure qui donne au verre son épaisseur, bien plus qu'un trait. */
+   cette rainure qui donne au verre son épaisseur, bien plus qu'un trait.
+   Trois choses font qu'une surface se lit comme du verre, et le flou n'est que
+   la troisième : le reflet en diagonale (--sheen), l'arête claire sur les bords
+   haut et gauche (l'ombre interne de --glass-edge), puis seulement le flou de
+   ce qu'il y a derrière. Une surface floutée sans reflet ni arête reste un
+   aplat, quel que soit le rayon du flou. */
 .sidebar {
   width: 244px;
   flex: none;
@@ -199,13 +224,14 @@ button, input, textarea { font-family: inherit; }
   flex-direction: column;
   margin: 10px 0 10px 10px;
   padding: 7px 0 0;
-  background: var(--glass-rail);
+  background-color: var(--glass-rail);
+  background-image: var(--sheen);
   -webkit-backdrop-filter: var(--blur);
   backdrop-filter: var(--blur);
   border: 1px solid var(--border);
   border-top-color: var(--glass-line);
   border-radius: var(--radius-panel);
-  box-shadow: var(--shadow-1);
+  box-shadow: var(--glass-edge), var(--shadow-1);
   overflow: hidden;
 }
 
@@ -218,14 +244,15 @@ button, input, textarea { font-family: inherit; }
   display: flex;
   flex-direction: column;
   margin: 10px 10px 10px 10px;
-  background: var(--glass);
+  background-color: var(--glass);
+  background-image: var(--sheen);
   -webkit-backdrop-filter: var(--blur);
   backdrop-filter: var(--blur);
   border: 1px solid var(--border);
   border-top-color: var(--glass-line);
   border-radius: var(--radius-panel);
   overflow: hidden;
-  box-shadow: var(--shadow-1);
+  box-shadow: var(--glass-edge), var(--shadow-1);
 }
 
 .view-shell { display: flex; flex-direction: column; height: 100%; min-height: 0; }
