@@ -274,6 +274,7 @@
       'chat.interrupted': 'Agent interrompu par un arrêt de Sillage : la tâche est repassée en revue. Ce qu\'il avait commité est là ; envoyez-lui un message pour qu\'il reprenne.',
       'conversation.empty': 'Aucun message pour l\'instant.',
       'diff.empty': 'Aucune modification.',
+      'diff.openInVscode': 'Ouvrir dans VS Code',
       'deliverables.code': 'Code',
       'deliverables.docs': 'Documents',
       'deliverables.images': 'Captures',
@@ -789,6 +790,7 @@
       'chat.interrupted': 'Agent interrupted by a Sillage shutdown: the task went back to review. What it had committed is there; send it a message to pick the work back up.',
       'conversation.empty': 'No messages yet.',
       'diff.empty': 'No changes.',
+      'diff.openInVscode': 'Open in VS Code',
       'deliverables.code': 'Code',
       'deliverables.docs': 'Documents',
       'deliverables.images': 'Screenshots',
@@ -2493,6 +2495,23 @@
       '</svg>';
   }
 
+  // Flèche vers l'extérieur : ouverture dans une application tierce, pas le
+  // logo d'un éditeur en particulier.
+  function externalIconHTML() {
+    return '<svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true" focusable="false">' +
+      '<path fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" d="M6.5 3H3.6c-.6 0-1.1.5-1.1 1.1v7.3c0 .6.5 1.1 1.1 1.1h7.3c.6 0 1.1-.5 1.1-1.1V9.5M9 2.5h4v4M7.2 8.3l5.6-5.6"/>' +
+      '</svg>';
+  }
+
+  // vscode://file/<chemin absolu> : ouvre un fichier du worktree dans VS Code
+  // via son gestionnaire d'URI système, sans appel serveur. N'a de sens que
+  // sur le poste qui fait tourner Sillage (localhost), ce qui est le seul cas
+  // d'usage du produit.
+  function vscodeFileUri(worktreeDir, path) {
+    if (!worktreeDir) return null;
+    return 'vscode://file' + encodeURI(worktreeDir.replace(/\/+$/, '') + '/' + path);
+  }
+
   // Total de commits de la branche du chantier (base..branche), tous dépôts
   // confondus : un chantier multi-dépôts en a une somme, pas une liste.
   function deliveryTotalCommits(prev) {
@@ -4143,12 +4162,19 @@
     });
   }
 
-  // Le pied du diff ne porte plus d'action : la livraison n'est plus une action
-  // de tâche (voir la barre de livraison du chantier). Il ne reste que le
-  // rappel de la branche et de sa base.
-  function buildDiffFooterHTML(task, diff) {
+  // Le pied du diff ne porte plus d'action de livraison : ce n'est plus une
+  // action de tâche (voir la barre de livraison du chantier). Il ne reste que
+  // le rappel de la branche et de sa base, plus l'ouverture du fichier actif
+  // dans VS Code quand le worktree existe encore.
+  function buildDiffFooterHTML(task, diff, activeFile) {
+    var uri = activeFile ? vscodeFileUri(task.worktreeDir, activeFile.path) : null;
+    var vscodeHTML = uri
+      ? '<a class="attach-btn" href="' + escapeHtml(uri) + '" title="' + escapeHtml(t('diff.openInVscode')) + '">' +
+        externalIconHTML() + '<span>' + escapeHtml(t('diff.openInVscode')) + '</span></a>'
+      : '';
     return '<div class="diff-footer">' +
         '<span class="mono diff-branch">' + escapeHtml(diff.branch || '') + ' → ' + escapeHtml(diff.base || '') + '</span>' +
+        vscodeHTML +
       '</div>';
   }
 
@@ -4177,7 +4203,7 @@
 
     return '<div class="diff-subtabs">' + fileTabs + '</div>' +
       '<div class="diff-hunks">' + hunks + '</div>' +
-      buildDiffFooterHTML(task, diff);
+      buildDiffFooterHTML(task, diff, activeFile);
   }
 
   function patchDiffFooter(taskId) {
@@ -4186,8 +4212,10 @@
     if (!task || !diff || !diff.files || diff.files.length === 0) return false;
     var footerEl = document.querySelector('.diff-footer');
     if (!footerEl) return false;
+    var activePath = state.activeDiffFile[taskId] || diff.files[0].path;
+    var activeFile = diff.files.filter(function (f) { return f.path === activePath; })[0] || diff.files[0];
     var wrapper = document.createElement('div');
-    wrapper.innerHTML = buildDiffFooterHTML(task, diff);
+    wrapper.innerHTML = buildDiffFooterHTML(task, diff, activeFile);
     var newFooter = wrapper.firstElementChild;
     if (newFooter) footerEl.replaceWith(newFooter);
     return true;
