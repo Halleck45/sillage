@@ -12,6 +12,7 @@ import (
 	"strings"
 	"testing"
 	"testing/fstest"
+	"time"
 )
 
 // diffFixture est un diff unifié inline couvrant : un fichier modifié
@@ -142,6 +143,50 @@ func TestWorktreeAndDiff(t *testing.T) {
 	if !contains(paths, "README.md") || !contains(paths, "nouveau.txt") {
 		t.Fatalf("chemins inattendus : %v", paths)
 	}
+}
+
+// TestOpenDifftool : sans diff.tool configuré, refus explicite plutôt qu'un
+// git difftool qui tenterait de deviner un outil ou resterait en attente
+// d'une réponse au prompt interactif (--no-prompt ne suffit pas s'il n'y a
+// rien à lancer). Une fois configuré, l'outil (ici un simple `touch`) part
+// bien en tâche de fond : OpenDifftool ne doit pas attendre sa fin.
+func TestOpenDifftool(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git non disponible dans cet environnement")
+	}
+
+	repo := t.TempDir()
+	runTestGit(t, repo, "init")
+	runTestGit(t, repo, "config", "user.email", "test@example.com")
+	runTestGit(t, repo, "config", "user.name", "Test")
+	if err := os.WriteFile(filepath.Join(repo, "a.txt"), []byte("one\n"), 0o644); err != nil {
+		t.Fatalf("écriture a.txt impossible : %v", err)
+	}
+	runTestGit(t, repo, "add", "-A")
+	runTestGit(t, repo, "commit", "-m", "initial")
+	if err := os.WriteFile(filepath.Join(repo, "a.txt"), []byte("two\n"), 0o644); err != nil {
+		t.Fatalf("modification a.txt impossible : %v", err)
+	}
+
+	if err := OpenDifftool(repo, "HEAD", "a.txt"); err == nil {
+		t.Fatal("attendu une erreur sans diff.tool configuré")
+	}
+
+	marker := filepath.Join(repo, "opened.marker")
+	runTestGit(t, repo, "config", "diff.tool", "sillagetest")
+	runTestGit(t, repo, "config", "difftool.sillagetest.cmd", "touch "+marker)
+
+	if err := OpenDifftool(repo, "HEAD", "a.txt"); err != nil {
+		t.Fatalf("OpenDifftool: %v", err)
+	}
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) {
+		if _, err := os.Stat(marker); err == nil {
+			return
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	t.Fatal("l'outil de diff configuré n'a pas été lancé")
 }
 
 // TestGitCommonDirFromWorktree : le worktree d'une tâche n'a qu'un fichier

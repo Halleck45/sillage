@@ -244,6 +244,7 @@ PreviewRun { "id": "pv1", "projectId": "p1", "cardId": "c1", "taskId": "",
 | POST | `/api/tasks/{id}/reopen` | | Task (accepted/cancelled → review). 400 sinon |
 | POST | `/api/tasks/{id}/read` | | 204 (unread=false, ne modifie jamais `updatedAt` : voir plus bas) |
 | GET | `/api/tasks/{id}/diff` | | voir ci-dessous |
+| POST | `/api/tasks/{id}/difftool` | `{path}` | 204 : lance `git difftool` sur `path`, entre `task.base` et l'état courant du worktree, avec l'outil configuré par l'utilisateur (`git config diff.tool`). Ne bloque pas la requête (l'outil est graphique et peut rester ouvert). 400 si `path` manque ou si aucun `diff.tool` n'est configuré. **Aucune confirmation** : local, lecture seule côté état |
 | GET | `/api/tasks/{id}/deliverables` | | voir ci-dessous |
 | POST | `/api/cards/{id}/preview` | `{repoName?}` | PreviewRun : lance la recette dans le worktree de la branche de chantier. `repoName` optionnel si le chantier n'a qu'une branche ; 400 `"repoName is required"` sinon, 400 si aucune branche de chantier ou aucune commande configurée. **Aucune confirmation** : local et réversible |
 | POST | `/api/tasks/{id}/preview` | | PreviewRun : même chose dans le worktree de la tâche |

@@ -187,6 +187,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/tasks/{id}/read", s.handleRead)
 	mux.HandleFunc("GET /api/tasks/{id}/attachments/{attId}", s.handleGetAttachment)
 	mux.HandleFunc("GET /api/tasks/{id}/diff", s.handleDiff)
+	mux.HandleFunc("POST /api/tasks/{id}/difftool", s.handleDifftool)
 	mux.HandleFunc("GET /api/tasks/{id}/deliverables", s.handleDeliverables)
 	mux.HandleFunc("POST /api/cards/{id}/preview", s.handleCardPreview)
 	mux.HandleFunc("POST /api/tasks/{id}/preview", s.handleTaskPreview)
@@ -1996,6 +1997,30 @@ func (s *Server) handleDiff(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, DiffResponse{Branch: task.Branch, Base: task.Base, Files: files})
+}
+
+// handleDifftool lance l'outil de diff configuré par git (diff.tool) sur un
+// fichier de la tâche. Local, réversible, sans effet sur l'état : aucune
+// confirmation.
+func (s *Server) handleDifftool(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	task, ok := s.store.GetTask(id)
+	if !ok {
+		writeError(w, http.StatusNotFound, "task not found")
+		return
+	}
+	var body struct {
+		Path string `json:"path"`
+	}
+	if err := decodeJSON(r, &body); err != nil || strings.TrimSpace(body.Path) == "" {
+		writeError(w, http.StatusBadRequest, "path is required")
+		return
+	}
+	if err := OpenDifftool(task.WorktreeDir, task.Base, body.Path); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (s *Server) handleDeliverables(w http.ResponseWriter, r *http.Request) {
