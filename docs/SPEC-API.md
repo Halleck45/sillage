@@ -39,13 +39,17 @@ Project { "id": "p1", "name": "sillage", "description": "...", "repos": [Repo, .
           "links": [Link, ...], "unread": 2,
           "tokens": Tokens, "checkCmd": "go test ./...", "contextPrompt": "...",
           "allowedTools": ["Bash(pytest:*)", "Bash(ruff:*)"],
-          "delivery": Delivery, "deliveryWarning": "...", "hiddenFromSidebar": false }
+          "delivery": Delivery, "deliveryWarning": "...", "githubRepos": ["api"],
+          "hiddenFromSidebar": false }
           // description : une phrase, affichée sous le nom. checkCmd/contextPrompt/description peuvent être vides.
           // allowedTools : outils supplémentaires accordés aux agents de ce projet, en plus
           // du socle du binaire (voir "Outils autorisés aux agents"). Vide par défaut.
           // links : au plus 12, http(s) uniquement (voir "Liens épinglés" ci-dessous).
           // deliveryWarning : calculé à chaque lecture (jamais persisté), vide si tout va
           // bien ; voir "Santé de la livraison" ci-dessous.
+          // githubRepos : les dépôts dont le remote origin est sur github.com. Calculé à
+          // chaque lecture (jamais persisté), du même coup que deliveryWarning : le remote
+          // de chaque dépôt n'est lu qu'une fois. Voir "Import d'une issue GitHub".
           // hiddenFromSidebar : retire le projet de la barre latérale sans le supprimer ;
           // il reste listé (et modifiable) depuis la page "Tous les projets". Faux par défaut.
 
@@ -161,6 +165,18 @@ PlanResponse { "cardId": "c1", "agentId": "bolt", "repoName": "api", "steps": [P
           // l'UI crée ensuite les tâches sur ce même dépôt.
           // JAMAIS persisté : une proposition, pas un état.
 
+GithubIssue { "number": 221, "title": "Importer une issue github",
+              "url": "https://github.com/acme/demo/issues/221", "body": "...",
+              "labels": ["bug"], "author": "jf", "updatedAt": "..." }
+          // Une issue OUVERTE d'un dépôt de projet, lue via gh. body est tronqué à 4000
+          // caractères (il part dans le prompt d'une tâche, où il est relu et corrigé).
+          // JAMAIS persisté : voir "Import d'une issue GitHub" ci-dessous.
+
+IssueListResponse { "repoName": "api", "issues": [GithubIssue] }
+          // Réponse de GET /api/projects/{id}/issues. repoName est le dépôt effectivement
+          // interrogé (résolu par le serveur si le projet n'en a qu'un) : la tâche créée
+          // ensuite doit viser celui-là. Au plus 50 issues.
+
 PreviewRun { "id": "pv1", "projectId": "p1", "cardId": "c1", "taskId": "",
              "repoName": "api", "cmd": "make serve PORT=4101",
              "url": "http://127.0.0.1:4101", "dir": ".../worktrees/ws-c1-api",
@@ -207,6 +223,7 @@ PreviewRun { "id": "pv1", "projectId": "p1", "cardId": "c1", "taskId": "",
 | PATCH | `/api/projects/{id}` | `{name?, description?, checkCmd?, contextPrompt?, allowedTools?, repos?, links?, delivery?, hiddenFromSidebar?}` | Project (repos/links/allowedTools, si fournis, remplacent la liste entière ; retirer un repo ne casse pas les tâches existantes ; `previewCmd`/`previewUrl` se posent sur chaque Repo, et une `previewUrl` non http(s) est refusée en 400) |
 | DELETE | `/api/projects/{id}` | `{confirm:true}` | 204 (voir « Suppressions » ci-dessous). **Validation humaine obligatoire** : refus 400 sans `confirm` |
 | POST | `/api/projects/{id}/mark-all-read` | | 204 (marque `unread=false` sur toutes les tâches non lues du projet, ne modifie jamais `updatedAt` : même règle que `/api/tasks/{id}/read`). **Aucune confirmation** : action locale et réversible |
+| GET | `/api/projects/{id}/issues?repoName=&q=` | | IssueListResponse : les issues **ouvertes** d'un dépôt du projet, lues via `gh`. **Lecture seule de bout en bout** : rien n'est écrit sur la forge, rien n'est créé dans l'état. `repoName` optionnel si le projet n'a qu'un dépôt, sinon obligatoire (mêmes règles et mêmes erreurs 400 que `POST /api/tasks`). `q` est passé à la recherche GitHub. 404 projet inconnu ; 502 si le dépôt n'est pas sur github.com (`"origin remote is not a github repository"`), si `gh` manque au PATH, expire (20 s) ou échoue. Voir « Import d'une issue GitHub » ci-dessous |
 | POST | `/api/cards` | `{projectId, title, column?, contextPrompt?}` | Card. `column`, si fourni, doit valoir `"soon"` (400 `"cards are created in the soon column"` sinon) : les cartes se créent toujours dans "Bientôt" |
 | PATCH | `/api/cards/{id}` | `{column?, title?, contextPrompt?}` | Card. `title`, si fourni, doit être non vide. Le déplacement manuel de colonne (toutes colonnes acceptées) reste indépendant de l'auto-déplacement (voir plus bas) |
 | DELETE | `/api/cards/{id}` | `{confirm:true}` | 204 (voir « Suppressions » ci-dessous). **Validation humaine obligatoire** : refus 400 sans `confirm` |
@@ -280,6 +297,18 @@ Le prompt de planification porte le titre du chantier, le contexte du projet et 
 Lecture de la réponse : le serveur cherche l'objet JSON dans le texte de l'agent, en tentant chaque accolade ouvrante et en gardant le **dernier** objet exploitable (les CLI encadrent leur JSON de prose ou de barrières ```` ```json ````, et certains modèles recopient d'abord l'exemple du prompt). La proposition est ensuite mise aux normes : les étapes sans titre tombent, un titre est tronqué à 120 caractères, le plan est plafonné à 8 étapes. Tronquer plutôt que refuser, un plan presque bon restant éditable ; un plan vide, en revanche, est un échec (502).
 
 Côté UI, la succession se traduit par le chaînage déjà existant : les tâches sont créées dans l'ordre, chacune avec `waitsForTaskId` sur la précédente (voir « Démarrage différé d'une tâche »), donc **seule la première démarre un agent**. Le chaînage est une case à cocher, décochable : sans elle, toutes les tâches partent en même temps.
+
+### Import d'une issue GitHub
+
+`GET /api/projects/{id}/issues` liste les issues **ouvertes** d'un dépôt du projet, via `gh issue list --state open --limit 50 --json ...` lancé dans le dépôt (timeout 20 s). Même philosophie que le plan de tâches : **la route ne crée rien**. Elle rend une liste, l'humain en choisit une, et cette issue ne fait que **pré-remplir le formulaire de création de tâche** (titre, consigne, dépôt visé), qu'il relit et corrige avant que le moindre agent démarre.
+
+**Aucune écriture, ni côté Sillage ni côté forge.** Ni commentaire, ni assignation, ni fermeture, ni maintenant ni plus tard : importer une issue est une lecture, et la seule action sortante du produit reste la livraison d'un chantier. Une tâche créée depuis une issue est une tâche ordinaire ; rien ne remonte à GitHub quand elle est acceptée.
+
+- `q` est passé à `--search` : les qualificatifs GitHub habituels y marchent (`label:bug`, `author:...`) comme du texte libre. Aucune interprétation côté Sillage.
+- La liste est plafonnée à 50 issues (`issueListLimit`) : au-delà, ce n'est plus une liste qu'on parcourt des yeux, et c'est la recherche qui va chercher plus loin. L'UI dit le plafond quand il est atteint.
+- Le `body` de chaque issue est renvoyé dans la liste (une seule requête, pas de second appel à la sélection), tronqué à 4000 caractères (`issueBodyMax`).
+- Les entrées inexploitables (sans numéro, sans titre) sont écartées plutôt que de faire échouer la liste. Une sortie qui n'est pas du JSON de liste, en revanche, est une erreur (502) : une liste vide se lirait comme « aucune issue ouverte ».
+- 502 couvre tout ce qui vient de l'extérieur : dépôt qui n'est pas sur github.com, `gh` absent du PATH, non authentifié, expiré, en échec. `Project.githubRepos` sert à ne proposer l'import que là où il a un sens ; l'absence de `gh` n'est pas cachée, elle est dite au moment du clic (même parti pris que `deliveryWarning`).
 
 ### Lecture d'une tâche : `updatedAt` inchangé
 
@@ -626,3 +655,11 @@ Règles qui tiennent ce découpage :
 - La proposition est un brouillon : chaque étape est un bloc au titre et au prompt modifiables, avec une croix pour la retirer. Ce qui a été corrigé à la main est relu avant tout re-rendu (retirer une étape réécrit la liste). Retirer la dernière étape ramène au formulaire.
 - Une seule case à cocher, cochée par défaut : « Enchaîner : chaque tâche démarre quand la précédente est acceptée ». C'est ce qui fait d'une liste d'étapes une succession, et donc un seul agent au travail à la fois.
 - Le bouton de création dit combien de tâches il crée (« Créer les 3 tâches »). Les créations sont séquentielles ; une erreur en cours de route garde les étapes restantes dans la modale et annonce combien de tâches sont déjà créées, plutôt que de tout perdre.
+
+### Importer une issue GitHub : un pré-remplissage, pas un troisième bouton
+
+- **L'entrée est dans la modale « Nouvelle tâche »**, pas au-dessus de la liste des tâches : « Depuis une issue GitHub », au trait, de la même famille que « Joindre une image » (une action facultative posée au-dessus du champ qu'elle remplit). Deux raisons de ne pas en faire un bouton voisin de « Plan de tâches » et « Nouvelle tâche » : ce que l'import produit est exactement ce que ce formulaire produit (une tâche, un titre, une consigne, un agent, un dépôt), et une action rare ne prend pas la place d'une action fréquente. Et surtout pas caché sous un menu de « Plan de tâches » : une issue n'est pas un plan, personne n'irait la chercher là.
+- **Visible seulement si le projet a un dépôt sur github.com** (`Project.githubRepos`). Sur un projet GitLab ou sans remote, la ligne n'existe pas.
+- Le choix se fait dans une liste (numéro, titre, labels, auteur, âge), avec un champ de recherche qui interroge la forge (temporisation de 350 ms, `Entrée` cherche tout de suite). Une recherche en cours estompe la liste précédente au lieu de la vider : la vider ferait clignoter la modale à chaque frappe. Les labels ne portent pas leur couleur GitHub, qui décorerait sans rien décider.
+- **Choisir une issue ne crée rien** : le titre de la tâche devient celui de l'issue, la consigne devient « Corrige l'issue GitHub #N : titre », son URL et son corps, et le dépôt visé devient celui de l'issue. Tout reste modifiable, et c'est le bouton de création habituel qui lance l'agent. La consigne s'ouvre sur plus de lignes quand elle est déjà remplie : une issue importée se relit.
+- Les deux modales occupent le même emplacement : la saisie en cours est relue avant d'ouvrir la liste et restituée au retour, que l'on ait choisi une issue ou renoncé (« Annuler » revient au formulaire, pas au kanban).

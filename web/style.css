@@ -196,7 +196,7 @@ button, input, textarea { font-family: inherit; }
 }
 .kanban-card:active, .project-tile:active, .task-row:active, .agent-choice:active,
 .choice-card:active, .add-card-btn:active, .project-tile-add:active,
-.onboarding-card-head:active {
+.onboarding-card-head:active, .issue-row:active {
   transform: scale(0.994);
 }
 
@@ -1375,6 +1375,39 @@ button, input, textarea { font-family: inherit; }
 .btn-dots { margin-left: 7px; vertical-align: middle; }
 .btn-dots i { background: currentColor; opacity: .9; }
 
+/* Import d'une issue GitHub. L'entrée est de la même famille que « Joindre une
+   image » (.attach-btn) : une action facultative posée au-dessus du champ
+   qu'elle remplit, au trait et sans couleur, qui ne se réveille qu'au survol. */
+.modal-import-row { display: flex; align-items: center; margin: 2px 0 4px; }
+/* Une liste d'issues est longue : elle défile dans la modale au lieu de
+   pousser les boutons hors de l'écran. */
+.issue-list {
+  margin-top: 10px; max-height: 46vh; overflow-y: auto;
+  display: flex; flex-direction: column; gap: 4px;
+}
+/* Une recherche en cours estompe la liste précédente au lieu de la vider :
+   vider ferait clignoter la modale à chaque frappe. */
+.issue-list-busy { opacity: .45; }
+.issue-empty { padding: 24px 10px; text-align: center; color: var(--muted-3); font-size: 12.5px; }
+.issue-row {
+  display: flex; align-items: flex-start; gap: 10px; width: 100%; padding: 9px 10px;
+  border: 0; border-radius: 10px; background: transparent; cursor: pointer; text-align: left;
+}
+.issue-row:hover { background: var(--hover); }
+.issue-row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.issue-row-num { flex: none; padding-top: 1px; font-size: 11.5px; color: var(--muted-3); }
+.issue-row-body { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.issue-row-title { font-size: 13px; color: var(--text); line-height: 1.35; }
+.issue-row-meta { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+/* Les labels de la forge ne portent pas leur couleur GitHub : elle décorerait
+   sans rien décider, et trois pastilles vives dans une liste calme se lisent
+   avant les titres. */
+.issue-label {
+  padding: 1px 7px; border-radius: 999px; background: var(--hover);
+  color: var(--muted-2); font-size: 10.5px;
+}
+.issue-row-when { font-size: 11px; color: var(--muted-4); }
+
 .agent-quota-box {
   margin-top: 8px; background: var(--glass-card); border: 1px solid var(--border-3);
   border-radius: 12px; padding: 4px 12px;
@@ -1769,7 +1802,7 @@ button, input, textarea { font-family: inherit; }
 .search-result, .card-menu-item, .project-menu-item, .reassign-item, .ptab,
 .onboarding-card-head, .diff-file-tab, .agent-manage-row, .composer,
 .msg-actions, .msg-copy, .code-copy, .conv-jump, .composer-attach,
-.attach-remove, .attach-btn, .msg-image,
+.attach-remove, .attach-btn, .msg-image, .issue-row,
 #login-form button[type="submit"] {
   transition-property: background-color, box-shadow, border-color, color, opacity, filter, transform;
   transition-duration: .2s;
@@ -1785,6 +1818,7 @@ button, input, textarea { font-family: inherit; }
 .icon-btn:active, .icon-btn-sm:active, .search-btn:active, .search-result:active,
 .card-menu-item:active, .project-menu-item:active, .reassign-item:active,
 .ptab:active, .tab:active, .diff-file-tab:active, .agent-manage-row:active,
+.issue-row:active,
 .msg-copy:active, .code-copy:active, .conv-jump:active,
 #login-form button[type="submit"]:active {
   transition-duration: .06s;

@@ -740,22 +740,41 @@ func sortedProjectsWithWarnings(m map[string]Project) []ProjectOut {
 	return out
 }
 
-// projectOut habille un projet de son avertissement de livraison.
+// projectOut habille un projet de ses champs calculés. Le remote de chaque
+// dépôt n'est lu qu'une fois : l'avertissement de livraison et la liste des
+// dépôts GitHub en ont tous les deux besoin.
 func projectOut(p Project) ProjectOut {
-	return ProjectOut{Project: p, DeliveryWarning: deliveryWarning(p)}
+	forges := detectForges(p.Repos)
+	github := []string{}
+	for i, repo := range p.Repos {
+		if forges[i].Provider == "github" {
+			github = append(github, repo.Name)
+		}
+	}
+	return ProjectOut{Project: p, DeliveryWarning: deliveryWarning(p, forges), GithubRepos: github}
+}
+
+// detectForges lit le remote origin de chaque dépôt, dans l'ordre de repos.
+func detectForges(repos []Repo) []ForgeInfo {
+	out := make([]ForgeInfo, len(repos))
+	for i, repo := range repos {
+		out[i] = DetectForge(repo.Path)
+	}
+	return out
 }
 
 // deliveryWarning calcule un avertissement de santé de la livraison (chaîne
 // vide si tout va bien) : CLI de la forge absent du PATH, ou dépôt sans remote
 // origin alors que le mode exige un push. N'empêche jamais rien : le repli est
 // une URL de pull request pré-remplie. Jamais persisté : voir ProjectOut.
-func deliveryWarning(p Project) string {
+// forges est le remote de chaque dépôt de p, dans le même ordre.
+func deliveryWarning(p Project, forges []ForgeInfo) string {
 	if !deliveryModePushes(p.Delivery.Mode) {
 		return "" // fusion locale : aucun binaire externe, aucun remote requis
 	}
 	needsGh, needsGlab := false, false
-	for _, repo := range p.Repos {
-		info := DetectForge(repo.Path)
+	for i, repo := range p.Repos {
+		info := forges[i]
 		if info.RemoteURL == "" {
 			return "no 'origin' remote on repository " + repo.Name + "; nothing can be pushed"
 		}

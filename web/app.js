@@ -354,6 +354,18 @@
       'plan.creating': 'Création…',
       'plan.errorEmpty': 'Il ne reste aucune étape à créer.',
       'plan.errorPartial': '{n} tâche(s) créée(s), puis une erreur : {msg}',
+      'issues.import': 'Depuis une issue GitHub',
+      'issues.importTooltip': 'Choisir une issue ouverte du dépôt : elle remplit le titre et la consigne',
+      'issues.title': 'Issues ouvertes',
+      'issues.searchPlaceholder': 'Rechercher : texte libre, label:bug, author:…',
+      'issues.repoLabel': 'Dépôt',
+      'issues.loading': 'Lecture des issues…',
+      'issues.empty': 'Aucune issue ouverte sur ce dépôt.',
+      'issues.emptySearch': 'Aucune issue ne correspond à cette recherche.',
+      'issues.errorFailed': 'Les issues n\'ont pas pu être lues.',
+      'issues.cap': 'Les {n} issues les plus récentes. Affinez la recherche pour aller au-delà.',
+      'issues.by': 'par {login}',
+      'issues.promptHeader': 'Corrige l\'issue GitHub #{n} : {title}',
       'workstream.editTooltip': 'Modifier le chantier',
       'workstream.editTitle': 'Chantier',
       'workstream.errorSaveFailed': 'Erreur lors de l\'enregistrement.',
@@ -857,6 +869,18 @@
       'plan.creating': 'Creating…',
       'plan.errorEmpty': 'No step left to create.',
       'plan.errorPartial': '{n} task(s) created, then an error: {msg}',
+      'issues.import': 'From a GitHub issue',
+      'issues.importTooltip': 'Pick an open issue from the repository: it fills the title and the brief',
+      'issues.title': 'Open issues',
+      'issues.searchPlaceholder': 'Search: free text, label:bug, author:…',
+      'issues.repoLabel': 'Repository',
+      'issues.loading': 'Reading the issues…',
+      'issues.empty': 'No open issue on this repository.',
+      'issues.emptySearch': 'No issue matches this search.',
+      'issues.errorFailed': 'The issues could not be read.',
+      'issues.cap': 'The {n} most recent issues. Refine the search to go further.',
+      'issues.by': 'by {login}',
+      'issues.promptHeader': 'Fix GitHub issue #{n}: {title}',
       'workstream.editTooltip': 'Edit workstream',
       'workstream.editTitle': 'Workstream',
       'workstream.errorSaveFailed': 'Failed to save.',
@@ -1116,6 +1140,21 @@
   var planStartedAt = 0;
   var planTicker = null;
   var planWaitKey = 'plan.proposing'; // libellé de l'attente en cours
+  // Création de tâche : ce qui a été saisi, gardé hors du DOM. La modale de
+  // création et le choix d'une issue GitHub occupent le même emplacement
+  // (#modal-root) : passer de l'une à l'autre effacerait la saisie en cours.
+  var newTaskDraft = null; // {title, prompt, repoName, waitsForTaskId}
+  // Choix d'une issue GitHub. La liste vient de la forge à chaque frappe (voir
+  // scheduleIssueSearch) : issueRunToken périme la réponse d'une recherche
+  // dépassée par la suivante, ou dont la modale est déjà fermée.
+  var issueCardId = null;
+  var issueRepoName = '';
+  var issueQuery = '';
+  var issueList = null; // null = première lecture en cours
+  var issueBusy = false;
+  var issueError = '';
+  var issueRunToken = 0;
+  var issueSearchTimer = null;
   // Onglet actif et brouillon des champs simples de la modale de projet. Les
   // panneaux se rendent un par un : sans ce brouillon, changer d'onglet
   // perdrait ce qui vient d'être saisi dans le panneau qu'on quitte.
@@ -2429,6 +2468,15 @@
   function attachIconHTML() {
     return '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false">' +
       '<path fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" d="M11.9 7.3 7.2 12a2.55 2.55 0 0 1-3.6-3.6l4.9-4.9a1.7 1.7 0 0 1 2.4 2.4l-4.9 4.9a.85.85 0 0 1-1.2-1.2l4.5-4.5"/>' +
+      '</svg>';
+  }
+
+  // Issue ouverte : le cercle pointé des forges, pas leur logo. Le logo GitHub
+  // serait une marque posée dans l'interface, et il ne dit pas « issue ».
+  function issueIconHTML() {
+    return '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false">' +
+      '<circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" stroke-width="1.5"/>' +
+      '<circle cx="8" cy="8" r="1.9" fill="currentColor"/>' +
       '</svg>';
   }
 
@@ -4562,6 +4610,7 @@
     state.modal = null;
     state.previewScope = null;
     resetPlanWait();
+    resetIssuePick();
     var root = document.getElementById('modal-root');
     root.innerHTML = '';
   }
@@ -4644,14 +4693,26 @@
     var selected = state.agentsById[modalAgentId];
     var project = state.projectsById[card.projectId];
     var repos = (project && project.repos) || [];
+    var draft = newTaskDraft || { title: '', prompt: '', repoName: '', waitsForTaskId: '' };
     var repoSelectHTML = '';
     if (repos.length > 1) {
       var repoOptions = repos.map(function (r) {
-        return '<option value="' + escapeHtml(r.name) + '">' + escapeHtml(r.name) + '</option>';
+        return '<option value="' + escapeHtml(r.name) + '"' + (r.name === draft.repoName ? ' selected' : '') + '>' + escapeHtml(r.name) + '</option>';
       }).join('');
       repoSelectHTML = '<div class="modal-label">' + escapeHtml(t('newTask.repoLabel')) + '</div>' +
         '<select id="new-task-repo" class="modal-input">' + repoOptions + '</select>';
     }
+    // Importer une issue GitHub, c'est remplir ce formulaire-là : un titre et
+    // une consigne, relus et corrigés avant qu'un agent démarre. D'où une
+    // entrée ici plutôt qu'un troisième bouton au-dessus de la liste des
+    // tâches. Visible seulement si un dépôt du projet est sur github.com.
+    var githubRepos = (project && project.githubRepos) || [];
+    var importHTML = githubRepos.length
+      ? '<div class="modal-import-row">' +
+        '<button class="attach-btn" data-action="open-issue-picker" title="' + escapeHtml(t('issues.importTooltip')) + '">' +
+        issueIconHTML() + '<span>' + escapeHtml(t('issues.import')) + '</span></button>' +
+        '</div>'
+      : '';
     // Démarrer après : uniquement les tâches du chantier pas encore terminales
     // (une tâche accepted/cancelled ne fera plus jamais rien). Absent du
     // formulaire s'il n'y a rien à attendre, pour ne pas encombrer le cas
@@ -4663,7 +4724,7 @@
     if (waitCandidates.length > 0) {
       var waitOptions = '<option value="">' + escapeHtml(t('newTask.waitsForNone')) + '</option>' +
         waitCandidates.map(function (tk) {
-          return '<option value="' + escapeHtml(tk.id) + '">#' + tk.ref + ' ' + escapeHtml(tk.title) + '</option>';
+          return '<option value="' + escapeHtml(tk.id) + '"' + (tk.id === draft.waitsForTaskId ? ' selected' : '') + '>#' + tk.ref + ' ' + escapeHtml(tk.title) + '</option>';
         }).join('');
       waitsForSelectHTML = '<div class="modal-label">' + escapeHtml(t('newTask.waitsForLabel')) + '</div>' +
         '<select id="new-task-waits-for" class="modal-input">' + waitOptions + '</select>';
@@ -4671,8 +4732,11 @@
     return '<div class="modal">' +
       '<div class="modal-head"><span class="modal-title">' + escapeHtml(t('newTask.title')) + '</span><span class="modal-sub">' + escapeHtml(card.title) + '</span>' +
       '<button class="icon-btn" data-action="close-modal" aria-label="' + escapeHtml(t('common.close')) + '">✕</button></div>' +
-      '<input id="new-task-title" class="modal-input" placeholder="' + escapeHtml(t('newTask.titlePlaceholder')) + '">' +
-      '<textarea id="new-task-prompt" class="modal-textarea" placeholder="' + escapeHtml(t('newTask.promptPlaceholder')) + '" rows="3"></textarea>' +
+      importHTML +
+      '<input id="new-task-title" class="modal-input" placeholder="' + escapeHtml(t('newTask.titlePlaceholder')) + '" value="' + escapeHtml(draft.title) + '">' +
+      // Plus de lignes quand la consigne est déjà là : une issue importée se
+      // relit, et trois lignes avec un ascenseur ne se relisent pas.
+      '<textarea id="new-task-prompt" class="modal-textarea" placeholder="' + escapeHtml(t('newTask.promptPlaceholder')) + '" rows="' + (draft.prompt ? 8 : 3) + '">' + escapeHtml(draft.prompt) + '</textarea>' +
       // Joindre une image dès la création : le trombone et la bande de
       // vignettes du composeur, au même endroit de la lecture (sous le champ
       // qu'elles accompagnent).
@@ -4714,8 +4778,39 @@
     var defaultAgent = state.agentsById.bolt || state.agents.find(function (a) { return !a.warning; }) || state.agents[0];
     modalAgentId = defaultAgent ? defaultAgent.id : null;
     modalAttachments = [];
+    newTaskDraft = null;
+    renderNewTaskModal(cardId, 'new-task-title');
+  }
+
+  // Rouvre la modale de création avec le brouillon en cours : c'est le retour
+  // du choix d'une issue, qui a occupé le même emplacement entre-temps.
+  // focusId dit où reprendre la saisie : le titre pour un formulaire vierge, la
+  // consigne quand une issue vient de la remplir (c'est elle qu'on relit).
+  function renderNewTaskModal(cardId, focusId) {
+    var card = state.cardsById[cardId];
+    if (!card) return;
     openModal(buildNewTaskModalHTML(card));
-    setTimeout(function () { var el = document.getElementById('new-task-title'); if (el) el.focus(); }, 0);
+    setTimeout(function () {
+      var el = document.getElementById(focusId || 'new-task-title');
+      if (!el) return;
+      el.focus();
+      if (el.value) el.setSelectionRange(el.value.length, el.value.length);
+    }, 0);
+  }
+
+  // Le formulaire vit dans le DOM ; le relire avant de céder la place est ce
+  // qui permet de revenir sans avoir rien perdu.
+  function captureNewTaskDraft() {
+    var titleEl = document.getElementById('new-task-title');
+    var promptEl = document.getElementById('new-task-prompt');
+    var repoEl = document.getElementById('new-task-repo');
+    var waitsForEl = document.getElementById('new-task-waits-for');
+    newTaskDraft = {
+      title: titleEl ? titleEl.value : '',
+      prompt: promptEl ? promptEl.value : '',
+      repoName: repoEl ? repoEl.value : '',
+      waitsForTaskId: waitsForEl ? waitsForEl.value : ''
+    };
   }
 
   // La modale n'est pas rendue par renderMain : seule sa bande de vignettes est
@@ -5432,6 +5527,202 @@
       showPlanError(t('plan.errorPartial', { n: i, msg: planErrorText(e, 'plan.errorFailed') }));
       renderSidebar();
     });
+  }
+
+  // Import d'une issue GitHub : choisir une issue ouverte d'un dépôt du projet
+  // pour remplir le formulaire de création de tâche. Même principe que le plan
+  // de tâches, et même raison : la forge propose un titre et un texte, l'humain
+  // les relit et les corrige avant qu'un agent démarre. Rien n'est écrit sur
+  // GitHub, ni ici ni plus tard (voir internal/server/issues.go).
+
+  // Plafond de la liste, à garder aligné sur issueListLimit
+  // (internal/server/issues.go) : c'est lui qui décide de l'affichage de la
+  // note « les N plus récentes ».
+  var ISSUE_LIST_LIMIT = 50;
+
+  // Les dépôts du projet qui sont sur github.com, calculés côté serveur depuis
+  // le remote origin (ProjectOut.GithubRepos).
+  function issueRepoChoices(card) {
+    var project = state.projectsById[card.projectId];
+    return (project && project.githubRepos) || [];
+  }
+
+  function openIssuePicker(cardId) {
+    var card = state.cardsById[cardId];
+    if (!card) return;
+    var repos = issueRepoChoices(card);
+    if (!repos.length) return;
+    issueCardId = cardId;
+    // Le dépôt déjà choisi dans le formulaire s'il est sur GitHub, sinon le
+    // premier : chercher une issue ailleurs que là où la tâche travaillera
+    // n'aurait pas de sens.
+    var wanted = (newTaskDraft && newTaskDraft.repoName) || '';
+    issueRepoName = repos.indexOf(wanted) >= 0 ? wanted : repos[0];
+    issueQuery = '';
+    issueList = null;
+    issueError = '';
+    issueBusy = false;
+    renderIssuePicker();
+    loadIssues();
+  }
+
+  // Appelé par closeModal : ni recherche en attente, ni réponse en vol capable
+  // de réécrire une liste qui n'est plus là.
+  function resetIssuePick() {
+    if (issueSearchTimer) { clearTimeout(issueSearchTimer); issueSearchTimer = null; }
+    if (issueBusy) { issueBusy = false; issueRunToken += 1; }
+  }
+
+  function renderIssuePicker() {
+    var card = state.cardsById[issueCardId];
+    if (!card) { closeModal(); return; }
+    openModal(buildIssuePickerHTML(card));
+    setTimeout(function () {
+      var el = document.getElementById('issue-search');
+      if (!el) return;
+      el.focus();
+      if (el.value) el.setSelectionRange(el.value.length, el.value.length);
+    }, 0);
+  }
+
+  function buildIssuePickerHTML(card) {
+    var repos = issueRepoChoices(card);
+    var repoSelectHTML = '';
+    if (repos.length > 1) {
+      var repoOptions = repos.map(function (name) {
+        return '<option value="' + escapeHtml(name) + '"' + (name === issueRepoName ? ' selected' : '') + '>' + escapeHtml(name) + '</option>';
+      }).join('');
+      repoSelectHTML = '<div class="modal-label">' + escapeHtml(t('issues.repoLabel')) + '</div>' +
+        '<select id="issue-repo" class="modal-input">' + repoOptions + '</select>';
+    }
+    return '<div class="modal">' +
+      '<div class="modal-head"><span class="modal-title">' + escapeHtml(t('issues.title')) + '</span>' +
+      '<span class="modal-sub">' + escapeHtml(card.title) + '</span>' +
+      '<button class="icon-btn" data-action="close-modal" aria-label="' + escapeHtml(t('common.close')) + '">✕</button></div>' +
+      // La recherche part sur la forge, pas sur la liste déjà chargée : un
+      // dépôt actif a plus d'issues ouvertes qu'on n'en affiche.
+      '<input id="issue-search" class="modal-input" placeholder="' + escapeHtml(t('issues.searchPlaceholder')) + '" value="' + escapeHtml(issueQuery) + '">' +
+      repoSelectHTML +
+      '<div class="issue-list" id="issue-list">' + buildIssueListHTML() + '</div>' +
+      '<div class="modal-foot"><button class="btn-outline" data-action="cancel-issue-picker">' + escapeHtml(t('common.cancel')) + '</button></div>' +
+      '</div>';
+  }
+
+  // Seule cette portion est réécrite à chaque recherche : réinjecter la modale
+  // entière volerait le focus et le curseur du champ en train d'être tapé.
+  function buildIssueListHTML() {
+    if (issueError) return '<div class="modal-error">' + escapeHtml(issueError) + '</div>';
+    if (issueList === null) return '<div class="issue-empty">' + escapeHtml(t('issues.loading')) + '</div>';
+    if (!issueList.length) {
+      return '<div class="issue-empty">' + escapeHtml(t(issueQuery ? 'issues.emptySearch' : 'issues.empty')) + '</div>';
+    }
+    var rowsHTML = issueList.map(buildIssueRowHTML).join('');
+    // La liste est plafonnée côté serveur : le dire, plutôt que de laisser
+    // croire que ce sont là toutes les issues ouvertes du dépôt.
+    var capHTML = issueList.length >= ISSUE_LIST_LIMIT
+      ? '<div class="modal-note">' + escapeHtml(t('issues.cap', { n: issueList.length })) + '</div>'
+      : '';
+    return rowsHTML + capHTML;
+  }
+
+  function buildIssueRowHTML(issue) {
+    var labelsHTML = (issue.labels || []).map(function (l) {
+      return '<span class="issue-label">' + escapeHtml(l) + '</span>';
+    }).join('');
+    var meta = [];
+    if (issue.author) meta.push(t('issues.by', { login: issue.author }));
+    if (issue.updatedAt) meta.push(timeAgo(issue.updatedAt));
+    return '<button class="issue-row" data-action="pick-issue" data-number="' + issue.number + '">' +
+      '<span class="issue-row-num mono">#' + issue.number + '</span>' +
+      '<span class="issue-row-body">' +
+        '<span class="issue-row-title">' + escapeHtml(issue.title) + '</span>' +
+        (labelsHTML || meta.length
+          ? '<span class="issue-row-meta">' + labelsHTML +
+            (meta.length ? '<span class="issue-row-when">' + escapeHtml(meta.join(' · ')) + '</span>' : '') +
+            '</span>'
+          : '') +
+      '</span></button>';
+  }
+
+  function refreshIssueList() {
+    var el = document.getElementById('issue-list');
+    if (!el) return;
+    el.innerHTML = buildIssueListHTML();
+    // Liste précédente conservée mais estompée pendant une nouvelle recherche :
+    // la vider à chaque frappe ferait clignoter la modale.
+    el.classList.toggle('issue-list-busy', issueBusy && issueList !== null);
+  }
+
+  function loadIssues() {
+    if (!issueCardId) return;
+    issueError = '';
+    issueBusy = true;
+    var token = ++issueRunToken;
+    refreshIssueList();
+    var url = '/api/projects/' + state.cardsById[issueCardId].projectId + '/issues' +
+      '?repoName=' + encodeURIComponent(issueRepoName) + '&q=' + encodeURIComponent(issueQuery);
+    api(url).then(function (res) {
+      if (token !== issueRunToken) return; // recherche dépassée, ou modale fermée
+      issueBusy = false;
+      issueRepoName = res.repoName || issueRepoName;
+      issueList = res.issues || [];
+      refreshIssueList();
+    }).catch(function (e) {
+      if (token !== issueRunToken) return;
+      issueBusy = false;
+      issueList = [];
+      issueError = (e instanceof ApiError && e.message) || t('issues.errorFailed');
+      refreshIssueList();
+    });
+  }
+
+  // Une frappe ne part pas tout de suite sur le réseau : gh interroge l'API
+  // GitHub, une requête par caractère serait une requête pour rien.
+  function scheduleIssueSearch(value) {
+    issueQuery = value;
+    if (issueSearchTimer) clearTimeout(issueSearchTimer);
+    issueSearchTimer = setTimeout(function () { issueSearchTimer = null; loadIssues(); }, 350);
+  }
+
+  function searchIssuesNow(value) {
+    if (issueSearchTimer) { clearTimeout(issueSearchTimer); issueSearchTimer = null; }
+    issueQuery = value;
+    loadIssues();
+  }
+
+  function changeIssueRepo(name) {
+    if (name === issueRepoName) return;
+    issueRepoName = name;
+    issueList = null;
+    loadIssues();
+  }
+
+  // L'issue choisie remplit le formulaire, elle ne crée rien : le titre, la
+  // consigne (référence, lien, corps de l'issue) et le dépôt visé. Tout reste
+  // modifiable, et aucun agent n'a encore bougé.
+  function pickIssue(number) {
+    var issue = (issueList || []).filter(function (i) { return i.number === number; })[0];
+    if (!issue) return;
+    var cardId = issueCardId;
+    var parts = [t('issues.promptHeader', { n: issue.number, title: issue.title })];
+    if (issue.url) parts.push(issue.url);
+    if (issue.body) parts.push('', issue.body);
+    newTaskDraft = {
+      title: issue.title,
+      prompt: parts.join('\n'),
+      repoName: issueRepoName,
+      waitsForTaskId: (newTaskDraft && newTaskDraft.waitsForTaskId) || ''
+    };
+    closeModal();
+    renderNewTaskModal(cardId, 'new-task-prompt');
+  }
+
+  // Renoncer au choix revient au formulaire, pas au kanban : la saisie qui
+  // l'attendait est toujours là (voir captureNewTaskDraft).
+  function cancelIssuePicker() {
+    var cardId = issueCardId;
+    closeModal();
+    renderNewTaskModal(cardId, 'new-task-title');
   }
 
   // Édition d'un chantier (titre + contexte)
@@ -6740,6 +7031,11 @@
       case 'plan-remove-step': removePlanStep(parseInt(el.getAttribute('data-index'), 10)); break;
       case 'plan-restart': restartPlan(); break;
       case 'plan-create-tasks': createPlanTasks(); break;
+      // Le formulaire de création cède la place à la liste d'issues : ce qui y
+      // était saisi est relu avant, pour revenir dessus intact.
+      case 'open-issue-picker': if (state.cardId) { captureNewTaskDraft(); openIssuePicker(state.cardId); } break;
+      case 'pick-issue': pickIssue(parseInt(el.getAttribute('data-number'), 10)); break;
+      case 'cancel-issue-picker': cancelIssuePicker(); break;
       case 'open-new-project': openNewProjectModal(); break;
       case 'open-edit-project': openEditProjectModal(); break;
       case 'set-project-tab': setProjectTab(el.getAttribute('data-project-tab')); break;
@@ -6880,6 +7176,9 @@
       // Sauf dans le champ d'ajout d'un lien, dont la validation est l'ajout :
       // enregistrer le projet y perdrait l'URL qu'on vient de taper.
       if (e.target.id === 'new-link-url') { e.preventDefault(); addLinkRow(); return; }
+      // Sauf dans la recherche d'issues : Entrée y lance la recherche sans
+      // attendre la temporisation, c'est le geste qu'on vient de faire.
+      if (e.target.id === 'issue-search') { e.preventDefault(); searchIssuesNow(e.target.value); return; }
       // Sauf dans le titre d'une étape de plan : la validation y créerait toutes
       // les tâches (worktrees compris) alors qu'on est en train de relire la
       // proposition, étape par étape.
@@ -6912,6 +7211,10 @@
       e.target.value = '';
       return;
     }
+    if (e.target && e.target.id === 'issue-repo') {
+      changeIssueRepo(e.target.value);
+      return;
+    }
     if (e.target && e.target.name === 'project-delivery-mode') {
       markProjectDraftDirty();
       captureProjectDraftFromDOM();
@@ -6925,6 +7228,10 @@
     if (e.target && e.target.id === 'composer-input') {
       autoGrowComposer(e.target);
       refreshComposerState();
+      return;
+    }
+    if (e.target && e.target.id === 'issue-search') {
+      scheduleIssueSearch(e.target.value);
       return;
     }
     var body = document.getElementById('project-modal-body');

@@ -166,6 +166,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("PATCH /api/projects/{id}", s.handleUpdateProject)
 	mux.HandleFunc("DELETE /api/projects/{id}", s.handleDeleteProject)
 	mux.HandleFunc("POST /api/projects/{id}/mark-all-read", s.handleMarkProjectAllRead)
+	mux.HandleFunc("GET /api/projects/{id}/issues", s.handleProjectIssues)
 	mux.HandleFunc("POST /api/cards", s.handleCreateCard)
 	mux.HandleFunc("PATCH /api/cards/{id}", s.handleUpdateCard)
 	mux.HandleFunc("DELETE /api/cards/{id}", s.handleDeleteCard)
@@ -856,6 +857,29 @@ func (s *Server) handleMarkProjectAllRead(w http.ResponseWriter, r *http.Request
 		s.runner.publishTask(t)
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// handleProjectIssues liste les issues ouvertes d'un dépôt du projet (voir
+// issues.go). Lecture seule de bout en bout : rien n'est écrit sur la forge,
+// rien n'est créé dans l'état. Le paramètre q est passé à la recherche GitHub.
+func (s *Server) handleProjectIssues(w http.ResponseWriter, r *http.Request) {
+	project, ok := s.store.GetProject(r.PathValue("id"))
+	if !ok {
+		writeError(w, http.StatusNotFound, "project not found")
+		return
+	}
+	repo, err := s.store.ResolveTaskRepo(project.ID, r.URL.Query().Get("repoName"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	issues, err := ListGithubIssues(r.Context(), repo.Path, r.URL.Query().Get("q"))
+	if err != nil {
+		// 502 : l'échec vient de gh ou de GitHub, pas de la requête reçue.
+		writeError(w, http.StatusBadGateway, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, IssueListResponse{RepoName: repo.Name, Issues: issues})
 }
 
 // --- Cartes ---
@@ -1653,7 +1677,7 @@ func (s *Server) deliveryPreview(card Card, project Project) DeliveryPreview {
 			prev.Behind[t.ID] = behind
 		}
 	}
-	if warning := deliveryWarning(project); warning != "" {
+	if warning := deliveryWarning(project, detectForges(project.Repos)); warning != "" {
 		prev.Warnings = append(prev.Warnings, warning)
 	}
 	for _, b := range card.Branches {
