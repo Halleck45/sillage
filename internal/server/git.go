@@ -137,6 +137,25 @@ func Diff(dir, base string) ([]DiffFile, error) {
 	return parseDiff(out), nil
 }
 
+// OpenDifftool lance l'outil de diff configuré par l'utilisateur (`git config
+// diff.tool`, réglage standard de git : VS Code, Meld, Kaleidoscope...) sur un
+// fichier du worktree, entre base et l'état courant. Ne bloque pas : l'outil
+// est une appli graphique qui peut rester ouverte longtemps, l'appelant ne
+// doit pas attendre sa fermeture.
+func OpenDifftool(dir, base, path string) error {
+	if out, err := runGit(dir, 5*time.Second, "config", "diff.tool"); err != nil || strings.TrimSpace(out) == "" {
+		return errors.New("no diff tool configured: run `git config --global diff.tool <tool>` (e.g. vscode)")
+	}
+	cmd := exec.Command("git", "difftool", "--no-prompt", base, "--", path)
+	cmd.Dir = dir
+	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("failed to launch diff tool: %w", err)
+	}
+	go cmd.Wait() // évite un zombie ; l'appelant n'a plus de raison d'attendre l'outil
+	return nil
+}
+
 // parseDiff transforme la sortie de `git diff` en une liste de fichiers avec
 // leurs hunks. Parseur robuste : ignore les sections binaires, gère les renommages.
 func parseDiff(output string) []DiffFile {

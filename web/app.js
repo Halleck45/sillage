@@ -274,7 +274,7 @@
       'chat.interrupted': 'Agent interrompu par un arrêt de Sillage : la tâche est repassée en revue. Ce qu\'il avait commité est là ; envoyez-lui un message pour qu\'il reprenne.',
       'conversation.empty': 'Aucun message pour l\'instant.',
       'diff.empty': 'Aucune modification.',
-      'diff.openInVscode': 'Ouvrir dans VS Code',
+      'diff.openDifftool': 'Ouvrir avec l\'outil de diff',
       'deliverables.code': 'Code',
       'deliverables.docs': 'Documents',
       'deliverables.images': 'Captures',
@@ -790,7 +790,7 @@
       'chat.interrupted': 'Agent interrupted by a Sillage shutdown: the task went back to review. What it had committed is there; send it a message to pick the work back up.',
       'conversation.empty': 'No messages yet.',
       'diff.empty': 'No changes.',
-      'diff.openInVscode': 'Open in VS Code',
+      'diff.openDifftool': 'Open in diff tool',
       'deliverables.code': 'Code',
       'deliverables.docs': 'Documents',
       'deliverables.images': 'Screenshots',
@@ -2503,15 +2503,6 @@
       '</svg>';
   }
 
-  // vscode://file/<chemin absolu> : ouvre un fichier du worktree dans VS Code
-  // via son gestionnaire d'URI système, sans appel serveur. N'a de sens que
-  // sur le poste qui fait tourner Sillage (localhost), ce qui est le seul cas
-  // d'usage du produit.
-  function vscodeFileUri(worktreeDir, path) {
-    if (!worktreeDir) return null;
-    return 'vscode://file' + encodeURI(worktreeDir.replace(/\/+$/, '') + '/' + path);
-  }
-
   // Total de commits de la branche du chantier (base..branche), tous dépôts
   // confondus : un chantier multi-dépôts en a une somme, pas une liste.
   function deliveryTotalCommits(prev) {
@@ -4165,16 +4156,15 @@
   // Le pied du diff ne porte plus d'action de livraison : ce n'est plus une
   // action de tâche (voir la barre de livraison du chantier). Il ne reste que
   // le rappel de la branche et de sa base, plus l'ouverture du fichier actif
-  // dans VS Code quand le worktree existe encore.
+  // dans l'outil de diff configuré par git (git config diff.tool).
   function buildDiffFooterHTML(task, diff, activeFile) {
-    var uri = activeFile ? vscodeFileUri(task.worktreeDir, activeFile.path) : null;
-    var vscodeHTML = uri
-      ? '<a class="attach-btn" href="' + escapeHtml(uri) + '" title="' + escapeHtml(t('diff.openInVscode')) + '">' +
-        externalIconHTML() + '<span>' + escapeHtml(t('diff.openInVscode')) + '</span></a>'
+    var difftoolHTML = activeFile
+      ? '<button class="attach-btn" type="button" data-action="open-difftool" data-task-id="' + task.id + '" data-path="' + escapeHtml(activeFile.path) + '" title="' + escapeHtml(t('diff.openDifftool')) + '">' +
+        externalIconHTML() + '<span>' + escapeHtml(t('diff.openDifftool')) + '</span></button>'
       : '';
     return '<div class="diff-footer">' +
         '<span class="mono diff-branch">' + escapeHtml(diff.branch || '') + ' → ' + escapeHtml(diff.base || '') + '</span>' +
-        vscodeHTML +
+        difftoolHTML +
       '</div>';
   }
 
@@ -4224,6 +4214,15 @@
   function selectDiffFile(taskId, path) {
     state.activeDiffFile[taskId] = path;
     renderMain();
+  }
+
+  // doOpenDifftool : demande au serveur de lancer l'outil de diff configuré
+  // par git (diff.tool) sur le fichier actif, dans le worktree de la tâche.
+  // Local, pas de rendu à rafraîchir ; seul un échec (aucun outil configuré)
+  // remonte à l'écran.
+  function doOpenDifftool(taskId, path) {
+    api('/api/tasks/' + taskId + '/difftool', { method: 'POST', body: { path: path } })
+      .catch(function (e) { if (e instanceof ApiError) showDetailError(taskId, e.message || t('errors.genericFailed')); });
   }
 
   // ---------------------------------------------------------------------
@@ -7110,6 +7109,7 @@
         break;
       case 'confirm-click': handleConfirmClickDispatch(el); break;
       case 'select-diff-file': selectDiffFile(el.getAttribute('data-task-id'), el.getAttribute('data-path')); break;
+      case 'open-difftool': doOpenDifftool(el.getAttribute('data-task-id'), el.getAttribute('data-path')); break;
       case 'send-message': sendMessage(el.getAttribute('data-task-id')); break;
       case 'attach-image': openAttachPicker(el.getAttribute('data-target')); break;
       case 'remove-attachment': removeAttachment(el.getAttribute('data-scope') || '', el.getAttribute('data-key')); break;
