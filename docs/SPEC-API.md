@@ -39,11 +39,14 @@ Project { "id": "p1", "name": "sillage", "description": "...", "repos": [Repo, .
           "links": [Link, ...], "unread": 2,
           "tokens": Tokens, "checkCmd": "go test ./...", "contextPrompt": "...",
           "allowedTools": ["Bash(pytest:*)", "Bash(ruff:*)"],
+          "permissionProfiles": ["ruby", "node"],
           "delivery": Delivery, "deliveryWarning": "...", "githubRepos": ["api"],
           "hiddenFromSidebar": false }
           // description : une phrase, affichée sous le nom. checkCmd/contextPrompt/description peuvent être vides.
           // allowedTools : outils supplémentaires accordés aux agents de ce projet, en plus
           // du socle du binaire (voir "Outils autorisés aux agents"). Vide par défaut.
+          // permissionProfiles : profils technologiques explicitement activés par l'humain
+          // (ruby|node|python|go|rust). Vide par défaut ; voir plus bas.
           // links : au plus 12, http(s) uniquement (voir "Liens épinglés" ci-dessous).
           // deliveryWarning : calculé à chaque lecture (jamais persisté), vide si tout va
           // bien ; voir "Santé de la livraison" ci-dessous.
@@ -220,7 +223,7 @@ PreviewRun { "id": "pv1", "projectId": "p1", "cardId": "c1", "taskId": "",
 | DELETE | `/api/agents/{id}` | | 204 (400 si une tâche référence encore l'agent) |
 | POST | `/api/agents/{id}/fix-warning` | | AgentOut, avertissement recalculé (donc vide si le correctif a marché). Applique le seul correctif de configuration machine que Sillage sait poser, dans `~/.gemini/antigravity-cli/settings.json` : `"toolPermission": "proceed-in-sandbox"` et les règles `read_file(<dataDir>/worktrees)` / `write_file(<dataDir>/worktrees)` ajoutées à `permissions.allow`. 404 agent inconnu, 400 `"no automatic fix for this agent"` si `cli != "agy"`, 500 si le fichier existe mais n'est pas du JSON valide (il n'est alors **pas** écrasé). Les autres clés et les règles déjà présentes sont conservées ; l'opération est idempotente. SSE : `agents` |
 | POST | `/api/projects` | `{name?, path}` ou `{name?, repos:[{name?,path}, ...], description?, contextPrompt?, links?:[{url,title?}, ...], delivery?}` | Project (400 si aucun dépôt, un path invalide/pas un dépôt git, noms de repo dupliqués, mode de livraison inconnu, ou lien invalide/en trop grand nombre). Seul le chemin d'un dépôt est requis : `name` absent ou vide = basename du premier dépôt, `delivery` absent = déduit des remotes des dépôts (voir « Livraison d'un chantier ») |
-| PATCH | `/api/projects/{id}` | `{name?, description?, checkCmd?, contextPrompt?, allowedTools?, repos?, links?, delivery?, hiddenFromSidebar?}` | Project (repos/links/allowedTools, si fournis, remplacent la liste entière ; retirer un repo ne casse pas les tâches existantes ; `previewCmd`/`previewUrl` se posent sur chaque Repo, et une `previewUrl` non http(s) est refusée en 400) |
+| PATCH | `/api/projects/{id}` | `{name?, description?, checkCmd?, contextPrompt?, allowedTools?, permissionProfiles?, repos?, links?, delivery?, hiddenFromSidebar?}` | Project (repos/links/allowedTools/permissionProfiles, si fournis, remplacent la liste entière ; profil inconnu refusé en 400 ; retirer un repo ne casse pas les tâches existantes ; `previewCmd`/`previewUrl` se posent sur chaque Repo, et une `previewUrl` non http(s) est refusée en 400) |
 | DELETE | `/api/projects/{id}` | `{confirm:true}` | 204 (voir « Suppressions » ci-dessous). **Validation humaine obligatoire** : refus 400 sans `confirm` |
 | POST | `/api/projects/{id}/mark-all-read` | | 204 (marque `unread=false` sur toutes les tâches non lues du projet, ne modifie jamais `updatedAt` : même règle que `/api/tasks/{id}/read`). **Aucune confirmation** : action locale et réversible |
 | GET | `/api/projects/{id}/issues?repoName=&q=` | | IssueListResponse : les issues **ouvertes** d'un dépôt du projet, lues via `gh`. **Lecture seule de bout en bout** : rien n'est écrit sur la forge, rien n'est créé dans l'état. `repoName` optionnel si le projet n'a qu'un dépôt, sinon obligatoire (mêmes règles et mêmes erreurs 400 que `POST /api/tasks`). `q` est passé à la recherche GitHub. 404 projet inconnu ; 502 si le dépôt n'est pas sur github.com (`"origin remote is not a github repository"`), si `gh` manque au PATH, expire (20 s) ou échoue. Voir « Import d'une issue GitHub » ci-dessous |
@@ -321,11 +324,12 @@ Côté UI, la succession se traduit par le chaînage déjà existant : les tâch
 
 ### Outils autorisés aux agents
 
-Un agent claude tourne avec une liste d'outils autorisés : tout ce qui n'y figure pas est refusé, sans invite possible puisque le CLI tourne en mode non interactif. Cette liste se compose de trois couches, dans cet ordre.
+Un agent claude tourne avec une liste d'outils autorisés : tout ce qui n'y figure pas est refusé, sans invite possible puisque le CLI tourne en mode non interactif. Cette liste se compose de quatre couches, dans cet ordre.
 
-1. **Le socle**, figé dans le binaire : lecture et écriture de fichiers, recherche, `WebFetch`, les commandes shell de base et le git en lecture seule (`status`, `diff`, `log`, `show`). Ce socle ne contient que ce qui ne dépend d'aucun langage : git n'est pas un choix de stack ici mais le modèle même du produit, où toute tâche vit dans un worktree. Aucune commande de build, de test ou de format n'y figure, quel que soit le langage : elles vont toutes dans la couche 2.
-2. **`Project.allowedTools`**, saisi par l'humain dans les réglages du projet : tout ce qui dépend du stack (`go test`, `pytest`, `cargo build`, `npm run lint`...). Sillage ne devine pas cette liste et ne la lit jamais depuis un fichier du dépôt : ces fichiers sont écrits par les agents, et les y lire ferait d'une branche un vecteur d'exécution (même règle et même niveau de confiance que `checkCmd` et `previewCmd`, voir l'invariant 5 de `CONTRIBUTING.md`).
-3. **Le refus figé**, également dans le binaire et appliqué après les deux autres couches : tout ce qui peut pousser (`git push`, `gh`, `glab`) et l'édition des fichiers qui pilotent l'agent lui-même (`.claude/settings*.json`, hooks). Le refus l'emporte toujours sur l'autorisation, donc aucune saisie dans `allowedTools` ne peut ouvrir ces portes.
+1. **Le socle**, figé dans le binaire : lecture et écriture de fichiers, recherche, `WebFetch`, les commandes shell de base et le git en lecture seule (`status`, `diff`, `log`, `show`). Ce socle ne contient que ce qui ne dépend d'aucun langage : git n'est pas un choix de stack ici mais le modèle même du produit, où toute tâche vit dans un worktree. Aucune commande de build, de test ou de format n'y figure, quel que soit le langage : elles vont toutes dans les couches 2 et 3.
+2. **`Project.permissionProfiles`**, choisi explicitement par l'humain parmi `ruby`, `node`, `python`, `go` et `rust`. Chaque profil développe une allowlist lisible (`bundle`/`rake`, `npm`/`yarn`, `pytest`/`uv`, etc.) et prépare les variables de cache correspondantes. Sillage ne détecte et n'active jamais un profil depuis le contenu du dépôt.
+3. **`Project.allowedTools`**, saisi par l'humain pour les commandes qui ne rentrent pas dans un profil. Même niveau de confiance que `checkCmd` et `previewCmd` : aucune commande n'est lue depuis un fichier du dépôt, puisque ces fichiers sont écrits par les agents.
+4. **Le refus figé**, également dans le binaire et appliqué après les autres couches : tout ce qui peut pousser (`git push`, `gh`, `glab`) et l'édition des fichiers qui pilotent l'agent lui-même (`.claude/settings*.json`, hooks). Le refus l'emporte toujours sur l'autorisation, donc aucun profil ni aucune saisie dans `allowedTools` ne peut ouvrir ces portes.
 
 Cette dernière couche est ce qui rend le champ défendable : elle attrape la maladresse, pas la détermination (une entrée `Bash(sh:*)` contournerait tout). Le confinement réel reste inchangé : worktree dédié, branche jetable, revue humaine, et `Ship` comme unique action sortante.
 
@@ -333,7 +337,9 @@ Migration : les projets antérieurs au champ (`allowedTools` absent du `state.js
 
 Quand un outil est refusé, un Message marqueur est ajouté au fil de la tâche (`author="agent"`, `authorName=""`, texte figé `"[tool-denied:<outil demandé>]"`), suivi de l'événement SSE `message`. Sans lui, un refus reste invisible : l'agent s'excuse, contourne, et l'humain constate seulement une tâche qui a pris trois tours de plus. Le frontend affiche une ligne système localisée qui nomme l'outil et renvoie vers les réglages du projet. C'est ce marqueur qui apprend à l'utilisateur quoi mettre dans `allowedTools` ; sans lui, le champ n'est découvrable qu'en lisant un transcript.
 
-Les autres adaptateurs ne consomment pas `Project.allowedTools`. Codex utilise son sandbox ; Copilot, Antigravity et Kiro ont leurs propres politiques headless (voir `SPEC-BACKEND.md`). Le champ le dit dans l'UI.
+Les autres adaptateurs ne consomment pas `Project.allowedTools`. Ils reçoivent en revanche l'environnement de cache des profils. Codex ajoute chaque cache sélectionné à son sandbox `workspace-write` ; les autres gardent leurs propres politiques headless (voir `SPEC-BACKEND.md`).
+
+Les caches vivent dans `<dataDir>/package-cache/<taskId>/<profil>/`, jamais dans le worktree : ils ne polluent donc pas le diff. Ils sont propres à une tâche pour qu'un agent ne puisse pas altérer le toolchain d'une autre tâche, mais survivent aux tours successifs de cette tâche. Ruby fixe notamment `BUNDLE_PATH`, `BUNDLE_BIN`, `BUNDLE_APP_CONFIG`, `BUNDLE_USER_CACHE` et `GEM_HOME`, ce qui empêche Bundler/RubyGems de retomber sur `/usr/local/bin`. La suppression d'une tâche supprime son cache (après l'arrêt effectif de son process si nécessaire).
 
 ### Réassignation d'une tâche à un autre agent
 
@@ -481,7 +487,7 @@ Un dépôt en échec n'annule pas les autres : chaque ligne porte sa propre erre
 
 ### Espace de travail (synchronisation git de dataDir)
 
-Le répertoire de données (dataDir) peut devenir un dépôt git optionnel, pour sauvegarder/synchroniser `state.json`, `config.json` et `.gitignore` (seuls fichiers versionnés ; `.gitignore` exclut `worktrees/` et `*.tmp`). Un commit local est tenté silencieusement si git est activé, throttlé à au plus un par quart d'heure (`workspaceCommitInterval`) : chaque commit stocke un blob complet de `state.json`, et un agent qui travaille déclenche plusieurs sauvegardes par seconde. La sauvegarde de `state.json` elle-même reste atomique et immédiate à chaque mutation ; le commit n'est qu'un point de restauration. Le dépôt de l'espace de travail est configuré en `gc.auto 256` pour que git compacte souvent. Jamais de push automatique en dehors de la synchronisation automatique optionnelle (`autoSync`, voir ci-dessous), qui reste désactivée par défaut.
+Le répertoire de données (dataDir) peut devenir un dépôt git optionnel, pour sauvegarder/synchroniser `state.json`, `config.json` et `.gitignore` (seuls fichiers versionnés ; `.gitignore` exclut `worktrees/`, `attachments/`, `package-cache/` et `*.tmp`). Un commit local est tenté silencieusement si git est activé, throttlé à au plus un par quart d'heure (`workspaceCommitInterval`) : chaque commit stocke un blob complet de `state.json`, et un agent qui travaille déclenche plusieurs sauvegardes par seconde. La sauvegarde de `state.json` elle-même reste atomique et immédiate à chaque mutation ; le commit n'est qu'un point de restauration. Le dépôt de l'espace de travail est configuré en `gc.auto 256` pour que git compacte souvent. Jamais de push automatique en dehors de la synchronisation automatique optionnelle (`autoSync`, voir ci-dessous), qui reste désactivée par défaut.
 
 - `mode:"local"` : marque `setupDone`, aucun git. Refusé (400) si déjà fait.
 - `mode:"init"` : `git init` (branche main), écrit `.gitignore`, premier commit ; `remote` optionnel (`git remote add`, jamais de push). Rejouable plus tard (depuis les réglages) pour activer git sur un espace resté local, même si `setupDone` est déjà vrai.
@@ -592,7 +598,7 @@ Le frontend maintient son état en mémoire à partir de `/api/state` + SSE ; re
 - Mise à jour : tout vit dans **Réglages > Mises à jour** (troisième onglet, à côté de Général et Statistiques) : la version courante, le mode d'installation, la date de dernière vérification, l'annonce quand une version existe, le bouton « Mettre à jour et redémarrer » (éteint avec la raison quand `blocker` est temporaire), la commande à copier, « Vérifier maintenant », et la case de vérification automatique. Le seul rappel hors de cet onglet est une ligne en bas de sidebar, jamais une bannière ni une modale spontanée : `Version <current>` en gris, qui devient « Mise à jour disponible » (vert, avec pastille) quand `update.available` est vrai, et rien du tout sur une compilation locale (`method: "dev"`). Cette ligne ouvre les réglages directement sur l'onglet. Après une réponse `restarting: true`, le frontend attend que le serveur réponde à nouveau puis **recharge la page** (le frontend est embarqué dans le binaire). Le même onglet porte le bloc « Démarrage » quand `update.service` est présent : l'état du lancement à l'ouverture de session, et la commande à copier quand il ne l'est pas. Rien du tout quand le champ est absent.
 - Tokens : jamais affichés dans le flux de travail (kanban, détail de tâche, liste des projets), pour ne pas ajouter de charge mentale. Seul endroit visible : Réglages > onglet Statistiques, consommation par projet, sans prix.
 - Un outil refusé à un agent s'affiche dans le fil comme une ligne système, qui nomme l'outil demandé et pointe vers les réglages du projet (voir « Outils autorisés aux agents »). Un refus silencieux se paie en tours d'agent que personne ne sait expliquer.
-- Le champ `allowedTools` est une entrée par ligne, avec un exemple en placeholder et une aide courte : c'est la seule saisie du produit où l'utilisateur doit connaître une syntaxe qui n'est pas la sienne mais celle du CLI. Vide par défaut, et vide reste un état normal : le socle suffit à lire, écrire et chercher.
+- Le panneau Permissions propose d'abord cinq profils technologiques à cocher, chacun avec ses commandes et la conséquence sur les caches. `allowedTools` reste dessous comme option avancée, une règle Claude par ligne. Profils et champ avancé sont vides par défaut : aucune permission n'est inférée du dépôt.
 - Une tâche s'ouvre → POST `/read`.
 
 ### Créer un projet : une seule question
@@ -603,13 +609,14 @@ La règle vaut aussi côté serveur (`name` optionnel sur `POST /api/projects`) 
 
 ### Réglages d'un projet : une modale à panneaux
 
-L'édition d'un projet est une modale à navigation latérale, pas une colonne de champs empilés. Six panneaux, deux ou trois champs chacun :
+L'édition d'un projet est une modale à navigation latérale, pas une colonne de champs empilés. Sept panneaux, deux ou trois champs chacun :
 
 | Panneau | Contenu |
 |---|---|
 | Général | nom, description, branche de base (`delivery.target`) |
 | Dépôts | les lignes nom + chemin, « + dépôt » |
-| Instructions | `contextPrompt` en grand (≥ 12 lignes), puis `checkCmd`, puis `allowedTools` |
+| Instructions | `contextPrompt` en grand (≥ 12 lignes), puis `checkCmd` |
+| Permissions | profils Ruby/Node.js/Python/Go/Rust à cocher, puis `allowedTools` avancé |
 | Livraison | les quatre modes en cartes à cocher, plus l'avertissement de santé s'il y en a un |
 | Liens | les liens épinglés |
 | Supprimer | conséquences chiffrées, puis le bouton de suppression en deux temps |
