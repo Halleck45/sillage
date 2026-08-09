@@ -8,15 +8,40 @@ import (
 )
 
 func TestNormalizePermissionProfilesValidatesAndOrdersSelections(t *testing.T) {
-	got, err := NormalizePermissionProfiles([]string{" rust ", "ruby", "rust", ""})
+	got, err := NormalizePermissionProfiles([]string{" rust ", "php", "ruby", "rust", ""})
 	if err != nil {
 		t.Fatalf("normalize profiles: %v", err)
 	}
-	if strings.Join(got, ",") != "ruby,rust" {
-		t.Fatalf("stable unique profiles expected ruby,rust, got %v", got)
+	if strings.Join(got, ",") != "ruby,php,rust" {
+		t.Fatalf("stable unique profiles expected ruby,php,rust, got %v", got)
 	}
 	if _, err := NormalizePermissionProfiles([]string{"unknown"}); err == nil {
 		t.Fatal("an unknown profile should be rejected")
+	}
+}
+
+func TestPHPPermissionProfileUsesWritableComposerCache(t *testing.T) {
+	dataDir := t.TempDir()
+	project := Project{ID: "p1", PermissionProfiles: []string{"php"}}
+	task := Task{ID: "t42"}
+	runtime, err := preparePermissionRuntime(dataDir, task, project)
+	if err != nil {
+		t.Fatalf("prepare PHP runtime: %v", err)
+	}
+	wantRoot := filepath.Join(dataDir, "package-cache", "t42", "php")
+	if len(runtime.WritableDirs) != 1 || runtime.WritableDirs[0] != wantRoot {
+		t.Fatalf("one writable PHP cache expected at %q, got %v", wantRoot, runtime.WritableDirs)
+	}
+
+	env := environmentMap(runtime.Env)
+	for _, key := range []string{"COMPOSER_CACHE_DIR", "COMPOSER_HOME"} {
+		if !isDirWithin(filepath.Clean(env[key]), wantRoot) {
+			t.Errorf("%s should stay inside the Sillage cache, got %q", key, env[key])
+		}
+	}
+	wantBin := filepath.Join(wantRoot, "composer", "vendor", "bin")
+	if !strings.HasPrefix(env["PATH"], wantBin+string(os.PathListSeparator)) {
+		t.Fatalf("global Composer executables should be first on PATH, got %q", env["PATH"])
 	}
 }
 
@@ -54,8 +79,8 @@ func TestRubyPermissionProfileUsesWritableSillageCache(t *testing.T) {
 }
 
 func TestPermissionProfilesExtendClaudeAndCodexExplicitly(t *testing.T) {
-	tools := claudeTools([]string{"Bash(custom:*)"}, []string{"ruby"})
-	for _, required := range []string{"Bash(bundle:*)", "Bash(rake:*)", "Bash(custom:*)"} {
+	tools := claudeTools([]string{"Bash(custom:*)"}, []string{"ruby", "php"})
+	for _, required := range []string{"Bash(bundle:*)", "Bash(rake:*)", "Bash(composer:*)", "Bash(php:*)", "Bash(custom:*)"} {
 		if !strings.Contains(tools, required) {
 			t.Errorf("Claude tools should contain %q: %s", required, tools)
 		}

@@ -51,6 +51,18 @@ var permissionProfiles = []permissionProfile{
 		},
 	},
 	{
+		ID: "php",
+		AllowedTools: []string{
+			"Bash(composer:*)", "Bash(php:*)",
+		},
+		Environment: func(root string) map[string]string {
+			return map[string]string{
+				"COMPOSER_CACHE_DIR": filepath.Join(root, "cache"),
+				"COMPOSER_HOME":      filepath.Join(root, "composer"),
+			}
+		},
+	},
+	{
 		ID: "python",
 		AllowedTools: []string{
 			"Bash(pip:*)", "Bash(pip3:*)", "Bash(pytest:*)",
@@ -172,6 +184,8 @@ func preparePermissionRuntime(dataDir string, task Task, project Project) (permi
 			pathDirs = append(pathDirs, filepath.Join(root, "bin"), filepath.Join(root, "gems", "bin"))
 		case "node":
 			pathDirs = append(pathDirs, filepath.Join(root, "pnpm"))
+		case "php":
+			pathDirs = append(pathDirs, filepath.Join(root, "composer", "vendor", "bin"))
 		case "go":
 			pathDirs = append(pathDirs, filepath.Join(root, "bin"))
 		case "rust":
