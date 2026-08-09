@@ -577,7 +577,7 @@ func TestUpdateProjectFields(t *testing.T) {
 
 	name := "Nouveau nom"
 	checkCmd := "go test ./..."
-	updated, err := s.UpdateProject(p.ID, &name, nil, &checkCmd, nil, nil, nil, nil, nil, nil)
+	updated, err := s.UpdateProject(p.ID, &name, nil, &checkCmd, nil, nil, nil, nil, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("UpdateProject: %v", err)
 	}
@@ -589,7 +589,7 @@ func TestUpdateProjectFields(t *testing.T) {
 	}
 
 	newRepos := []Repo{{Name: "a", Path: "/tmp/a"}, {Name: "b", Path: "/tmp/b"}}
-	updated, err = s.UpdateProject(p.ID, nil, nil, nil, nil, nil, &newRepos, nil, nil, nil)
+	updated, err = s.UpdateProject(p.ID, nil, nil, nil, nil, nil, &newRepos, nil, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("UpdateProject (repos): %v", err)
 	}
@@ -613,7 +613,7 @@ func TestUpdateProjectHiddenFromSidebar(t *testing.T) {
 	}
 
 	hidden := true
-	updated, err := s.UpdateProject(p.ID, nil, nil, nil, nil, nil, nil, nil, nil, &hidden)
+	updated, err := s.UpdateProject(p.ID, nil, nil, nil, nil, nil, nil, nil, nil, &hidden, nil)
 	if err != nil {
 		t.Fatalf("UpdateProject: %v", err)
 	}
@@ -623,7 +623,7 @@ func TestUpdateProjectHiddenFromSidebar(t *testing.T) {
 
 	// nil (champ non fourni) ne touche pas à l'état existant.
 	name := "sillage2"
-	updated, err = s.UpdateProject(p.ID, &name, nil, nil, nil, nil, nil, nil, nil, nil)
+	updated, err = s.UpdateProject(p.ID, &name, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("UpdateProject (sans hiddenFromSidebar): %v", err)
 	}
@@ -632,7 +632,7 @@ func TestUpdateProjectHiddenFromSidebar(t *testing.T) {
 	}
 
 	visible := false
-	updated, err = s.UpdateProject(p.ID, nil, nil, nil, nil, nil, nil, nil, nil, &visible)
+	updated, err = s.UpdateProject(p.ID, nil, nil, nil, nil, nil, nil, nil, nil, &visible, nil)
 	if err != nil {
 		t.Fatalf("UpdateProject (remise en visible): %v", err)
 	}
@@ -657,7 +657,7 @@ func TestUpdateProjectDescriptionAndContextPrompt(t *testing.T) {
 
 	desc := "Nouvelle description"
 	ctx := "Nouveau contexte"
-	updated, err := s.UpdateProject(p.ID, nil, &desc, nil, &ctx, nil, nil, nil, nil, nil)
+	updated, err := s.UpdateProject(p.ID, nil, &desc, nil, &ctx, nil, nil, nil, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("UpdateProject: %v", err)
 	}
@@ -1757,7 +1757,7 @@ func TestUpdateProjectAllowedTools(t *testing.T) {
 	}
 
 	tools := []string{"Bash(pytest:*)", "  "}
-	updated, err := s.UpdateProject(p.ID, nil, nil, nil, nil, &tools, nil, nil, nil, nil)
+	updated, err := s.UpdateProject(p.ID, nil, nil, nil, nil, &tools, nil, nil, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("UpdateProject: %v", err)
 	}
@@ -1766,7 +1766,7 @@ func TestUpdateProjectAllowedTools(t *testing.T) {
 	}
 
 	// nil (champ non fourni) ne touche pas à la liste existante.
-	updated, err = s.UpdateProject(p.ID, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+	updated, err = s.UpdateProject(p.ID, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("UpdateProject (sans allowedTools): %v", err)
 	}
@@ -1776,7 +1776,7 @@ func TestUpdateProjectAllowedTools(t *testing.T) {
 
 	// Liste vide fournie : l'utilisateur retire tout, et ça se persiste.
 	none := []string{}
-	updated, err = s.UpdateProject(p.ID, nil, nil, nil, nil, &none, nil, nil, nil, nil)
+	updated, err = s.UpdateProject(p.ID, nil, nil, nil, nil, &none, nil, nil, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("UpdateProject (liste vide): %v", err)
 	}

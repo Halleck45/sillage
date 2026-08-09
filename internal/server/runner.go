@@ -53,8 +53,8 @@ const copilotDeniedTools = "shell(git push),shell(gh:*),shell(glab:*)," +
 
 // claudeTools assemble la liste d'outils réellement passée au CLI : le socle,
 // puis les outils accordés au projet par l'humain dans les réglages.
-func claudeTools(projectTools []string) string {
-	extra := NormalizeAllowedTools(projectTools)
+func claudeTools(projectTools, permissionProfileIDs []string) string {
+	extra := NormalizeAllowedTools(append(permissionProfileTools(permissionProfileIDs), projectTools...))
 	if len(extra) == 0 {
 		return claudeAllowedTools
 	}
@@ -431,6 +431,20 @@ func (r *Runner) deleteTaskQuiet(taskID string) (Task, error) {
 	}
 
 	removeTaskAttachments(r.store.DataDir(), taskID)
+	if task.ID != "" {
+		cacheDir := filepath.Join(r.store.DataDir(), "package-cache", task.ID)
+		if hasProc {
+			// The process may still be writing its package cache until its group
+			// exits. Cleaning after done avoids leaving files recreated during a
+			// concurrent RemoveAll.
+			go func() {
+				<-handle.done
+				_ = os.RemoveAll(cacheDir)
+			}()
+		} else {
+			_ = os.RemoveAll(cacheDir)
+		}
+	}
 
 	return r.store.DeleteTask(taskID)
 }
@@ -574,25 +588,27 @@ func (r *Runner) run(task Task, agent Agent, handle *procHandle, cliInput string
 
 	project, _ := r.store.GetProject(task.ProjectID)
 	card, _ := r.store.GetCard(task.CardID)
+	runtime, runtimeErr := preparePermissionRuntime(r.store.DataDir(), task, project)
 
 	var runErr error
-	switch agent.Cli {
-	case "claude":
-		runErr = r.runClaude(&task, agent, project, card, handle, cliInput)
-	case "codex":
-		runErr = r.runCodex(&task, agent, project, card, handle, cliInput)
-	case "copilot":
-		runErr = r.runCopilot(&task, agent, project, card, handle, cliInput)
-	case "agy":
-		runErr = r.runAntigravity(&task, agent, project, card, handle, cliInput)
-	case "kiro":
-		runErr = r.runKiro(&task, agent, project, card, handle, cliInput)
-	case "fake":
+	switch {
+	case runtimeErr != nil:
+		runErr = runtimeErr
+	case agent.Cli == "claude":
+		runErr = r.runClaude(&task, agent, project, card, handle, cliInput, runtime)
+	case agent.Cli == "codex":
+		runErr = r.runCodex(&task, agent, project, card, handle, cliInput, runtime)
+	case agent.Cli == "copilot":
+		runErr = r.runCopilot(&task, agent, project, card, handle, cliInput, runtime)
+	case agent.Cli == "agy":
+		runErr = r.runAntigravity(&task, agent, project, card, handle, cliInput, runtime)
+	case agent.Cli == "kiro":
+		runErr = r.runKiro(&task, agent, project, card, handle, cliInput, runtime)
+	case agent.Cli == "fake":
 		runErr = r.runFake(&task, agent, handle)
 	default:
 		runErr = fmt.Errorf("unknown cli: %s", agent.Cli)
 	}
-
 	if runErr != nil {
 		msg, updated, err := r.store.AddMessage(task.ID, "agent", agent.Name, "⚠️ "+runErr.Error())
 		if err == nil {
@@ -601,11 +617,11 @@ func (r *Runner) run(task Task, agent Agent, handle *procHandle, cliInput string
 		}
 	}
 
-	r.finalize(task.ID)
+	r.finalize(task.ID, runtime.Env)
 }
 
 // finalize exécute le check éventuel du projet et clôt l'exécution.
-func (r *Runner) finalize(taskID string) {
+func (r *Runner) finalize(taskID string, env []string) {
 	task, ok := r.store.GetTask(taskID)
 	if !ok {
 		return
@@ -614,7 +630,7 @@ func (r *Runner) finalize(taskID string) {
 
 	checks := []Check{}
 	if project.CheckCmd != "" {
-		ok, _ := runCheck(task.WorktreeDir, project.CheckCmd, 120*time.Second)
+		ok, _ := runCheck(task.WorktreeDir, project.CheckCmd, 120*time.Second, env)
 		checks = []Check{{Label: project.CheckCmd, Ok: ok}}
 	}
 
@@ -640,11 +656,12 @@ func (r *Runner) finalize(taskID string) {
 	r.publishActivity(updated.ID, nil)
 }
 
-func runCheck(dir, command string, timeout time.Duration) (bool, string) {
+func runCheck(dir, command string, timeout time.Duration, env []string) (bool, string) {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "sh", "-c", command)
 	cmd.Dir = dir
+	cmd.Env = env
 	out, err := cmd.CombinedOutput()
 	return err == nil, string(out)
 }
@@ -809,11 +826,11 @@ type claudeEnvelope struct {
 	IsError bool `json:"is_error"`
 }
 
-func (r *Runner) runClaude(task *Task, agent Agent, project Project, card Card, handle *procHandle, cliInput string) error {
+func (r *Runner) runClaude(task *Task, agent Agent, project Project, card Card, handle *procHandle, cliInput string, runtime permissionRuntime) error {
 	args := []string{
 		"-p", "--output-format", "stream-json", "--verbose",
 		"--permission-mode", "acceptEdits",
-		"--allowedTools", claudeTools(project.AllowedTools),
+		"--allowedTools", claudeTools(project.AllowedTools, project.PermissionProfiles),
 		"--disallowedTools", claudeDeniedTools,
 	}
 	if agent.Model != "" {
@@ -829,6 +846,7 @@ func (r *Runner) runClaude(task *Task, agent Agent, project Project, card Card, 
 
 	cmd := exec.Command("claude", args...)
 	cmd.Dir = task.WorktreeDir
+	cmd.Env = runtime.Env
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 
 	stdout, err := cmd.StdoutPipe()
@@ -1068,10 +1086,15 @@ func isDirWithin(path, parent string) bool {
 	return rel == "." || (rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)))
 }
 
-func codexArgs(worktreeDir, sandbox string, agent Agent, cliInput string) []string {
+func codexArgs(worktreeDir, sandbox string, writableDirs []string, agent Agent, cliInput string) []string {
 	args := []string{"exec", "--json", "--sandbox", sandbox, "-C", worktreeDir}
 	if sandbox == "workspace-write" {
-		for _, dir := range codexGitWritableDirs(worktreeDir) {
+		seen := map[string]bool{}
+		for _, dir := range append(codexGitWritableDirs(worktreeDir), writableDirs...) {
+			if seen[dir] {
+				continue
+			}
+			seen[dir] = true
 			args = append(args, "--add-dir", dir)
 		}
 	}
@@ -1081,7 +1104,7 @@ func codexArgs(worktreeDir, sandbox string, agent Agent, cliInput string) []stri
 	return append(args, cliInput)
 }
 
-func (r *Runner) runCodex(task *Task, agent Agent, project Project, card Card, handle *procHandle, cliInput string) error {
+func (r *Runner) runCodex(task *Task, agent Agent, project Project, card Card, handle *procHandle, cliInput string, runtime permissionRuntime) error {
 	// workspace-write limits source edits to the task worktree plus the narrow
 	// Git metadata roots added by codexArgs. Network access remains disabled, so
 	// outbound Git operations still go through Ship after human validation.
@@ -1095,10 +1118,11 @@ func (r *Runner) runCodex(task *Task, agent Agent, project Project, card Card, h
 	if blocks := strings.Join(contextParts(project.ContextPrompt, card.ContextPrompt), "\n\n"); blocks != "" {
 		cliInput = blocks + "\n\n---\n\n" + cliInput
 	}
-	args := codexArgs(task.WorktreeDir, sandbox, agent, cliInput)
+	args := codexArgs(task.WorktreeDir, sandbox, runtime.WritableDirs, agent, cliInput)
 
 	cmd := exec.Command("codex", args...)
 	cmd.Dir = task.WorktreeDir
+	cmd.Env = runtime.Env
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 
 	stdout, err := cmd.StdoutPipe()
@@ -1282,8 +1306,11 @@ func kiroArgs(cliInput string) []string {
 	return []string{"chat", "--no-interactive", "--agent", kiroAgentName, "--wrap", "never", cliInput}
 }
 
-func kiroEnv(home string) []string {
-	env := os.Environ()
+func kiroEnv(home string, base []string) []string {
+	env := base
+	if env == nil {
+		env = os.Environ()
+	}
 	filtered := make([]string, 0, len(env)+3)
 	for _, entry := range env {
 		if strings.HasPrefix(entry, "KIRO_HOME=") || strings.HasPrefix(entry, "KIRO_LOG_NO_COLOR=") || strings.HasPrefix(entry, "NO_COLOR=") {
@@ -1294,7 +1321,7 @@ func kiroEnv(home string) []string {
 	return append(filtered, "KIRO_HOME="+home, "KIRO_LOG_NO_COLOR=1", "NO_COLOR=1")
 }
 
-func (r *Runner) runKiro(task *Task, agent Agent, project Project, card Card, handle *procHandle, cliInput string) error {
+func (r *Runner) runKiro(task *Task, agent Agent, project Project, card Card, handle *procHandle, cliInput string, runtime permissionRuntime) error {
 	home, err := createKiroHome(agent)
 	if err != nil {
 		return fmt.Errorf("cannot prepare Kiro runtime: %w", err)
@@ -1302,7 +1329,7 @@ func (r *Runner) runKiro(task *Task, agent Agent, project Project, card Card, ha
 	defer os.RemoveAll(home)
 
 	cliInput = prefixAgentContext(agent, project, card, cliInput)
-	return r.runTextCLI(task, agent, handle, "kiro-cli", kiroArgs(cliInput), kiroEnv(home))
+	return r.runTextCLI(task, agent, handle, "kiro-cli", kiroArgs(cliInput), kiroEnv(home, runtime.Env))
 }
 
 func copilotArgs(agent Agent, cliInput string) []string {
@@ -1363,9 +1390,9 @@ func antigravityArgs(agent Agent, worktreeDir, gitCommonDir, cliInput string) []
 	return append(args, "--print", cliInput)
 }
 
-func (r *Runner) runCopilot(task *Task, agent Agent, project Project, card Card, handle *procHandle, cliInput string) error {
+func (r *Runner) runCopilot(task *Task, agent Agent, project Project, card Card, handle *procHandle, cliInput string, runtime permissionRuntime) error {
 	cliInput = prefixAgentContext(agent, project, card, cliInput)
-	return r.runTextCLI(task, agent, handle, "copilot", copilotArgs(agent, cliInput), copilotEnv())
+	return r.runTextCLI(task, agent, handle, "copilot", copilotArgs(agent, cliInput), copilotEnv(runtime.Env))
 }
 
 // antigravityWorktreeNote prévient l'agent de la particularité de son
@@ -1384,13 +1411,13 @@ func (r *Runner) runCopilot(task *Task, agent Agent, project Project, card Card,
 // auto-refuse. Mieux vaut qu'il rapporte l'échec que de finir muet.
 const antigravityWorktreeNote = "Environment: your working directory is a linked git worktree, so `.git` is a one-line pointer file, not a directory. Never open it: that read is refused and ends your session without any answer. Read-only git commands (`git status`, `git log`, `git diff`, `git show`) work here; `git add`, `git commit` and anything writing to git do not, and you never need them: your work is committed for you. Your sandbox also has no network access. Never re-run a command outside the sandbox (no bypass-sandbox, no unsandboxed execution): such a request is auto-denied and ends your session without any answer. Report the failure in your answer instead."
 
-func (r *Runner) runAntigravity(task *Task, agent Agent, project Project, card Card, handle *procHandle, cliInput string) error {
+func (r *Runner) runAntigravity(task *Task, agent Agent, project Project, card Card, handle *procHandle, cliInput string, runtime permissionRuntime) error {
 	cliInput = prefixAgentContext(agent, project, card, antigravityWorktreeNote+"\n\n"+cliInput)
 	// Best-effort : sans le dossier git commun, agy travaille quand même sur les
 	// fichiers, il perd seulement les commandes git.
 	gitCommonDir, _ := GitCommonDir(task.WorktreeDir)
 	args := antigravityArgs(agent, task.WorktreeDir, gitCommonDir, cliInput)
-	return r.runTextCLI(task, agent, handle, "agy", args, nil)
+	return r.runTextCLI(task, agent, handle, "agy", args, runtime.Env)
 }
 
 // copilotEnv strips a classic GitHub PAT (the "ghp_" prefix) from GITHUB_TOKEN
@@ -1402,8 +1429,11 @@ func (r *Runner) runAntigravity(task *Task, agent Agent, project Project, card C
 // where GITHUB_TOKEN happens to hold an old classic PAT for unrelated tools.
 // Fine-grained PATs and an unset GITHUB_TOKEN pass through untouched, so
 // gh's own auth (gh auth login, copilot's /login) keeps working.
-func copilotEnv() []string {
-	env := os.Environ()
+func copilotEnv(base []string) []string {
+	env := base
+	if env == nil {
+		env = os.Environ()
+	}
 	filtered := make([]string, 0, len(env))
 	for _, kv := range env {
 		if strings.HasPrefix(kv, "GITHUB_TOKEN=ghp_") {

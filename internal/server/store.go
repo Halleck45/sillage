@@ -21,7 +21,7 @@ import (
 // les champs exportés du Store sont sérialisés tels quels, une version qui ne
 // connaît pas un champ le fait disparaître du fichier à sa première
 // sauvegarde, en silence (voir ErrStateTooNew).
-const stateFormatVersion = 6
+const stateFormatVersion = 7
 
 // agentSeedVersion tracks one-time additions to the built-in agent profiles.
 // Unlike checking for an ID at every startup, this lets users delete a seeded
@@ -130,6 +130,7 @@ func loadStoreFile(dataDir string) (*Store, error) {
 	migrateTaskStatuses(s)
 	migrateLegacyDelivery(s)
 	migrateProjectAllowedTools(s)
+	migrateProjectPermissionProfiles(s)
 	migrateCardRefs(s)
 	migrateCardUpdatedAt(s)
 	migrateAgentSeeds(s)
@@ -280,6 +281,18 @@ func migrateProjectAllowedTools(s *Store) {
 	for id, p := range s.Projects {
 		if p.AllowedTools == nil {
 			p.AllowedTools = append([]string{}, legacyGoAllowedTools...)
+			s.Projects[id] = p
+		}
+	}
+}
+
+// migrateProjectPermissionProfiles gives projects created before profiles were
+// introduced an explicit empty selection. Enabling commands remains a human
+// decision and is never inferred from repository contents.
+func migrateProjectPermissionProfiles(s *Store) {
+	for id, p := range s.Projects {
+		if p.PermissionProfiles == nil {
+			p.PermissionProfiles = []string{}
 			s.Projects[id] = p
 		}
 	}
@@ -1418,7 +1431,8 @@ func (s *Store) AddProject(name, description, contextPrompt string, repos []Repo
 		Delivery: normalizedDelivery,
 		// Liste vide non nulle : un projet neuf n'a rien à migrer, alors qu'un
 		// nil serait relu comme « antérieur au champ » au prochain démarrage.
-		AllowedTools: []string{},
+		AllowedTools:       []string{},
+		PermissionProfiles: []string{},
 	}
 	s.Projects[p.ID] = p
 	if err := s.save(); err != nil {
@@ -1451,7 +1465,7 @@ func NormalizeAllowedTools(tools []string) []string {
 // (même vides), remplacent entièrement la liste existante (mêmes validations
 // que AddProject). Retirer un repo ne casse pas les tâches existantes : leur
 // worktree déjà créé vit sa vie indépendamment.
-func (s *Store) UpdateProject(id string, name, description, checkCmd, contextPrompt *string, allowedTools *[]string, repos *[]Repo, links *[]Link, delivery *Delivery, hiddenFromSidebar *bool) (Project, error) {
+func (s *Store) UpdateProject(id string, name, description, checkCmd, contextPrompt *string, allowedTools *[]string, repos *[]Repo, links *[]Link, delivery *Delivery, hiddenFromSidebar *bool, permissionProfiles *[]string) (Project, error) {
 	var normalized []Repo
 	if repos != nil {
 		var err error
@@ -1472,6 +1486,14 @@ func (s *Store) UpdateProject(id string, name, description, checkCmd, contextPro
 	if delivery != nil {
 		var err error
 		normalizedDelivery, err = NormalizeDelivery(delivery)
+		if err != nil {
+			return Project{}, err
+		}
+	}
+	var normalizedPermissionProfiles []string
+	if permissionProfiles != nil {
+		var err error
+		normalizedPermissionProfiles, err = NormalizePermissionProfiles(*permissionProfiles)
 		if err != nil {
 			return Project{}, err
 		}
@@ -1511,6 +1533,9 @@ func (s *Store) UpdateProject(id string, name, description, checkCmd, contextPro
 	}
 	if hiddenFromSidebar != nil {
 		p.HiddenFromSidebar = *hiddenFromSidebar
+	}
+	if permissionProfiles != nil {
+		p.PermissionProfiles = normalizedPermissionProfiles
 	}
 	s.Projects[id] = p
 	if err := s.save(); err != nil {
