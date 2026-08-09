@@ -1269,9 +1269,8 @@ button, input, textarea { font-family: inherit; }
   transition: background-color .18s ease, border-color .18s ease;
 }
 .choice-card:hover { background: var(--glass-float); border-color: var(--muted-5); }
-/* accent-color : le bleu natif du navigateur détonne dans la palette (noir pour
-   les actions, beige pour les fonds). */
-.choice-card input[type="radio"] { margin: 2px 0 0; cursor: pointer; flex: none; accent-color: var(--solid); }
+/* Keep both radio and checkbox controls aligned with the neutral palette. */
+.choice-card input[type="radio"], .choice-card input[type="checkbox"] { margin: 2px 0 0; cursor: pointer; flex: none; accent-color: var(--solid); }
 .choice-card-active { border-color: var(--text); background: var(--green-soft-bg); }
 .choice-card-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .choice-card-title { font-size: 13px; font-weight: 600; color: var(--text); }

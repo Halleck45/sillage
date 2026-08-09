@@ -86,6 +86,11 @@ type Project struct {
 	// Ignoré par codex, copilot, agy, kiro et fake.
 	AllowedTools []string `json:"allowedTools"`
 
+	// PermissionProfiles are explicit, pre-packaged development stack choices
+	// such as Ruby or Go. They add command permissions and writable package
+	// caches without granting access to system directories.
+	PermissionProfiles []string `json:"permissionProfiles"`
+
 	// Delivery définit ce que livrer veut dire pour ce projet (voir Delivery).
 	Delivery Delivery `json:"delivery"`
 

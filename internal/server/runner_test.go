@@ -271,7 +271,7 @@ func TestCodexArgsAllowLinkedWorktreeGitWritesWithoutExposingHooks(t *testing.T)
 		}
 	}
 
-	args := codexArgs(worktree, "workspace-write", Agent{Model: "gpt-test"}, "Commit the change")
+	args := codexArgs(worktree, "workspace-write", nil, Agent{Model: "gpt-test"}, "Commit the change")
 	for _, dir := range dirs {
 		if !containsAdjacentArgs(args, "--add-dir", dir) {
 			t.Errorf("Codex arguments should grant write access to %q: %v", dir, args)
@@ -353,7 +353,7 @@ func TestCodexGitWritableDirsSupportExternalSeparateGitDir(t *testing.T) {
 }
 
 func TestCodexArgsDoNotExtendNonWorkspaceSandboxModes(t *testing.T) {
-	args := codexArgs(t.TempDir(), "danger-full-access", Agent{}, "Inspect the change")
+	args := codexArgs(t.TempDir(), "danger-full-access", nil, Agent{}, "Inspect the change")
 	if containsString(args, "--add-dir") {
 		t.Fatalf("danger-full-access should not receive redundant writable roots: %v", args)
 	}
@@ -508,7 +508,7 @@ func TestKiroEnvIsolatesHomeAndPreservesAPIKey(t *testing.T) {
 	t.Setenv("KIRO_HOME", "/old")
 	t.Setenv("KIRO_API_KEY", "secret-test-key")
 	t.Setenv("NO_COLOR", "old")
-	env := kiroEnv("/tmp/new-kiro-home")
+	env := kiroEnv("/tmp/new-kiro-home", nil)
 	values := map[string]string{}
 	for _, entry := range env {
 		parts := strings.SplitN(entry, "=", 2)
@@ -675,11 +675,11 @@ func TestClaudeDeniedToolsCoversOutboundAndSelfEscalation(t *testing.T) {
 }
 
 func TestClaudeToolsAppendsProjectTools(t *testing.T) {
-	if got := claudeTools(nil); got != claudeAllowedTools {
+	if got := claudeTools(nil, nil); got != claudeAllowedTools {
 		t.Fatalf("sans outil de projet, la liste doit être le socle seul ; reçu %q", got)
 	}
 	// Les entrées vides viennent d'un champ saisi une ligne par outil.
-	got := claudeTools([]string{" Bash(pytest:*) ", "", "Bash(ruff:*)"})
+	got := claudeTools([]string{" Bash(pytest:*) ", "", "Bash(ruff:*)"}, nil)
 	want := claudeAllowedTools + ",Bash(pytest:*),Bash(ruff:*)"
 	if got != want {
 		t.Fatalf("liste attendue %q, reçue %q", want, got)

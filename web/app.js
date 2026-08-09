@@ -67,6 +67,7 @@
       'project.tabGeneral': 'Général',
       'project.tabRepos': 'Dépôts',
       'project.tabInstructions': 'Instructions',
+      'project.tabPermissions': 'Permissions',
       'project.tabDelivery': 'Livraison',
       'project.tabLinks': 'Liens',
       'project.tabDanger': 'Supprimer',
@@ -74,9 +75,22 @@
       'project.baseBranch': 'Branche de base',
       'project.baseBranchHint': 'Les chantiers partent de cette branche et y retournent à la livraison. Vide : branche par défaut du dépôt.',
       'project.checkCmd': 'Commande de vérification',
-      'project.allowedTools': 'Outils autorisés aux agents',
+      'project.permissionProfilesHint': 'Activez seulement les technologies de confiance pour ce projet. Chaque profil autorise ses commandes et place ses téléchargements dans un cache Sillage inscriptible, hors du dépôt et des dossiers système.',
+      'project.profile.ruby': 'Ruby',
+      'project.profile.rubyDesc': 'bundle, gem, rake et ruby · les gems ne sont jamais installées dans /usr/local',
+      'project.profile.node': 'Node.js',
+      'project.profile.nodeDesc': 'node, npm, npx, pnpm et yarn · caches de paquets isolés',
+      'project.profile.php': 'PHP',
+      'project.profile.phpDesc': 'php et Composer · cache et outils Composer isolés',
+      'project.profile.python': 'Python',
+      'project.profile.pythonDesc': 'python, pip, pytest, ruff et uv · caches de paquets isolés',
+      'project.profile.go': 'Go',
+      'project.profile.goDesc': 'go, gofmt et golangci-lint · caches de build et de modules isolés',
+      'project.profile.rust': 'Rust',
+      'project.profile.rustDesc': 'cargo, rustc, rustfmt et clippy · registre et artefacts isolés',
+      'project.allowedTools': 'Règles Claude supplémentaires',
       'project.allowedToolsPlaceholder': 'Bash(go test:*)\nBash(gofmt:*)',
-      'project.allowedToolsHint': 'Une entrée par ligne, dans la syntaxe du CLI. Les agents savent déjà lire, écrire, chercher et consulter l\'historique git : ajoutez ici les commandes de votre langage (tests, build, format). Rien qui puisse pousser ne sera accepté.',
+      'project.allowedToolsHint': 'Option avancée, une règle par ligne dans la syntaxe de Claude CLI. Les règles des profils cochés sont appliquées automatiquement sans être recopiées ici. Rien qui puisse pousser ne sera accepté.',
       'project.reposHint': 'Chemins locaux des dépôts git de ce projet.',
       'project.repoNamePlaceholder': 'Nom du dépôt',
       'project.repoName': 'Nom',
@@ -583,6 +597,7 @@
       'project.tabGeneral': 'General',
       'project.tabRepos': 'Repositories',
       'project.tabInstructions': 'Instructions',
+      'project.tabPermissions': 'Permissions',
       'project.tabDelivery': 'Delivery',
       'project.tabLinks': 'Links',
       'project.tabDanger': 'Delete',
@@ -590,9 +605,22 @@
       'project.baseBranch': 'Base branch',
       'project.baseBranchHint': 'Workstreams branch off this branch and ship back into it. Empty: the repository default branch.',
       'project.checkCmd': 'Check command',
-      'project.allowedTools': 'Tools allowed to agents',
+      'project.permissionProfilesHint': 'Enable only technologies you trust for this project. Each profile allows its commands and moves downloads to a writable Sillage cache, outside the repository and system directories.',
+      'project.profile.ruby': 'Ruby',
+      'project.profile.rubyDesc': 'bundle, gem, rake, and ruby · gems are never installed in /usr/local',
+      'project.profile.node': 'Node.js',
+      'project.profile.nodeDesc': 'node, npm, npx, pnpm, and yarn · isolated package caches',
+      'project.profile.php': 'PHP',
+      'project.profile.phpDesc': 'php and Composer · isolated Composer cache and tools',
+      'project.profile.python': 'Python',
+      'project.profile.pythonDesc': 'python, pip, pytest, ruff, and uv · isolated package caches',
+      'project.profile.go': 'Go',
+      'project.profile.goDesc': 'go, gofmt, and golangci-lint · isolated build and module caches',
+      'project.profile.rust': 'Rust',
+      'project.profile.rustDesc': 'cargo, rustc, rustfmt, and clippy · isolated registry and artifacts',
+      'project.allowedTools': 'Additional Claude rules',
       'project.allowedToolsPlaceholder': 'Bash(go test:*)\nBash(gofmt:*)',
-      'project.allowedToolsHint': 'One entry per line, in the CLI syntax. Agents can already read, write, search and read git history: add your language\'s commands here (tests, build, format). Nothing able to push will ever be accepted.',
+      'project.allowedToolsHint': 'Advanced option, one rule per line using Claude CLI syntax. Rules from checked profiles are applied automatically without being copied here. Nothing able to push will ever be accepted.',
       'project.reposHint': 'Local paths of this project\'s git repositories.',
       'project.repoNamePlaceholder': 'Repository name',
       'project.repoName': 'Name',
@@ -5976,6 +6004,7 @@
     { key: 'general', labelKey: 'project.tabGeneral' },
     { key: 'repos', labelKey: 'project.tabRepos' },
     { key: 'instructions', labelKey: 'project.tabInstructions' },
+    { key: 'permissions', labelKey: 'project.tabPermissions' },
     { key: 'delivery', labelKey: 'project.tabDelivery' },
     { key: 'links', labelKey: 'project.tabLinks' },
     { key: 'danger', labelKey: 'project.tabDanger', danger: true }
@@ -6000,10 +6029,43 @@
     return '<div class="modal-section-hint">' + escapeHtml(t('project.instructionsHint')) + '</div>' +
       '<textarea id="project-context-prompt" class="modal-textarea modal-textarea-tall" rows="12" placeholder="' + escapeHtml(t('project.contextPromptPlaceholder')) + '">' + escapeHtml(projectDraft.contextPrompt) + '</textarea>' +
       '<label class="modal-label" for="project-edit-checkcmd">' + escapeHtml(t('project.checkCmd')) + '</label>' +
-      '<input id="project-edit-checkcmd" class="modal-input mono" placeholder="go test ./..." value="' + escapeHtml(projectDraft.checkCmd) + '">' +
+      '<input id="project-edit-checkcmd" class="modal-input mono" placeholder="go test ./..." value="' + escapeHtml(projectDraft.checkCmd) + '">';
+  }
+
+  var PERMISSION_PROFILES = [
+    { id: 'ruby', labelKey: 'project.profile.ruby', descKey: 'project.profile.rubyDesc' },
+    { id: 'node', labelKey: 'project.profile.node', descKey: 'project.profile.nodeDesc' },
+    { id: 'php', labelKey: 'project.profile.php', descKey: 'project.profile.phpDesc' },
+    { id: 'python', labelKey: 'project.profile.python', descKey: 'project.profile.pythonDesc' },
+    { id: 'go', labelKey: 'project.profile.go', descKey: 'project.profile.goDesc' },
+    { id: 'rust', labelKey: 'project.profile.rust', descKey: 'project.profile.rustDesc' }
+  ];
+
+  function buildProjectPermissionsPanelHTML() {
+    var selected = projectDraft.permissionProfiles || [];
+    var cards = PERMISSION_PROFILES.map(function (profile) {
+      var checked = selected.indexOf(profile.id) >= 0;
+      return '<label class="choice-card' + (checked ? ' choice-card-active' : '') + '">' +
+        '<input type="checkbox" name="project-permission-profile" value="' + profile.id + '"' + (checked ? ' checked' : '') + '>' +
+        '<span class="choice-card-text">' +
+          '<span class="choice-card-title">' + escapeHtml(t(profile.labelKey)) + '</span>' +
+          '<span class="choice-card-desc">' + escapeHtml(t(profile.descKey)) + '</span>' +
+        '</span>' +
+      '</label>';
+    }).join('');
+    return '<div class="modal-section-hint">' + escapeHtml(t('project.permissionProfilesHint')) + '</div>' +
+      '<div class="choice-cards permission-profile-cards">' + cards + '</div>' +
       '<label class="modal-label" for="project-allowed-tools">' + escapeHtml(t('project.allowedTools')) + '</label>' +
       '<textarea id="project-allowed-tools" class="modal-textarea mono" rows="4" placeholder="' + escapeHtml(t('project.allowedToolsPlaceholder')) + '">' + escapeHtml(projectDraft.allowedTools) + '</textarea>' +
       '<div class="modal-note">' + escapeHtml(t('project.allowedToolsHint')) + '</div>';
+  }
+
+  function refreshPermissionProfileCards() {
+    var cards = document.querySelectorAll('.permission-profile-cards .choice-card');
+    Array.prototype.forEach.call(cards, function (card) {
+      var input = card.querySelector('input[type="checkbox"]');
+      card.classList.toggle('choice-card-active', !!(input && input.checked));
+    });
   }
 
   function buildProjectDangerPanelHTML(project) {
@@ -6023,6 +6085,7 @@
   function buildProjectPanelHTML(project) {
     if (projectModalTab === 'repos') return buildRepoSectionHTML();
     if (projectModalTab === 'instructions') return buildProjectInstructionsPanelHTML();
+    if (projectModalTab === 'permissions') return buildProjectPermissionsPanelHTML();
     if (projectModalTab === 'delivery') return buildDeliveryPanelHTML(project);
     if (projectModalTab === 'links') return buildLinksSectionHTML();
     if (projectModalTab === 'danger') return buildProjectDangerPanelHTML(project);
@@ -6083,6 +6146,12 @@
     });
     var mode = document.querySelector('input[name="project-delivery-mode"]:checked');
     if (mode) projectDraft.mode = mode.value;
+    var profileInputs = document.querySelectorAll('input[name="project-permission-profile"]');
+    if (profileInputs.length) {
+      projectDraft.permissionProfiles = Array.prototype.filter.call(profileInputs, function (input) {
+        return input.checked;
+      }).map(function (input) { return input.value; });
+    }
     captureRepoRowsFromDOM();
     captureLinksFromDOM();
   }
@@ -6109,6 +6178,7 @@
       checkCmd: project.checkCmd || '',
       // Une entrée par ligne dans le champ, une liste côté API.
       allowedTools: (project.allowedTools || []).join('\n'),
+      permissionProfiles: (project.permissionProfiles || []).slice(),
       mode: (project.delivery && project.delivery.mode) || 'pr'
     };
     var repos = (project.repos && project.repos.length) ? project.repos : [{ name: '', path: '' }];
@@ -6155,6 +6225,7 @@
       name: name, checkCmd: projectDraft.checkCmd.trim(), repos: reposToBody(repos),
       description: projectDraft.description.trim(), contextPrompt: projectDraft.contextPrompt.trim(),
       allowedTools: splitAllowedTools(projectDraft.allowedTools),
+      permissionProfiles: projectDraft.permissionProfiles.slice(),
       links: linksToBody(links),
       delivery: { mode: projectDraft.mode, target: projectDraft.target.trim() }
     };
@@ -7247,6 +7318,12 @@
       markProjectDraftDirty();
       captureProjectDraftFromDOM();
       refreshDeliveryCards();
+      return;
+    }
+    if (e.target && e.target.name === 'project-permission-profile') {
+      markProjectDraftDirty();
+      captureProjectDraftFromDOM();
+      refreshPermissionProfileCards();
     }
   }
 

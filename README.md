@@ -62,12 +62,14 @@ Then open http://127.0.0.1:8787. No login is required by default. To require a p
 
 Add a project (any local git repository), create a card, create a task, pick an agent: it starts working immediately in its own worktree. Try the free agent Écho first if you want to see the flow without any API cost.
 
+Project settings include explicit Ruby, Node.js, PHP, Python, Go, and Rust permission profiles. A profile allows the stack's local commands and redirects package/build caches to task-scoped writable directories managed by Sillage. For example, the Ruby profile keeps Bundler and gem executables out of `/usr/local/bin` without adding generated dependencies to the repository diff.
+
 ## Security model
 
 - Agents run headless with explicit tool permissions or a workspace sandbox. Outbound Git commands stay denied, and Antigravity never receives its permission-bypass flag.
 - The server binds to `127.0.0.1` by default. Optional password login (bcrypt, `SILLAGE_PASSWORD`), HttpOnly session cookies, login rate limiting, JSON content-type enforcement on mutations.
 - **Never expose the HTTP port directly to the internet.** For remote access use [Tailscale](https://tailscale.com) (`sillage -addr <tailscale-ip>:8787`) or a TLS reverse proxy; the session cookie switches to Secure automatically behind `X-Forwarded-Proto: https`.
-- Data lives in `~/.local/share/sillage` (JSON state, atomic writes) plus one git worktree per task.
+- Data lives in `~/.local/share/sillage` (JSON state, atomic writes), with one git worktree and optional task-scoped package caches per task.
 - The only network call Sillage makes on its own is the daily update check: one read of GitHub's latest release number. No data from your machine is sent, no identifier, no telemetry, and you can switch it off in Settings. A binary it downloads for you is never installed without checking its sha256 against the release's `checksums.txt`.
 
 Note for codex agents: Sillage runs them with `--sandbox workspace-write`. Task directories are linked Git worktrees, so Sillage automatically grants Codex write access to the external Git metadata required for local commits while keeping repository hooks and configuration protected. On machines where AppArmor blocks bubblewrap (`bwrap: Operation not permitted`), either allow unprivileged user namespaces (`sudo sysctl kernel.apparmor_restrict_unprivileged_userns=0`) or start Sillage with `SILLAGE_CODEX_SANDBOX=danger-full-access`, knowing that the remaining containment is Sillage's own (dedicated worktree, no push, human validation).
