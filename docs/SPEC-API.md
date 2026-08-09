@@ -327,7 +327,7 @@ Côté UI, la succession se traduit par le chaînage déjà existant : les tâch
 Un agent claude tourne avec une liste d'outils autorisés : tout ce qui n'y figure pas est refusé, sans invite possible puisque le CLI tourne en mode non interactif. Cette liste se compose de quatre couches, dans cet ordre.
 
 1. **Le socle**, figé dans le binaire : lecture et écriture de fichiers, recherche, `WebFetch`, les commandes shell de base et le git en lecture seule (`status`, `diff`, `log`, `show`). Ce socle ne contient que ce qui ne dépend d'aucun langage : git n'est pas un choix de stack ici mais le modèle même du produit, où toute tâche vit dans un worktree. Aucune commande de build, de test ou de format n'y figure, quel que soit le langage : elles vont toutes dans les couches 2 et 3.
-2. **`Project.permissionProfiles`**, choisi explicitement par l'humain parmi `ruby`, `node`, `python`, `go` et `rust`. Chaque profil développe une allowlist lisible (`bundle`/`rake`, `npm`/`yarn`, `pytest`/`uv`, etc.) et prépare les variables de cache correspondantes. Sillage ne détecte et n'active jamais un profil depuis le contenu du dépôt.
+2. **`Project.permissionProfiles`**, choisi explicitement par l'humain parmi `ruby`, `node`, `php`, `python`, `go` et `rust`. Chaque profil développe une allowlist lisible (`bundle`/`rake`, `npm`/`yarn`, `php`/`composer`, `pytest`/`uv`, etc.) et prépare les variables de cache correspondantes. Sillage ne détecte et n'active jamais un profil depuis le contenu du dépôt.
 3. **`Project.allowedTools`**, saisi par l'humain pour les commandes qui ne rentrent pas dans un profil. Même niveau de confiance que `checkCmd` et `previewCmd` : aucune commande n'est lue depuis un fichier du dépôt, puisque ces fichiers sont écrits par les agents.
 4. **Le refus figé**, également dans le binaire et appliqué après les autres couches : tout ce qui peut pousser (`git push`, `gh`, `glab`) et l'édition des fichiers qui pilotent l'agent lui-même (`.claude/settings*.json`, hooks). Le refus l'emporte toujours sur l'autorisation, donc aucun profil ni aucune saisie dans `allowedTools` ne peut ouvrir ces portes.
 
@@ -339,7 +339,7 @@ Quand un outil est refusé, un Message marqueur est ajouté au fil de la tâche 
 
 Les autres adaptateurs ne consomment pas `Project.allowedTools`. Ils reçoivent en revanche l'environnement de cache des profils. Codex ajoute chaque cache sélectionné à son sandbox `workspace-write` ; les autres gardent leurs propres politiques headless (voir `SPEC-BACKEND.md`).
 
-Les caches vivent dans `<dataDir>/package-cache/<taskId>/<profil>/`, jamais dans le worktree : ils ne polluent donc pas le diff. Ils sont propres à une tâche pour qu'un agent ne puisse pas altérer le toolchain d'une autre tâche, mais survivent aux tours successifs de cette tâche. Ruby fixe notamment `BUNDLE_PATH`, `BUNDLE_BIN`, `BUNDLE_APP_CONFIG`, `BUNDLE_USER_CACHE` et `GEM_HOME`, ce qui empêche Bundler/RubyGems de retomber sur `/usr/local/bin`. La suppression d'une tâche supprime son cache (après l'arrêt effectif de son process si nécessaire).
+Les caches vivent dans `<dataDir>/package-cache/<taskId>/<profil>/`, jamais dans le worktree : ils ne polluent donc pas le diff. Ils sont propres à une tâche pour qu'un agent ne puisse pas altérer le toolchain d'une autre tâche, mais survivent aux tours successifs de cette tâche. Ruby fixe notamment `BUNDLE_PATH`, `BUNDLE_BIN`, `BUNDLE_APP_CONFIG`, `BUNDLE_USER_CACHE` et `GEM_HOME`, ce qui empêche Bundler/RubyGems de retomber sur `/usr/local/bin`. PHP fixe `COMPOSER_HOME` et `COMPOSER_CACHE_DIR`, et expose les outils Composer globaux depuis ce dossier isolé. La suppression d'une tâche supprime son cache (après l'arrêt effectif de son process si nécessaire).
 
 ### Réassignation d'une tâche à un autre agent
 
@@ -616,7 +616,7 @@ L'édition d'un projet est une modale à navigation latérale, pas une colonne d
 | Général | nom, description, branche de base (`delivery.target`) |
 | Dépôts | les lignes nom + chemin, « + dépôt » |
 | Instructions | `contextPrompt` en grand (≥ 12 lignes), puis `checkCmd` |
-| Permissions | profils Ruby/Node.js/Python/Go/Rust à cocher, puis `allowedTools` avancé |
+| Permissions | profils Ruby/Node.js/PHP/Python/Go/Rust à cocher, puis `allowedTools` avancé |
 | Livraison | les quatre modes en cartes à cocher, plus l'avertissement de santé s'il y en a un |
 | Liens | les liens épinglés |
 | Supprimer | conséquences chiffrées, puis le bouton de suppression en deux temps |

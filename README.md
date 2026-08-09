@@ -62,7 +62,7 @@ Then open http://127.0.0.1:8787. No login is required by default. To require a p
 
 Add a project (any local git repository), create a card, create a task, pick an agent: it starts working immediately in its own worktree. Try the free agent Écho first if you want to see the flow without any API cost.
 
-Project settings include explicit Ruby, Node.js, Python, Go, and Rust permission profiles. A profile allows the stack's local commands and redirects package/build caches to task-scoped writable directories managed by Sillage. For example, the Ruby profile keeps Bundler and gem executables out of `/usr/local/bin` without adding generated dependencies to the repository diff.
+Project settings include explicit Ruby, Node.js, PHP, Python, Go, and Rust permission profiles. A profile allows the stack's local commands and redirects package/build caches to task-scoped writable directories managed by Sillage. For example, the Ruby profile keeps Bundler and gem executables out of `/usr/local/bin` without adding generated dependencies to the repository diff.
 
 ## Security model
 
