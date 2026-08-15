@@ -774,6 +774,23 @@ func detectDelivery(repos []Repo) Delivery {
 	return Delivery{Mode: "pr"}
 }
 
+// repairMovedRepoWorktrees compare les dépôts d'un projet avant et après une
+// mise à jour et rejoue `git worktree repair` (voir RepairWorktrees) pour
+// chaque dépôt dont le chemin a changé : c'est le cas d'un dossier de code
+// déplacé sur le disque, qui sinon casse les worktrees de tâches et de
+// chantiers déjà créés à l'ancien chemin.
+func repairMovedRepoWorktrees(before, after []Repo) {
+	oldPaths := map[string]string{}
+	for _, repo := range before {
+		oldPaths[repo.Name] = repo.Path
+	}
+	for _, repo := range after {
+		if old, ok := oldPaths[repo.Name]; ok && old != repo.Path {
+			RepairWorktrees(repo.Path)
+		}
+	}
+}
+
 func (s *Server) handleUpdateProject(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	var body struct {
@@ -792,6 +809,7 @@ func (s *Server) handleUpdateProject(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
+	before, _ := s.store.GetProject(id)
 	if body.Repos != nil {
 		normalized, err := NormalizeRepos(*body.Repos)
 		if err != nil {
@@ -819,6 +837,9 @@ func (s *Server) handleUpdateProject(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeError(w, statusForStoreError(err), err.Error())
 		return
+	}
+	if body.Repos != nil {
+		repairMovedRepoWorktrees(before.Repos, project.Repos)
 	}
 	out := projectOut(project)
 	s.runner.publishProject(out)

@@ -111,6 +111,22 @@ func createWorktree(repoPath, dir, branch, base string) (string, string, error) 
 	return dir, base, nil
 }
 
+// RepairWorktrees recolle les worktrees déjà créés (tâches et chantiers) au
+// dépôt d'origine après un déplacement de son dossier sur le disque : chaque
+// worktree lié garde en dur le chemin absolu de ce dépôt au moment de sa
+// création (son fichier .git pointeur), qui devient invalide dès que le
+// dossier bouge (« fatal: not a git repository »). `git worktree repair`,
+// lancé depuis le nouveau chemin sans argument, retrouve tous les worktrees
+// liés au dépôt et corrige ce pointeur. Best-effort (appelé après un
+// changement de chemin de dépôt) : un échec ne doit jamais faire échouer la
+// mise à jour du projet, seulement laisser les worktrees concernés cassés.
+func RepairWorktrees(repoPath string) {
+	if repoPath == "" {
+		return
+	}
+	_, _ = runGit(repoPath, gitDefaultTimeout, "worktree", "repair")
+}
+
 // RemoveWorktree retire le worktree d'une tâche du dépôt d'origine :
 // git worktree remove --force puis worktree prune. Best-effort (appelé lors
 // d'une suppression de tâche) : un échec ne doit jamais empêcher la

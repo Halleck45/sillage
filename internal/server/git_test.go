@@ -145,6 +145,47 @@ func TestWorktreeAndDiff(t *testing.T) {
 	}
 }
 
+// TestRepairWorktrees vérifie qu'un worktree cassé par le déplacement de son
+// dépôt d'origine (cas d'un dossier de code déplacé sur le disque, voir
+// repairMovedRepoWorktrees) redevient utilisable après RepairWorktrees.
+func TestRepairWorktrees(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git non disponible dans cet environnement")
+	}
+
+	base := t.TempDir()
+	repo := filepath.Join(base, "repo")
+	if err := os.Mkdir(repo, 0o700); err != nil {
+		t.Fatalf("mkdir repo: %v", err)
+	}
+	dataDir := t.TempDir()
+
+	runTestGit(t, repo, "init")
+	runTestGit(t, repo, "config", "user.email", "test@example.com")
+	runTestGit(t, repo, "config", "user.name", "Test")
+	runTestGit(t, repo, "commit", "--allow-empty", "-m", "initial")
+
+	dir, _, err := CreateWorktree(repo, dataDir, "t1", "sillage/100-test", "")
+	if err != nil {
+		t.Fatalf("CreateWorktree: %v", err)
+	}
+
+	moved := filepath.Join(base, "repo-moved")
+	if err := os.Rename(repo, moved); err != nil {
+		t.Fatalf("os.Rename: %v", err)
+	}
+
+	// Sans réparation, le worktree pointe encore vers l'ancien chemin.
+	cmd := exec.Command("git", "status")
+	cmd.Dir = dir
+	if err := cmd.Run(); err == nil {
+		t.Fatalf("git status aurait dû échouer avant réparation")
+	}
+
+	RepairWorktrees(moved)
+	runTestGit(t, dir, "status")
+}
+
 // TestOpenDifftool : sans diff.tool configuré, refus explicite plutôt qu'un
 // git difftool qui tenterait de deviner un outil ou resterait en attente
 // d'une réponse au prompt interactif (--no-prompt ne suffit pas s'il n'y a
@@ -437,6 +478,37 @@ func TestRestartRefreshesCountersOfInterruptedTask(t *testing.T) {
 	if got.FilesCount != 1 || got.CommitsCount != 1 {
 		t.Fatalf("compteurs relus attendus (1 fichier, 1 commit), reçu files=%d commits=%d", got.FilesCount, got.CommitsCount)
 	}
+}
+
+// TestUpdateProjectRepairsWorktreesAfterRepoMove couvre le cas produit qui a
+// motivé RepairWorktrees : un dossier de code déplacé sur le disque, avec un
+// chantier déjà en cours dessus. Changer le chemin du dépôt via PATCH ne doit
+// pas seulement être accepté, il doit aussi laisser le worktree de la tâche
+// utilisable.
+func TestUpdateProjectRepairsWorktreesAfterRepoMove(t *testing.T) {
+	f := newDeliveryFixture(t, Delivery{Mode: "merge"})
+	id, _ := f.addTask(t, "Refonte visuelle", "style.css", ":root{--glass:1}\n")
+	task, ok := f.srv.store.GetTask(id)
+	if !ok {
+		t.Fatalf("tâche %s introuvable", id)
+	}
+
+	moved := f.repo + "-moved"
+	if err := os.Rename(f.repo, moved); err != nil {
+		t.Fatalf("os.Rename: %v", err)
+	}
+
+	body := fmt.Sprintf(`{"repos":[{"name":"demo","path":%q}]}`, moved)
+	req := httptest.NewRequest(http.MethodPatch, "/", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.SetPathValue("id", f.project.ID)
+	w := httptest.NewRecorder()
+	f.srv.handleUpdateProject(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("PATCH project = %d, corps %s", w.Code, w.Body.String())
+	}
+
+	runTestGit(t, task.WorktreeDir, "status")
 }
 
 // accept accepte une tâche et attend les rebases automatiques que l'acceptation
