@@ -98,6 +98,131 @@ type Project struct {
 	// supprimer : il reste listé (et accessible) depuis la page "Tous les
 	// projets", seul endroit d'où on peut le remettre dans la barre.
 	HiddenFromSidebar bool `json:"hiddenFromSidebar"`
+
+	// Watch est le réglage de Vigie du projet (voir watch.go) : surveillance
+	// des PR et issues GitHub de ses dépôts, analysées par un agent en lecture
+	// seule. Désactivée par défaut.
+	Watch Watch `json:"watch"`
+}
+
+// Watch règle la Vigie d'un projet. Since est posé à l'activation : rien de
+// créé avant ne remonte, sinon activer la Vigie sur un dépôt actif ferait
+// tomber d'un coup tout son backlog.
+type Watch struct {
+	Enabled bool      `json:"enabled"`
+	AgentID string    `json:"agentId"`
+	Since   time.Time `json:"since"`
+	// UpkeepAt : la dernière veille d'entretien (voir upkeep.go), nil si
+	// jamais faite ou redemandée.
+	UpkeepAt *time.Time `json:"upkeepAt"`
+}
+
+// Signal est une PR ou une issue GitHub repérée par la Vigie, avec l'analyse
+// qu'en a faite l'agent. Verdict et Review restent sur la machine : Sillage
+// n'écrit jamais rien sur la forge (voir watch.go).
+type Signal struct {
+	ID        string   `json:"id"`
+	ProjectID string   `json:"projectId"`
+	RepoName  string   `json:"repoName"`
+	Kind      string   `json:"kind"` // "pr" | "issue"
+	Number    int      `json:"number"`
+	Title     string   `json:"title"`
+	URL       string   `json:"url"`
+	Author    string   `json:"author"`
+	Body      string   `json:"body"`
+	Labels    []string `json:"labels"`
+	CreatedAt string   `json:"createdAt"` // côté forge
+
+	DetectedAt time.Time `json:"detectedAt"`
+	// Status : "queued" | "analyzing" | "ready" | "error" | "dismissed" | "handled"
+	Status string `json:"status"`
+	// Priority, donnée par l'analyse : "high" | "normal" | "low".
+	Priority string `json:"priority"`
+	// Decision est le jugement de l'agent, ce que le mainteneur doit faire.
+	// PR : "merge" | "changes" | "rework" | "close".
+	// Issue : "fix" | "feature" | "needs-info" | "close".
+	Decision string `json:"decision"`
+	Verdict  string `json:"verdict"`
+	// Review est toujours en anglais : c'est un texte destiné à GitHub.
+	// Verdict suit la langue de l'interface.
+	Review string `json:"review"`
+	Error  string `json:"error"`
+	// CardID : le chantier ouvert depuis ce signal (statut "handled").
+	CardID     string     `json:"cardId"`
+	AnalyzedAt *time.Time `json:"analyzedAt"`
+
+	// Comments : la discussion sur la forge, les signalCommentsMax derniers
+	// messages (commentaires et revues), du plus ancien au plus récent.
+	Comments []SignalComment `json:"comments"`
+	// SeenCommentAt : la date du dernier message déjà vu (RFC 3339). Un
+	// message d'un tiers plus récent relance l'analyse.
+	SeenCommentAt string `json:"seenCommentAt"`
+	// NewComments : les messages de tiers qui ont relancé la dernière analyse.
+	NewComments int `json:"newComments"`
+}
+
+// SignalComment est un message de la discussion d'une PR ou d'une issue.
+type SignalComment struct {
+	Author    string `json:"author"`
+	Body      string `json:"body"`
+	CreatedAt string `json:"createdAt"`
+}
+
+// WatchStatus est l'état du veilleur, en mémoire seulement (champ `watch` de
+// GET /api/state, événement SSE "watch").
+type WatchStatus struct {
+	CheckedAt *time.Time        `json:"checkedAt"`
+	Checking  bool              `json:"checking"`
+	Errors    map[string]string `json:"errors"` // projectId -> dernière erreur
+	// Log : le journal des dernières relèves et analyses, le plus récent en
+	// premier. Structuré plutôt que rédigé : l'UI le met en mots dans sa langue.
+	Log []WatchLogEntry `json:"log"`
+	// Current : la relecture en cours, nil sinon. Une à la fois (voir
+	// analyzeQueued).
+	Current *AnalysisProgress `json:"current"`
+}
+
+// AnalysisProgress montre ce que fait l'analyste pendant qu'il relit : depuis
+// quand, à quelle phase, et ses derniers outils. Sans lui, « Muse relit » ne
+// dit pas si l'agent avance ou s'il est planté.
+type AnalysisProgress struct {
+	// Kind : "review" (un signal) | "upkeep" (veille d'entretien d'un dépôt,
+	// SignalID vide).
+	Kind      string    `json:"kind"`
+	ProjectID string    `json:"projectId"`
+	RepoName  string    `json:"repoName"`
+	SignalID  string    `json:"signalId"`
+	StartedAt time.Time `json:"startedAt"`
+	// Phase : "diff" (lecture du diff sur GitHub) | "reading" (l'agent lit).
+	Phase string `json:"phase"`
+	// Steps : les derniers outils employés, le plus récent en dernier.
+	Steps []string `json:"steps"`
+	// TimeoutSec : le délai au-delà duquel la relecture est abandonnée.
+	TimeoutSec int `json:"timeoutSec"`
+}
+
+// WatchLogEntry est une ligne du journal de la Vigie.
+//   - "list" : une liste lue sur la forge. Open = éléments ouverts renvoyés,
+//     Added = nouveaux signaux, Older = trop anciens (avant From), Drafts =
+//     brouillons écartés, Known = déjà vus.
+//   - "analysis" : une analyse terminée (Error vide) ou échouée.
+//   - "error" : la lecture de la forge a échoué.
+type WatchLogEntry struct {
+	At         time.Time `json:"at"`
+	Kind       string    `json:"kind"`
+	ProjectID  string    `json:"projectId"`
+	RepoName   string    `json:"repoName"`
+	Item       string    `json:"item"` // "pr" | "issue"
+	Open       int       `json:"open"`
+	Added      int       `json:"added"`
+	Older      int       `json:"older"`
+	Drafts     int       `json:"drafts"`
+	Known      int       `json:"known"`
+	Updated    int       `json:"updated"` // signaux relancés par de nouveaux commentaires
+	From       time.Time `json:"from"`
+	Number     int       `json:"number"`
+	DurationMs int64     `json:"durationMs"`
+	Error      string    `json:"error"`
 }
 
 // ProjectOut est la représentation d'un Project exposée par l'API : les mêmes
@@ -415,6 +540,8 @@ type Settings struct {
 	// que "absent" (state.json écrit avant cette fonctionnalité) veuille dire
 	// "activé", sans migration.
 	UpdateCheck *bool `json:"updateCheck"`
+	// LAN : Sillage répond aussi sur le réseau local, en HTTPS (voir lan.go).
+	LAN bool `json:"lan"`
 }
 
 // UpdateStatus décrit les mises à jour de Sillage (GET /api/update, champ
@@ -474,7 +601,12 @@ type State struct {
 	Settings  Settings        `json:"settings"`
 	Previews  []PreviewRun    `json:"previews"`
 	Update    UpdateStatus    `json:"update"`
-	Tokens    struct {
+	Signals   []Signal        `json:"signals"`
+	Watch     WatchStatus     `json:"watch"`
+	Lan       LanStatus       `json:"lan"`
+	// Autoconfigs : les autoconfigurations de projet en cours ou à relire.
+	Autoconfigs []AutoconfigRun `json:"autoconfigs"`
+	Tokens      struct {
 		Global Tokens `json:"global"`
 	} `json:"tokens"`
 }
@@ -529,6 +661,9 @@ type DiffResponse struct {
 	Branch string     `json:"branch"`
 	Base   string     `json:"base"`
 	Files  []DiffFile `json:"files"`
+	// Tool est l'outil de diff configuré par git (`diff.tool`), vide s'il n'y
+	// en a pas : le bouton d'ouverture le nomme, ou explique comment en régler un.
+	Tool string `json:"tool"`
 }
 
 // CommitInfo est une ligne de `git log`.

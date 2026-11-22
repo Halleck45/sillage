@@ -153,16 +153,36 @@ func Diff(dir, base string) ([]DiffFile, error) {
 	return parseDiff(out), nil
 }
 
-// OpenDifftool lance l'outil de diff configuré par l'utilisateur (`git config
-// diff.tool`, réglage standard de git : VS Code, Meld, Kaleidoscope...) sur un
-// fichier du worktree, entre base et l'état courant. Ne bloque pas : l'outil
-// est une appli graphique qui peut rester ouverte longtemps, l'appelant ne
-// doit pas attendre sa fermeture.
-func OpenDifftool(dir, base, path string) error {
-	if out, err := runGit(dir, 5*time.Second, "config", "diff.tool"); err != nil || strings.TrimSpace(out) == "" {
-		return errors.New("no diff tool configured: run `git config --global diff.tool <tool>` (e.g. vscode)")
+// DifftoolName retourne l'outil de diff configuré par git dans dir, vide sinon.
+func DifftoolName(dir string) string {
+	out, err := runGit(dir, 5*time.Second, "config", "diff.tool")
+	if err != nil {
+		return ""
 	}
-	cmd := exec.Command("git", "difftool", "--no-prompt", base, "--", path)
+	return strings.TrimSpace(out)
+}
+
+// OpenDifftool lance l'outil de diff configuré par l'utilisateur (`git config
+// diff.tool`, réglage standard de git : Meld, VS Code, Kaleidoscope...) entre
+// base et l'état courant du worktree. path vide : toutes les modifications en
+// une fois (`--dir-diff`, l'outil reçoit deux arborescences), sinon ce seul
+// fichier. Ne bloque pas : l'outil est une appli graphique qui peut rester
+// ouverte longtemps, l'appelant ne doit pas attendre sa fermeture.
+func OpenDifftool(dir, base, path string) error {
+	if DifftoolName(dir) == "" {
+		return errors.New("no diff tool configured: run `git config --global diff.tool <tool>` (e.g. meld)")
+	}
+	// Les fichiers non suivis n'apparaissent qu'une fois marqués (comme Diff).
+	if _, err := runGit(dir, gitDefaultTimeout, "add", "-A", "-N"); err != nil {
+		return err
+	}
+	args := []string{"difftool", "--no-prompt", base}
+	if path == "" {
+		args = []string{"difftool", "--no-prompt", "--dir-diff", base}
+	} else {
+		args = append(args, "--", path)
+	}
+	cmd := exec.Command("git", args...)
 	cmd.Dir = dir
 	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
 	if err := cmd.Start(); err != nil {

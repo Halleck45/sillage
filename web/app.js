@@ -51,16 +51,15 @@
       'allProjects.hiddenBadge': 'Masqué de la barre latérale',
       'inbox.empty': 'Boîte de réception vide. Tout est à jour !',
       'kanban.addCard': '+ Ajouter',
-      'kanban.empty': 'Aucun chantier pour l\'instant.',
-      'kanban.emptyAction': 'Créer le premier chantier',
+      'kanban.empty': 'Rien en cours pour l\'instant.',
+      'kanban.emptyAction': 'Confier une première tâche à un agent',
+      'kanban.newWorkstream': 'Nouveau chantier',
+      'kanban.newTaskTooltip': 'Confier une tâche à un agent (N). Son chantier est créé pour vous.',
       'kanban.card.tasksLabel': 'tâches',
       'kanban.card.noTask': 'Aucune tâche',
       'kanban.card.reviewCount': '{n} à relire',
       'kanban.card.awaitingShip': 'À livrer',
       'inbox.awaitingShip.title': 'Chantiers à livrer',
-      'column.soon': 'Bientôt',
-      'column.doing': 'En cours',
-      'column.done': 'Terminé',
       'cardMenu.moveTo': 'Déplacer vers {column}',
       'project.editTooltip': 'Modifier le projet',
       'project.editTitle': 'Réglages du projet',
@@ -288,7 +287,22 @@
       'chat.interrupted': 'Agent interrompu par un arrêt de Sillage : la tâche est repassée en revue. Ce qu\'il avait commité est là ; envoyez-lui un message pour qu\'il reprenne.',
       'conversation.empty': 'Aucun message pour l\'instant.',
       'diff.empty': 'Aucune modification.',
-      'diff.openDifftool': 'Ouvrir avec l\'outil de diff',
+      'diff.openDifftool': 'Ouvrir dans l\'outil de diff',
+      'diff.openIn': 'Ouvrir dans {tool}',
+      'diff.openAllHint': 'Toutes les modifications d\'un coup, côte à côte',
+      'diff.noToolHint': 'Aucun outil de diff réglé dans git : git config --global diff.tool meld',
+      'diff.openFile': 'Ouvrir ce fichier dans {tool}',
+      'diff.files.one': '{n} fichier',
+      'diff.files.other': '{n} fichiers',
+      'diff.collapseAll': 'Tout replier',
+      'diff.expandAll': 'Tout déplier',
+      'diff.collapse': 'Replier',
+      'diff.expand': 'Déplier',
+      'diff.new': 'nouveau',
+      'diff.deleted': 'supprimé',
+      'diff.generated': 'généré',
+      'diff.skipped.one': '{n} ligne inchangée',
+      'diff.skipped.other': '{n} lignes inchangées',
       'deliverables.code': 'Code',
       'deliverables.docs': 'Documents',
       'deliverables.images': 'Captures',
@@ -328,6 +342,8 @@
       'shortcuts.searchNav': 'Parcourir les résultats',
       'shortcuts.searchOpen': 'Ouvrir le résultat',
       'shortcuts.sendMessage': 'Envoyer le message',
+      'shortcuts.expandPanel': 'Agrandir ou réduire le panneau',
+      'shortcuts.diffNav': 'Fichier suivant / précédent du diff',
       'newProject.title': 'Nouveau projet',
       'newProject.pathLabel': 'Chemin d\'un dépôt git',
       'newProject.pathPlaceholder': '/home/utilisateur/projets/mon-projet',
@@ -381,6 +397,180 @@
       'issues.cap': 'Les {n} issues les plus récentes. Affinez la recherche pour aller au-delà.',
       'issues.by': 'par {login}',
       'issues.promptHeader': 'Corrige l\'issue GitHub #{n} : {title}',
+      'nav.vigie': 'Vigie',
+      'vigie.check': 'Vérifier maintenant',
+      'vigie.checking': 'Vérification…',
+      'vigie.checkedAgo': 'vérifié {when}',
+      'vigie.notify': 'Activer les notifications',
+      'vigie.introTitle': 'La Vigie relit à votre place',
+      'vigie.introSub': 'Choisissez les projets à surveiller. À chaque nouvelle PR ou issue, un agent la relit en lecture seule et vous prépare un verdict et une revue. Rien n\'est jamais publié sur GitHub.',
+      'vigie.noGithub': 'Aucun de vos projets n\'a de dépôt sur GitHub.',
+      'vigie.emptyTitle': 'Rien à signaler',
+      'vigie.emptySub': 'Les nouvelles PR et issues des projets surveillés arriveront ici, déjà relues.',
+      'vigie.watchedHeading': 'Projets sur GitHub',
+      'vigie.watch': 'Surveiller',
+      'vigie.unwatch': 'Ne plus surveiller',
+      'vigie.analyst': 'Relu par',
+      'vigie.kind.pr': 'PR',
+      'vigie.kind.issue': 'Issue',
+      'vigie.kind.upkeep': 'Suggestion',
+      'vigie.detail.kindUpkeep': 'Suggestion',
+      'vigie.decision.upgrade': 'À considérer',
+      'vigie.detail.plan': 'Ce qu\'il faudrait faire',
+      'vigie.detail.foundBy': 'Repéré par la veille d\'entretien {when}',
+      'vigie.detail.discussion': 'La discussion sur GitHub',
+      'vigie.newComments.one': '{n} nouveau commentaire',
+      'vigie.newComments.other': '{n} nouveaux commentaires',
+      'vigie.upkeep.check': 'Vérifier les mises à jour',
+      'vigie.upkeep.last': 'mises à jour vérifiées {when}',
+      'vigie.upkeep.running': '{agent} vérifie si {repo} a besoin de mises à jour',
+      'vigie.upkeep.promptHeader': 'Entretien du dépôt {repo} : {title}.',
+      'vigie.log.upkeep': 'Entretien de {repo} vérifié, nouveaux constats : {n}',
+      'vigie.log.upkeepFailed': 'Vérification de l\'entretien de {repo} impossible : {error}',
+      'vigie.log.updated': 'relancées par un commentaire : {n}',
+      'vigie.by': 'par {login}',
+      'vigie.high': 'Prioritaire',
+      'vigie.queued': 'En attente d\'analyse',
+      'vigie.stopped': 'Relecture arrêtée.',
+      'vigie.queuedNext': 'En file : c\'est la prochaine relue',
+      'vigie.queuedAhead.one': 'En file : {n} relecture avant elle',
+      'vigie.queuedAhead.other': 'En file : {n} relectures avant elle',
+      'vigie.queuedPaused': 'En attente : la Vigie est coupée sur ce projet',
+      'vigie.queuedHint': 'Les relectures passent une à la fois, pour ne pas lancer dix agents sur votre machine.',
+      'vigie.live.title': '{agent} relit',
+      'vigie.live.diff': 'Lecture du diff sur GitHub…',
+      'vigie.live.start': 'Démarrage de l\'agent…',
+      'vigie.live.limit': 'abandon après {n} min',
+      'vigie.live.stop': 'Arrêter',
+      'sessions.pill.active': 'Une session Claude en cours dans ce projet',
+      'sessions.pill.recent.one': '{n} session Claude récente',
+      'sessions.pill.recent.other': '{n} sessions Claude récentes',
+      'sessions.title': 'Sessions Claude Code',
+      'sessions.hint': 'Les sessions lancées à la main dans les dossiers de ce projet, celles que liste « claude --resume ». Sillage les montre sans y toucher.',
+      'sessions.active': 'en cours',
+      'sessions.prompts.one': '{n} demande',
+      'sessions.prompts.other': '{n} demandes',
+      'sessions.copy': 'Copier la commande de reprise',
+      'sessions.copied': 'Commande copiée',
+      'sessions.workstream': 'En faire un chantier',
+      'sessions.allPrompts': 'Ses dernières demandes',
+      'sessions.empty': 'Aucune session Claude Code récente dans les dossiers de ce projet.',
+      'sessions.promptHeader': 'Reprends le travail d\'une session Claude Code menée hors de Sillage, « {title} ».',
+      'sessions.promptBranch': 'Elle travaillait dans {cwd}, sur la branche {branch}. Ce qui n\'y a pas été commité n\'est pas dans ce worktree.',
+      'sessions.promptAsks': 'Ses dernières demandes, de la plus ancienne à la plus récente :',
+      'sessions.shipWarning': 'Une session Claude Code est ouverte dans {repo} (« {title} ») : elle écrit peut-être au même endroit que cette livraison.',
+      'autoconf.title': 'Configuration automatique',
+      'autoconf.hint': 'Un agent lit le dépôt (fichiers de build, CI, README) et propose la vérification lancée après chaque tâche, la commande de recette et son adresse. Il ne modifie rien, et vous relisez avant d\'enregistrer.',
+      'autoconf.start': 'Lancer l\'analyse',
+      'autoconf.with': 'Agent',
+      'autoconf.running': '{agent} lit {repo}',
+      'autoconf.runningShort': '{agent} configure le projet',
+      'autoconf.readyShort': 'Configuration proposée, à relire',
+      'autoconf.stop': 'Arrêter',
+      'autoconf.ready': 'Proposition de {agent}',
+      'autoconf.apply': 'Reprendre ces valeurs',
+      'autoconf.applied': 'Valeurs reprises dans les onglets. Relisez-les, puis enregistrez.',
+      'autoconf.dismiss': 'Oublier',
+      'autoconf.retry': 'Relancer',
+      'autoconf.error': 'Échec : {error}',
+      'autoconf.stopped': 'Analyse arrêtée.',
+      'autoconf.check': 'Vérification après chaque tâche',
+      'autoconf.preview': 'Recette',
+      'autoconf.url': 'Adresse',
+      'autoconf.profiles': 'Profils de permissions',
+      'autoconf.found': 'Trouvé',
+      'autoconf.notes': 'À savoir',
+      'autoconf.install': 'installation',
+      'autoconf.build': 'build',
+      'autoconf.test': 'tests',
+      'autoconf.current': 'actuellement : {v}',
+      'autoconf.nothing': 'rien de proposé',
+      'autoconf.warning': 'Ces commandes s\'exécuteront sur votre machine : relisez-les avant d\'enregistrer.',
+      'autoconf.noAgent': 'Il faut un agent capable de lire sans écrire (Claude Code ou Codex).',
+      'autoconf.nudge': 'Sillage ne sait pas encore vérifier ni lancer ce projet.',
+      'autoconf.nudgeAction': 'Configurer automatiquement',
+      'vigie.analyzing': 'Analyse en cours…',
+      'vigie.error': 'Analyse impossible : {error}',
+      'vigie.copyReview': 'Copier les commentaires',
+      'vigie.copied': 'Copiés, à coller sur GitHub',
+      'inbox.signals.title': 'Sur GitHub',
+      'sidebar.agentsToSetup.one': '1 agent à installer',
+      'sidebar.agentsToSetup.other': '{n} agents à installer',
+      'vigie.githubAction.merge': 'Merger sur GitHub',
+      'vigie.githubAction.close': 'Fermer sur GitHub',
+      'vigie.githubAction.changes': 'Voir sur GitHub',
+      'vigie.githubAction.rework': 'Voir sur GitHub',
+      'vigie.githubAction.needs-info': 'Voir sur GitHub',
+      'vigie.githubAction.fix': 'Voir sur GitHub',
+      'vigie.githubAction.feature': 'Voir sur GitHub',
+      'vigie.githubAction.undefined': 'Voir sur GitHub',
+      'vigie.githubAction.': 'Voir sur GitHub',
+      'lane.next': 'À lancer',
+      'lane.agents': 'Les agents travaillent',
+      'lane.you': 'À vous',
+      'lane.shipped': 'Livré',
+      'vigie.detail.review': 'Commentaires proposés',
+      'vigie.detail.reply': 'Réponse proposée',
+      'vigie.detail.nothingToAdd': 'Rien à ajouter : la PR peut être mergée telle quelle.',
+      'vigie.detail.prBody': 'Description de la PR, par {login}',
+      'vigie.detail.issueBody': 'L’issue, par {login}',
+      'hello.day': 'Bonjour',
+      'hello.evening': 'Bonsoir',
+      'hello.and': 'et',
+      'hello.waiting': 'Vous avez {list}.',
+      'hello.nothing': 'Rien ne vous attend.',
+      'hello.review.one': '{n} tâche à relire',
+      'hello.review.other': '{n} tâches à relire',
+      'hello.signals.one': '{n} sujet GitHub à trancher',
+      'hello.signals.other': '{n} sujets GitHub à trancher',
+      'hello.ship.one': '{n} chantier à livrer',
+      'hello.ship.other': '{n} chantiers à livrer',
+      'hello.running.one': 'Un agent travaille pour vous.',
+      'hello.running.other': '{n} agents travaillent pour vous.',
+      'pulse.you.one': '{n} pour vous',
+      'pulse.you.other': '{n} pour vous',
+      'pulse.agents.one': '{n} agent au travail',
+      'pulse.agents.other': '{n} agents au travail',
+      'pulse.calm': 'Tout est calme',
+      'pulse.empty': 'Rien pour l’instant',
+      'vigie.detail.kindPr': 'Pull request',
+      'vigie.detail.kindIssue': 'Issue',
+      'vigie.detail.opened': 'ouverte {when}',
+      'vigie.detail.copy': 'Copier',
+      'vigie.detail.onGithub': 'Ouvrir sur GitHub',
+      'vigie.detail.readBy': 'Relu par {agent}',
+      'vigie.detail.analyzing': '{agent} relit…',
+      'vigie.detail.waiting': 'Le jugement arrive dès que la relecture est finie.',
+      'vigie.detail.noBody': 'L’auteur n’a rien écrit.',
+      'vigie.openGithub': 'Voir sur GitHub',
+      'vigie.workstream': 'Confier à un agent',
+      'vigie.toCard': 'En faire un chantier',
+      'vigie.toCardHint': 'Un chantier, puis un agent le découpe en tâches que vous relisez',
+      'vigie.dismiss': 'Retirer de la liste',
+      'vigie.retry': 'Réessayer',
+      'vigie.localOnly': 'Sillage ne publie jamais rien sur GitHub. Les commentaires proposés restent ici : copiez-les et collez-les vous-même si vous êtes d\'accord.',
+      'vigie.promptAnalysis': 'Analyse préalable de la Vigie :',
+      'vigie.log.error': 'Lecture de {repo} impossible : {error}',
+      'vigie.log.analysisFailed': 'Échec de l\'analyse de {kind} #{n} ({repo}) : {error}',
+      'vigie.log.analysis': '{kind} #{n} ({repo}) analysée en {s} s',
+      'vigie.log.older': 'ouvertes avant le {date}, ignorées : {n}',
+      'vigie.log.drafts': 'brouillons ignorés : {n}',
+      'vigie.log.known': 'déjà vues : {n}',
+      'vigie.log.list': '{repo} · {kind} ouvertes : {open}, nouvelles : {added}',
+      'vigie.log.empty': 'Aucune vérification depuis le démarrage de Sillage.',
+      'vigie.log.hide': 'Masquer le journal',
+      'vigie.log.show': 'Voir le journal',
+      'vigie.replyNote': 'Réponse rédigée par l\'agent, en anglais, non publiée. « Copier la réponse » la met dans le presse-papier pour la coller sur l\'issue.',
+      'vigie.copyReply': 'Copier la réponse',
+      'vigie.decision.needs-info': 'Informations manquantes',
+      'vigie.decision.feature': 'Demande d\'évolution',
+      'vigie.decision.fix': 'Bug à corriger',
+      'vigie.decision.close': 'À fermer',
+      'vigie.decision.rework': 'À retravailler',
+      'vigie.decision.changes': 'Quelques retours à faire',
+      'vigie.decision.merge': 'Mergeable en l\'état',
+      'vigie.neverChecked': 'jamais vérifié',
+      'vigie.reviewNote': 'Commentaires rédigés par l\'agent, non publiés. « Copier les commentaires » les met dans le presse-papier pour les coller dans la revue GitHub.',
       'workstream.editTooltip': 'Modifier le chantier',
       'workstream.editTitle': 'Chantier',
       'workstream.errorSaveFailed': 'Erreur lors de l\'enregistrement.',
@@ -514,6 +704,13 @@
       'update.neverChecked': 'Jamais vérifié',
       'update.lastChecked': 'Vérifié {time}',
       'update.autoCheckLab': 'Vérifier les mises à jour automatiquement',
+      'lan.heading': 'Depuis vos autres appareils',
+      'lan.copy': 'Copier l’adresse',
+      'lan.toggle': 'Ouvrir Sillage au réseau local',
+      'lan.offNote': 'Sillage ne répond qu’à cet ordinateur. Activez pour le suivre depuis votre téléphone sur le même wifi.',
+      'lan.noPassword': 'Il faut d’abord un mot de passe : lancez Sillage avec SILLAGE_PASSWORD. Sans lui, n’importe qui sur le wifi pourrait faire travailler vos agents.',
+      'lan.noAddress': 'Aucune adresse réseau trouvée : cet ordinateur n’est connecté à aucun réseau local.',
+      'lan.certNote': 'La connexion est chiffrée par un certificat créé sur cette machine : le navigateur prévient une fois. Pour vérifier, son empreinte doit être celle-ci :',
       'update.autoCheckNote': 'Une requête par jour vers GitHub, pour lire le numéro de la dernière version. Rien de votre machine ne sort.',
       'update.apply': 'Mettre à jour et redémarrer',
       'update.applying': 'Mise à jour en cours…',
@@ -581,16 +778,15 @@
       'allProjects.hiddenBadge': 'Hidden from sidebar',
       'inbox.empty': 'Inbox is empty. All caught up!',
       'kanban.addCard': '+ Add',
-      'kanban.empty': 'No workstreams yet.',
-      'kanban.emptyAction': 'Create the first workstream',
+      'kanban.empty': 'Nothing in progress yet.',
+      'kanban.emptyAction': 'Hand a first task to an agent',
+      'kanban.newWorkstream': 'New workstream',
+      'kanban.newTaskTooltip': 'Hand a task to an agent (N). Its workstream is created for you.',
       'kanban.card.tasksLabel': 'tasks',
       'kanban.card.noTask': 'No task',
       'kanban.card.reviewCount': '{n} to review',
       'kanban.card.awaitingShip': 'Ready to ship',
       'inbox.awaitingShip.title': 'Workstreams ready to ship',
-      'column.soon': 'Soon',
-      'column.doing': 'In progress',
-      'column.done': 'Done',
       'cardMenu.moveTo': 'Move to {column}',
       'project.editTooltip': 'Edit project',
       'project.editTitle': 'Project settings',
@@ -819,6 +1015,21 @@
       'conversation.empty': 'No messages yet.',
       'diff.empty': 'No changes.',
       'diff.openDifftool': 'Open in diff tool',
+      'diff.openIn': 'Open in {tool}',
+      'diff.openAllHint': 'Every change at once, side by side',
+      'diff.noToolHint': 'No diff tool set in git: git config --global diff.tool meld',
+      'diff.openFile': 'Open this file in {tool}',
+      'diff.files.one': '{n} file',
+      'diff.files.other': '{n} files',
+      'diff.collapseAll': 'Collapse all',
+      'diff.expandAll': 'Expand all',
+      'diff.collapse': 'Collapse',
+      'diff.expand': 'Expand',
+      'diff.new': 'new',
+      'diff.deleted': 'deleted',
+      'diff.generated': 'generated',
+      'diff.skipped.one': '{n} unchanged line',
+      'diff.skipped.other': '{n} unchanged lines',
       'deliverables.code': 'Code',
       'deliverables.docs': 'Documents',
       'deliverables.images': 'Screenshots',
@@ -858,6 +1069,8 @@
       'shortcuts.searchNav': 'Move through results',
       'shortcuts.searchOpen': 'Open the result',
       'shortcuts.sendMessage': 'Send the message',
+      'shortcuts.expandPanel': 'Expand or collapse the panel',
+      'shortcuts.diffNav': 'Next / previous file in the diff',
       'newProject.title': 'New project',
       'newProject.pathLabel': 'Path to a git repository',
       'newProject.pathPlaceholder': '/home/user/projects/my-project',
@@ -911,6 +1124,180 @@
       'issues.cap': 'The {n} most recent issues. Refine the search to go further.',
       'issues.by': 'by {login}',
       'issues.promptHeader': 'Fix GitHub issue #{n}: {title}',
+      'nav.vigie': 'Lookout',
+      'vigie.check': 'Check now',
+      'vigie.checking': 'Checking…',
+      'vigie.checkedAgo': 'checked {when}',
+      'vigie.notify': 'Turn on notifications',
+      'vigie.introTitle': 'The lookout reads for you',
+      'vigie.introSub': 'Pick the projects to watch. Every new pull request or issue is read by an agent, in read-only mode, who drafts a verdict and a review for you. Nothing is ever posted to GitHub.',
+      'vigie.noGithub': 'None of your projects has a repository on GitHub.',
+      'vigie.emptyTitle': 'All quiet',
+      'vigie.emptySub': 'New pull requests and issues from watched projects will land here, already read.',
+      'vigie.watchedHeading': 'Projects on GitHub',
+      'vigie.watch': 'Watch',
+      'vigie.unwatch': 'Stop watching',
+      'vigie.analyst': 'Read by',
+      'vigie.kind.pr': 'PR',
+      'vigie.kind.issue': 'Issue',
+      'vigie.kind.upkeep': 'Suggestion',
+      'vigie.detail.kindUpkeep': 'Suggestion',
+      'vigie.decision.upgrade': 'Worth considering',
+      'vigie.detail.plan': 'What to do',
+      'vigie.detail.foundBy': 'Found by the upkeep check {when}',
+      'vigie.detail.discussion': 'Discussion on GitHub',
+      'vigie.newComments.one': '{n} new comment',
+      'vigie.newComments.other': '{n} new comments',
+      'vigie.upkeep.check': 'Check for updates',
+      'vigie.upkeep.last': 'updates checked {when}',
+      'vigie.upkeep.running': '{agent} is checking whether {repo} needs updates',
+      'vigie.upkeep.promptHeader': 'Upkeep of the {repo} repository: {title}.',
+      'vigie.log.upkeep': 'Upkeep of {repo} checked, new findings: {n}',
+      'vigie.log.upkeepFailed': 'Could not check the upkeep of {repo}: {error}',
+      'vigie.log.updated': 'reopened by a comment: {n}',
+      'vigie.by': 'by {login}',
+      'vigie.high': 'Priority',
+      'vigie.queued': 'Waiting for analysis',
+      'vigie.stopped': 'Review stopped.',
+      'vigie.queuedNext': 'Queued: next in line',
+      'vigie.queuedAhead.one': 'Queued: {n} review ahead',
+      'vigie.queuedAhead.other': 'Queued: {n} reviews ahead',
+      'vigie.queuedPaused': 'Waiting: the watch is off for this project',
+      'vigie.queuedHint': 'Reviews run one at a time, so ten agents never start on your machine at once.',
+      'vigie.live.title': '{agent} is reading',
+      'vigie.live.diff': 'Fetching the diff from GitHub…',
+      'vigie.live.start': 'Starting the agent…',
+      'vigie.live.limit': 'gives up after {n} min',
+      'vigie.live.stop': 'Stop',
+      'sessions.pill.active': 'A Claude session is running in this project',
+      'sessions.pill.recent.one': '{n} recent Claude session',
+      'sessions.pill.recent.other': '{n} recent Claude sessions',
+      'sessions.title': 'Claude Code sessions',
+      'sessions.hint': 'Sessions started by hand in this project\'s folders, the ones "claude --resume" lists. Sillage shows them without touching them.',
+      'sessions.active': 'running',
+      'sessions.prompts.one': '{n} request',
+      'sessions.prompts.other': '{n} requests',
+      'sessions.copy': 'Copy the resume command',
+      'sessions.copied': 'Command copied',
+      'sessions.workstream': 'Turn into a workstream',
+      'sessions.allPrompts': 'Its latest requests',
+      'sessions.empty': 'No recent Claude Code session in this project\'s folders.',
+      'sessions.promptHeader': 'Pick up the work of a Claude Code session run outside Sillage, "{title}".',
+      'sessions.promptBranch': 'It worked in {cwd}, on branch {branch}. Whatever was not committed there is not in this worktree.',
+      'sessions.promptAsks': 'Its latest requests, oldest first:',
+      'sessions.shipWarning': 'A Claude Code session is open in {repo} ("{title}"): it may be writing where this delivery goes.',
+      'autoconf.title': 'Automatic setup',
+      'autoconf.hint': 'An agent reads the repository (build files, CI, README) and suggests the check run after every task, the preview command and its address. It changes nothing, and you review before saving.',
+      'autoconf.start': 'Start',
+      'autoconf.with': 'Agent',
+      'autoconf.running': '{agent} is reading {repo}',
+      'autoconf.runningShort': '{agent} is setting up the project',
+      'autoconf.readyShort': 'Setup suggested, ready to review',
+      'autoconf.stop': 'Stop',
+      'autoconf.ready': 'Suggested by {agent}',
+      'autoconf.apply': 'Use these values',
+      'autoconf.applied': 'Values copied into the tabs. Review them, then save.',
+      'autoconf.dismiss': 'Discard',
+      'autoconf.retry': 'Run again',
+      'autoconf.error': 'Failed: {error}',
+      'autoconf.stopped': 'Stopped.',
+      'autoconf.check': 'Check after every task',
+      'autoconf.preview': 'Preview',
+      'autoconf.url': 'Address',
+      'autoconf.profiles': 'Permission profiles',
+      'autoconf.found': 'Found',
+      'autoconf.notes': 'Good to know',
+      'autoconf.install': 'install',
+      'autoconf.build': 'build',
+      'autoconf.test': 'tests',
+      'autoconf.current': 'currently: {v}',
+      'autoconf.nothing': 'nothing suggested',
+      'autoconf.warning': 'These commands will run on your machine: review them before saving.',
+      'autoconf.noAgent': 'This needs an agent that can read without writing (Claude Code or Codex).',
+      'autoconf.nudge': 'Sillage does not know yet how to check or run this project.',
+      'autoconf.nudgeAction': 'Set up automatically',
+      'vigie.analyzing': 'Analyzing…',
+      'vigie.error': 'Analysis failed: {error}',
+      'vigie.copyReview': 'Copy comments',
+      'vigie.copied': 'Copied, paste them on GitHub',
+      'inbox.signals.title': 'On GitHub',
+      'sidebar.agentsToSetup.one': '1 agent to install',
+      'sidebar.agentsToSetup.other': '{n} agents to install',
+      'vigie.githubAction.merge': 'Merge on GitHub',
+      'vigie.githubAction.close': 'Close on GitHub',
+      'vigie.githubAction.changes': 'Open on GitHub',
+      'vigie.githubAction.rework': 'Open on GitHub',
+      'vigie.githubAction.needs-info': 'Open on GitHub',
+      'vigie.githubAction.fix': 'Open on GitHub',
+      'vigie.githubAction.feature': 'Open on GitHub',
+      'vigie.githubAction.undefined': 'Open on GitHub',
+      'vigie.githubAction.': 'Open on GitHub',
+      'lane.next': 'Up next',
+      'lane.agents': 'Agents at work',
+      'lane.you': 'Your turn',
+      'lane.shipped': 'Shipped',
+      'vigie.detail.review': 'Suggested review',
+      'vigie.detail.reply': 'Suggested reply',
+      'vigie.detail.nothingToAdd': 'Nothing to add: the PR can be merged as is.',
+      'vigie.detail.prBody': 'PR description, by {login}',
+      'vigie.detail.issueBody': 'The issue, by {login}',
+      'hello.day': 'Hello',
+      'hello.evening': 'Good evening',
+      'hello.and': 'and',
+      'hello.waiting': 'You have {list}.',
+      'hello.nothing': 'Nothing is waiting for you.',
+      'hello.review.one': '{n} task to review',
+      'hello.review.other': '{n} tasks to review',
+      'hello.signals.one': '{n} GitHub item to decide on',
+      'hello.signals.other': '{n} GitHub items to decide on',
+      'hello.ship.one': '{n} workstream to ship',
+      'hello.ship.other': '{n} workstreams to ship',
+      'hello.running.one': 'One agent is working for you.',
+      'hello.running.other': '{n} agents are working for you.',
+      'pulse.you.one': '{n} for you',
+      'pulse.you.other': '{n} for you',
+      'pulse.agents.one': '{n} agent at work',
+      'pulse.agents.other': '{n} agents at work',
+      'pulse.calm': 'All quiet',
+      'pulse.empty': 'Nothing yet',
+      'vigie.detail.kindPr': 'Pull request',
+      'vigie.detail.kindIssue': 'Issue',
+      'vigie.detail.opened': 'opened {when}',
+      'vigie.detail.copy': 'Copy',
+      'vigie.detail.onGithub': 'Open on GitHub',
+      'vigie.detail.readBy': 'Read by {agent}',
+      'vigie.detail.analyzing': '{agent} is reading…',
+      'vigie.detail.waiting': 'The verdict arrives as soon as the read is done.',
+      'vigie.detail.noBody': 'The author wrote nothing.',
+      'vigie.openGithub': 'Open on GitHub',
+      'vigie.workstream': 'Hand to an agent',
+      'vigie.toCard': 'Turn into a workstream',
+      'vigie.toCardHint': 'A workstream, then an agent splits it into tasks you review',
+      'vigie.dismiss': 'Remove from list',
+      'vigie.retry': 'Retry',
+      'vigie.localOnly': 'Sillage never posts anything to GitHub. Suggested comments stay here: copy and paste them yourself if you agree.',
+      'vigie.promptAnalysis': 'Prior analysis from the lookout:',
+      'vigie.log.error': 'Could not read {repo}: {error}',
+      'vigie.log.analysisFailed': 'Analysis of {kind} #{n} ({repo}) failed: {error}',
+      'vigie.log.analysis': '{kind} #{n} ({repo}) analyzed in {s} s',
+      'vigie.log.older': 'opened before {date}, skipped: {n}',
+      'vigie.log.drafts': 'drafts skipped: {n}',
+      'vigie.log.known': 'already seen: {n}',
+      'vigie.log.list': '{repo} · open {kind}: {open}, new: {added}',
+      'vigie.log.empty': 'No check since Sillage started.',
+      'vigie.log.hide': 'Hide log',
+      'vigie.log.show': 'Show log',
+      'vigie.replyNote': 'Reply drafted by the agent, not posted. "Copy reply" puts it on your clipboard so you can paste it on the issue.',
+      'vigie.copyReply': 'Copy reply',
+      'vigie.decision.needs-info': 'Needs more information',
+      'vigie.decision.feature': 'Feature request',
+      'vigie.decision.fix': 'Bug to fix',
+      'vigie.decision.close': 'Should be closed',
+      'vigie.decision.rework': 'Needs rework',
+      'vigie.decision.changes': 'Minor changes needed',
+      'vigie.decision.merge': 'Ready to merge',
+      'vigie.neverChecked': 'never checked',
+      'vigie.reviewNote': 'Comments drafted by the agent, not posted. "Copy comments" puts them on your clipboard so you can paste them into the GitHub review.',
       'workstream.editTooltip': 'Edit workstream',
       'workstream.editTitle': 'Workstream',
       'workstream.errorSaveFailed': 'Failed to save.',
@@ -1044,6 +1431,13 @@
       'update.neverChecked': 'Never checked',
       'update.lastChecked': 'Checked {time}',
       'update.autoCheckLab': 'Check for updates automatically',
+      'lan.heading': 'From your other devices',
+      'lan.copy': 'Copy address',
+      'lan.toggle': 'Open Sillage to the local network',
+      'lan.offNote': 'Sillage only answers this computer. Turn this on to follow it from your phone on the same wifi.',
+      'lan.noPassword': 'A password comes first: start Sillage with SILLAGE_PASSWORD. Without one, anyone on the wifi could put your agents to work.',
+      'lan.noAddress': 'No network address found: this computer is not on a local network.',
+      'lan.certNote': 'The connection is encrypted with a certificate made on this machine, so the browser warns once. To check it, its fingerprint must be:',
       'update.autoCheckNote': 'One request a day to GitHub, to read the latest version number. Nothing from your machine leaves it.',
       'update.apply': 'Update and restart',
       'update.applying': 'Updating…',
@@ -1110,8 +1504,6 @@
     accepted: { icon: '✓', color: '#2f7d54' },
     cancelled: { icon: '⊘', color: '#8b8982' }
   };
-  var COLUMN_ORDER = ['soon', 'doing', 'done'];
-  function columnLabel(key) { return t('column.' + key); }
 
   // ---------------------------------------------------------------------
   // État en mémoire
@@ -1122,10 +1514,15 @@
     workspace: null,
     settings: { displayName: '', lang: '' },
     projects: [], cards: [], tasks: [], agents: [],
+    signals: [], watch: {}, // Vigie : signaux actifs et état du veilleur
+    autoconfigs: {}, // configurations automatiques en cours ou à relire, par projet
+    claudeSessions: {}, // sessions Claude Code hors Sillage, par projet : {at, list}
+    vigieError: '',
+    vigieLogOpen: false, // journal de la Vigie déplié
     projectsById: {}, cardsById: {}, tasksById: {}, agentsById: {},
     tokens: { global: { input: 0, output: 0, costUsd: 0 } },
     messagesByTask: {}, diffByTask: {}, deliverablesByTask: {},
-    activeDiffFile: {},
+    diffCollapsed: {}, diffTreeOpen: false,
     detailErrorByTask: {},
     previews: [], // runs de recette en cours ou terminés (jamais persistés côté serveur)
     previewLogByRun: {}, // journal par run : tampon initial (GET) + lignes SSE
@@ -1136,7 +1533,7 @@
     acceptingByTask: {}, // acceptation en vol : le bouton attend sa fusion, sans deuxième clic possible
     attachDrafts: {}, // images jointes en attente d'envoi, par tâche : [{key, name, mime, size, dataUrl}]
     loading: {},
-    screen: 'inbox', // 'inbox' | 'projects' | 'kanban' | 'work'
+    screen: 'inbox', // 'inbox' | 'vigie' | 'projects' | 'kanban' | 'work'
     projectId: null, cardId: null, taskId: null,
     panelTab: 'chat', panelExpanded: false, taskFilter: 'all',
     pendingConversationScroll: false, // défiler vers le bas au prochain rendu (ouverture d'une conversation)
@@ -1174,6 +1571,10 @@
   // création et le choix d'une issue GitHub occupent le même emplacement
   // (#modal-root) : passer de l'une à l'autre effacerait la saisie en cours.
   var newTaskDraft = null; // {title, prompt, repoName, waitsForTaskId}
+  // Chantier implicite : la modale de création ouverte depuis un projet (ou la
+  // Vigie) n'a pas encore de chantier. Le serveur en crée un au nom de la tâche.
+  var newTaskProjectId = null;
+  var newTaskSignalId = null; // signal de la Vigie auquel la tâche répond
   // Choix d'une issue GitHub. La liste vient de la forge à chaque frappe (voir
   // scheduleIssueSearch) : issueRunToken périme la réponse d'une recherche
   // dépassée par la suivante, ou dont la modale est déjà fermée.
@@ -1322,13 +1723,21 @@
     var escaped = escapeHtml(withPlaceholders);
     var html = escaped.replace(/`([^`]+)`/g, function (m, c) { return '<code>' + c + '</code>'; });
     html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+    html = html.replace(/(^|[^*\w])\*([^*\s][^*\n]*?)\*(?![*\w])/g, '$1<em>$2</em>');
+    // Liens Markdown : http(s) seulement, le texte est déjà échappé (les
+    // guillemets aussi, donc l'URL ne peut pas sortir de son attribut).
+    html = html.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer" data-action="external">$1</a>');
     var lines = html.split('\n');
     var out = [];
     var inList = false;
     for (var i = 0; i < lines.length; i++) {
       var line = lines[i];
       var m = line.match(/^\s*[-*]\s+(.*)$/);
-      if (m) {
+      var h = !m && line.match(/^\s*#{1,6}\s+(.*)$/);
+      if (h) {
+        if (inList) { out.push('</ul>'); inList = false; }
+        out.push('<p class="md-h">' + h[1] + '</p>');
+      } else if (m) {
         if (!inList) { out.push('<ul>'); inList = true; }
         out.push('<li>' + m[1] + '</li>');
       } else {
@@ -1401,6 +1810,11 @@
     state.agents = data.agents || [];
     state.tokens = data.tokens || { global: { input: 0, output: 0, costUsd: 0 } };
     state.previews = data.previews || [];
+    state.signals = data.signals || [];
+    state.watch = data.watch || {};
+    state.lan = data.lan || {};
+    state.autoconfigs = {};
+    (data.autoconfigs || []).forEach(function (r) { state.autoconfigs[r.projectId] = r; });
     state.workspace = data.workspace || state.workspace || null;
     state.update = data.update || state.update || null;
     state.settings = data.settings || state.settings || { displayName: '', lang: '' };
@@ -1550,6 +1964,7 @@
     }
     var parts = hash.split('/').filter(function (p) { return p.length > 0; }).map(decodeURIComponent);
     if (parts[0] === 'inbox') return { screen: 'inbox' };
+    if (parts[0] === 'vigie') return { screen: 'vigie' };
     if (parts[0] === 'projects') return { screen: 'projects' };
     if (parts[0] === 'p' && parts[1]) {
       var projectId = parts[1];
@@ -1560,6 +1975,7 @@
         }
         return { screen: 'work', projectId: projectId, cardId: cardId };
       }
+      if (parts[2] === 's' && parts[3]) return { screen: 'signal', projectId: projectId, signalId: parts[3] };
       return { screen: 'kanban', projectId: projectId };
     }
     return null;
@@ -1572,11 +1988,16 @@
 
   function applyRoute() {
     var route = parseHash(location.hash);
-    if (!route) { location.hash = '#/projects'; return; }
+    // L'accueil est ce qui vous attend, pas la liste des dossiers.
+    if (!route) { location.hash = '#/inbox'; return; }
     if (route.projectId && !state.projectsById[route.projectId]) { location.hash = '#/projects'; return; }
     if (route.cardId) {
       var card = state.cardsById[route.cardId];
       if (!card || card.projectId !== route.projectId) { location.hash = '#/projects'; return; }
+    }
+    if (route.signalId) {
+      var sig = findSignal(route.signalId);
+      if (!sig || sig.projectId !== route.projectId) { location.hash = '#/p/' + encodeURIComponent(route.projectId); return; }
     }
     if (route.taskId) {
       var task = state.tasksById[route.taskId];
@@ -1589,6 +2010,7 @@
     state.projectId = route.projectId || null;
     state.cardId = route.cardId || null;
     state.taskId = route.taskId || null;
+    state.signalId = route.signalId || null;
     if (state.cardId !== prevCardId) state.taskFilter = 'all';
     if (state.taskId) {
       state.panelTab = route.tab === 'diff' ? 'diff' : (route.tab === 'deliverables' ? 'files' : (route.tab === 'history' ? 'history' : 'chat'));
@@ -1618,11 +2040,23 @@
   // ---------------------------------------------------------------------
 
   function goInbox() { closeSidebarDrawer(); navigateTo('#/inbox'); }
+  function goVigie() { closeSidebarDrawer(); navigateTo('#/vigie'); }
+  // Depuis la boîte de réception : la Vigie, le signal déplié et sous les yeux.
+  function openSignal(id) {
+    var s = findSignal(id);
+    if (!s) return;
+    closeSidebarDrawer();
+    navigateTo('#/p/' + encodeURIComponent(s.projectId) + '/s/' + encodeURIComponent(s.id));
+  }
   function goAllProjects() { closeSidebarDrawer(); navigateTo('#/projects'); }
   function goProject(id) { closeSidebarDrawer(); navigateTo('#/p/' + encodeURIComponent(id)); }
   function goCard(id) {
     var c = state.cardsById[id];
     if (!c) return;
+    // Un chantier d'une seule tâche, c'est cette tâche : l'ouvrir directement
+    // évite un écran de liste qui ne contient qu'une ligne.
+    var tasks = state.tasks.filter(function (tk) { return tk.cardId === id; });
+    if (tasks.length === 1) { openTask(tasks[0].id); return; }
     navigateTo('#/p/' + encodeURIComponent(c.projectId) + '/c/' + encodeURIComponent(id));
   }
   function goBack() { if (state.projectId) goProject(state.projectId); else goAllProjects(); }
@@ -1630,9 +2064,16 @@
     if (state.cardId) navigateTo('#/p/' + encodeURIComponent(state.projectId) + '/c/' + encodeURIComponent(state.cardId));
     else goInbox();
   }
+  // En place, sans rendu : c'est la classe posée sur le même élément qui laisse
+  // la largeur du panneau s'animer. Le contenu s'adapte seul (requêtes de
+  // conteneur), seule la poignée change de libellé.
   function togglePanelExpand() {
     state.panelExpanded = !state.panelExpanded;
-    renderMain();
+    var body = document.querySelector('.work-body.has-panel');
+    if (!body) { renderMain(); return; }
+    body.classList.toggle('panel-expanded', state.panelExpanded);
+    var h = body.querySelector('.panel-handle');
+    if (h) { h.title = panelHandleLabel(); h.setAttribute('aria-label', panelHandleLabel()); }
   }
   function setFilter(f) { state.taskFilter = f; renderMain(); }
   function setTab(tabKey) {
@@ -1695,12 +2136,14 @@
   function buildSidebarHTML() {
     var navItems = [
       { key: 'inbox', icon: '⌂', label: t('nav.inbox'), action: 'nav-inbox' },
+      { key: 'vigie', icon: '◎', label: t('nav.vigie'), action: 'nav-vigie', badge: vigieAttentionCount() },
       { key: 'projects', icon: '◫', label: t('nav.allProjects'), action: 'nav-projects' }
     ];
     var navHTML = navItems.map(function (n) {
       var active = state.screen === n.key;
       return '<button class="nav-item ' + (active ? 'active' : '') + '" data-action="' + n.action + '">' +
-        '<span class="nav-icon">' + n.icon + '</span>' + escapeHtml(n.label) + '</button>';
+        '<span class="nav-icon">' + n.icon + '</span><span class="nav-label">' + escapeHtml(n.label) + '</span>' +
+        (n.badge ? '<span class="badge-unread">' + n.badge + '</span>' : '') + '</button>';
     }).join('');
 
     var projectsHTML = state.projects.filter(function (p) { return !p.hiddenFromSidebar; }).map(function (p) {
@@ -1726,7 +2169,12 @@
     // ne peut pas se permettre de cacher). Le reste de la liste vit dans les
     // réglages, onglet Agents. Sept lignes d'agents au repos, c'était la moitié
     // de la barre pour une information qu'on ne relit jamais.
-    var shownAgents = state.agents.filter(function (a) { return a.active || a.warning; });
+    // Un avertissement ne mérite sa ligne que pour un agent qu'on emploie : les
+    // CLI jamais installés se regroupent en une seule ligne vers les réglages.
+    var usedAgents = {};
+    state.tasks.forEach(function (tk) { usedAgents[tk.agentId] = true; });
+    var shownAgents = state.agents.filter(function (a) { return a.active || (a.warning && usedAgents[a.id]); });
+    var idleBroken = state.agents.filter(function (a) { return !a.active && a.warning && !usedAgents[a.id]; }).length;
     var agentsHTML = shownAgents.map(function (a) {
       var warn = a.warning ? '<span class="agent-warning-sm" title="' + escapeHtml(agentWarningText(a.warning)) + '">⚠</span>' : '';
       return '<div class="agent-item" data-action="edit-agent" data-agent-id="' + a.id + '">' +
@@ -1742,6 +2190,10 @@
       ? '<div class="sidebar-section-head"><span>' + escapeHtml(t('sidebar.agentsAtWork')) + '</span></div>' +
         '<div class="agent-list">' + agentsHTML + '</div>'
       : '';
+    if (idleBroken) {
+      agentsSectionHTML += '<button class="sidebar-agents-setup" data-action="open-settings-agents">' +
+        escapeHtml(tCount('sidebar.agentsToSetup', idleBroken)) + '</button>';
+    }
 
     return '' +
       '<div class="sidebar-brand">' +
@@ -1905,12 +2357,23 @@
     var back = '', title = '', branchHTML = '', actions = '', editBtn = '';
     if (state.screen === 'inbox') {
       title = t('nav.inbox');
+    } else if (state.screen === 'vigie') {
+      title = t('nav.vigie');
+      actions = buildVigieHeaderActionsHTML();
     } else if (state.screen === 'projects') {
       title = t('nav.allProjects');
       actions = buildCreateButtonHTML('open-new-project', t('header.newProject'), t('header.newProjectTooltip'), 'btn-outline');
     } else if (state.screen === 'kanban') {
       // Le nom du projet est déjà affiché en grand titre (avec bouton edit)
       // dans buildKanbanHTML : pas besoin de le répéter dans la barre du haut.
+    } else if (state.screen === 'signal') {
+      var sp = state.projectsById[state.projectId];
+      var sg = findSignal(state.signalId);
+      back = '<button class="back-crumb" data-action="go-back" aria-label="' + escapeHtml(t('nav.back')) + (sp ? ' : ' + escapeHtml(sp.name) : '') + '">' +
+        '<svg class="back-chevron" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/></svg>' +
+        (sp ? '<span class="back-crumb-project">' + escapeHtml(sp.name) + '</span>' : '') +
+        '</button>';
+      title = sg ? signalRefText(sg) : '';
     } else if (state.screen === 'work') {
       var c = state.cardsById[state.cardId];
       var pr = state.projectsById[state.projectId];
@@ -1949,6 +2412,28 @@
   // Rendu : Tous les projets
   // ---------------------------------------------------------------------
 
+  // Une tuile de projet dit où il en est, dans le vocabulaire du flux : ce qui
+  // vous attend d'abord, ce que font les agents ensuite.
+  function projectPulseText(p, cardCount) {
+    var you = 0, agents = 0;
+    state.cards.forEach(function (c) {
+      if (c.projectId !== p.id) return;
+      var lane = cardLane(c);
+      if (lane === 'you') you++; else if (lane === 'agents') agents++;
+    });
+    if (projectWatched(p)) {
+      vigieSignals().forEach(function (sg) {
+        if (sg.projectId !== p.id) return;
+        if (signalLane(sg) === 'you') you++; else agents++;
+      });
+    }
+    var parts = [];
+    if (you) parts.push(tCount('pulse.you', you));
+    if (agents) parts.push(tCount('pulse.agents', agents));
+    if (!parts.length) parts.push(cardCount ? t('pulse.calm') : t('pulse.empty'));
+    return { text: parts.join(' · '), you: you > 0 };
+  }
+
   function buildAllProjectsHTML() {
     if (state.projects.length === 0) {
       return buildHeaderHTML() + '<div class="view-body"><div class="empty-state big">' +
@@ -1960,20 +2445,659 @@
     var tiles = state.projects.map(function (p) {
       var cardCount = state.cards.filter(function (c) { return c.projectId === p.id; }).length;
       var unread = projectUnread(p.id);
+      var pulse = projectPulseText(p, cardCount);
       return '<div class="project-tile-wrap">' +
         '<article class="project-tile" data-action="nav-project" data-project-id="' + p.id + '">' +
           '<div class="project-tile-top"><span class="project-hash">#</span><h3>' + escapeHtml(p.name) + '</h3>' +
           (unread ? '<span class="badge-unread">' + unread + '</span>' : '') + '</div>' +
-          '<div class="project-tile-meta"><span>' + escapeHtml(tCount('allProjects.cardCount', cardCount)) + '</span>' +
+          '<div class="project-tile-meta"><span class="' + (pulse.you ? 'project-pulse-you' : '') + '">' + escapeHtml(pulse.text) + '</span>' +
           (p.hiddenFromSidebar ? '<span class="project-tile-hidden-note">' + escapeHtml(t('allProjects.hiddenBadge')) + '</span>' : '') +
           '</div>' +
         '</article>' +
         '<button class="project-menu-btn project-tile-menu-btn" data-action="toggle-project-menu" data-project-id="' + p.id + '" data-menu-scope="tile" title="' + escapeHtml(t('sidebar.projectMenuTooltip')) + '" aria-label="' + escapeHtml(t('sidebar.projectMenuTooltip')) + '">⋯</button>' +
       '</div>';
     }).join('');
-    return buildHeaderHTML() + '<div class="view-body all-projects-body"><div class="project-grid">' + tiles +
+    return buildHeaderHTML() + '<div class="view-body all-projects-body"><div class="page-col"><div class="project-grid">' + tiles +
       '<button class="project-tile project-tile-add" data-action="open-new-project">' + escapeHtml(t('header.newProject')) + '</button>' +
-      '</div></div>';
+      '</div></div></div>';
+  }
+
+  // ---------------------------------------------------------------------
+  // Rendu : Vigie
+  // ---------------------------------------------------------------------
+
+  // La Vigie montre ce qui attend une décision, déjà relu par un agent. Ordre :
+  // le prioritaire, puis l'ordinaire, puis ce qui a échoué ou attend son
+  // analyse, et le bruit (priorité basse) en dernier. Rien n'y est publié sur
+  // GitHub : la revue se copie, elle ne s'envoie pas.
+  function signalRank(s) {
+    if (s.status === 'ready') return s.priority === 'high' ? 0 : (s.priority === 'low' ? 4 : 1);
+    if (s.status === 'error') return 2;
+    return 3;
+  }
+
+  function vigieSignals() {
+    return state.signals.filter(function (s) { return s.status !== 'dismissed' && s.status !== 'handled'; })
+      .sort(function (a, b) {
+        var d = signalRank(a) - signalRank(b);
+        if (d) return d;
+        return idNumJS(b.id) - idNumJS(a.id);
+      });
+  }
+
+  function idNumJS(id) { var m = /\d+/.exec(String(id || '')); return m ? parseInt(m[0], 10) : 0; }
+
+  // Le badge de la barre latérale ne compte que ce qui mérite d'être lu : un
+  // signal analysé et qui n'est pas du bruit.
+  function vigieAttentionCount() {
+    return state.signals.filter(function (s) { return s.status === 'ready' && s.priority !== 'low'; }).length;
+  }
+
+  function vigieProjects() {
+    return state.projects.filter(function (p) { return p.githubRepos && p.githubRepos.length; });
+  }
+  function projectWatched(p) { return !!(p && p.watch && p.watch.enabled); }
+
+  function canNotify() {
+    return typeof window.Notification !== 'undefined' && window.isSecureContext;
+  }
+
+  function buildVigieHeaderActionsHTML() {
+    var html = '';
+    if (canNotify() && Notification.permission === 'default' && state.projects.some(projectWatched)) {
+      html += '<button class="btn-outline" data-action="vigie-notify">' + escapeHtml(t('vigie.notify')) + '</button>';
+    }
+    if (state.projects.some(projectWatched)) {
+      var checking = state.watch && state.watch.checking;
+      var when = state.watch && state.watch.checkedAt;
+      html += '<span class="vigie-checked" title="' + escapeHtml(when ? new Date(when).toLocaleString() : '') + '">' +
+        escapeHtml(checking ? '' : (when ? t('vigie.checkedAgo', { when: timeAgo(when) }) : t('vigie.neverChecked'))) + '</span>';
+      html += '<button class="btn-outline" data-action="vigie-check"' + (checking ? ' disabled' : '') + '>' +
+        escapeHtml(t(checking ? 'vigie.checking' : 'vigie.check')) + '</button>';
+    }
+    return html;
+  }
+
+  function buildVigieHTML() {
+    var projects = vigieProjects();
+    var body;
+    if (!projects.length) {
+      body = '<div class="empty-state big"><div class="empty-title">' + escapeHtml(t('vigie.introTitle')) + '</div>' +
+        '<div class="empty-sub">' + escapeHtml(t('vigie.noGithub')) + '</div></div>';
+    } else if (!projects.some(projectWatched)) {
+      body = '<div class="vigie-intro"><div class="empty-title">' + escapeHtml(t('vigie.introTitle')) + '</div>' +
+        '<p class="empty-sub">' + escapeHtml(t('vigie.introSub')) + '</p>' +
+        buildVigieProjectsHTML(projects) + '</div>';
+    } else {
+      var signals = vigieSignals();
+      var listHTML = signals.length
+        ? '<div class="signal-grid">' + signals.map(function (sg) { return buildSignalCardHTML(sg, { showProject: true, actions: true }); }).join('') + '</div>'
+        : '<div class="empty-state big"><div class="empty-title">' + escapeHtml(t('vigie.emptyTitle')) + '</div>' +
+          '<div class="empty-sub">' + escapeHtml(t('vigie.emptySub')) + '</div></div>';
+      body = (state.vigieError ? '<div class="modal-error">' + escapeHtml(state.vigieError) + '</div>' : '') +
+        listHTML +
+        '<div class="vigie-foot">' +
+          '<div class="vigie-foot-head"><span>' + escapeHtml(t('vigie.watchedHeading')) + '</span></div>' +
+          buildVigieProjectsHTML(projects) +
+          '<div class="modal-note">' + escapeHtml(t('vigie.localOnly')) + '</div>' +
+          buildVigieLogHTML(null) +
+        '</div>';
+    }
+    return buildHeaderHTML() + '<div class="view-body"><div class="page-col vigie-body">' + body + '</div></div>';
+  }
+
+  // Les analystes possibles : ceux dont Sillage garantit la lecture seule
+  // (voir canPlan côté serveur).
+  function analystAgents() {
+    return state.agents.filter(function (a) { return a.cli === 'claude' || a.cli === 'codex' || a.cli === 'fake'; });
+  }
+
+  // La veille d'entretien d'un projet : sa dernière date et de quoi la
+  // relancer, ou, pendant qu'elle tourne, ce que fait l'agent.
+  function upkeepLiveInnerHTML(p) {
+    var c = state.watch && state.watch.current;
+    if (c && c.kind === 'upkeep' && c.projectId === p.id) {
+      var agent = p.watch && state.agentsById[p.watch.agentId];
+      var steps = c.steps || [];
+      return '<span class="task-spinner"></span><span class="signal-line-text"><span>' +
+        escapeHtml(t('vigie.upkeep.running', { agent: agent ? agent.name : '', repo: c.repoName })) + ' · ' + elapsedHTML(c.startedAt) + '</span>' +
+        '<span class="signal-line-now mono">' + escapeHtml(steps.length ? steps[steps.length - 1] : t('vigie.live.start')) + '</span></span>' +
+        '<button class="btn-quiet" data-action="vigie-upkeep-stop" data-project-id="' + p.id + '">' + escapeHtml(t('vigie.live.stop')) + '</button>';
+    }
+    var last = p.watch && p.watch.upkeepAt;
+    return (last ? '<span class="vigie-upkeep-last">' + escapeHtml(t('vigie.upkeep.last', { when: timeAgo(last) })) + '</span>' : '') +
+      '<button class="btn-quiet" data-action="vigie-upkeep" data-project-id="' + p.id + '">' + escapeHtml(t('vigie.upkeep.check')) + '</button>';
+  }
+
+  function buildVigieProjectsHTML(projects) {
+    var errors = (state.watch && state.watch.errors) || {};
+    return '<div class="vigie-projects">' + projects.map(function (p) {
+      var on = projectWatched(p);
+      var agentHTML = '';
+      if (on) {
+        var opts = analystAgents().map(function (a) {
+          return '<option value="' + escapeHtml(a.id) + '"' + (a.id === p.watch.agentId ? ' selected' : '') + '>' +
+            escapeHtml(a.emoji + ' ' + a.name) + '</option>';
+        }).join('');
+        agentHTML = '<label class="vigie-agent"><span>' + escapeHtml(t('vigie.analyst')) + '</span>' +
+          '<select class="modal-input vigie-agent-select" data-project-id="' + p.id + '">' + opts + '</select></label>';
+      }
+      var err = errors[p.id] ? '<div class="vigie-project-error">' + escapeHtml(errors[p.id]) + '</div>' : '';
+      var upkeep = on ? '<div class="vigie-upkeep" data-upkeep-live="' + p.id + '">' + upkeepLiveInnerHTML(p) + '</div>' : '';
+      return '<div class="vigie-project">' +
+        '<div class="vigie-project-line"><span class="hash">#</span><span class="vigie-project-name">' + escapeHtml(p.name) + '</span>' +
+        agentHTML +
+        '<button class="' + (on ? 'btn-quiet' : 'btn-primary') + ' vigie-toggle" data-action="vigie-watch" data-project-id="' + p.id + '" data-enabled="' + (on ? '0' : '1') + '">' +
+        escapeHtml(t(on ? 'vigie.unwatch' : 'vigie.watch')) + '</button></div>' + upkeep + err +
+      '</div>';
+    }).join('') + '</div>';
+  }
+
+
+  // Pictogrammes des deux sortes de signal, dessinés en SVG au trait (même
+  // règle que shipIconHTML : jamais d'emoji, jamais de police d'icônes).
+  function signalKindIconHTML(kind) {
+    var body = kind === 'upkeep'
+      ? '<path d="M13.2 6.2A5.4 5.4 0 1 0 13.4 9"/><path d="M13.6 2.8v3.6H10"/><path d="M8 10.6V5.6M5.9 7.6L8 5.5l2.1 2.1"/>'
+      : kind === 'pr'
+      ? '<circle cx="4.5" cy="3.5" r="1.7"/><circle cx="4.5" cy="12.5" r="1.7"/><circle cx="11.5" cy="12.5" r="1.7"/>' +
+        '<path d="M4.5 5.2v5.6M11.5 10.8V7.2a2.2 2.2 0 0 0-2.2-2.2H7"/><path d="M8.6 3.3L6.9 5l1.7 1.7"/>'
+      : '<circle cx="8" cy="8" r="6"/><circle cx="8" cy="8" r="1.3" fill="currentColor" stroke="none"/>';
+    return '<svg class="signal-kind-icon" viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">' + body + '</svg>';
+  }
+
+  // La référence GitHub est toujours un lien : on doit pouvoir sauter à la PR
+  // depuis n'importe où. data-action="external" l'empêche d'ouvrir aussi la
+  // carte qui la contient.
+  // La référence courte d'un signal : dépôt#numéro, ou le dépôt seul pour un
+  // constat d'entretien, qui n'a pas de numéro sur la forge.
+  function signalRefText(s) {
+    return s.kind === 'upkeep' ? s.repoName : s.repoName + '#' + s.number;
+  }
+
+  function signalRefLinkHTML(s) {
+    var label = escapeHtml(signalRefText(s));
+    if (!s.url) return '<span class="signal-ref mono">' + label + '</span>';
+    return '<a class="signal-ref-link mono" href="' + escapeHtml(s.url) + '" target="_blank" rel="noopener noreferrer" data-action="external" title="' + escapeHtml(t('vigie.openGithub')) + '">' +
+      label + externalIconHTML() + '</a>';
+  }
+
+  function signalDecisionHTML(s) {
+    return s.decision ? '<span class="signal-decision signal-decision-' + escapeHtml(s.decision) + '">' + escapeHtml(t('vigie.decision.' + s.decision)) + '</span>' : '';
+  }
+
+  // L'état d'un signal en une ligne : le verdict une fois analysé, sinon où en
+  // est l'agent.
+  function signalStateHTML(s, cls) {
+    if (s.status === 'ready') {
+      return '<div class="' + cls + '">' + signalDecisionHTML(s) + '<span>' + escapeHtml(s.verdict) + '</span></div>';
+    }
+    if (s.status === 'error') {
+      return '<div class="' + cls + ' signal-verdict-error">' + escapeHtml(signalErrorText(s)) + '</div>';
+    }
+    return '<div class="' + cls + ' signal-verdict-pending" data-signal-line="' + s.id + '">' + signalLineInnerHTML(s) + '</div>';
+  }
+
+  function signalErrorText(s) {
+    return s.error === 'stopped' ? t('vigie.stopped') : t('vigie.error', { error: s.error });
+  }
+
+  // La relecture en cours (une seule à la fois, voir analyzeQueued) si c'est
+  // celle de ce signal.
+  function signalProgress(s) {
+    var c = state.watch && state.watch.current;
+    return c && c.signalId === s.id ? c : null;
+  }
+
+  function signalAnalyst(s) {
+    var project = state.projectsById[s.projectId];
+    return (project && project.watch && state.agentsById[project.watch.agentId]) || null;
+  }
+
+  // Où en est un signal en file : combien passent avant lui. Sans ça, « en
+  // attente » ne dit pas si quelque chose avance.
+  function signalQueueText(s) {
+    var project = state.projectsById[s.projectId];
+    if (project && project.watch && !project.watch.enabled) return t('vigie.queuedPaused');
+    var queued = state.signals.filter(function (x) { return x.status === 'queued'; })
+      .sort(function (a, b) { return idNumber(a.id) - idNumber(b.id); });
+    var ahead = queued.indexOf(s);
+    if (ahead < 0) ahead = 0;
+    if (state.watch && state.watch.current) ahead++;
+    return ahead === 0 ? t('vigie.queuedNext') : tCount('vigie.queuedAhead', ahead);
+  }
+
+  function idNumber(id) { return parseInt(String(id).replace(/\D/g, ''), 10) || 0; }
+
+  // La dernière chose que fait l'agent, ou sa phase quand il n'a encore rien fait.
+  function progressNowText(c) {
+    if (!c) return '';
+    if (c.phase === 'diff') return t('vigie.live.diff');
+    var steps = c.steps || [];
+    return steps.length ? steps[steps.length - 1] : t('vigie.live.start');
+  }
+
+  // Une ligne sur une carte : qui relit, depuis quand, et ce qu'il fait là.
+  function signalLineInnerHTML(s) {
+    if (s.status !== 'analyzing') return '<span>' + escapeHtml(signalQueueText(s)) + '</span>';
+    var c = signalProgress(s);
+    var analyst = signalAnalyst(s);
+    return '<span class="task-spinner"></span><span class="signal-line-text">' +
+      '<span>' + escapeHtml(analyst ? t('vigie.live.title', { agent: analyst.name }) : t('vigie.analyzing')) +
+      (c ? ' · ' + elapsedHTML(c.startedAt) : '') + '</span>' +
+      (c ? '<span class="signal-line-now mono">' + escapeHtml(progressNowText(c)) + '</span>' : '') +
+    '</span>';
+  }
+
+  // Le suivi en direct de la fiche : chaque outil employé par l'agent, la durée
+  // et le délai d'abandon, et de quoi l'arrêter.
+  function signalLiveInnerHTML(s) {
+    if (s.status === 'queued') {
+      return '<div class="sd-live-head"><span class="sd-live-title">' + escapeHtml(signalQueueText(s)) + '</span></div>' +
+        '<div class="sd-note">' + escapeHtml(t('vigie.queuedHint')) + '</div>';
+    }
+    var c = signalProgress(s);
+    var analyst = signalAnalyst(s);
+    var steps = (c && c.steps) || [];
+    var html = '<div class="sd-live-head"><span class="task-spinner"></span>' +
+      '<span class="sd-live-title">' + escapeHtml(t('vigie.live.title', { agent: analyst ? analyst.name : '' })) + '</span>' +
+      (c ? '<span class="sd-live-time">' + elapsedHTML(c.startedAt) +
+        (c.timeoutSec ? ' · ' + escapeHtml(t('vigie.live.limit', { n: Math.round(c.timeoutSec / 60) })) : '') + '</span>' : '') +
+      (c ? '<button class="btn-quiet sd-live-stop" data-action="signal-stop" data-signal-id="' + s.id + '">' + escapeHtml(t('vigie.live.stop')) + '</button>' : '') +
+    '</div>';
+    if (c && (c.phase === 'diff' || !steps.length)) {
+      html += '<div class="sd-live-now">' + escapeHtml(progressNowText(c)) + '</div>';
+    }
+    if (steps.length) {
+      html += '<ol class="live-steps">' + steps.map(function (line, i) {
+        return '<li class="mono' + (i === steps.length - 1 ? ' live-step-now' : '') + '">' + escapeHtml(line) + '</li>';
+      }).join('') + '</ol>';
+    }
+    return html;
+  }
+
+  // Les événements de progression ne reconstruisent pas l'écran (le défilement
+  // de la fiche sauterait à chaque outil) : seules ces zones sont réécrites.
+  function patchSignalLive() {
+    Array.prototype.forEach.call(document.querySelectorAll('[data-signal-line]'), function (el) {
+      var sg = findSignal(el.getAttribute('data-signal-line'));
+      if (sg && (sg.status === 'queued' || sg.status === 'analyzing')) el.innerHTML = signalLineInnerHTML(sg);
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('[data-upkeep-live]'), function (el) {
+      var p = state.projectsById[el.getAttribute('data-upkeep-live')];
+      if (p) el.innerHTML = upkeepLiveInnerHTML(p);
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('[data-signal-live]'), function (el) {
+      var sg = findSignal(el.getAttribute('data-signal-live'));
+      if (sg && (sg.status === 'queued' || sg.status === 'analyzing')) el.innerHTML = signalLiveInnerHTML(sg);
+    });
+  }
+
+  function elapsedText(iso) {
+    var then = new Date(iso).getTime();
+    if (isNaN(then)) return '';
+    var sec = Math.max(0, Math.round((Date.now() - then) / 1000));
+    var m = Math.floor(sec / 60);
+    var rest = sec % 60;
+    return m + ':' + (rest < 10 ? '0' : '') + rest;
+  }
+
+  // Un compteur qui avance, mis à jour chaque seconde par tickElapsed : c'est
+  // ce qui distingue un agent qui travaille d'une page figée.
+  function elapsedHTML(iso) {
+    return '<span class="elapsed mono" data-elapsed-since="' + escapeHtml(iso || '') + '">' + escapeHtml(elapsedText(iso)) + '</span>';
+  }
+
+  function tickElapsed() {
+    Array.prototype.forEach.call(document.querySelectorAll('[data-elapsed-since]'), function (el) {
+      el.textContent = elapsedText(el.getAttribute('data-elapsed-since'));
+    });
+  }
+  setInterval(tickElapsed, 1000);
+
+  // 'github' : la décision se prend là-bas (merger, fermer) ; 'copy' : il y a
+  // quelque chose à dire à l'auteur ; 'agent' : il y a du code à écrire.
+  function signalPrimaryAction(s) {
+    if (s.kind === 'upkeep') return 'agent';
+    if (s.decision === 'merge') return 'github';
+    if (s.decision === 'close') return s.review ? 'copy' : 'github';
+    if (s.kind === 'issue' && (s.decision === 'fix' || s.decision === 'feature' || !s.decision)) return 'agent';
+    return s.review ? 'copy' : 'github';
+  }
+
+  // Les actions d'un signal, la principale en tête et seule en plein. compact :
+  // sur une carte, seulement l'action principale (le reste est dans la fiche).
+  function buildSignalActionsHTML(s, compact, opts) {
+    var actions = [];
+    if (s.status === 'ready') {
+      var primary = signalPrimaryAction(s);
+      var copy = s.review && s.kind !== 'upkeep' ? '<button class="' + (primary === 'copy' ? 'btn-primary' : 'btn-outline') + '" data-action="signal-copy" data-signal-id="' + s.id + '">' +
+        escapeHtml(t(s.kind === 'pr' ? 'vigie.copyReview' : 'vigie.copyReply')) + '</button>' : '';
+      var agent = s.kind === 'issue' || s.kind === 'upkeep' ? '<button class="' + (primary === 'agent' ? 'btn-primary' : 'btn-outline') + '" data-action="signal-workstream" data-signal-id="' + s.id + '">' + escapeHtml(t('vigie.workstream')) + '</button>' : '';
+      // Un travail plus large qu'une tâche : un chantier, que la planification
+      // découpe. Seulement sur la fiche, la carte garde un seul bouton.
+      var toCard = (s.kind === 'issue' || s.kind === 'upkeep') && !compact ? '<button class="btn-outline" data-action="signal-card" data-signal-id="' + s.id + '" title="' + escapeHtml(t('vigie.toCardHint')) + '">' + escapeHtml(t('vigie.toCard')) + '</button>' : '';
+      var gh = s.url ? '<a class="' + (primary === 'github' ? 'btn-primary' : 'btn-quiet') + '" href="' + escapeHtml(s.url) + '" target="_blank" rel="noopener noreferrer" data-action="external">' +
+        escapeHtml(t(primary === 'github' ? 'vigie.githubAction.' + (s.decision || '') : 'vigie.openGithub')) + '</a>' : '';
+      var first = primary === 'copy' ? copy : (primary === 'agent' ? agent : gh);
+      actions.push(first);
+      if (!compact) {
+        // La fiche a sa propre carte GitHub : le lien n'y est repris que s'il
+        // est l'action principale.
+        var rest = compact === false && opts && opts.noGithub ? [agent, toCard, copy] : [agent, toCard, copy, gh];
+        rest.forEach(function (h) { if (h && h !== first) actions.push(h); });
+      }
+    } else if (s.status === 'error') {
+      actions.push('<button class="' + (compact ? 'btn-outline' : 'btn-primary') + '" data-action="signal-retry" data-signal-id="' + s.id + '">' + escapeHtml(t('vigie.retry')) + '</button>');
+    }
+    if (!compact) {
+      actions.push('<button class="btn-quiet signal-dismiss" data-action="signal-dismiss" data-signal-id="' + s.id + '">' + escapeHtml(t('vigie.dismiss')) + '</button>');
+    }
+    actions = actions.filter(Boolean);
+    return actions.length ? '<div class="signal-actions">' + actions.join('') + '</div>' : '';
+  }
+
+  // Une PR ou une issue se présente comme un chantier : une carte qu'on ouvre
+  // pour relire. opts.showProject : le nom du projet (écran Vigie, qui mélange
+  // les projets) ; opts.actions : l'action principale sous le verdict.
+  function buildSignalCardHTML(s, opts) {
+    opts = opts || {};
+    var project = state.projectsById[s.projectId];
+    var meta = [];
+    if (opts.showProject && project) meta.push(project.name);
+    if (s.createdAt) meta.push(timeAgo(s.createdAt));
+    var cls = 'kanban-card signal-card';
+    if (s.status === 'ready' && s.priority === 'low') cls += ' signal-low';
+    return '<article class="' + cls + '" data-action="open-signal" data-signal-id="' + s.id + '">' +
+      '<div class="signal-card-head">' +
+        '<span class="signal-kind-chip">' + signalKindIconHTML(s.kind) + escapeHtml(t('vigie.kind.' + s.kind)) + '</span>' +
+        signalRefLinkHTML(s) +
+        (s.status === 'ready' && s.priority === 'high' ? '<span class="signal-high">' + escapeHtml(t('vigie.high')) + '</span>' : '') +
+        (s.newComments ? '<span class="signal-comments">' + escapeHtml(tCount('vigie.newComments', s.newComments)) + '</span>' : '') +
+        '<span class="signal-when">' + escapeHtml(meta.join(' · ')) + '</span>' +
+      '</div>' +
+      '<h3 class="card-title signal-card-title">' + escapeHtml(s.title) + '</h3>' +
+      signalStateHTML(s, 'signal-card-verdict') +
+      (opts.actions ? buildSignalActionsHTML(s, true) : '') +
+    '</article>';
+  }
+
+  // La fiche d'un signal. Deux colonnes, comme une page qu'on lit et une
+  // décision qu'on prend : à gauche le texte (la revue proposée, puis celui de
+  // l'auteur), à droite le jugement, les actions et GitHub, qui restent sous la
+  // main pendant qu'on défile. Sous 1100 px, la décision passe au-dessus.
+  function buildSignalDetailHTML() {
+    var s = findSignal(state.signalId);
+    if (!s) return buildHeaderHTML() + '<div class="view-body"></div>';
+    var project = state.projectsById[s.projectId];
+    var analyst = project && project.watch && state.agentsById[project.watch.agentId];
+    var labels = (s.labels || []).map(function (l) { return '<span class="signal-label">' + escapeHtml(l) + '</span>'; }).join('');
+    var byline = [];
+    if (s.author) byline.push(t('vigie.by', { login: s.author }));
+    if (s.createdAt) byline.push(t(s.kind === 'upkeep' ? 'vigie.detail.foundBy' : 'vigie.detail.opened', { when: timeAgo(s.createdAt) }));
+
+    var reviewHTML = '';
+    if (s.status === 'ready') {
+      var heading = t(s.kind === 'upkeep' ? 'vigie.detail.plan' : (s.kind === 'pr' ? 'vigie.detail.review' : 'vigie.detail.reply'));
+      reviewHTML = '<section class="sd-section sd-review">' +
+        '<div class="sd-section-head"><h2>' + escapeHtml(heading) + '</h2>' +
+          // Copier se tient aussi près du texte, sauf quand c'est déjà l'action
+          // principale du panneau : deux boutons pour un geste, c'est un de trop.
+          (s.review && signalPrimaryAction(s) !== 'copy' ? '<button class="btn-quiet" data-action="signal-copy" data-signal-id="' + s.id + '">' + escapeHtml(t('vigie.detail.copy')) + '</button>' : '') +
+        '</div>' +
+        (s.review
+          ? '<div class="msg-text sd-prose">' + renderMarkdown(s.review) + '</div>' +
+            (s.kind === 'upkeep' ? '' : '<div class="sd-note">' + escapeHtml(t(s.kind === 'pr' ? 'vigie.reviewNote' : 'vigie.replyNote')) + '</div>')
+          : '<div class="sd-empty">' + escapeHtml(t('vigie.detail.nothingToAdd')) + '</div>') +
+      '</section>';
+    } else if (s.status !== 'error') {
+      reviewHTML = '<section class="sd-section sd-review sd-live" data-signal-live="' + s.id + '">' + signalLiveInnerHTML(s) + '</section>';
+    }
+    // La discussion : les derniers messages sur la forge, ceux que l'analyste a lus.
+    var discussionHTML = (s.comments || []).length ? '<section class="sd-section sd-discussion">' +
+      '<div class="sd-section-head"><h2>' + escapeHtml(t('vigie.detail.discussion')) + '</h2>' +
+        (s.newComments ? '<span class="signal-comments">' + escapeHtml(tCount('vigie.newComments', s.newComments)) + '</span>' : '') + '</div>' +
+      s.comments.map(function (c) {
+        return '<div class="sd-comment"><div class="sd-comment-head"><span class="sd-comment-author">@' + escapeHtml(c.author || '?') + '</span>' +
+          '<span class="sd-comment-when">' + escapeHtml(timeAgo(c.createdAt)) + '</span></div>' +
+          '<div class="msg-text sd-prose">' + renderMarkdown(c.body || '') + '</div></div>';
+      }).join('') + '</section>' : '';
+    var bodyHTML = s.kind === 'upkeep' ? '' : '<section class="sd-section sd-source">' +
+      '<div class="sd-section-head"><h2>' + escapeHtml(t(s.kind === 'pr' ? 'vigie.detail.prBody' : 'vigie.detail.issueBody', { login: s.author || '?' })) + '</h2></div>' +
+      (s.body ? '<div class="msg-text sd-prose">' + renderMarkdown(s.body) + '</div>' : '<div class="sd-empty">' + escapeHtml(t('vigie.detail.noBody')) + '</div>') +
+    '</section>';
+
+    // Le panneau de décision.
+    var verdict = '';
+    if (s.status === 'ready') {
+      verdict = '<div class="sd-decision">' + signalDecisionHTML(s) + '</div>' +
+        '<p class="sd-verdict">' + escapeHtml(s.verdict) + '</p>';
+    } else if (s.status === 'error') {
+      verdict = '<p class="sd-verdict signal-verdict-error">' + escapeHtml(signalErrorText(s)) + '</p>';
+    } else {
+      verdict = '<p class="sd-verdict signal-verdict-pending">' + escapeHtml(t('vigie.detail.waiting')) + '</p>';
+    }
+    var who = analyst
+      ? '<div class="sd-analyst"><span class="agent-avatar-sm" style="background:' + softColor(analyst.color) + '">' + analyst.emoji + '</span>' +
+        escapeHtml(t('vigie.detail.readBy', { agent: analyst.name })) +
+        (s.analyzedAt ? '<span class="sd-analyst-when">' + escapeHtml(timeAgo(s.analyzedAt)) + '</span>' : '') + '</div>'
+      : '';
+    var github = s.url
+      ? '<a class="sd-github" href="' + escapeHtml(s.url) + '" target="_blank" rel="noopener noreferrer" data-action="external">' +
+          '<span class="sd-github-icon">' + signalKindIconHTML(s.kind) + '</span>' +
+          '<span class="sd-github-text"><span class="sd-github-ref mono">' + escapeHtml(s.repoName) + '#' + s.number + '</span>' +
+          '<span class="sd-github-sub">' + escapeHtml(t('vigie.detail.onGithub')) + '</span></span>' +
+          externalIconHTML() +
+        '</a>'
+      : '';
+    var aside = '<aside class="sd-aside"><div class="sd-panel">' +
+        who + verdict +
+        buildSignalActionsHTML(s, false, { noGithub: true }) +
+      '</div>' + github + '</aside>';
+
+    return buildHeaderHTML() + '<div class="view-body"><div class="sd-page">' +
+      '<header class="sd-head">' +
+        '<div class="sd-eyebrow">' + signalKindIconHTML(s.kind) + '<span>' + escapeHtml(t(s.kind === 'upkeep' ? 'vigie.detail.kindUpkeep' : (s.kind === 'pr' ? 'vigie.detail.kindPr' : 'vigie.detail.kindIssue'))) + '</span>' +
+          (project ? '<span class="sd-dot">·</span><span>' + escapeHtml(project.name) + '</span>' : '') + '</div>' +
+        '<h1 class="sd-title">' + escapeHtml(s.title) + '</h1>' +
+        '<div class="sd-byline">' + escapeHtml(byline.join(' · ')) + labels + '</div>' +
+      '</header>' +
+      aside +
+      '<div class="sd-main">' + reviewHTML + bodyHTML + discussionHTML + '</div>' +
+    '</div></div>';
+  }
+
+  // Le journal dit ce que la Vigie a lu et pourquoi elle n'a rien remonté :
+  // une Vigie muette doit pouvoir s'expliquer. projectId restreint au projet.
+  function buildVigieLogHTML(projectId) {
+    var entries = ((state.watch && state.watch.log) || []).filter(function (e) {
+      return !projectId || e.projectId === projectId;
+    });
+    var open = !!state.vigieLogOpen;
+    var html = '<div class="vigie-log">' +
+      '<button class="btn-quiet vigie-log-toggle" data-action="vigie-log-toggle" aria-expanded="' + (open ? 'true' : 'false') + '">' +
+      escapeHtml(t(open ? 'vigie.log.hide' : 'vigie.log.show')) + '</button>';
+    if (open) {
+      html += entries.length
+        ? '<ul class="vigie-log-list">' + entries.map(function (e) {
+            return '<li class="' + (e.error ? 'vigie-log-error' : '') + '"><span class="vigie-log-at mono">' + escapeHtml(formatTime(e.at)) + '</span>' +
+              '<span>' + escapeHtml(watchLogText(e)) + '</span></li>';
+          }).join('') + '</ul>'
+        : '<div class="modal-note">' + escapeHtml(t('vigie.log.empty')) + '</div>';
+    }
+    return html + '</div>';
+  }
+
+  function watchLogText(e) {
+    var project = state.projectsById[e.projectId];
+    var where = e.repoName + (project && project.name !== e.repoName ? ' (' + project.name + ')' : '');
+    var kind = t('vigie.kind.' + e.item);
+    if (e.kind === 'error') return t('vigie.log.error', { repo: where, error: e.error });
+    if (e.kind === 'upkeep') {
+      return e.error ? t('vigie.log.upkeepFailed', { repo: where, error: e.error === 'stopped' ? t('vigie.stopped') : e.error }) : t('vigie.log.upkeep', { repo: where, n: e.added || 0 });
+    }
+    if (e.kind === 'analysis') {
+      if (e.error) return t('vigie.log.analysisFailed', { kind: kind, n: e.number, repo: where, error: e.error });
+      return t('vigie.log.analysis', { kind: kind, n: e.number, repo: where, s: Math.max(1, Math.round((e.durationMs || 0) / 1000)) });
+    }
+    var parts = [t('vigie.log.list', { repo: where, kind: kind, open: e.open, added: e.added })];
+    if (e.updated) parts.push(t('vigie.log.updated', { n: e.updated }));
+    if (e.known) parts.push(t('vigie.log.known', { n: e.known }));
+    if (e.drafts) parts.push(t('vigie.log.drafts', { n: e.drafts }));
+    if (e.older) {
+      var d = new Date(e.from);
+      parts.push(t('vigie.log.older', { n: e.older, date: isNaN(d.getTime()) ? '' : d.toLocaleDateString(state.lang === 'en' ? 'en-US' : 'fr-FR') }));
+    }
+    return parts.join(', ');
+  }
+
+  // Dans la vue d'un projet, ce que la Vigie y a trouvé, au-dessus du kanban.
+  // Rien du tout tant que la Vigie n'est pas activée ou n'a rien à dire : le
+  // kanban reste le sujet de la page.
+  function findSignal(id) {
+    return state.signals.filter(function (s) { return s.id === id; })[0] || null;
+  }
+
+  function upsertSignal(sig) {
+    var i = state.signals.findIndex(function (x) { return x.id === sig.id; });
+    if (i >= 0) state.signals[i] = sig; else state.signals.push(sig);
+  }
+
+  function refreshVigie() {
+    renderSidebar();
+    if (state.screen === 'vigie' || state.screen === 'kanban' || state.screen === 'signal' || state.screen === 'inbox') renderMain();
+  }
+
+  function vigieFail(err) {
+    state.vigieError = (err && err.message) || t('common.networkError');
+    refreshVigie();
+  }
+
+  function setProjectWatch(projectId, enabled, agentId) {
+    state.vigieError = '';
+    var body = { enabled: enabled };
+    if (agentId) body.agentId = agentId;
+    api('/api/projects/' + encodeURIComponent(projectId) + '/watch', { method: 'PUT', body: body })
+      .then(function (p) { upsertProject(p); refreshVigie(); })
+      .catch(vigieFail);
+  }
+
+  function vigieCheck() {
+    state.vigieError = '';
+    state.watch = Object.assign({}, state.watch || {}, { checking: true });
+    refreshVigie();
+    api('/api/watch/check', { method: 'POST' }).catch(vigieFail);
+  }
+
+  function patchSignal(id, body) {
+    return api('/api/signals/' + encodeURIComponent(id), { method: 'PATCH', body: body })
+      .then(function (sig) { upsertSignal(sig); refreshVigie(); return sig; });
+  }
+
+  // Classer est optimiste : c'est le geste qu'on répète en vidant la liste, il
+  // ne doit pas attendre le serveur.
+  function dismissSignal(id) {
+    var s = findSignal(id);
+    if (!s) return;
+    var before = s.status;
+    s.status = 'dismissed';
+    if (state.signalId === id) { goBack(); }
+    refreshVigie();
+    patchSignal(id, { status: 'dismissed' }).catch(function (err) { s.status = before; vigieFail(err); });
+  }
+
+  function copySignalReview(id, el) {
+    var s = findSignal(id);
+    if (!s || !s.review) return;
+    writeClipboard(s.review, function () {
+      var before = el.textContent;
+      el.textContent = t('vigie.copied');
+      setTimeout(function () { el.textContent = before; }, 1300);
+    });
+  }
+
+  // Un signal devient un chantier : la carte porte le constat en contexte (que
+  // chaque tâche reçoit), le signal est marqué traité, puis la planification
+  // s'ouvre pour découper le travail. Rien ne démarre sans que l'humain relise
+  // et crée les tâches proposées.
+  function signalToCard(id, el) {
+    var s = findSignal(id);
+    if (!s) return;
+    var ctx = [s.kind === 'upkeep' ? t('vigie.upkeep.promptHeader', { repo: s.repoName, title: s.title }) : t('issues.promptHeader', { n: s.number, title: s.title })];
+    if (s.url) ctx.push(s.url);
+    if (s.verdict) ctx.push('', s.verdict);
+    if (s.review) ctx.push('', s.review);
+    if (el) el.disabled = true;
+    api('/api/cards', { method: 'POST', body: { projectId: s.projectId, title: s.title, contextPrompt: ctx.join('\n') } })
+      .then(function (card) {
+        upsertCard(card);
+        return patchSignal(id, { status: 'handled', cardId: card.id }).then(function () { return card; });
+      })
+      .then(function (card) {
+        navigateTo('#/p/' + encodeURIComponent(card.projectId) + '/c/' + encodeURIComponent(card.id));
+        setTimeout(function () { openPlanModal(card.id); }, 0);
+      })
+      .catch(function (err) { if (el) el.disabled = false; vigieFail(err); });
+  }
+
+  // Une issue devient un chantier : la carte est créée, le signal marqué traité,
+  // et la création de tâche s'ouvre pré-remplie avec l'issue et l'analyse.
+  // L'humain relit la consigne avant que le moindre agent démarre, comme pour
+  // un import d'issue ordinaire.
+  function startWorkstreamFromSignal(id) {
+    var s = findSignal(id);
+    if (!s) return;
+    if (s.kind === 'upkeep') {
+      var up = [t('vigie.upkeep.promptHeader', { repo: s.repoName, title: s.title }), '', s.verdict];
+      if (s.review) up.push('', s.review);
+      openNewTaskInProject(s.projectId, { title: s.title, prompt: up.join('\n'), repoName: s.repoName, waitsForTaskId: '' }, s.id);
+      return;
+    }
+    var parts = [t('issues.promptHeader', { n: s.number, title: s.title })];
+    if (s.url) parts.push(s.url);
+    if (s.body) parts.push('', s.body);
+    if (s.review) parts.push('', t('vigie.promptAnalysis'), s.review);
+    openNewTaskInProject(s.projectId, { title: s.title, prompt: parts.join('\n'), repoName: s.repoName, waitsForTaskId: '' }, s.id);
+  }
+
+  // Notification système : seulement pour un signal qui vient d'être analysé,
+  // qui n'est pas du bruit, et quand on ne regarde pas déjà la Vigie.
+  function notifySignal(sig) {
+    if (!canNotify() || Notification.permission !== 'granted') return;
+    if (sig.priority === 'low') return;
+    if (!document.hidden && state.screen === 'vigie') return;
+    var project = state.projectsById[sig.projectId];
+    var title = t('vigie.kind.' + sig.kind) + ' ' + signalRefText(sig) + (project ? ' · ' + project.name : '');
+    try {
+      var n = new Notification(title, { body: sig.verdict, tag: 'sillage-signal-' + sig.id });
+      n.onclick = function () { window.focus(); openSignal(sig.id); n.close(); };
+    } catch (e) {}
+  }
+
+  function onSignalEvent(sig) {
+    if (!sig || !sig.id) return;
+    var prev = findSignal(sig.id);
+    upsertSignal(sig);
+    if (sig.status === 'ready' && (!prev || prev.status !== 'ready')) notifySignal(sig);
+    refreshVigie();
+  }
+
+  function onWatchEvent(w) {
+    var prev = state.watch || {};
+    state.watch = w || {};
+    function key(c) { return c ? [c.kind, c.projectId, c.repoName, c.signalId].join('/') : ''; }
+    var cur = key(state.watch.current);
+    var was = key(prev.current);
+    // Une étape de plus ne change que les zones de suivi ; le reste de l'écran
+    // Vigie (journal, relève) ne se reconstruit que quand il a bougé.
+    var moved = cur !== was || !!prev.checking !== !!state.watch.checking ||
+      prev.checkedAt !== state.watch.checkedAt || (prev.log || []).length !== (state.watch.log || []).length;
+    if (moved && state.screen === 'vigie') renderMain();
+    patchSignalLive();
+  }
+
+  function stopSignal(id) {
+    api('/api/signals/' + encodeURIComponent(id) + '/stop', { method: 'POST' }).catch(vigieFail);
   }
 
   // ---------------------------------------------------------------------
@@ -2006,18 +3130,23 @@
     var awaitingShip = c.awaitingShip
       ? '<span class="card-awaiting-ship">' + shipIconHTML() + escapeHtml(t('kanban.card.awaitingShip')) + '</span>'
       : '';
-    var others = COLUMN_ORDER.filter(function (k) { return k !== colKey; });
-    var menuItemsHTML = others.map(function (k) {
-      return '<button class="card-menu-item" data-action="move-card" data-card-id="' + c.id + '" data-column="' + k + '">' +
-        escapeHtml(t('cardMenu.moveTo', { column: columnLabel(k) })) + '</button>';
-    }).join('');
+    // Les colonnes suivent les tâches : seul un chantier sans tâche se range à
+    // la main (le classer, ou le remettre à lancer).
+    var menuItemsHTML = '';
+    if (!c.tasksTotal && !state.tasks.some(function (tk) { return tk.cardId === c.id; })) {
+      var target = c.column === 'done' ? 'soon' : 'done';
+      menuItemsHTML = '<button class="card-menu-item" data-action="move-card" data-card-id="' + c.id + '" data-column="' + target + '">' +
+        escapeHtml(t('cardMenu.moveTo', { column: t(target === 'done' ? 'lane.shipped' : 'lane.next') })) + '</button>';
+    }
     return '<article class="kanban-card" data-action="open-card" data-card-id="' + c.id + '">' +
       '<div class="card-top">' +
         runningGlyph +
         '<h3 class="card-title ' + (colKey === 'done' ? 'card-title-done' : '') + '">' + escapeHtml(c.title) + '</h3>' +
         '<div class="card-avatars">' + avatarsHTML + '</div>' +
-        '<button class="card-menu-btn" data-action="toggle-card-menu" data-card-id="' + c.id + '">⋯</button>' +
-        '<div class="card-menu hidden" data-card-menu="' + c.id + '">' + menuItemsHTML + '</div>' +
+        (menuItemsHTML
+          ? '<button class="card-menu-btn" data-action="toggle-card-menu" data-card-id="' + c.id + '">⋯</button>' +
+            '<div class="card-menu hidden" data-card-menu="' + c.id + '">' + menuItemsHTML + '</div>'
+          : '') +
       '</div>' +
       liveHTML +
       // Une carte porte une décision, pas un tableau de bord. Restent l'avancement
@@ -2053,6 +3182,25 @@
   // Tri stable et déterministe, comme compareTasksForList : updatedAt
   // décroissant (les chantiers actifs remontent), ref décroissante en
   // départage.
+  // Le flux se lit « à qui la main » plutôt que « bientôt, en cours, terminé » :
+  // avec des agents, l'avancement n'est plus le goulot, l'attention humaine
+  // l'est. Les colonnes sont dérivées de l'état des tâches, sauf « Livré » qui
+  // reste la colonne done du serveur (tout terminal et livré).
+  var LANE_ORDER = ['next', 'agents', 'you', 'shipped'];
+  function cardLane(c) {
+    if (c.column === 'done') return 'shipped';
+    if (c.reviewCount || c.awaitingShip) return 'you';
+    var tasks = state.tasks.filter(function (tk) { return tk.cardId === c.id; });
+    if (tasks.some(function (tk) { return tk.status === 'running'; })) return 'agents';
+    if (!tasks.length || tasks.some(function (tk) { return tk.status === 'waiting'; })) return 'next';
+    return 'you'; // du travail rendu ou refusé, rien qui tourne : une décision vous attend
+  }
+  // Un signal analysé attend une décision humaine ; en file ou en cours
+  // d'analyse, c'est un agent qui a la main.
+  function signalLane(sg) {
+    return (sg.status === 'queued' || sg.status === 'analyzing') ? 'agents' : 'you';
+  }
+
   function compareCardsForColumn(a, b) {
     var diff = new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
     if (diff !== 0) return diff;
@@ -2063,17 +3211,18 @@
     var project = state.projectsById[state.projectId];
     var cards = state.cards.filter(function (c) { return c.projectId === state.projectId; });
 
-    var colsHTML = COLUMN_ORDER.map(function (key) {
-      var label = columnLabel(key);
-      var color = key === 'soon' ? '#d3d0c8' : (key === 'doing' ? '#2f7d54' : '#c3c0b8');
-      var list = cards.filter(function (c) { return c.column === key; }).sort(compareCardsForColumn);
-      var addBtn = key === 'soon'
+    var signals = projectWatched(project) ? vigieSignals().filter(function (sg) { return sg.projectId === state.projectId; }) : [];
+    var colsHTML = LANE_ORDER.map(function (key) {
+      var list = cards.filter(function (c) { return cardLane(c) === key; }).sort(compareCardsForColumn);
+      var laneSignals = signals.filter(function (sg) { return signalLane(sg) === key; });
+      var addBtn = key === 'next'
         ? '<button class="add-card-btn" data-action="open-new-card">' + escapeHtml(t('kanban.addCard')) + '</button>'
         : '';
-      return '<section class="kanban-col">' +
-        '<div class="col-head"><span class="col-dot" style="background:' + color + '"></span>' +
-        '<span class="col-label">' + escapeHtml(label) + '</span><span class="col-count">' + list.length + '</span></div>' +
-        list.map(function (c) { return buildKanbanCardHTML(c, key); }).join('') +
+      return '<section class="kanban-col kanban-lane-' + key + '">' +
+        '<div class="col-head"><span class="col-dot"></span>' +
+        '<span class="col-label">' + escapeHtml(t('lane.' + key)) + '</span><span class="col-count">' + (list.length + laneSignals.length) + '</span></div>' +
+        list.map(function (c) { return buildKanbanCardHTML(c, c.column === 'done' ? 'done' : key); }).join('') +
+        laneSignals.map(function (sg) { return buildSignalCardHTML(sg, { actions: sg.status === 'ready' }); }).join('') +
         addBtn +
         '</section>';
     }).join('');
@@ -2084,6 +3233,16 @@
       head += '<button class="icon-btn" data-action="open-edit-project" title="' + escapeHtml(t('project.editTooltip')) + '" aria-label="' + escapeHtml(t('project.editTooltip')) + '">✎</button>';
     }
     head += '</div>';
+    if (project) {
+      fetchClaudeSessions(project.id);
+      head += '<div class="kanban-pills">' + buildAutoconfPillHTML(project) + buildSessionsPillHTML(project) + '</div>';
+    }
+    if (project) {
+      head += '<div class="kanban-actions">' +
+        buildCreateButtonHTML('open-new-project-task', t('header.newTask'), t('kanban.newTaskTooltip'), 'btn-primary') +
+        '<button class="btn-quiet" data-action="open-new-card">' + escapeHtml(t('kanban.newWorkstream')) + '</button>' +
+        '</div>';
+    }
     if (project && project.description) {
       head += '<div class="kanban-description">' + escapeHtml(project.description) + '</div>';
     }
@@ -2091,8 +3250,10 @@
     head += '</div>';
     head += buildPinnedLinksHTML(project);
 
-    var emptyNote = cards.length === 0
-      ? '<button class="empty-cta" data-action="open-new-card">' +
+    // Un projet n'est vide que sans chantier ni signal : une PR à relire, c'est
+    // déjà quelque chose en cours.
+    var emptyNote = cards.length === 0 && signals.length === 0
+      ? '<button class="empty-cta" data-action="open-new-project-task">' +
           '<span class="empty-cta-title">' + escapeHtml(t('kanban.empty')) + '</span>' +
           '<span class="empty-cta-sub">' + escapeHtml(t('kanban.emptyAction')) + '</span>' +
         '</button>'
@@ -2252,7 +3413,11 @@
       { key: 'review', label: t('filter.review', { n: counts.review || 0 }) },
       { key: 'finished', label: t('filter.finished', { n: finishedCount }) }
     ];
-    var filterHTML = filters.map(function (f) {
+    // Un filtre vide ne filtre rien : il disparaît, sauf s'il est actif (on ne
+    // retire pas le sol sous les pieds de qui vient de cliquer dessus).
+    var filterCounts = { all: tasksAll.length, waiting: counts.waiting || 0, running: counts.running || 0, review: counts.review || 0, finished: finishedCount };
+    filters = filters.filter(function (f) { return f.key === 'all' || filterCounts[f.key] || state.taskFilter === f.key; });
+    var filterHTML = filters.length < 2 ? '' : filters.map(function (f) {
       return '<button class="pill ' + (state.taskFilter === f.key ? 'pill-active' : '') + '" data-action="set-filter" data-filter="' + f.key + '">' + escapeHtml(f.label) + '</button>';
     }).join('');
     // Le plan se tient à côté de « Nouvelle tâche », pas dans la barre du haut
@@ -2288,10 +3453,10 @@
     var task = state.taskId ? state.tasksById[state.taskId] : null;
     var panelHTML = task ? buildDetailPanelHTML(task) : '';
     var card = state.cardId ? state.cardsById[state.cardId] : null;
-    var bodyClass = 'view-body work-body' + (task ? ' has-panel' : '') + (task && state.panelExpanded ? ' panel-expanded' : '');
+    var bodyClass = 'view-body work-body' + (opts.bodyClass ? ' ' + opts.bodyClass : '') + (task ? ' has-panel' : '') + (task && state.panelExpanded ? ' panel-expanded' : '');
     return buildHeaderHTML() + (opts.bannerHTML || '') + (card ? buildShipBarHTML(card) : '') +
       '<div class="' + bodyClass + '" style="padding:0;">' +
-      '<div class="task-list-pane">' + paneInnerHTML + '</div>' +
+      '<div class="task-list-pane">' + (opts.paneTopHTML || '') + paneInnerHTML + '</div>' +
       panelHTML +
       '</div>';
   }
@@ -2769,7 +3934,7 @@
       '<div class="modal-head"><span class="modal-title">' + escapeHtml(t('ship.modalTitle')) + '</span>' +
       '<button class="icon-btn" data-action="close-modal" aria-label="' + escapeHtml(t('common.close')) + '">✕</button></div>' +
       '<div class="ship-modal-sub">' + escapeHtml(deliveryActionLabel(prev)) + '</div>' +
-      reposHTML + partialNote + mergeNote + warnings +
+      reposHTML + partialNote + mergeNote + warnings + buildShipSessionsWarningHTML(card) +
       buildShipResultsHTML(card.id) +
       '<div id="ship-modal-error" class="modal-error hidden"></div>' +
       '<div class="modal-foot"><button class="btn-outline" data-action="close-modal">' + escapeHtml(t('common.cancel')) + '</button>' +
@@ -2781,11 +3946,20 @@
   // Le bouton d'action de cette modale EST la confirmation : deux clics au
   // total pour livrer, le second en connaissance de cause (branche, base,
   // dépôts concernés, avertissements).
+  // Une session Claude Code ouverte à la main dans un dépôt du projet peut
+  // écrire là où la livraison fusionne : on le dit, sans bloquer.
+  function buildShipSessionsWarningHTML(card) {
+    var active = claudeSessionList(card.projectId).filter(function (x) { return x.active; });
+    if (!active.length) return '';
+    return '<div class="modal-note modal-note-warning">' + escapeHtml(t('sessions.shipWarning', { repo: active[0].repoName, title: active[0].title })) + '</div>';
+  }
+
   function openShipModal(cardId) {
     var card = state.cardsById[cardId];
     var prev = state.deliveryByCard[cardId];
     if (!card || !prev || !card.shipReady || !deliverableRepos(prev).length) return;
     delete state.shipResultByCard[cardId];
+    fetchClaudeSessions(card.projectId, true);
     openModal(buildShipModalHTML(card, prev));
   }
 
@@ -3296,7 +4470,7 @@
     if (state.screen === 'inbox') {
       return {
         tasksAll: state.tasks.filter(function (t) { return t.unread || t.status === 'review'; }),
-        opts: { showProject: true, emptyMsg: t('inbox.empty'), bannerHTML: buildAwaitingShipBannerHTML() }
+        opts: { showProject: true, emptyMsg: t('inbox.empty'), bodyClass: 'inbox-body', paneTopHTML: buildInboxHelloHTML() + buildInboxSignalsHTML() + buildAwaitingShipBannerHTML() }
       };
     }
     return null;
@@ -3306,6 +4480,50 @@
   // (voir Card.awaitingShip) : sans ce bandeau, rien dans la boîte de réception
   // ne les signale, puisque leurs tâches sont acceptées/refusées et n'y
   // apparaissent donc jamais.
+  // Une seule porte pour « qu'est-ce qui m'attend » : les signaux prêts de la
+  // Vigie remontent ici, une ligne chacun, avec le jugement en tête. Le détail
+  // (commentaires, actions) reste sur l'écran Vigie.
+  // L'accueil salue, puis dit en une phrase ce qui vous attend. Pas de
+  // tableau de bord : une phrase se lit d'un coup d'œil, des chiffres se
+  // déchiffrent.
+  function buildInboxHelloHTML() {
+    var h = new Date().getHours();
+    var name = (state.settings && state.settings.displayName) || '';
+    var hello = t(h >= 18 || h < 5 ? 'hello.evening' : 'hello.day') + (name ? ', ' + name : '');
+    var review = state.tasks.filter(function (tk) { return tk.status === 'review'; }).length;
+    var signals = vigieSignals().filter(function (sg) { return sg.status === 'ready' && sg.priority !== 'low'; }).length;
+    var ship = state.cards.filter(function (c) { return c.awaitingShip; }).length;
+    var running = state.tasks.filter(function (tk) { return tk.status === 'running'; }).length +
+      state.signals.filter(function (sg) { return sg.status === 'analyzing'; }).length;
+    var parts = [];
+    if (review) parts.push(tCount('hello.review', review));
+    if (signals) parts.push(tCount('hello.signals', signals));
+    if (ship) parts.push(tCount('hello.ship', ship));
+    var line;
+    if (parts.length) {
+      var list = parts.length > 1 ? parts.slice(0, -1).join(', ') + ' ' + t('hello.and') + ' ' + parts[parts.length - 1] : parts[0];
+      line = t('hello.waiting', { list: list });
+    } else {
+      line = t('hello.nothing');
+    }
+    if (running) line += ' ' + tCount('hello.running', running);
+    return '<div class="inbox-hello"><h1>' + escapeHtml(hello) + '</h1><p>' + escapeHtml(line) + '</p></div>';
+  }
+
+  function buildInboxSignalsHTML() {
+    var signals = vigieSignals().filter(function (s) { return s.status === 'ready' && s.priority !== 'low'; });
+    if (!signals.length) return '';
+    var rows = signals.map(function (s) {
+      return '<button class="inbox-signal-row" data-action="open-signal" data-signal-id="' + s.id + '">' +
+        (s.decision ? '<span class="signal-decision signal-decision-' + escapeHtml(s.decision) + '">' + escapeHtml(t('vigie.decision.' + s.decision)) + '</span>' : '') +
+        '<span class="inbox-signal-title">' + escapeHtml(s.title) + '</span>' +
+        '<span class="inbox-signal-ref mono">' + escapeHtml(signalRefText(s)) + '</span>' +
+      '</button>';
+    }).join('');
+    return '<div class="awaiting-ship-banner inbox-signals">' +
+      '<div class="awaiting-ship-head">' + escapeHtml(t('inbox.signals.title')) + '</div>' + rows + '</div>';
+  }
+
   function buildAwaitingShipBannerHTML() {
     var cards = state.cards.filter(function (c) { return c.awaitingShip; });
     if (!cards.length) return '';
@@ -3617,7 +4835,6 @@
             '</div>' +
           '</div>' +
           menuHTML +
-          '<button class="icon-btn" data-action="toggle-panel-expand" aria-label="' + escapeHtml(state.panelExpanded ? t('panel.collapse') : t('panel.expand')) + '" title="' + escapeHtml(state.panelExpanded ? t('panel.collapse') : t('panel.expand')) + '">' + (state.panelExpanded ? '⤡' : '⤢') + '</button>' +
           '<button class="icon-btn" data-action="close-panel" aria-label="' + escapeHtml(t('common.close')) + '">✕</button>' +
         '</div>' +
         buildStatusBadgeHTML(task) +
@@ -3632,6 +4849,18 @@
       '</div>';
   }
 
+  // La poignée d'agrandissement se tient sur la frontière qu'elle déplace : le
+  // bord gauche du panneau, à mi-hauteur. Une flèche dit dans quel sens le
+  // panneau va partir ; F fait la même chose au clavier.
+  function panelHandleLabel() {
+    return (state.panelExpanded ? t('panel.collapse') : t('panel.expand')) + ' (F)';
+  }
+  function buildPanelHandleHTML() {
+    return '<button class="panel-handle" data-action="toggle-panel-expand" aria-label="' + escapeHtml(panelHandleLabel()) + '" title="' + escapeHtml(panelHandleLabel()) + '">' +
+      '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false"><path fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" d="M10 3.5 5.5 8l4.5 4.5"/></svg>' +
+      '</button>';
+  }
+
   function buildDetailPanelHTML(task) {
     var agent = state.agentsById[task.agentId] || { emoji: '?', name: '?', model: '?', color: '#ccc' };
     var err = state.detailErrorByTask[task.id];
@@ -3642,6 +4871,7 @@
     else if (state.panelTab === 'history') bodyHTML = buildHistoryHTML(task);
 
     return '<aside class="detail-panel">' +
+      buildPanelHandleHTML() +
       (err ? '<div class="detail-error">' + escapeHtml(err) + '</div>' : '') +
       buildDetailHeadHTML(task) +
       '<div class="tab-body">' + bodyHTML + '</div>' +
@@ -4181,19 +5411,166 @@
     });
   }
 
-  // Le pied du diff ne porte plus d'action de livraison : ce n'est plus une
-  // action de tâche (voir la barre de livraison du chantier). Il ne reste que
-  // le rappel de la branche et de sa base, plus l'ouverture du fichier actif
-  // dans l'outil de diff configuré par git (git config diff.tool).
-  function buildDiffFooterHTML(task, diff, activeFile) {
-    var difftoolHTML = activeFile
-      ? '<button class="attach-btn" type="button" data-action="open-difftool" data-task-id="' + task.id + '" data-path="' + escapeHtml(activeFile.path) + '" title="' + escapeHtml(t('diff.openDifftool')) + '">' +
-        externalIconHTML() + '<span>' + escapeHtml(t('diff.openDifftool')) + '</span></button>'
-      : '';
-    return '<div class="diff-footer">' +
-        '<span class="mono diff-branch">' + escapeHtml(diff.branch || '') + ' → ' + escapeHtml(diff.base || '') + '</span>' +
-        difftoolHTML +
-      '</div>';
+  // Le diff se lit d'un bout à l'autre, comme une revue : tous les fichiers à
+  // la suite, chacun sous un en-tête qui colle en haut pendant qu'on le lit,
+  // avec les numéros de ligne des deux côtés et, sur une ligne modifiée, le
+  // fragment qui change surligné. L'arbre des fichiers sert à sauter de l'un à
+  // l'autre : colonne à gauche quand le panneau est large, menu sous le résumé
+  // sinon (requête de conteneur dans style.css, aucun rendu à refaire). Replier
+  // un fichier se fait en place, pour que l'animation parte.
+
+  var DIFF_GENERATED_RE = /(^|\/)(go\.sum|package-lock\.json|yarn\.lock|pnpm-lock\.yaml|composer\.lock|Cargo\.lock|Gemfile\.lock|poetry\.lock|uv\.lock|bun\.lockb)$/;
+  var DIFF_HUNK_RE = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@ ?(.*)$/;
+  var DIFF_BIG_LINES = 600;
+
+  function diffFileLines(f) {
+    return (f.hunks || []).reduce(function (n, h) { return n + (h.lines || []).length; }, 0);
+  }
+
+  // Ajout ou suppression pure : tous les hunks partent (ou arrivent) de rien.
+  function diffFileStatus(f) {
+    var hunks = f.hunks || [];
+    if (!hunks.length) return '';
+    var added = true, deleted = true;
+    hunks.forEach(function (h) {
+      var m = DIFF_HUNK_RE.exec(h.header || '');
+      if (!m) { added = deleted = false; return; }
+      if (!(m[1] === '0' && m[2] === '0')) added = false;
+      if (!(m[3] === '0' && m[4] === '0')) deleted = false;
+    });
+    return added ? 'new' : (deleted ? 'deleted' : '');
+  }
+
+  function diffFileCollapsed(taskId, f) {
+    var map = state.diffCollapsed[taskId] || {};
+    if (Object.prototype.hasOwnProperty.call(map, f.path)) return map[f.path];
+    return DIFF_GENERATED_RE.test(f.path) || diffFileLines(f) > DIFF_BIG_LINES;
+  }
+
+  function diffPathHTML(path) {
+    var i = path.lastIndexOf('/');
+    var dir = i >= 0 ? path.slice(0, i + 1) : '';
+    var name = i >= 0 ? path.slice(i + 1) : path;
+    return '<span class="diff-path-dir">' + escapeHtml(dir) + '</span><span class="diff-path-name">' + escapeHtml(name) + '</span>';
+  }
+
+  // Cinq cases, comme GitHub : la part d'ajout et de suppression d'un coup d'œil.
+  function diffRatioHTML(add, del) {
+    var total = add + del;
+    var greens = total ? Math.round(5 * add / total) : 0;
+    if (add && !greens) greens = 1;
+    if (del && greens === 5) greens = 4;
+    var reds = total ? 5 - greens : 0;
+    var html = '';
+    for (var i = 0; i < 5; i++) {
+      html += '<i class="' + (i < greens ? 'r-add' : (i < greens + reds ? 'r-del' : '')) + '"></i>';
+    }
+    return '<span class="diff-ratio" aria-hidden="true">' + html + '</span>';
+  }
+
+  function diffStatsHTML(add, del) {
+    return '<span class="diff-stats"><span class="diff-add">+' + add + '</span><span class="diff-del">−' + del + '</span></span>';
+  }
+
+  // Le fragment qui change entre une ligne supprimée et celle qui la remplace :
+  // préfixe et suffixe communs retirés. Rien de surligné quand presque tout
+  // change, le surlignage ne dirait alors rien de plus que la couleur de ligne.
+  function diffWordSplit(a, b) {
+    var max = Math.min(a.length, b.length), p = 0, q = 0;
+    while (p < max && a.charAt(p) === b.charAt(p)) p++;
+    while (q < max - p && a.charAt(a.length - 1 - q) === b.charAt(b.length - 1 - q)) q++;
+    var changed = Math.max(a.length, b.length) - p - q;
+    if (p + q === 0 || changed > 0.7 * Math.max(a.length, b.length)) return null;
+    return { p: p, q: q };
+  }
+
+  function diffTextHTML(text, cut) {
+    if (!cut) return escapeHtml(text);
+    var end = text.length - cut.q;
+    if (end <= cut.p) return escapeHtml(text);
+    return escapeHtml(text.slice(0, cut.p)) + '<span class="dw">' + escapeHtml(text.slice(cut.p, end)) + '</span>' + escapeHtml(text.slice(end));
+  }
+
+  function buildDiffHunksHTML(f) {
+    var html = '';
+    var prevEnd = null;
+    (f.hunks || []).forEach(function (h) {
+      var m = DIFF_HUNK_RE.exec(h.header || '');
+      var oldN = m ? +m[1] : 0, newN = m ? +m[3] : 0;
+      if (m && prevEnd !== null && oldN > prevEnd) {
+        html += '<div class="diff-gap">' + escapeHtml(tCount('diff.skipped', oldN - prevEnd)) + '</div>';
+      }
+      html += '<div class="diff-hunk-head"><span class="diff-hunk-range">' + escapeHtml(m ? '@@ -' + m[1] + (m[2] !== undefined ? ',' + m[2] : '') + ' +' + m[3] + (m[4] !== undefined ? ',' + m[4] : '') + ' @@' : h.header) + '</span>' +
+        (m && m[5] ? '<span class="diff-hunk-ctx">' + escapeHtml(m[5]) + '</span>' : '') + '</div>';
+      var lines = h.lines || [];
+      // Appariement des blocs « suppressions puis ajouts » ligne à ligne.
+      var cuts = new Array(lines.length);
+      for (var i = 0; i < lines.length;) {
+        if (lines[i].type !== 'del') { i++; continue; }
+        var d0 = i;
+        while (i < lines.length && lines[i].type === 'del') i++;
+        var a0 = i;
+        while (i < lines.length && lines[i].type === 'add') i++;
+        var pairs = Math.min(a0 - d0, i - a0);
+        for (var k = 0; k < pairs; k++) {
+          var cut = diffWordSplit(lines[d0 + k].text, lines[a0 + k].text);
+          if (!cut) continue;
+          cuts[d0 + k] = cut;
+          cuts[a0 + k] = cut;
+        }
+      }
+      lines.forEach(function (l, idx) {
+        var o = '', n = '', mark = ' ';
+        if (l.type === 'del') { o = oldN++; mark = '−'; }
+        else if (l.type === 'add') { n = newN++; mark = '+'; }
+        else { o = oldN++; n = newN++; }
+        html += '<div class="dl dl-' + l.type + '"><span class="ln">' + o + '</span><span class="ln">' + n + '</span><span class="dm">' + mark + '</span><span class="dt">' + diffTextHTML(l.text, cuts[idx]) + '</span></div>';
+      });
+      prevEnd = oldN;
+    });
+    return html;
+  }
+
+  function diffToolLabel(diff) {
+    return diff.tool ? t('diff.openIn', { tool: diff.tool }) : t('diff.openDifftool');
+  }
+
+  function buildDiffFileHTML(task, diff, f) {
+    var collapsed = diffFileCollapsed(task.id, f);
+    var status = diffFileStatus(f);
+    var generated = DIFF_GENERATED_RE.test(f.path);
+    // Largeur des colonnes de numéros : le plus grand numéro du fichier.
+    var maxLine = 1;
+    (f.hunks || []).forEach(function (h) {
+      var m = DIFF_HUNK_RE.exec(h.header || '');
+      if (m) maxLine = Math.max(maxLine, +m[1] + +(m[2] || 1), +m[3] + +(m[4] || 1));
+    });
+    var badge = status ? '<span class="diff-badge diff-badge-' + status + '">' + escapeHtml(t('diff.' + status)) + '</span>' :
+      (generated ? '<span class="diff-badge">' + escapeHtml(t('diff.generated')) + '</span>' : '');
+    return '<section class="diff-file' + (collapsed ? ' collapsed' : '') + '" data-diff-path="' + escapeHtml(f.path) + '" style="--ln-w:' + (String(maxLine).length + 1) + 'ch">' +
+      '<header class="diff-file-head">' +
+        '<button class="diff-file-toggle" data-action="diff-toggle-file" data-task-id="' + task.id + '" data-path="' + escapeHtml(f.path) + '" aria-expanded="' + (collapsed ? 'false' : 'true') + '" title="' + escapeHtml(collapsed ? t('diff.expand') : t('diff.collapse')) + '">' +
+          '<span class="diff-chevron" aria-hidden="true"></span>' +
+          '<span class="diff-file-path mono">' + diffPathHTML(f.path) + '</span>' +
+        '</button>' +
+        badge +
+        diffStatsHTML(f.additions, f.deletions) +
+        diffRatioHTML(f.additions, f.deletions) +
+        '<button class="icon-btn-sm diff-file-open" data-action="open-difftool" data-task-id="' + task.id + '" data-path="' + escapeHtml(f.path) + '" title="' + escapeHtml(t('diff.openFile', { tool: diff.tool || 'difftool' })) + '" aria-label="' + escapeHtml(t('diff.openFile', { tool: diff.tool || 'difftool' })) + '">' + externalIconHTML() + '</button>' +
+      '</header>' +
+      '<div class="diff-file-body"><div class="diff-file-inner">' + (collapsed ? '' : buildDiffHunksHTML(f)) + '</div></div>' +
+    '</section>';
+  }
+
+  function buildDiffTreeHTML(task, diff) {
+    return diff.files.map(function (f) {
+      var status = diffFileStatus(f);
+      return '<button class="diff-tree-row" data-action="diff-jump" data-task-id="' + task.id + '" data-path="' + escapeHtml(f.path) + '" title="' + escapeHtml(f.path) + '">' +
+        '<span class="diff-tree-dot' + (status ? ' dot-' + status : '') + '" aria-hidden="true"></span>' +
+        '<span class="diff-tree-name mono">' + diffPathHTML(f.path) + '</span>' +
+        diffStatsHTML(f.additions, f.deletions) +
+      '</button>';
+    }).join('');
   }
 
   function buildDiffHTML(task) {
@@ -4205,43 +5582,151 @@
     if (!diff.files || diff.files.length === 0) {
       return '<div class="empty-note">' + escapeHtml(t('diff.empty')) + '</div>';
     }
-    var activePath = state.activeDiffFile[task.id] || diff.files[0].path;
-    var activeFile = diff.files.filter(function (f) { return f.path === activePath; })[0] || diff.files[0];
-    var fileTabs = diff.files.map(function (f) {
-      return '<button class="diff-file-tab ' + (f.path === activeFile.path ? 'active' : '') + '" data-action="select-diff-file" data-task-id="' + task.id + '" data-path="' + escapeHtml(f.path) + '">' +
-        escapeHtml(f.path) + ' <span class="diff-add">+' + f.additions + '</span> <span class="diff-del">-' + f.deletions + '</span></button>';
-    }).join('');
-    var hunks = (activeFile.hunks || []).map(function (h) {
-      var lines = (h.lines || []).map(function (l) {
-        var mark = l.type === 'add' ? '+' : (l.type === 'del' ? '-' : ' ');
-        return '<div class="diff-line diff-' + l.type + '"><span class="diff-mark">' + mark + '</span><span class="diff-text mono">' + escapeHtml(l.text) + '</span></div>';
-      }).join('');
-      return '<div><div class="diff-hunk-header mono">' + escapeHtml(h.header) + '</div>' + lines + '</div>';
-    }).join('');
-
-    return '<div class="diff-subtabs">' + fileTabs + '</div>' +
-      '<div class="diff-hunks">' + hunks + '</div>' +
-      buildDiffFooterHTML(task, diff, activeFile);
+    var add = 0, del = 0;
+    diff.files.forEach(function (f) { add += f.additions; del += f.deletions; });
+    var allCollapsed = diff.files.every(function (f) { return diffFileCollapsed(task.id, f); });
+    var toolBtn = '<button class="btn-outline diff-open-all" data-action="open-difftool" data-task-id="' + task.id + '" data-path="" title="' + escapeHtml(diff.tool ? t('diff.openAllHint') : t('diff.noToolHint')) + '">' +
+      externalIconHTML() + '<span>' + escapeHtml(diffToolLabel(diff)) + '</span></button>';
+    return '<div class="diff-view' + (state.diffTreeOpen ? ' tree-open' : '') + '" data-diff-task="' + task.id + '">' +
+      '<div class="diff-toolbar">' +
+        '<button class="diff-summary" data-action="diff-tree-toggle" aria-expanded="' + (state.diffTreeOpen ? 'true' : 'false') + '">' +
+          '<span class="diff-summary-count">' + escapeHtml(tCount('diff.files', diff.files.length)) + '</span>' +
+          diffStatsHTML(add, del) + diffRatioHTML(add, del) +
+          '<span class="diff-chevron diff-summary-chevron" aria-hidden="true"></span>' +
+        '</button>' +
+        '<span class="diff-toolbar-spacer"></span>' +
+        '<button class="btn-quiet" data-action="diff-toggle-all" data-task-id="' + task.id + '">' + escapeHtml(allCollapsed ? t('diff.expandAll') : t('diff.collapseAll')) + '</button>' +
+        toolBtn +
+      '</div>' +
+      '<div class="diff-layout">' +
+        '<nav class="diff-tree" aria-label="' + escapeHtml(tCount('diff.files', diff.files.length)) + '">' + buildDiffTreeHTML(task, diff) + '</nav>' +
+        '<div class="diff-scroll" id="diff-scroll">' +
+          diff.files.map(function (f) { return buildDiffFileHTML(task, diff, f); }).join('') +
+          '<div class="diff-end mono">' + escapeHtml(diff.branch || '') + ' → ' + escapeHtml(diff.base || '') + '</div>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
   }
 
-  function patchDiffFooter(taskId) {
-    var task = state.tasksById[taskId];
+  // Le pied n'existe plus (la branche est en bas du fil) : rien à patcher.
+  function patchDiffFooter() { return true; }
+
+  function findDiffFile(taskId, path) {
     var diff = state.diffByTask[taskId];
-    if (!task || !diff || !diff.files || diff.files.length === 0) return false;
-    var footerEl = document.querySelector('.diff-footer');
-    if (!footerEl) return false;
-    var activePath = state.activeDiffFile[taskId] || diff.files[0].path;
-    var activeFile = diff.files.filter(function (f) { return f.path === activePath; })[0] || diff.files[0];
-    var wrapper = document.createElement('div');
-    wrapper.innerHTML = buildDiffFooterHTML(task, diff, activeFile);
-    var newFooter = wrapper.firstElementChild;
-    if (newFooter) footerEl.replaceWith(newFooter);
-    return true;
+    return diff && diff.files ? diff.files.filter(function (f) { return f.path === path; })[0] : null;
   }
 
-  function selectDiffFile(taskId, path) {
-    state.activeDiffFile[taskId] = path;
-    renderMain();
+  function diffSectionEl(path) {
+    var all = document.querySelectorAll('.diff-file');
+    for (var i = 0; i < all.length; i++) if (all[i].getAttribute('data-diff-path') === path) return all[i];
+    return null;
+  }
+
+  // Replie ou déplie en place : le contenu d'un fichier replié n'est pas rendu
+  // (un go.sum de 3000 lignes n'a rien à faire dans le DOM), il l'est au
+  // premier dépliage, puis la hauteur s'anime.
+  function setDiffFileCollapsed(taskId, path, collapsed) {
+    state.diffCollapsed[taskId] = state.diffCollapsed[taskId] || {};
+    state.diffCollapsed[taskId][path] = collapsed;
+    var sec = diffSectionEl(path);
+    var f = findDiffFile(taskId, path);
+    if (!sec || !f) return;
+    var inner = sec.querySelector('.diff-file-inner');
+    if (!collapsed && inner && !inner.firstChild) inner.innerHTML = buildDiffHunksHTML(f);
+    sec.classList.toggle('collapsed', collapsed);
+    var btn = sec.querySelector('.diff-file-toggle');
+    if (btn) {
+      btn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+      btn.title = collapsed ? t('diff.expand') : t('diff.collapse');
+    }
+    refreshDiffToggleAll(taskId);
+  }
+
+  function refreshDiffToggleAll(taskId) {
+    var diff = state.diffByTask[taskId];
+    var btn = document.querySelector('[data-action="diff-toggle-all"]');
+    if (!diff || !btn) return;
+    var allCollapsed = diff.files.every(function (f) { return diffFileCollapsed(taskId, f); });
+    btn.textContent = allCollapsed ? t('diff.expandAll') : t('diff.collapseAll');
+  }
+
+  function toggleDiffFile(taskId, path) {
+    var f = findDiffFile(taskId, path);
+    if (f) setDiffFileCollapsed(taskId, path, !diffFileCollapsed(taskId, f));
+  }
+
+  function toggleDiffAll(taskId) {
+    var diff = state.diffByTask[taskId];
+    if (!diff) return;
+    var collapse = !diff.files.every(function (f) { return diffFileCollapsed(taskId, f); });
+    diff.files.forEach(function (f) { setDiffFileCollapsed(taskId, f.path, collapse); });
+  }
+
+  function toggleDiffTree() {
+    state.diffTreeOpen = !state.diffTreeOpen;
+    var view = document.querySelector('.diff-view');
+    if (view) view.classList.toggle('tree-open', state.diffTreeOpen);
+    var btn = document.querySelector('.diff-summary');
+    if (btn) btn.setAttribute('aria-expanded', state.diffTreeOpen ? 'true' : 'false');
+  }
+
+  // Saut vers un fichier : déplié s'il était replié, son en-tête amené en haut.
+  // Le défilement s'anime, c'est un geste de l'utilisateur.
+  function jumpToDiffFile(taskId, path) {
+    var f = findDiffFile(taskId, path);
+    if (!f) return;
+    if (diffFileCollapsed(taskId, f)) setDiffFileCollapsed(taskId, path, false);
+    if (state.diffTreeOpen) toggleDiffTree();
+    var sec = diffSectionEl(path);
+    var scroller = document.getElementById('diff-scroll');
+    if (!sec || !scroller) return;
+    scroller.scrollTo({ top: sec.offsetTop - scroller.offsetTop, behavior: 'smooth' });
+    markDiffTreeActive(path);
+    diffJump = { path: path, at: Date.now() };
+  }
+
+  function markDiffTreeActive(path) {
+    var rows = document.querySelectorAll('.diff-tree-row');
+    for (var i = 0; i < rows.length; i++) rows[i].classList.toggle('active', rows[i].getAttribute('data-path') === path);
+  }
+
+  // Le fichier lu est celui dont l'en-tête a passé le haut de la zone.
+  function currentDiffPath() {
+    var scroller = document.getElementById('diff-scroll');
+    if (!scroller) return null;
+    var secs = scroller.querySelectorAll('.diff-file');
+    var top = scroller.scrollTop + 8, cur = secs.length ? secs[0] : null;
+    for (var i = 0; i < secs.length; i++) {
+      if (secs[i].offsetTop - scroller.offsetTop <= top) cur = secs[i]; else break;
+    }
+    return cur ? cur.getAttribute('data-diff-path') : null;
+  }
+
+  // Dernier saut demandé : pendant que le défilement animé court, c'est lui le
+  // fichier courant, sinon deux J rapides viseraient deux fois le même.
+  var diffJump = null;
+  var diffSpyFrame = 0;
+  function onDiffScroll(e) {
+    if (!e.target || e.target.id !== 'diff-scroll' || diffSpyFrame) return;
+    diffSpyFrame = requestAnimationFrame(function () {
+      diffSpyFrame = 0;
+      var p = currentDiffPath();
+      if (p) markDiffTreeActive(p);
+    });
+  }
+
+  // j / k : fichier suivant ou précédent, depuis celui qu'on lit.
+  function stepDiffFile(dir) {
+    var task = state.taskId ? state.tasksById[state.taskId] : null;
+    var diff = task ? state.diffByTask[task.id] : null;
+    if (!diff || !diff.files || !diff.files.length) return;
+    var cur = diffJump && Date.now() - diffJump.at < 700 ? diffJump.path : currentDiffPath();
+    var idx = diff.files.findIndex(function (f) { return f.path === cur; });
+    var scroller = document.getElementById('diff-scroll');
+    // Au tout début, « suivant » mène au premier fichier lui-même s'il n'est pas en haut.
+    var next = Math.max(0, Math.min(diff.files.length - 1, idx + dir));
+    if (dir > 0 && scroller && scroller.scrollTop < 4 && idx <= 0 && cur === diff.files[0].path && !(diffJump && Date.now() - diffJump.at < 700)) next = Math.min(1, diff.files.length - 1);
+    jumpToDiffFile(task.id, diff.files[next].path);
   }
 
   // doOpenDifftool : demande au serveur de lancer l'outil de diff configuré
@@ -4477,8 +5962,10 @@
 
   function buildMainHTML() {
     if (state.cardId) return buildWorkHTML();
+    if (state.signalId) return buildSignalDetailHTML();
     if (state.projectId) return buildKanbanHTML();
     if (state.screen === 'inbox') return buildInboxHTML();
+    if (state.screen === 'vigie') return buildVigieHTML();
     return buildAllProjectsHTML();
   }
 
@@ -4491,8 +5978,17 @@
     var selStart = prevComposer ? prevComposer.selectionStart : null;
     var prevConv = document.getElementById('conversation-list');
     var prevScroll = prevConv ? prevConv.scrollTop : null;
+    var prevDiff = document.getElementById('diff-scroll');
+    var prevDiffScroll = prevDiff ? prevDiff.scrollTop : null;
 
     mainEl.innerHTML = buildMainHTML();
+
+    var newDiff = document.getElementById('diff-scroll');
+    if (newDiff) {
+      if (prevDiffScroll !== null) newDiff.scrollTop = prevDiffScroll;
+      var cur = currentDiffPath();
+      if (cur) markDiffTreeActive(cur);
+    }
 
     var newComposer = document.getElementById('composer-input');
     if (newComposer) {
@@ -4652,6 +6148,13 @@
 
   function overlayBgCloseModal(e) { if (e.target === e.currentTarget) closeModal(); }
 
+  // Après openModal, le formulaire est déjà dans le DOM : focaliser tout de
+  // suite, sans setTimeout, pour ne perdre aucune frappe.
+  function focusById(id) {
+    var el = document.getElementById(id);
+    if (el) el.focus();
+  }
+
   function openModal(html) {
     state.modal = true;
     // Le panneau de recette est une modale comme les autres : ouvrir autre chose
@@ -4694,7 +6197,9 @@
         [['⏎'], t('shortcuts.searchOpen')]
       ] },
       { label: t('shortcuts.sectionTask'), rows: [
-        [['⏎'], t('shortcuts.sendMessage')]
+        [['⏎'], t('shortcuts.sendMessage')],
+        [['F'], t('shortcuts.expandPanel')],
+        [['J', 'K'], t('shortcuts.diffNav')]
       ] }
     ];
   }
@@ -4762,9 +6267,9 @@
     // entrée ici plutôt qu'un troisième bouton au-dessus de la liste des
     // tâches. Visible seulement si un dépôt du projet est sur github.com.
     var githubRepos = (project && project.githubRepos) || [];
-    var importHTML = githubRepos.length
+    var importHTML = githubRepos.length && !newTaskSignalId
       ? '<div class="modal-import-row">' +
-        '<button class="attach-btn" data-action="open-issue-picker" title="' + escapeHtml(t('issues.importTooltip')) + '">' +
+        '<button class="attach-btn" data-action="open-issue-picker" data-card-id="' + card.id + '" title="' + escapeHtml(t('issues.importTooltip')) + '">' +
         issueIconHTML() + '<span>' + escapeHtml(t('issues.import')) + '</span></button>' +
         '</div>'
       : '';
@@ -4827,7 +6332,33 @@
       '</div>';
   }
 
+  // En mode projet, pas de chantier : une pseudo-carte porte le projet et le
+  // nom affiché sous le titre de la modale. Son id vide dit au reste du code
+  // qu'aucune tâche du chantier n'existe encore.
+  function newTaskCard(cardId) {
+    if (cardId) return state.cardsById[cardId] || null;
+    var project = newTaskProjectId && state.projectsById[newTaskProjectId];
+    if (!project) return null;
+    return { id: '', projectId: project.id, title: project.name, contextPrompt: '' };
+  }
+
+  // Une tâche, tout de suite, sans passer par la création d'un chantier : le
+  // cas courant. Le chantier existe quand même (c'est la branche, donc la PR),
+  // mais l'humain n'a pas à le nommer deux fois.
+  function openNewTaskInProject(projectId, draft, signalId) {
+    if (!state.projectsById[projectId]) return;
+    newTaskProjectId = projectId;
+    newTaskSignalId = signalId || null;
+    var defaultAgent = state.agentsById.bolt || state.agents.find(function (a) { return !a.warning; }) || state.agents[0];
+    modalAgentId = defaultAgent ? defaultAgent.id : null;
+    modalAttachments = [];
+    newTaskDraft = draft || null;
+    renderNewTaskModal('', draft && draft.prompt ? 'new-task-prompt' : 'new-task-title');
+  }
+
   function openNewTaskModal(cardId) {
+    newTaskProjectId = null;
+    newTaskSignalId = null;
     var card = state.cardsById[cardId];
     if (!card) return;
     var defaultAgent = state.agentsById.bolt || state.agents.find(function (a) { return !a.warning; }) || state.agents[0];
@@ -4842,15 +6373,15 @@
   // focusId dit où reprendre la saisie : le titre pour un formulaire vierge, la
   // consigne quand une issue vient de la remplir (c'est elle qu'on relit).
   function renderNewTaskModal(cardId, focusId) {
-    var card = state.cardsById[cardId];
+    var card = newTaskCard(cardId);
     if (!card) return;
     openModal(buildNewTaskModalHTML(card));
-    setTimeout(function () {
-      var el = document.getElementById(focusId || 'new-task-title');
-      if (!el) return;
-      el.focus();
-      if (el.value) el.setSelectionRange(el.value.length, el.value.length);
-    }, 0);
+    // Focus synchrone : la modale est déjà dans le DOM, et un focus différé
+    // laisse filer les premières frappes de qui tape juste après N.
+    var el = document.getElementById(focusId || 'new-task-title');
+    if (!el) return;
+    el.focus();
+    if (el.value) el.setSelectionRange(el.value.length, el.value.length);
   }
 
   // Le formulaire vit dans le DOM ; le relire avant de céder la place est ce
@@ -4929,7 +6460,10 @@
     if (!title) { errEl.textContent = t('newTask.errorTitleRequired'); errEl.classList.remove('hidden'); titleEl.focus(); return; }
     if (!modalAgentId) { errEl.textContent = t('newTask.errorAgentRequired'); errEl.classList.remove('hidden'); return; }
     errEl.classList.add('hidden');
-    var body = { cardId: cardId, title: title, agentId: modalAgentId };
+    var body = { title: title, agentId: modalAgentId };
+    if (cardId) body.cardId = cardId;
+    else body.projectId = newTaskProjectId;
+    if (!cardId && newTaskSignalId) body.signalId = newTaskSignalId;
     if (prompt) body.prompt = prompt;
     if (modalAttachments.length) body.attachments = attachPayloadOf(modalAttachments);
     var repoEl = document.getElementById('new-task-repo');
@@ -4938,6 +6472,8 @@
     if (waitsForEl && waitsForEl.value) body.waitsForTaskId = waitsForEl.value;
     api('/api/tasks', { method: 'POST', body: body }).then(function (task) {
       upsertTask(task);
+      // Un seul signal par tâche : « Créer et enchaîner » repart sans lui.
+      if (!cardId) newTaskSignalId = null;
       if (mode === 'another') {
         titleEl.value = '';
         promptEl.value = '';
@@ -4953,6 +6489,13 @@
         return;
       }
       closeModal();
+      // Chantier implicite : la carte vient d'être créée côté serveur, et son
+      // événement SSE peut arriver après cette réponse. La route vers la tâche
+      // a besoin de la carte, d'où un rechargement de l'état avant d'y aller.
+      if (!cardId && !state.cardsById[task.cardId]) {
+        api('/api/state').then(function (data) { hydrateState(data); openTask(task.id); }).catch(function () { openTask(task.id); });
+        return;
+      }
       openTask(task.id);
     }).catch(function (e) {
       errEl.textContent = (e instanceof ApiError && e.message) || t('newTask.errorCreateFailed');
@@ -5227,7 +6770,7 @@
   }
   function openNewProjectModal() {
     openModal(buildNewProjectModalHTML());
-    setTimeout(function () { var el = document.getElementById('new-project-path'); if (el) el.focus(); }, 0);
+    focusById('new-project-path');
   }
   function submitNewProject() {
     var errEl = document.getElementById('new-project-error');
@@ -5267,7 +6810,7 @@
   function openNewCardModal() {
     if (!state.projectId) return;
     openModal(buildNewCardModalHTML());
-    setTimeout(function () { var el = document.getElementById('new-card-title'); if (el) el.focus(); }, 0);
+    focusById('new-card-title');
   }
   // mode 'plan' : le chantier créé, la modale de plan prend la place de
   // celle-ci, sur la page du chantier.
@@ -5603,7 +7146,7 @@
   }
 
   function openIssuePicker(cardId) {
-    var card = state.cardsById[cardId];
+    var card = newTaskCard(cardId);
     if (!card) return;
     var repos = issueRepoChoices(card);
     if (!repos.length) return;
@@ -5629,7 +7172,7 @@
   }
 
   function renderIssuePicker() {
-    var card = state.cardsById[issueCardId];
+    var card = newTaskCard(issueCardId);
     if (!card) { closeModal(); return; }
     openModal(buildIssuePickerHTML(card));
     setTimeout(function () {
@@ -5714,7 +7257,7 @@
     issueBusy = true;
     var token = ++issueRunToken;
     refreshIssueList();
-    var url = '/api/projects/' + state.cardsById[issueCardId].projectId + '/issues' +
+    var url = '/api/projects/' + newTaskCard(issueCardId).projectId + '/issues' +
       '?repoName=' + encodeURIComponent(issueRepoName) + '&q=' + encodeURIComponent(issueQuery);
     api(url).then(function (res) {
       if (token !== issueRunToken) return; // recherche dépassée, ou modale fermée
@@ -5805,7 +7348,7 @@
     var card = state.cardsById[state.cardId];
     if (!card) return;
     openModal(buildCardEditModalHTML(card));
-    setTimeout(function () { var el = document.getElementById('card-edit-title'); if (el) el.focus(); }, 0);
+    focusById('card-edit-title');
   }
   function submitCardEdit(cardId) {
     var title = document.getElementById('card-edit-title').value.trim();
@@ -5915,7 +7458,7 @@
   }
   function openNewAgentModal() {
     openModal(buildAgentModalHTML(null));
-    setTimeout(function () { var el = document.getElementById('agent-name'); if (el) el.focus(); }, 0);
+    focusById('agent-name');
   }
   function openEditAgentModal(agentId) {
     var agent = state.agentsById[agentId];
@@ -5994,6 +7537,330 @@
     });
   }
 
+
+  // ---------------------------------------------------------------------
+  // Sessions Claude Code hors Sillage (voir claude_sessions.go)
+  // ---------------------------------------------------------------------
+  // Lues à la demande, pas poussées par SSE : c'est un dossier du disque que
+  // Sillage ne surveille pas. Rafraîchies toutes les 30 s tant que le projet
+  // est à l'écran, pour que « en cours » reste vrai.
+
+  var CLAUDE_SESSIONS_TTL = 30000;
+
+  function fetchClaudeSessions(projectId, force) {
+    var cur = state.claudeSessions[projectId];
+    if (!force && cur && (cur.loading || Date.now() - cur.at < CLAUDE_SESSIONS_TTL)) return;
+    state.claudeSessions[projectId] = Object.assign({ list: [] }, cur || {}, { loading: true });
+    api('/api/projects/' + encodeURIComponent(projectId) + '/claude-sessions').then(function (res) {
+      state.claudeSessions[projectId] = { at: Date.now(), list: (res && res.sessions) || [] };
+      refreshClaudeSessionsUI(projectId);
+    }).catch(function () {
+      state.claudeSessions[projectId] = { at: Date.now(), list: (cur && cur.list) || [] };
+    });
+  }
+
+  function claudeSessionList(projectId) {
+    var cur = state.claudeSessions[projectId];
+    return (cur && cur.list) || [];
+  }
+
+  function buildSessionsPillHTML(project) {
+    var list = claudeSessionList(project.id);
+    var attr = ' data-sessions-pill="' + project.id + '"';
+    if (!list.length) return '<span' + attr + ' hidden></span>';
+    var active = list.filter(function (x) { return x.active; }).length;
+    return '<button class="autoconf-pill sessions-pill' + (active ? ' sessions-pill-active' : '') + '"' + attr +
+      ' data-action="open-claude-sessions" data-project-id="' + project.id + '">' +
+      (active ? '<span class="sessions-dot"></span>' + escapeHtml(t('sessions.pill.active')) : escapeHtml(tCount('sessions.pill.recent', list.length))) +
+      '</button>';
+  }
+
+  function buildClaudeSessionsInnerHTML(projectId) {
+    var list = claudeSessionList(projectId);
+    if (!list.length) return '<div class="modal-note">' + escapeHtml(t('sessions.empty')) + '</div>';
+    return '<div class="sessions-list">' + list.map(function (x) {
+      var meta = [x.repoName];
+      if (x.branch) meta.push(x.branch);
+      meta.push(timeAgo(x.updatedAt));
+      meta.push(tCount('sessions.prompts', x.promptsCount));
+      var prompts = (x.prompts || []);
+      return '<article class="session-row">' +
+        '<div class="session-head"><span class="session-title">' + escapeHtml(x.title) + '</span>' +
+          (x.active ? '<span class="session-active"><span class="sessions-dot"></span>' + escapeHtml(t('sessions.active')) + '</span>' : '') + '</div>' +
+        '<div class="session-meta">' + escapeHtml(meta.join(' · ')) + '</div>' +
+        (x.lastPrompt ? '<div class="session-last">' + escapeHtml(x.lastPrompt) + '</div>' : '') +
+        (prompts.length > 1 ? '<details class="session-prompts"><summary>' + escapeHtml(t('sessions.allPrompts')) + '</summary><ol>' +
+          prompts.map(function (pr) { return '<li>' + escapeHtml(pr) + '</li>'; }).join('') + '</ol></details>' : '') +
+        '<div class="session-actions">' +
+          '<button class="btn-outline" data-action="claude-session-copy" data-project-id="' + projectId + '" data-session-id="' + escapeHtml(x.id) + '">' + escapeHtml(t('sessions.copy')) + '</button>' +
+          '<button class="btn-quiet" data-action="claude-session-workstream" data-project-id="' + projectId + '" data-session-id="' + escapeHtml(x.id) + '">' + escapeHtml(t('sessions.workstream')) + '</button>' +
+        '</div>' +
+      '</article>';
+    }).join('') + '</div>';
+  }
+
+  function openClaudeSessionsModal(projectId) {
+    openModal('<div class="modal">' +
+      '<div class="modal-head"><span class="modal-title">' + escapeHtml(t('sessions.title')) + '</span><button class="icon-btn" data-action="close-modal" aria-label="' + escapeHtml(t('common.close')) + '">✕</button></div>' +
+      '<div class="modal-section-hint">' + escapeHtml(t('sessions.hint')) + '</div>' +
+      '<div id="claude-sessions-body" data-project-id="' + projectId + '">' + buildClaudeSessionsInnerHTML(projectId) + '</div>' +
+      '</div>');
+    fetchClaudeSessions(projectId, true);
+  }
+
+  function refreshClaudeSessionsUI(projectId) {
+    var project = state.projectsById[projectId];
+    if (!project) return;
+    var pill = document.querySelector('[data-sessions-pill="' + projectId + '"]');
+    if (pill) pill.outerHTML = buildSessionsPillHTML(project);
+    var body = document.getElementById('claude-sessions-body');
+    // La modale n'est réécrite que si rien n'y est déplié : une liste qui se
+    // replie sous les yeux pendant qu'on lit, c'est pire qu'une date en retard.
+    if (body && body.getAttribute('data-project-id') === projectId && !body.querySelector('details[open]')) {
+      body.innerHTML = buildClaudeSessionsInnerHTML(projectId);
+    }
+  }
+
+  function findClaudeSession(projectId, id) {
+    return claudeSessionList(projectId).filter(function (x) { return x.id === id; })[0] || null;
+  }
+
+  function copyClaudeSessionCmd(projectId, id, el) {
+    var x = findClaudeSession(projectId, id);
+    if (!x) return;
+    writeClipboard(x.resumeCmd, function () {
+      var before = el.textContent;
+      el.textContent = t('sessions.copied');
+      setTimeout(function () { el.textContent = before; }, 1300);
+    });
+  }
+
+  // Pas une reprise de la session (elle est rangée sous son dossier de
+  // lancement, et ses changements non commités sont dans le dépôt principal) :
+  // une tâche neuve, dans son worktree, qui part de ce qu'on y demandait.
+  function claudeSessionToWorkstream(projectId, id) {
+    var x = findClaudeSession(projectId, id);
+    if (!x) return;
+    var parts = [t('sessions.promptHeader', { title: x.title })];
+    if (x.branch) parts.push(t('sessions.promptBranch', { cwd: x.cwd, branch: x.branch }));
+    if ((x.prompts || []).length) {
+      parts.push('', t('sessions.promptAsks'));
+      x.prompts.forEach(function (pr) { parts.push('- ' + pr.replace(/\n+/g, ' ')); });
+    }
+    closeModal();
+    openNewTaskInProject(projectId, { title: x.title, prompt: parts.join('\n'), repoName: x.repoName, waitsForTaskId: '' });
+  }
+
+  setInterval(function () {
+    // Le kanban et l'écran d'un chantier : partout où l'on peut livrer.
+    if (state.projectId && !document.hidden && ['kanban', 'work'].indexOf(state.screen) >= 0) fetchClaudeSessions(state.projectId);
+  }, CLAUDE_SESSIONS_TTL);
+
+  // ---------------------------------------------------------------------
+  // Configuration automatique d'un projet (voir autoconfig.go)
+  // ---------------------------------------------------------------------
+  // Un agent en lecture seule propose les commandes ; rien n'est enregistré
+  // sans l'humain. « Reprendre ces valeurs » remplit le brouillon de la
+  // modale, et c'est Enregistrer qui écrit : une commande qui s'exécutera après
+  // chaque tâche se relit avant.
+
+  var autoconfApplied = {};
+
+  function projectIsConfigured(p) {
+    return !!(p.checkCmd || (p.repos || []).some(function (r) { return r.previewCmd; }));
+  }
+
+  function autoconfIconHTML() {
+    return '<svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">' +
+      '<path d="M2.5 13.5l7-7M8.5 5.5l2 2"/><path d="M12 1.8v2.4M10.8 3h2.4M13.6 6.6v1.8M12.7 7.5h1.8M6 1.6v1.6M5.2 2.4h1.6"/></svg>';
+  }
+
+  function defaultAutoconfAgent(project) {
+    var agents = analystAgents();
+    var watchAgent = project.watch && project.watch.agentId;
+    if (watchAgent && agents.some(function (a) { return a.id === watchAgent; })) return watchAgent;
+    var real = agents.filter(function (a) { return a.cli !== 'fake' && !a.warning; })[0];
+    return (real || agents[0] || {}).id || '';
+  }
+
+  function buildAutoconfSectionHTML(project) {
+    return '<section id="autoconf-section" class="autoconf" data-project-id="' + project.id + '">' + buildAutoconfInnerHTML(project) + '</section>';
+  }
+
+  function autoconfCode(v) {
+    return v ? '<code class="mono">' + escapeHtml(v) + '</code>' : '<span class="autoconf-none">' + escapeHtml(t('autoconf.nothing')) + '</span>';
+  }
+
+  function autoconfRowHTML(label, value, current) {
+    return '<div class="autoconf-row"><div class="autoconf-label">' + escapeHtml(label) + '</div><div class="autoconf-value">' + autoconfCode(value) +
+      (current && current !== value ? '<div class="autoconf-current">' + escapeHtml(t('autoconf.current', { v: current })) + '</div>' : '') +
+      '</div></div>';
+  }
+
+  function buildAutoconfInnerHTML(project) {
+    var run = state.autoconfigs[project.id];
+    var pid = project.id;
+    var agent = run && state.agentsById[run.agentId];
+    var agentName = agent ? agent.name : '';
+    var head = '<div class="autoconf-head"><span class="autoconf-icon">' + autoconfIconHTML() + '</span>' +
+      '<div class="autoconf-head-text"><div class="autoconf-title">' + escapeHtml(t('autoconf.title')) + '</div>';
+    if (!run) {
+      var agents = analystAgents();
+      head += '<div class="autoconf-hint">' + escapeHtml(t('autoconf.hint')) + '</div></div></div>';
+      if (!agents.length) return head + '<div class="modal-note">' + escapeHtml(t('autoconf.noAgent')) + '</div>';
+      var chosen = defaultAutoconfAgent(project);
+      return head + '<div class="autoconf-actions">' +
+        (agents.length > 1 ? '<select id="autoconf-agent" class="modal-input autoconf-agent" aria-label="' + escapeHtml(t('autoconf.with')) + '">' +
+          agents.map(function (a) { return '<option value="' + a.id + '"' + (a.id === chosen ? ' selected' : '') + '>' + a.emoji + ' ' + escapeHtml(a.name) + '</option>'; }).join('') +
+        '</select>' : '') +
+        '<button class="btn-primary" data-action="autoconf-start" data-project-id="' + pid + '">' + escapeHtml(t('autoconf.start')) + '</button></div>';
+    }
+    if (run.status === 'running') {
+      var steps = run.steps || [];
+      return head + '<div class="autoconf-live"><span class="task-spinner"></span>' +
+          '<span>' + escapeHtml(t('autoconf.running', { agent: agentName, repo: run.repoName || '' })) + ' · ' + elapsedHTML(run.startedAt) +
+          (run.timeoutSec ? ' · ' + escapeHtml(t('vigie.live.limit', { n: Math.round(run.timeoutSec / 60) })) : '') + '</span>' +
+          '<button class="btn-quiet" data-action="autoconf-stop" data-project-id="' + pid + '">' + escapeHtml(t('autoconf.stop')) + '</button></div></div></div>' +
+        (steps.length ? '<ol class="live-steps">' + steps.map(function (line, i) {
+          return '<li class="mono' + (i === steps.length - 1 ? ' live-step-now' : '') + '">' + escapeHtml(line) + '</li>';
+        }).join('') + '</ol>' : '<div class="sd-live-now">' + escapeHtml(t('vigie.live.start')) + '</div>');
+    }
+    var again = '<button class="btn-quiet" data-action="autoconf-start" data-project-id="' + pid + '">' + escapeHtml(t('autoconf.retry')) + '</button>' +
+      '<button class="btn-quiet" data-action="autoconf-dismiss" data-project-id="' + pid + '">' + escapeHtml(t('autoconf.dismiss')) + '</button>';
+    if (run.status === 'error') {
+      return head + '<div class="autoconf-hint signal-verdict-error">' + escapeHtml(run.error === 'stopped' ? t('autoconf.stopped') : t('autoconf.error', { error: run.error })) + '</div></div></div>' +
+        '<div class="autoconf-actions">' + again + '</div>';
+    }
+    var prop = run.proposal || { repos: [] };
+    var draft = projectDraft || {};
+    var rows = autoconfRowHTML(t('autoconf.check'), prop.checkCmd, draft.checkCmd);
+    (prop.repos || []).forEach(function (r) {
+      var multi = (prop.repos || []).length > 1;
+      var current = (modalRepos || []).filter(function (m) { return m.name === r.name; })[0] || {};
+      if (r.error) {
+        rows += '<div class="autoconf-row"><div class="autoconf-label">' + escapeHtml(r.name) + '</div><div class="autoconf-value signal-verdict-error">' + escapeHtml(t('autoconf.error', { error: r.error })) + '</div></div>';
+        return;
+      }
+      rows += autoconfRowHTML(t('autoconf.preview') + (multi ? ' · ' + r.name : ''), r.previewCmd, current.previewCmd);
+      if (r.previewUrl) rows += autoconfRowHTML(t('autoconf.url') + (multi ? ' · ' + r.name : ''), r.previewUrl, current.previewUrl);
+      var found = [['install', r.install], ['build', r.build], ['test', r.test]].filter(function (x) { return x[1]; });
+      if (found.length) {
+        rows += '<div class="autoconf-row autoconf-row-minor"><div class="autoconf-label">' + escapeHtml(t('autoconf.found') + (multi ? ' · ' + r.name : '')) + '</div><div class="autoconf-value">' +
+          found.map(function (x) { return '<div><span class="autoconf-step">' + escapeHtml(t('autoconf.' + x[0])) + '</span> <code class="mono">' + escapeHtml(x[1]) + '</code></div>'; }).join('') +
+        '</div></div>';
+      }
+      if (r.notes) {
+        rows += '<div class="autoconf-row autoconf-row-minor"><div class="autoconf-label">' + escapeHtml(t('autoconf.notes') + (multi ? ' · ' + r.name : '')) + '</div>' +
+          '<div class="autoconf-value"><div class="autoconf-notes">' + escapeHtml(r.notes) + '</div></div></div>';
+      }
+    });
+    if ((prop.permissionProfiles || []).length) {
+      rows += '<div class="autoconf-row"><div class="autoconf-label">' + escapeHtml(t('autoconf.profiles')) + '</div><div class="autoconf-value">' +
+        prop.permissionProfiles.map(function (id) {
+          var pr = PERMISSION_PROFILES.filter(function (x) { return x.id === id; })[0];
+          return '<span class="signal-label">' + escapeHtml(pr ? t(pr.labelKey) : id) + '</span>';
+        }).join(' ') + '</div></div>';
+    }
+    var applied = autoconfApplied[pid];
+    return head + '<div class="autoconf-hint">' + escapeHtml(t('autoconf.ready', { agent: agentName })) + '</div></div></div>' +
+      '<div class="autoconf-proposal">' + rows + '</div>' +
+      '<div class="autoconf-warning">' + escapeHtml(applied ? t('autoconf.applied') : t('autoconf.warning')) + '</div>' +
+      '<div class="autoconf-actions">' +
+        (applied ? '' : '<button class="btn-primary" data-action="autoconf-apply" data-project-id="' + pid + '">' + escapeHtml(t('autoconf.apply')) + '</button>') +
+        again + '</div>';
+  }
+
+  function refreshAutoconfUI(projectId) {
+    var el = document.getElementById('autoconf-section');
+    var project = state.projectsById[projectId];
+    if (el && project && el.getAttribute('data-project-id') === projectId) el.innerHTML = buildAutoconfInnerHTML(project);
+    var pill = document.querySelector('[data-autoconf-pill="' + projectId + '"]');
+    if (pill && project) pill.outerHTML = buildAutoconfPillHTML(project);
+    else if (state.screen === 'kanban' && state.projectId === projectId) renderMain();
+  }
+
+  function onAutoconfigEvent(r) {
+    if (!r || !r.projectId) return;
+    if (!r.status) delete state.autoconfigs[r.projectId];
+    else state.autoconfigs[r.projectId] = r;
+    refreshAutoconfUI(r.projectId);
+  }
+
+  function autoconfFail(projectId, err) {
+    state.autoconfigs[projectId] = { projectId: projectId, status: 'error', error: (err && err.message) || t('common.networkError') };
+    refreshAutoconfUI(projectId);
+  }
+
+  function startAutoconf(projectId) {
+    var project = state.projectsById[projectId];
+    if (!project) return;
+    var sel = document.getElementById('autoconf-agent');
+    var agentId = (sel && sel.value) || defaultAutoconfAgent(project);
+    delete autoconfApplied[projectId];
+    api('/api/projects/' + encodeURIComponent(projectId) + '/autoconfigure', { method: 'POST', body: { agentId: agentId } })
+      .then(function (run) { state.autoconfigs[projectId] = run; refreshAutoconfUI(projectId); })
+      .catch(function (e) { autoconfFail(projectId, e); });
+  }
+
+  function stopAutoconf(projectId) {
+    api('/api/projects/' + encodeURIComponent(projectId) + '/autoconfigure/stop', { method: 'POST' }).catch(function () {});
+  }
+
+  function forgetAutoconf(projectId) {
+    delete state.autoconfigs[projectId];
+    delete autoconfApplied[projectId];
+    refreshAutoconfUI(projectId);
+    api('/api/projects/' + encodeURIComponent(projectId) + '/autoconfigure', { method: 'DELETE' }).catch(function () {});
+  }
+
+  // Les valeurs proposées vont dans le brouillon, champ par champ ; un champ
+  // pour lequel l'agent n'a rien trouvé garde ce qui y était.
+  function applyAutoconf(projectId) {
+    var run = state.autoconfigs[projectId];
+    if (!run || !run.proposal || !projectDraft) return;
+    captureProjectDraftFromDOM();
+    var prop = run.proposal;
+    if (prop.checkCmd) projectDraft.checkCmd = prop.checkCmd;
+    (prop.repos || []).forEach(function (r) {
+      var m = (modalRepos || []).filter(function (x) { return x.name === r.name; })[0];
+      if (!m || r.error) return;
+      if (r.previewCmd) { m.previewCmd = r.previewCmd; m.previewUrl = r.previewUrl || ''; }
+    });
+    (prop.permissionProfiles || []).forEach(function (id) {
+      if (projectDraft.permissionProfiles.indexOf(id) < 0) projectDraft.permissionProfiles.push(id);
+    });
+    autoconfApplied[projectId] = true;
+    markProjectDraftDirty();
+    refreshAutoconfUI(projectId);
+  }
+
+  function openAutoconf(projectId, start) {
+    state.projectId = projectId;
+    openEditProjectModal('general', projectId);
+    if (start && !state.autoconfigs[projectId]) startAutoconf(projectId);
+  }
+
+  // Sous le titre du projet : l'invitation quand rien n'est configuré, ou
+  // l'état d'une configuration en cours.
+  function buildAutoconfPillHTML(project) {
+    var run = state.autoconfigs[project.id];
+    var attr = ' data-autoconf-pill="' + project.id + '"';
+    if (run && run.status === 'running') {
+      var agent = state.agentsById[run.agentId];
+      return '<button class="autoconf-pill"' + attr + ' data-action="autoconf-open" data-project-id="' + project.id + '"><span class="task-spinner"></span>' +
+        escapeHtml(t('autoconf.runningShort', { agent: agent ? agent.name : '' })) + ' · ' + elapsedHTML(run.startedAt) + '</button>';
+    }
+    if (run && run.status === 'ready' && !autoconfApplied[project.id]) {
+      return '<button class="autoconf-pill autoconf-pill-ready"' + attr + ' data-action="autoconf-open" data-project-id="' + project.id + '">' +
+        autoconfIconHTML() + escapeHtml(t('autoconf.readyShort')) + '</button>';
+    }
+    if (!projectIsConfigured(project) && analystAgents().length) {
+      return '<div class="autoconf-nudge"' + attr + '>' + escapeHtml(t('autoconf.nudge')) +
+        ' <button class="detail-link" data-action="autoconf-open" data-start="1" data-project-id="' + project.id + '">' + escapeHtml(t('autoconf.nudgeAction')) + '</button></div>';
+    }
+    return '<span' + attr + ' hidden></span>';
+  }
+
   // Réglages de projet : une modale à panneaux, pas un formulaire de onze
   // champs empilés. La colonne de gauche EST le découpage (aucun filet
   // horizontal), chaque panneau ne montre que deux ou trois choses, et ce qui ne
@@ -6019,7 +7886,8 @@
   }
 
   function buildProjectGeneralPanelHTML() {
-    return fieldRowHTML('project.name', 'project-edit-name',
+    var project = state.projectsById[state.projectId];
+    return (project ? buildAutoconfSectionHTML(project) : '') + fieldRowHTML('project.name', 'project-edit-name',
         '<input id="project-edit-name" class="modal-input" value="' + escapeHtml(projectDraft.name) + '">') +
       fieldRowHTML('project.description', 'project-description',
         '<input id="project-description" class="modal-input" placeholder="' + escapeHtml(t('project.descriptionPlaceholder')) + '" value="' + escapeHtml(projectDraft.description) + '">');
@@ -6190,7 +8058,7 @@
     });
     modalLinks = (project.links || []).map(function (l) { return { url: l.url || '', title: l.title || '' }; });
     openModal(buildProjectModalHTML(project));
-    setTimeout(function () { var el = document.getElementById('project-edit-name'); if (el) el.focus(); }, 0);
+    focusById('project-edit-name');
   }
 
   // Une saisie quelque part dans la modale allume la mention « modifications non
@@ -6232,6 +8100,8 @@
     api('/api/projects/' + projectId, { method: 'PATCH', body: body }).then(function (project) {
       upsertProject(project);
       invalidateDeliveryForProject(project.id);
+      // Une proposition reprise puis enregistrée n'a plus rien à dire.
+      if (autoconfApplied[project.id]) { delete autoconfApplied[project.id]; forgetAutoconf(project.id); }
       closeModal();
       renderSidebar(); renderMain();
     }).catch(function (e) {
@@ -6412,8 +8282,52 @@
         escapeHtml(t('sidebar.newAgentTooltip')) + '</button></div>';
   }
 
+  // Accès depuis le téléphone ou un autre portable : un interrupteur, les
+  // adresses à taper, et l'empreinte du certificat pour qui veut vérifier
+  // l'avertissement du navigateur au lieu de le subir.
+  var lanError = '';
+  function buildLanSectionInnerHTML() {
+    var lan = state.lan || {};
+    var html = '<div class="modal-label">' + escapeHtml(t('lan.heading')) + '</div>' +
+      '<label class="workspace-autosync-row">' +
+        '<input type="checkbox" data-action="toggle-lan"' + (lan.enabled ? ' checked' : '') + (lan.noPassword && !lan.enabled ? ' disabled' : '') + '>' +
+        '<span>' + escapeHtml(t('lan.toggle')) + '</span>' +
+      '</label>';
+    if (lan.noPassword && !lan.enabled) {
+      html += '<div class="update-note">' + escapeHtml(t('lan.noPassword')) + '</div>';
+    } else if (lan.enabled) {
+      var urls = lan.urls || [];
+      html += urls.length
+        ? urls.map(function (u) {
+            return '<div class="agent-warning-cmd"><code class="mono">' + escapeHtml(u) + '</code>' +
+              '<button data-action="copy-path" data-path="' + escapeHtml(u) + '">' + escapeHtml(t('lan.copy')) + '</button></div>';
+          }).join('')
+        : '<div class="update-note">' + escapeHtml(t('lan.noAddress')) + '</div>';
+      html += '<div class="update-note">' + escapeHtml(t('lan.certNote')) + '</div>' +
+        (lan.fingerprint ? '<div class="lan-fingerprint mono">' + escapeHtml(lan.fingerprint) + '</div>' : '');
+    } else {
+      html += '<div class="update-note">' + escapeHtml(t('lan.offNote')) + '</div>';
+    }
+    var err = lanError || lan.error;
+    if (err) html += '<div class="modal-error">' + escapeHtml(err) + '</div>';
+    return html + '<div class="preferences-divider"></div>';
+  }
+  function refreshLanSection() {
+    var el = document.getElementById('lan-section');
+    if (el) el.innerHTML = buildLanSectionInnerHTML();
+  }
+  function saveLanSetting(enabled) {
+    lanError = '';
+    api('/api/settings', { method: 'PATCH', body: { lan: enabled } }).then(function (settings) {
+      if (settings) state.settings = settings;
+    }).catch(function (e) {
+      lanError = (e instanceof ApiError && e.message) || t('preferences.errorSaveFailed');
+    }).then(refreshLanSection);
+  }
+
   function buildSettingsGeneralHTML() {
     return buildPreferencesSectionHTML() +
+      '<div id="lan-section">' + buildLanSectionInnerHTML() + '</div>' +
       '<button class="btn-outline btn-block" data-action="logout">' + escapeHtml(t('nav.logout')) + '</button>';
   }
 
@@ -7063,6 +8977,10 @@
     es.addEventListener('update', function (e) { try { onUpdateEvent(JSON.parse(e.data)); } catch (er) {} });
     es.addEventListener('settings', function (e) { try { onSettingsEvent(JSON.parse(e.data)); } catch (er) {} });
     es.addEventListener('preview', function (e) { try { onPreviewEvent(JSON.parse(e.data)); } catch (er) {} });
+    es.addEventListener('signal', function (e) { try { onSignalEvent(JSON.parse(e.data)); } catch (er) {} });
+    es.addEventListener('watch', function (e) { try { onWatchEvent(JSON.parse(e.data)); } catch (er) {} });
+    es.addEventListener('autoconfig', function (e) { try { onAutoconfigEvent(JSON.parse(e.data)); } catch (er) {} });
+    es.addEventListener('lan', function (e) { try { state.lan = JSON.parse(e.data) || {}; refreshLanSection(); } catch (er) {} });
     es.addEventListener('previewLog', function (e) { try { onPreviewLogEvent(JSON.parse(e.data)); } catch (er) {} });
     es.addEventListener('taskDeleted', function (e) { try { onTaskDeletedEvent(JSON.parse(e.data)); } catch (er) {} });
     es.addEventListener('cardDeleted', function (e) { try { onCardDeletedEvent(JSON.parse(e.data)); } catch (er) {} });
@@ -7105,6 +9023,29 @@
     if (action !== 'toggle-project-menu') closeAllProjectMenus();
     switch (action) {
       case 'nav-inbox': goInbox(); break;
+      case 'nav-vigie': goVigie(); break;
+      case 'vigie-check': vigieCheck(); break;
+      case 'vigie-upkeep': api('/api/projects/' + encodeURIComponent(el.getAttribute('data-project-id')) + '/upkeep', { method: 'POST' }).catch(vigieFail); break;
+      case 'vigie-upkeep-stop': api('/api/projects/' + encodeURIComponent(el.getAttribute('data-project-id')) + '/upkeep/stop', { method: 'POST' }).catch(vigieFail); break;
+      case 'vigie-watch': setProjectWatch(el.getAttribute('data-project-id'), el.getAttribute('data-enabled') === '1'); break;
+      case 'vigie-notify':
+        if (canNotify()) Notification.requestPermission().then(function () { refreshVigie(); });
+        break;
+      case 'vigie-log-toggle': state.vigieLogOpen = !state.vigieLogOpen; renderMain(); break;
+      case 'signal-dismiss': dismissSignal(el.getAttribute('data-signal-id')); break;
+      case 'signal-stop': stopSignal(el.getAttribute('data-signal-id')); break;
+      case 'open-claude-sessions': openClaudeSessionsModal(el.getAttribute('data-project-id')); break;
+      case 'claude-session-copy': copyClaudeSessionCmd(el.getAttribute('data-project-id'), el.getAttribute('data-session-id'), el); break;
+      case 'claude-session-workstream': claudeSessionToWorkstream(el.getAttribute('data-project-id'), el.getAttribute('data-session-id')); break;
+      case 'autoconf-start': startAutoconf(el.getAttribute('data-project-id')); break;
+      case 'autoconf-stop': stopAutoconf(el.getAttribute('data-project-id')); break;
+      case 'autoconf-dismiss': forgetAutoconf(el.getAttribute('data-project-id')); break;
+      case 'autoconf-apply': applyAutoconf(el.getAttribute('data-project-id')); break;
+      case 'autoconf-open': openAutoconf(el.getAttribute('data-project-id'), el.getAttribute('data-start') === '1'); break;
+      case 'signal-retry': patchSignal(el.getAttribute('data-signal-id'), { status: 'queued' }).catch(vigieFail); break;
+      case 'signal-copy': copySignalReview(el.getAttribute('data-signal-id'), el); break;
+      case 'signal-card': signalToCard(el.getAttribute('data-signal-id'), el); break;
+      case 'signal-workstream': startWorkstreamFromSignal(el.getAttribute('data-signal-id')); break;
       case 'nav-projects': goAllProjects(); break;
       case 'nav-project': goProject(el.getAttribute('data-project-id')); break;
       case 'open-card': goCard(el.getAttribute('data-card-id')); break;
@@ -7124,6 +9065,7 @@
       case 'move-card': moveCard(el.getAttribute('data-card-id'), el.getAttribute('data-column')); break;
       case 'open-new-card': openNewCardModal(); break;
       case 'open-new-task': if (state.cardId) openNewTaskModal(state.cardId); break;
+      case 'open-new-project-task': if (state.projectId) openNewTaskInProject(state.projectId); break;
       case 'open-plan': if (state.cardId) openPlanModal(state.cardId); break;
       case 'submit-plan': submitPlan(); break;
       case 'plan-remove-step': removePlanStep(parseInt(el.getAttribute('data-index'), 10)); break;
@@ -7131,7 +9073,14 @@
       case 'plan-create-tasks': createPlanTasks(); break;
       // Le formulaire de création cède la place à la liste d'issues : ce qui y
       // était saisi est relu avant, pour revenir dessus intact.
-      case 'open-issue-picker': if (state.cardId) { captureNewTaskDraft(); openIssuePicker(state.cardId); } break;
+      case 'open-issue-picker': {
+        // La modale porte son chantier (vide en mode projet) : c'est lui, pas
+        // l'écran derrière, qui dit où la tâche sera créée.
+        var pickerCardId = el.getAttribute('data-card-id') || '';
+        captureNewTaskDraft();
+        openIssuePicker(pickerCardId);
+        break;
+      }
       case 'pick-issue': pickIssue(parseInt(el.getAttribute('data-number'), 10)); break;
       case 'cancel-issue-picker': cancelIssuePicker(); break;
       case 'open-new-project': openNewProjectModal(); break;
@@ -7179,7 +9128,10 @@
         askAgentToCatchUp(el.getAttribute('data-card-id'), el.getAttribute('data-repo-name'), el.getAttribute('data-target'), el.getAttribute('data-files'));
         break;
       case 'confirm-click': handleConfirmClickDispatch(el); break;
-      case 'select-diff-file': selectDiffFile(el.getAttribute('data-task-id'), el.getAttribute('data-path')); break;
+      case 'diff-toggle-file': toggleDiffFile(el.getAttribute('data-task-id'), el.getAttribute('data-path')); break;
+      case 'diff-toggle-all': toggleDiffAll(el.getAttribute('data-task-id')); break;
+      case 'diff-tree-toggle': toggleDiffTree(); break;
+      case 'diff-jump': jumpToDiffFile(el.getAttribute('data-task-id'), el.getAttribute('data-path')); break;
       case 'open-difftool': doOpenDifftool(el.getAttribute('data-task-id'), el.getAttribute('data-path')); break;
       case 'send-message': sendMessage(el.getAttribute('data-task-id')); break;
       case 'attach-image': openAttachPicker(el.getAttribute('data-target')); break;
@@ -7197,6 +9149,9 @@
       case 'close-sidebar-drawer': closeSidebarDrawer(); break;
       case 'set-lang': setLang(el.getAttribute('data-lang')); break;
       case 'open-workspace-modal': openWorkspaceModal(); break;
+      case 'open-settings-agents': closeSidebarDrawer(); settingsModalTab = 'agents'; openModal(buildWorkspaceModalHTML()); break;
+      case 'open-signal': openSignal(el.getAttribute('data-signal-id')); break;
+      case 'external': break; // lien sortant dans une carte : le navigateur l'ouvre, la carte reste fermée
       case 'set-settings-tab': setSettingsTab(el.getAttribute('data-settings-tab')); break;
       case 'save-workspace-remote': saveWorkspaceRemote(); break;
       case 'toggle-autosync': saveAutoSync(el.checked); break;
@@ -7208,6 +9163,7 @@
       case 'update-check': doUpdateCheck(); break;
       case 'update-apply': doUpdateApply(); break;
       case 'toggle-update-check': saveUpdateCheckSetting(el.checked); break;
+      case 'toggle-lan': saveLanSetting(el.checked); break;
     }
   }
 
@@ -7221,7 +9177,7 @@
   // Action de création principale de l'écran courant (raccourci « N »).
   function createShortcutAction() {
     if (state.screen === 'work' && state.cardId) return function () { openNewTaskModal(state.cardId); };
-    if (state.screen === 'kanban' && state.projectId) return openNewCardModal;
+    if (state.screen === 'kanban' && state.projectId) return function () { openNewTaskInProject(state.projectId); };
     if (state.screen === 'projects') return openNewProjectModal;
     return null;
   }
@@ -7308,6 +9264,10 @@
       // Le champ est vidé pour que rechoisir le même fichier redéclenche
       // l'événement (sinon la valeur ne change pas et rien ne se passe).
       e.target.value = '';
+      return;
+    }
+    if (e.target && e.target.classList && e.target.classList.contains('vigie-agent-select')) {
+      setProjectWatch(e.target.getAttribute('data-project-id'), true, e.target.value);
       return;
     }
     if (e.target && e.target.id === 'issue-repo') {
@@ -7429,6 +9389,10 @@
       return;
     }
     if (e.key === '/') { e.preventDefault(); openSearch(); return; }
+    if (state.taskId && (e.key === 'f' || e.key === 'F')) { e.preventDefault(); togglePanelExpand(); return; }
+    if (state.taskId && state.panelTab === 'diff' && (e.key === 'j' || e.key === 'k')) {
+      e.preventDefault(); stepDiffFile(e.key === 'j' ? 1 : -1); return;
+    }
     if (e.key === '?') { e.preventDefault(); openShortcutsModal(); }
   }
 
@@ -7442,6 +9406,7 @@
     document.addEventListener('paste', onGlobalPaste);
     document.addEventListener('scroll', onGlobalScroll, true);
     document.addEventListener('keydown', onGlobalKeydown);
+    document.addEventListener('scroll', onDiffScroll, true);
     window.addEventListener('hashchange', applyRoute);
     boot();
   });

@@ -35,6 +35,9 @@ type Server struct {
 	pwMu         sync.RWMutex
 	passwordHash string
 
+	// lan : listener HTTPS optionnel sur le réseau local (voir lan.go).
+	lan lanListener
+
 	// autoSyncMu protège autoSyncStop (goroutine de synchronisation
 	// automatique périodique, voir workspace.go).
 	autoSyncMu   sync.Mutex
@@ -56,6 +59,12 @@ type Server struct {
 	// pour ne pas retarder la réponse de l'acceptation.
 	rebaseMu sync.Mutex
 	rebaseWG sync.WaitGroup
+
+	// watch : la Vigie (voir watch.go). En mémoire, hors signaux.
+	watch *watcher
+
+	// autoconf : les autoconfigurations de projet (voir autoconfig.go).
+	autoconf *autoconfTracker
 }
 
 // waitRebases attend la fin des rebases automatiques en cours. Réservé aux
@@ -77,6 +86,8 @@ func NewServer(store *Store, passwordHash, dataDir string, webFS fs.FS) *Server 
 		dataDir:      dataDir,
 		static:       staticWithRevalidation(webFS, http.FileServer(http.FS(webFS))),
 		updates:      &updateTracker{},
+		watch:        newWatcher(),
+		autoconf:     newAutoconfTracker(),
 	}
 	if store.GetWorkspace().AutoSync {
 		s.startAutoSync()
@@ -84,6 +95,9 @@ func NewServer(store *Store, passwordHash, dataDir string, webFS fs.FS) *Server 
 	// Sans effet sur une compilation locale (version "dev") ni si le réglage
 	// est coupé : aucun appel réseau n'est fait dans ces deux cas.
 	s.startUpdateChecker()
+	// Ne fait rien, pas même un appel à gh, tant qu'aucun projet n'a activé
+	// la Vigie.
+	s.startWatcher()
 	return s
 }
 
@@ -95,6 +109,9 @@ func (s *Server) Shutdown() {
 	s.previews.StopAll()
 	s.stopAutoSync()
 	s.stopUpdateChecker()
+	s.stopWatcher()
+	s.stopLAN()
+	s.autoconf.stopAll()
 }
 
 // staticWithRevalidation ajoute un ETag (empreinte du contenu embarqué) et
@@ -167,6 +184,16 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("DELETE /api/projects/{id}", s.handleDeleteProject)
 	mux.HandleFunc("POST /api/projects/{id}/mark-all-read", s.handleMarkProjectAllRead)
 	mux.HandleFunc("GET /api/projects/{id}/issues", s.handleProjectIssues)
+	mux.HandleFunc("PUT /api/projects/{id}/watch", s.handleProjectWatch)
+	mux.HandleFunc("GET /api/projects/{id}/claude-sessions", s.handleClaudeSessions)
+	mux.HandleFunc("POST /api/projects/{id}/upkeep", s.handleUpkeepNow)
+	mux.HandleFunc("POST /api/projects/{id}/upkeep/stop", s.handleUpkeepStop)
+	mux.HandleFunc("POST /api/projects/{id}/autoconfigure", s.handleStartAutoconfig)
+	mux.HandleFunc("POST /api/projects/{id}/autoconfigure/stop", s.handleStopAutoconfig)
+	mux.HandleFunc("DELETE /api/projects/{id}/autoconfigure", s.handleForgetAutoconfig)
+	mux.HandleFunc("POST /api/watch/check", s.handleWatchCheck)
+	mux.HandleFunc("PATCH /api/signals/{id}", s.handleUpdateSignal)
+	mux.HandleFunc("POST /api/signals/{id}/stop", s.handleStopSignal)
 	mux.HandleFunc("POST /api/cards", s.handleCreateCard)
 	mux.HandleFunc("PATCH /api/cards/{id}", s.handleUpdateCard)
 	mux.HandleFunc("DELETE /api/cards/{id}", s.handleDeleteCard)
@@ -317,6 +344,9 @@ func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 	state.Workspace = s.workspaceStatus()
 	state.Previews = s.previews.List()
 	state.Update = s.UpdateStatus()
+	state.Watch = s.WatchStatus()
+	state.Lan = s.LanStatus()
+	state.Autoconfigs = s.autoconf.list()
 	writeJSON(w, http.StatusOK, state)
 }
 
@@ -327,10 +357,29 @@ func (s *Server) handleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 		DisplayName *string `json:"displayName"`
 		Lang        *string `json:"lang"`
 		UpdateCheck *bool   `json:"updateCheck"`
+		LAN         *bool   `json:"lan"`
 	}
 	if err := decodeJSON(r, &body); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
+	}
+	if body.LAN != nil {
+		// Ouvrir au réseau d'abord : un échec (pas de mot de passe, port pris)
+		// ne doit pas laisser le réglage allumé sur un listener absent.
+		if *body.LAN {
+			if err := s.startLAN(); err != nil {
+				writeError(w, http.StatusBadRequest, err.Error())
+				s.publishLan()
+				return
+			}
+		} else {
+			s.stopLAN()
+		}
+		if err := s.store.SetLAN(*body.LAN); err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		s.publishLan()
 	}
 	settings, err := s.store.UpdateSettings(body.DisplayName, body.Lang, body.UpdateCheck)
 	if err != nil {
@@ -1028,18 +1077,47 @@ func (s *Server) handleCreateTask(w http.ResponseWriter, r *http.Request) {
 		RepoName       string            `json:"repoName"`
 		WaitsForTaskID string            `json:"waitsForTaskId"`
 		Attachments    []attachmentInput `json:"attachments"`
+		// ProjectID sans CardID : chantier implicite. Le chantier est créé ici,
+		// au nom de la tâche, et supprimé si la tâche ne peut pas l'être.
+		ProjectID string `json:"projectId"`
+		// SignalID : la tâche répond à un signal de la Vigie, qui passe en
+		// "handled" une fois la tâche créée.
+		SignalID string `json:"signalId"`
 	}
-	if err := decodeJSON(r, &body); err != nil || body.CardID == "" || body.Title == "" || body.AgentID == "" {
-		writeError(w, http.StatusBadRequest, "cardId, title and agentId are required")
-		return
-	}
-	card, ok := s.store.GetCard(body.CardID)
-	if !ok {
-		writeError(w, http.StatusBadRequest, "card not found")
+	if err := decodeJSON(r, &body); err != nil || (body.CardID == "" && body.ProjectID == "") || body.Title == "" || body.AgentID == "" {
+		writeError(w, http.StatusBadRequest, "cardId (or projectId), title and agentId are required")
 		return
 	}
 	if _, ok := s.store.GetAgent(body.AgentID); !ok {
 		writeError(w, http.StatusBadRequest, "agent not found")
+		return
+	}
+	if body.CardID == "" {
+		if body.WaitsForTaskID != "" {
+			writeError(w, http.StatusBadRequest, "waitsForTaskId needs an existing workstream")
+			return
+		}
+		if _, err := s.store.ResolveTaskRepo(body.ProjectID, body.RepoName); err != nil {
+			writeError(w, statusForStoreError(err), err.Error())
+			return
+		}
+		implicit, err := s.store.AddCard(body.ProjectID, body.Title, "", "")
+		if err != nil {
+			writeError(w, statusForStoreError(err), err.Error())
+			return
+		}
+		body.CardID = implicit.ID
+		// Le chantier implicite ne survit que si la tâche a été enregistrée.
+		defer func() {
+			if len(s.store.TasksByCard(implicit.ID)) == 0 {
+				_, _ = s.store.DeleteCard(implicit.ID)
+			}
+			s.runner.publishCards(implicit.ProjectID)
+		}()
+	}
+	card, ok := s.store.GetCard(body.CardID)
+	if !ok {
+		writeError(w, http.StatusBadRequest, "card not found")
 		return
 	}
 	// waitsForTaskId : la tâche reste "waiting" (agent non lancé) jusqu'à
@@ -1115,6 +1193,11 @@ func (s *Server) handleCreateTask(w http.ResponseWriter, r *http.Request) {
 	}
 	s.runner.publishTask(task)
 	s.runner.publishCards(project.ID)
+	if body.SignalID != "" {
+		if sig, err := s.store.UpdateSignal(body.SignalID, func(x *Signal) { x.Status = "handled"; x.CardID = card.ID }); err == nil {
+			s.publishSignal(sig)
+		}
+	}
 
 	if task.Status == "waiting" {
 		// L'agent démarrera plus tard : les chemins des images attendent avec le
@@ -2018,7 +2101,7 @@ func (s *Server) handleDiff(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "failed to compute diff: "+err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, DiffResponse{Branch: task.Branch, Base: task.Base, Files: files})
+	writeJSON(w, http.StatusOK, DiffResponse{Branch: task.Branch, Base: task.Base, Files: files, Tool: DifftoolName(task.WorktreeDir)})
 }
 
 // handleDifftool lance l'outil de diff configuré par git (diff.tool) sur un
@@ -2034,8 +2117,9 @@ func (s *Server) handleDifftool(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Path string `json:"path"`
 	}
-	if err := decodeJSON(r, &body); err != nil || strings.TrimSpace(body.Path) == "" {
-		writeError(w, http.StatusBadRequest, "path is required")
+	// path vide : toutes les modifications d'un coup (git difftool --dir-diff).
+	if err := decodeJSON(r, &body); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid body")
 		return
 	}
 	if err := OpenDifftool(task.WorktreeDir, task.Base, body.Path); err != nil {

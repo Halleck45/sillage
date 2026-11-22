@@ -21,7 +21,7 @@ import (
 // les champs exportés du Store sont sérialisés tels quels, une version qui ne
 // connaît pas un champ le fait disparaître du fichier à sa première
 // sauvegarde, en silence (voir ErrStateTooNew).
-const stateFormatVersion = 7
+const stateFormatVersion = 8
 
 // agentSeedVersion tracks one-time additions to the built-in agent profiles.
 // Unlike checking for an ID at every startup, this lets users delete a seeded
@@ -57,6 +57,12 @@ type Store struct {
 	Agents    map[string]Agent
 	Workspace Workspace
 	Settings  Settings
+
+	// Signals : ce que la Vigie a repéré sur les forges (voir watch.go). Les
+	// signaux classés restent, c'est ce qui empêche une PR déjà vue de
+	// remonter à la relève suivante.
+	Signals     map[string]Signal
+	NextSignalN int
 
 	// AgentSeedVersion records which built-in agent additions have already been
 	// offered to this workspace. It does not prevent users from editing or
@@ -135,6 +141,7 @@ func loadStoreFile(dataDir string) (*Store, error) {
 	migrateCardUpdatedAt(s)
 	migrateAgentSeeds(s)
 	resetTransientTaskFlags(s)
+	resetTransientSignals(s)
 	return s, nil
 }
 
@@ -419,6 +426,9 @@ func (s *Store) ensureMaps() {
 	}
 	if s.Agents == nil {
 		s.Agents = map[string]Agent{}
+	}
+	if s.Signals == nil {
+		s.Signals = map[string]Signal{}
 	}
 }
 
@@ -1123,6 +1133,7 @@ func (s *Store) Snapshot() State {
 		Tasks:    sortedTasks(s.Tasks),
 		Agents:   sortedAgentsWithWarnings(s.Agents, s.CodexQuota, s.WorktreesDir()),
 		Settings: s.Settings,
+		Signals:  activeSignals(s.Signals),
 	}
 	st.Tokens.Global = global
 	return st
@@ -1315,6 +1326,15 @@ func (s *Store) UpdateSettings(displayName, lang *string, updateCheck *bool) (Se
 		return Settings{}, err
 	}
 	return s.Settings, nil
+}
+
+// SetLAN enregistre le réglage d'accès réseau ; le listener est géré par le
+// serveur (lan.go).
+func (s *Store) SetLAN(on bool) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.Settings.LAN = on
+	return s.save()
 }
 
 // NormalizeRepos valide et normalise une liste de dépôts : au moins un repo,
@@ -2141,6 +2161,11 @@ func (s *Store) DeleteProject(id string) (Project, error) {
 		return Project{}, fmt.Errorf("project not found")
 	}
 	delete(s.Projects, id)
+	for sid, sig := range s.Signals {
+		if sig.ProjectID == id {
+			delete(s.Signals, sid)
+		}
+	}
 	if err := s.save(); err != nil {
 		return Project{}, err
 	}

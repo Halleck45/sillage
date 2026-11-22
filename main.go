@@ -74,6 +74,7 @@ func main() {
 	}
 
 	srv := server.NewServer(store, hash, *dataDir, webContent)
+	srv.SetListenAddr(*addr)
 	httpSrv := &http.Server{Addr: *addr, Handler: srv.Handler()}
 
 	// Arrêt propre : les recettes manuelles lancées par Sillage (serveurs de

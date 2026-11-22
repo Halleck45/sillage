@@ -1727,3 +1727,46 @@ func TestCancelWaitingTask(t *testing.T) {
 		t.Fatalf("la tâche annulée ne devrait pas redémarrer, statut %q", after.Status)
 	}
 }
+
+// TestOpenDifftoolAllFiles : sans chemin, l'outil reçoit toutes les
+// modifications d'un coup (--dir-diff), fichiers non suivis compris.
+func TestOpenDifftoolAllFiles(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git non disponible dans cet environnement")
+	}
+	repo := t.TempDir()
+	runTestGit(t, repo, "init")
+	runTestGit(t, repo, "config", "user.email", "test@example.com")
+	runTestGit(t, repo, "config", "user.name", "Test")
+	if err := os.WriteFile(filepath.Join(repo, "a.txt"), []byte("one\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	runTestGit(t, repo, "add", "-A")
+	runTestGit(t, repo, "commit", "-m", "initial")
+	if err := os.WriteFile(filepath.Join(repo, "a.txt"), []byte("two\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(repo, "b.txt"), []byte("new\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	out := filepath.Join(t.TempDir(), "seen")
+	runTestGit(t, repo, "config", "diff.tool", "sillagetest")
+	runTestGit(t, repo, "config", "difftool.sillagetest.cmd", `ls "$REMOTE" > `+out+`.tmp && mv `+out+`.tmp `+out)
+	if got := DifftoolName(repo); got != "sillagetest" {
+		t.Fatalf("DifftoolName = %q", got)
+	}
+	if err := OpenDifftool(repo, "HEAD", ""); err != nil {
+		t.Fatalf("OpenDifftool: %v", err)
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		if b, err := os.ReadFile(out); err == nil {
+			if s := string(b); !strings.Contains(s, "a.txt") || !strings.Contains(s, "b.txt") {
+				t.Fatalf("l'outil devait recevoir a.txt et b.txt, reçu %q", s)
+			}
+			return
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	t.Fatal("l'outil de diff n'a pas été lancé en mode répertoire")
+}

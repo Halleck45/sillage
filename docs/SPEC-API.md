@@ -138,9 +138,10 @@ WorkspaceStatus { "setupDone": true, "gitEnabled": true, "remote": "git@host:org
                   // uniquement (jamais persisté, remis à "" à chaque redémarrage) ; voir
                   // "Synchronisation automatique" ci-dessous.
 
-Settings { "displayName": "Ada", "lang": "fr", "updateCheck": true | false | null }
+Settings { "displayName": "Ada", "lang": "fr", "updateCheck": true | false | null, "lan": false }
           // lang : ""|"fr"|"en". updateCheck : vérification périodique des mises à jour ;
           // null/absent = activé (voir "Mises à jour de Sillage" ci-dessous).
+          // lan : accès depuis le réseau local (voir "Accès réseau local").
 
 UpdateStatus { "current": "0.8.0", "latest": "0.9.0", "available": true,
                "method": "brew|binary|go|unknown|dev", "path": "/opt/homebrew/bin/sillage",
@@ -191,6 +192,66 @@ PreviewRun { "id": "pv1", "projectId": "p1", "cardId": "c1", "taskId": "",
           // stopped = arrêt humain, failed = n'a pas démarré (error).
           // JAMAIS persisté : ni dans state.json, ni dans l'espace de travail git. Un
           // redémarrage du serveur ne laisse ni process ni run.
+
+Watch   { "enabled": true, "agentId": "bolt", "since": "...", "upkeepAt": "..." | null }
+          // Project.watch : la Vigie du projet (voir "Vigie" ci-dessous). since est posé au
+          // passage de coupé à actif, jamais déplacé ensuite (changer d'agent le garde).
+          // upkeepAt : la dernière veille d'entretien, null si jamais faite ou redemandée.
+
+Signal  { "id": "s1", "projectId": "p1", "repoName": "api", "kind": "pr|issue|upkeep",
+          "number": 552, "title": "...", "url": "https://github.com/...", "author": "login",
+          "body": "...", "labels": ["bug"], "createdAt": "...", "detectedAt": "...",
+          "status": "queued|analyzing|ready|error|dismissed|handled",
+          "decision": "merge|changes|rework|close|fix|feature|needs-info",
+          "priority": "high|normal|low", "verdict": "...", "review": "...", "error": "",
+          "cardId": "", "analyzedAt": null,
+          "comments": [{"author": "login", "body": "...", "createdAt": "..."}],
+          "seenCommentAt": "...", "newComments": 0 }
+          // comments : les 10 derniers messages (commentaires, et revues pour une PR), du plus
+          // ancien au plus récent. newComments : messages de tiers qui ont relancé l'analyse.
+          // kind "upkeep" : un constat de la veille d'entretien, sans numéro ni URL, créé
+          // directement "ready" avec decision "upgrade" ; review porte le plan de travail.
+          // Une PR ou une issue repérée par la Vigie, avec l'analyse de l'agent. Persisté.
+          // GET /api/state n'expose que les signaux actifs (ni dismissed ni handled).
+          // decision : le jugement (PR : merge, changes, rework, close ; issue : fix, feature,
+          // needs-info, close), vide si l'agent n'en a pas donné de valide.
+          // review : texte destiné à GitHub (commentaires de revue, réponse à l'issue),
+          // toujours en anglais. verdict : pour le mainteneur, dans la langue de l'UI.
+
+WatchStatus { "checkedAt": "...", "checking": false, "errors": {"p1": "api: gh not found in PATH"},
+              "log": [WatchLogEntry], "current": AnalysisProgress | null }
+          // État du veilleur, jamais persisté. log : les 80 dernières lignes, la plus récente
+          // en premier. current : la relecture en cours (une seule à la fois), null sinon.
+
+AnalysisProgress { "kind": "review|upkeep", "projectId": "p1", "repoName": "api", "signalId": "s4", "startedAt": "...", "phase": "diff|reading",
+                   "steps": ["Read · internal/watch.go"], "timeoutSec": 900 }
+          // phase diff : lecture du diff via gh ; reading : l'agent lit. steps : les 12
+          // derniers outils employés, le plus récent en dernier, chemins du dépôt relatifs.
+
+AutoconfigRun { "projectId": "p1", "agentId": "muse", "status": "running|ready|error",
+                "startedAt": "...", "finishedAt": null, "repoName": "api", "steps": ["Read · Makefile"],
+                "timeoutSec": 600, "proposal": AutoconfigProposal | null, "error": "" }
+          // Jamais persisté. Une par projet au plus. error "stopped" : arrêtée par l'humain.
+          // Dans l'événement SSE "autoconfig", status "" signifie « oubliée ».
+
+AutoconfigProposal { "checkCmd": "go test ./...", "permissionProfiles": ["go"],
+                     "repos": [{ "name": "api", "install": "", "build": "", "test": "",
+                                 "check": "", "previewCmd": "", "previewUrl": "", "notes": "", "error": "" }] }
+          // install, build, test : informatifs. checkCmd : le check du premier dépôt qui en a un.
+          // Commandes ramenées à une ligne, previewUrl http(s) seulement, profils inconnus écartés,
+          // check no-op (true, exit 0) écarté.
+
+LanStatus { "enabled": true, "urls": ["https://192.168.1.12:8788"], "fingerprint": "55:14:…",
+            "error": "", "noPassword": false }
+          // Jamais persisté. noPassword : aucun mot de passe défini, le réglage ne peut pas s'activer.
+
+WatchLogEntry { "at": "...", "kind": "list|analysis|error", "projectId": "p1", "repoName": "api",
+                "item": "pr|issue", "open": 3, "added": 1, "older": 1, "drafts": 1, "known": 0,
+                "from": "...", "number": 0, "durationMs": 0, "error": "" }
+          // list : une liste lue sur la forge (open = renvoyés par gh, added = nouveaux signaux,
+          // older = créés avant from, drafts = brouillons, known = déjà vus).
+          // analysis : une analyse terminée (error vide) ou échouée. error : lecture impossible.
+          // Structuré plutôt que rédigé : l'UI le met en mots dans sa langue.
 ```
 
 `Card.progress` = tasksDone/tasksTotal en % (0 si vide). Les compteurs de Card sont calculés côté serveur. `tasksDone` = tâches `accepted`. `reviewCount` = tâches `review`. Les tâches `cancelled` (refusées) sont exclues de `tasksTotal`/`tasksDone`/`progress`, mais comptent comme terminales pour l'auto-déplacement de carte (voir plus bas).
@@ -209,12 +270,22 @@ PreviewRun { "id": "pv1", "projectId": "p1", "cardId": "c1", "taskId": "",
 |---|---|---|---|
 | POST | `/api/login` | `{password}` | 204 ou 401 `{error}` |
 | POST | `/api/logout` | | 204 |
-| GET | `/api/state` | | `{projects, cards, tasks, agents, workspace, settings, previews, update, tokens:{global:Tokens}}` |
+| GET | `/api/state` | | `{projects, cards, tasks, agents, workspace, settings, previews, update, signals, watch, lan, autoconfigs:[AutoconfigRun], tokens:{global:Tokens}}` |
+| PUT | `/api/projects/{id}/watch` | `{enabled, agentId?}` | ProjectOut (voir "Vigie" ; `agentId` vide = l'analyste déjà choisi, sinon le premier agent claude, codex puis fake sans avertissement ; 400 `"this agent cannot analyze"` pour tout autre CLI) |
+| POST | `/api/watch/check` | | 202 (relève immédiate, en tâche de fond) |
+| POST | `/api/projects/{id}/upkeep` | | 202 : redemande la veille d'entretien du projet (remet `watch.upkeepAt` à null) et lance une relève ; 400 si la Vigie est coupée |
+| POST | `/api/projects/{id}/upkeep/stop` | | 202 : arrête la veille en cours du projet ; 409 si rien ne tourne |
+| GET | `/api/projects/{id}/claude-sessions` | | `{sessions:[ClaudeSession]}` : les sessions Claude Code interactives lancées dans un dépôt du projet (voir « Sessions Claude Code ») |
+| POST | `/api/signals/{id}/stop` | | 202 : arrête la relecture en cours du signal, qui passe `error` avec `error:"stopped"` ; 409 si ce n'est pas lui qui est relu. Classer (`dismissed`) un signal en cours de relecture l'arrête aussi |
+| POST | `/api/projects/{id}/autoconfigure` | `{agentId?}` | 202 AutoconfigRun : lance la configuration automatique en tâche de fond (voir ci-dessous). `agentId` vide = l'analyste de la Vigie, sinon le choix par défaut de la Vigie. 400 `"this agent cannot run read-only"` hors claude/codex/fake, 409 si une tourne déjà |
+| POST | `/api/projects/{id}/autoconfigure/stop` | | 202 ; 409 si rien ne tourne |
+| DELETE | `/api/projects/{id}/autoconfigure` | | 204 : oublie la proposition ; 409 si elle tourne |
+| PATCH | `/api/signals/{id}` | `{status:"dismissed"\|"handled"\|"queued", cardId?}` | Signal (`handled` exige un `cardId` existant ; `queued` relance l'analyse, 409 si elle tourne déjà) |
 | GET | `/api/workspace` | | WorkspaceStatus |
 | POST | `/api/workspace/setup` | `{mode:"local"\|"init"\|"clone", remote?}` | WorkspaceStatus (voir ci-dessous) |
 | PATCH | `/api/workspace` | `{remote?, autoSync?}` | WorkspaceStatus (au moins un des deux champs requis ; `remote` définit/remplace origin, 400 si git non initialisé ; `autoSync:true` exige git initialisé ET un remote déjà défini, celui fourni dans le même appel compte, 400 sinon ; voir "Synchronisation automatique" ci-dessous) |
 | POST | `/api/workspace/sync` | `{confirm:true}` | `{output, lastSyncAt}` (voir ci-dessous). **Validation humaine obligatoire** : refus 400 sans `confirm` |
-| PATCH | `/api/settings` | `{displayName?, lang?, updateCheck?}` | Settings (`lang` doit être `""`, `"fr"` ou `"en"`, 400 sinon ; `updateCheck` démarre ou arrête la vérification périodique) |
+| PATCH | `/api/settings` | `{displayName?, lang?, updateCheck?, lan?}` | Settings (`lang` doit être `""`, `"fr"` ou `"en"`, 400 sinon ; `updateCheck` démarre ou arrête la vérification périodique ; `lan` ouvre ou ferme l'accès réseau local, 400 sans mot de passe ou si le port est pris, le réglage n'est alors pas enregistré) |
 | GET | `/api/update` | | UpdateStatus. Lecture du cache mémoire uniquement : **aucun appel réseau** |
 | POST | `/api/update/check` | `{}` | UpdateStatus après un appel à l'API GitHub. 400 sur une compilation locale (rien à comparer), 502 si GitHub est injoignable |
 | POST | `/api/update/apply` | `{confirm:true}` | `{output, version, restarting, note}` : installe la version publiée puis remplace le process. 400 sans `confirm`, 502 si l'installation échoue ou n'est pas possible en un clic (voir ci-dessous) |
@@ -234,7 +305,7 @@ PreviewRun { "id": "pv1", "projectId": "p1", "cardId": "c1", "taskId": "",
 | POST | `/api/cards/{id}/ship` | `{confirm:true}` | ShipResponse : **la seule action sortante du produit** (push + pull request, ou fusion locale). 400 sans `confirm`, 409 si le chantier n'est pas livrable |
 | POST | `/api/cards/{id}/catch-up` | | CatchUpResponse : fusionne la branche de destination dans celle du chantier pour débloquer la livraison (voir « Livraison d'un chantier »). Local, aucune confirmation ; un conflit est annulé et rapporté par dépôt |
 | POST | `/api/cards/{id}/plan` | `{agentId, repoName?, prompt?}` | PlanResponse : un agent propose un découpage du chantier en tâches. **Ne crée rien** (ni tâche, ni branche de chantier), **lecture seule**. Synchrone, jusqu'à 5 min. 400 si `agentId` manque, est inconnu, ou si son CLI ne sait pas planifier (`"this agent cannot plan"`) ; 400 sur `repoName` inconnu/manquant ; 502 si l'agent échoue, expire ou ne rend pas de plan. Voir « Plan de tâches » ci-dessous |
-| POST | `/api/tasks` | `{cardId, title, agentId, prompt?, repoName?, waitsForTaskId?, attachments?}` | Task (créée `running`, agent lancé avec title+prompt). `attachments` : mêmes règles et mêmes limites que pour un message (voir « Images jointes »). `repoName` optionnel si le projet n'a qu'un repo ; sinon 400 `"repoName required (project has several repositories)"` ou 400 si inconnu. `waitsForTaskId` : voir « Démarrage différé d'une tâche » ci-dessous |
+| POST | `/api/tasks` | `{cardId \| projectId, title, agentId, prompt?, repoName?, waitsForTaskId?, attachments?, signalId?}` | Task (créée `running`, agent lancé avec title+prompt). `projectId` sans `cardId` : chantier implicite, voir ci-dessous. `signalId` : le signal de la Vigie passe en `handled`, rattaché au chantier de la tâche. `attachments` : mêmes règles et mêmes limites que pour un message (voir « Images jointes »). `repoName` optionnel si le projet n'a qu'un repo ; sinon 400 `"repoName required (project has several repositories)"` ou 400 si inconnu. `waitsForTaskId` : voir « Démarrage différé d'une tâche » ci-dessous |
 | PATCH | `/api/tasks/{id}` | `{agentId}` | Task : réassigne l'agent (voir « Réassignation » ci-dessous). 400 si `status=running` (`"interrupt the agent before reassigning"`) ou si l'agent est inconnu |
 | DELETE | `/api/tasks/{id}` | `{confirm:true}` | 204 (voir « Suppressions » ci-dessous). **Validation humaine obligatoire** : refus 400 sans `confirm` |
 | GET | `/api/tasks/{id}` | | `{task, messages}` |
@@ -247,7 +318,7 @@ PreviewRun { "id": "pv1", "projectId": "p1", "cardId": "c1", "taskId": "",
 | POST | `/api/tasks/{id}/reopen` | | Task (accepted/cancelled → review). 400 sinon |
 | POST | `/api/tasks/{id}/read` | | 204 (unread=false, ne modifie jamais `updatedAt` : voir plus bas) |
 | GET | `/api/tasks/{id}/diff` | | voir ci-dessous |
-| POST | `/api/tasks/{id}/difftool` | `{path}` | 204 : lance `git difftool` sur `path`, entre `task.base` et l'état courant du worktree, avec l'outil configuré par l'utilisateur (`git config diff.tool`). Ne bloque pas la requête (l'outil est graphique et peut rester ouvert). 400 si `path` manque ou si aucun `diff.tool` n'est configuré. **Aucune confirmation** : local, lecture seule côté état |
+| POST | `/api/tasks/{id}/difftool` | `{path?}` | 204 : lance `git difftool` entre `task.base` et l'état courant du worktree, avec l'outil configuré par l'utilisateur (`git config diff.tool`). `path` vide ou absent : toutes les modifications d'un coup (`--dir-diff`, fichiers non suivis compris), sinon ce seul fichier. Ne bloque pas la requête (l'outil est graphique et peut rester ouvert). 400 si aucun `diff.tool` n'est configuré. **Aucune confirmation** : local, lecture seule côté état |
 | GET | `/api/tasks/{id}/deliverables` | | voir ci-dessous |
 | POST | `/api/cards/{id}/preview` | `{repoName?}` | PreviewRun : lance la recette dans le worktree de la branche de chantier. `repoName` optionnel si le chantier n'a qu'une branche ; 400 `"repoName is required"` sinon, 400 si aucune branche de chantier ou aucune commande configurée. **Aucune confirmation** : local et réversible |
 | POST | `/api/tasks/{id}/preview` | | PreviewRun : même chose dans le worktree de la tâche |
@@ -283,8 +354,60 @@ Pendant l'opération, `Task.rebasing` vaut `true` (événement SSE `task` à l'e
 
 Résultat au fil de la tâche : `"[rebased:<workstreamBranch>]"` en cas de succès. En cas de conflit, `git rebase --abort` remet le worktree exactement dans son état d'avant (rien n'est modifié, la branche est inchangée), le marqueur est `"[rebase-conflict:<fichiers séparés par des espaces>]"`, et comme pour un conflit à l'acceptation (voir ci-dessus), l'agent reçoit aussitôt l'instruction de reprendre la base : la tâche repasse en `running` au lieu de rester en `review` avec un marqueur que personne ne lit. Un échec sans conflit ne pose aucun marqueur (et ne relance rien).
 
-Après chaque changement de statut de tâche, la carte est automatiquement replacée : si elle a au moins une tâche, qu'elles sont toutes terminales (`accepted`/`cancelled`) **et** que le chantier a été livré, `card.column` passe à `"done"` ; sinon elle passe (ou reste) en `"doing"`. La colonne « Terminé » veut donc dire livré, pas seulement relu. Une carte déjà livrée en ressort dès qu'un travail nouveau y apparaît (voir « Continuer un chantier déjà livré »). Les cartes antérieures aux branches de chantier (`branches` vide) sont considérées livrées, pour garder leur colonne historique. Le déplacement manuel (PATCH `/api/cards/{id}`) reste indépendant de cette règle. Chaque changement republie l'événement SSE `cards`.
+Après chaque changement de statut de tâche, la carte est automatiquement replacée : si elle a au moins une tâche, qu'elles sont toutes terminales (`accepted`/`cancelled`) **et** que le chantier a été livré, `card.column` passe à `"done"` ; sinon elle passe (ou reste) en `"doing"`. La colonne « Terminé » veut donc dire livré, pas seulement relu. Le kanban n'affiche pas `soon`/`doing`/`done` tels quels : il les lit « à qui la main » en quatre colonnes dérivées côté frontend (`cardLane`) : *À lancer* (sans tâche, ou une tâche `waiting`), *Les agents travaillent* (une tâche `running`), *À vous* (`reviewCount > 0`, `awaitingShip`, ou du travail rendu sans rien qui tourne), *Livré* (`column == "done"`). Les signaux de la Vigie du projet y figurent comme des cartes : *Les agents travaillent* pendant l'analyse, *À vous* ensuite. Le déplacement manuel ne sert plus qu'aux chantiers sans tâche. Une carte déjà livrée en ressort dès qu'un travail nouveau y apparaît (voir « Continuer un chantier déjà livré »). Les cartes antérieures aux branches de chantier (`branches` vide) sont considérées livrées, pour garder leur colonne historique. Le déplacement manuel (PATCH `/api/cards/{id}`) reste indépendant de cette règle. Chaque changement republie l'événement SSE `cards`.
 
+### Chantier implicite
+
+Le cas courant est une tâche seule : un correctif, une issue. `POST /api/tasks` avec `projectId` et sans `cardId` crée le chantier au nom de la tâche, puis la tâche dedans. Le modèle ne change pas (un chantier reste une branche, donc une PR par sujet) ; seule la cérémonie disparaît. Si la tâche ne peut pas être créée (worktree, dépôt), le chantier est supprimé dans la foulée. `waitsForTaskId` exige un chantier existant (400).
+
+Côté UI, « Nouvelle tâche » (touche N) est l'action principale du kanban, « Nouveau chantier » reste à côté pour un sujet qui demandera plusieurs tâches. Ouvrir un chantier qui n'a qu'une tâche mène directement à elle.
+
+### Accès réseau local
+
+Le listener de `-addr` reste sur localhost. `Settings.lan` en ajoute un second, sur toutes les interfaces, au port de `-addr` plus un (8788 par défaut), **en HTTPS uniquement** : un certificat auto-signé ECDSA est créé au premier usage dans `<dataDir>/tls/` (clé en 0600) et réutilisé ensuite, pour que l'exception du navigateur ne se demande qu'une fois. Le réglage est refusé sans mot de passe : une session sur ce listener vaut une exécution de code sur la machine (les agents écrivent et lancent du code). Les adresses affichées sont les IPv4 privées (et la plage 100.64/10 de Tailscale) des interfaces actives, hors bridges de conteneurs, plus `<hostname>.local`. L'empreinte SHA-256 du certificat est affichée pour être comparée à celle que montre le navigateur.
+
+### Sessions Claude Code
+
+`GET /api/projects/{id}/claude-sessions` lit, **en lecture seule**, les sessions que `claude --resume` liste pour les dossiers du projet : les fichiers `<profil>/projects/<chemin encodé>/<id>.jsonl` des profils `CLAUDE_CONFIG_DIR`, `~/.claude` et `~/.claude-*` (hors `.bak`, `.backup`, `.old`). Un dossier encodé n'est qu'un préfixe ambigu : le `cwd` lu dans le fichier doit être le dépôt ou un de ses sous-dossiers. Les exécutions non interactives (`entrypoint` autre que `cli`) sont écartées : ce sont les tâches, plans, relectures et configurations de Sillage lui-même. 30 sessions au plus, de moins de 60 jours, les plus récentes d'abord ; un fichier n'est relu que si sa taille ou sa date change.
+
+```
+ClaudeSession { "id": "9a16…", "repoName": "api", "cwd": "/abs/path", "title": "...", "lastPrompt": "...",
+                "branch": "main", "startedAt": "...", "updatedAt": "...", "active": true,
+                "promptsCount": 15, "prompts": ["..."], "configDir": "/home/u/.claude-perso",
+                "resumeCmd": "cd '/abs/path' && CLAUDE_CONFIG_DIR='…' claude --resume 9a16…" }
+// title : ai-title ou custom-title de Claude Code, sinon la première demande. active : fichier
+// écrit il y a moins de 3 minutes. prompts : les 8 dernières demandes tapées (hors retours d'outils
+// et commandes internes).
+```
+
+Sillage ne reprend pas ces sessions et n'en fait pas des tâches d'office : elles n'ont ni worktree ni diff à relire. L'UI propose de copier la commande de reprise, ou d'en faire un chantier (une tâche neuve, pré-remplie avec leurs dernières demandes). La modale de livraison prévient quand une session est active dans le projet.
+
+### Configuration automatique
+
+Un agent en lecture seule (mêmes garanties que la planification : `planAllowedTools` pour claude, sandbox `read-only` pour codex) lit chaque dépôt du projet, l'un après l'autre (10 minutes au plus par dépôt), et propose la commande de vérification, la commande et l'URL de recette (avec `$SILLAGE_PORT`) et les profils de permissions. **Rien n'est enregistré par cette route** : l'UI montre la proposition, « Reprendre ces valeurs » remplit le brouillon des réglages, et c'est l'enregistrement ordinaire (`PATCH /api/projects/{id}`) qui écrit. La commande de vérification s'exécute après chaque tâche, et les fichiers lus par l'agent peuvent avoir été écrits par n'importe qui : une commande que personne n'a relue ne s'exécute jamais.
+
+### Vigie
+
+La Vigie surveille les PR et issues GitHub des projets qui l'ont activée (`Project.watch.enabled`, coupée par défaut) et fait relire chaque nouvel élément par un agent **avant** d'en parler à l'humain : il ne reçoit pas « une PR est arrivée » mais un verdict d'une phrase, une priorité et une revue rédigée.
+
+**Rien n'est écrit sur la forge.** Sillage lit GitHub avec `gh` (`pr list`, `issue list`, `pr diff`) et n'y poste jamais rien : ni revue, ni commentaire, ni label. Le verdict et la revue restent dans `state.json` ; l'UI propose de copier les commentaires proposés, c'est l'humain qui la publie, hors de Sillage.
+
+**Le code d'une PR n'est jamais exécuté ni extrait.** L'agent reçoit le diff en texte et lit le dépôt local tel qu'il est. Lancer les tests d'une PR venue d'un fork reviendrait à exécuter le code d'un inconnu sur le poste.
+
+- Relève toutes les 10 minutes (première 20 s après le démarrage), plus à l'activation d'un projet et sur `POST /api/watch/check`. Sans projet surveillé, aucun appel à `gh`.
+- Ne remontent que les éléments ouverts, non brouillons, créés au plus 30 jours avant l'activation (`since`). Au plus 5 nouveaux par dépôt, type et relève, au plus 10 analyses par relève, une à la fois : un dépôt très actif est absorbé sur plusieurs relèves.
+- Un élément ne remonte qu'une fois (clé projet, dépôt, type, numéro), même classé. Une PR qui reçoit de nouveaux commits ne repasse pas en analyse.
+- **La discussion est suivie.** La relève lit aussi les commentaires (et les revues d'une PR). Un message d'un tiers plus récent que `seenCommentAt` remet le signal en file, même classé (sauf `handled` ou en cours d'analyse), avec `newComments` ; l'analyste reçoit la discussion (encadrée `<untrusted>`) et son verdict précédent, et répond d'abord aux nouveaux messages. Les messages du compte `gh` de la machine (`gh api user`) et des robots (`[bot]`) ne relancent rien. Un élément antérieur à `since` entre dans la Vigie s'il vient d'être commenté par un tiers. Un signal antérieur à ce suivi prend la discussion telle quelle au premier passage, sans relance.
+- **Veille d'entretien.** Une fois par semaine par projet surveillé (`watch.upkeepAt`), après les analyses, l'analyste lit chaque dépôt en lecture seule et rend au plus trois constats (`{"findings":[{"title","priority","verdict","details"}]}`) : version de langage ou de framework publiée mais non déclarée ou non testée, version minimale en fin de vie, CI dépréciée, contrainte qui bloque une majeure. Sillage lui fournit les cycles de vie publiés par **endoflife.date** (GET `https://endoflife.date/api/<produit>.json`, en cache un jour) pour les technologies repérées dans les manifestes (`composer.json`, `go.mod`, `package.json`, `pyproject.toml`…), parce qu'un modèle ignore ce qui est sorti après sa date de coupure. Chaque constat devient un signal `upkeep` ; un constat de même titre pour le même dépôt n'est jamais recréé, même classé. 10 minutes au plus par dépôt.
+- Analyse : mêmes garanties de lecture seule que le plan de tâches (allowlist figée pour claude, `--sandbox read-only` pour codex, fake simulé, aucun autre CLI). Le texte externe (titre, corps, labels, diff) est encadré de balises `<untrusted>` que le texte lui-même ne peut pas refermer, avec la consigne de le traiter comme une donnée. Réponse attendue : un objet JSON `{"decision","priority","verdict","review"}`, lu comme le plan (dernier objet exploitable). `review` est toujours en anglais, parce qu'il est destiné à GitHub ; `verdict` est en anglais si `settings.lang` vaut `en`, en français sinon.
+- Un signal en `analyzing` au redémarrage repasse en `queued`. Un projet dont la Vigie est coupée garde ses signaux en file sans les analyser.
+- Chaque relève et chaque analyse laisse une ligne au journal (`watch.log`), affiché sous la liste : une Vigie muette doit pouvoir dire ce qu'elle a lu et pourquoi elle l'a écarté. La date de la dernière vérification est dans l'en-tête de l'écran.
+- Les signaux actifs d'un projet sont des cartes de son kanban, dans la colonne de qui a la main (les agents pendant l'analyse, vous ensuite) ; pas de bloc à part.
+- Une issue ou un constat d'entretien se transforme de deux façons, sur la fiche : « Confier à un agent » (action principale, aussi sur la carte du kanban) ouvre la création de tâche pré-remplie, et le signal passe `handled` à la création ; « En faire un chantier » crée une carte dont le contexte porte le constat (`POST /api/cards` avec `contextPrompt`), marque le signal `handled` avec ce `cardId`, puis ouvre la planification pour découper le travail. Aucun agent ne démarre sans validation.
+- Notification système (API Notification du navigateur, contexte sécurisé, sur permission explicite) quand un signal passe à `ready` avec une priorité autre que `low`, sauf si l'onglet est visible sur l'écran de la Vigie.
+
+
+Un signal s'ouvre comme un chantier : la fiche `#/p/{projectId}/s/{signalId}` montre le jugement et ses actions, la revue ou la réponse proposée en entier, puis la description écrite par l'auteur (rendue échappée, c'est du texte externe). La référence `repo#n` est partout un lien vers GitHub. Une relecture a 15 minutes (`signalAnalysisTimeout`), plus que la planification : un gros modèle dépasse les 5 minutes de `planTimeout` sur une PR ordinaire.
 ### Plan de tâches
 
 `POST /api/cards/{id}/plan` demande à un agent de découper un chantier en une succession de tâches. **La route ne crée rien** : elle rend une proposition (`PlanResponse`), l'humain la relit, la corrige, en retire ce qu'il ne veut pas, puis crée les tâches lui-même par `POST /api/tasks`. Sillage ne lance jamais un agent sur une tâche que personne n'a validée, et un plan ne fait pas exception.
@@ -557,8 +680,11 @@ Sillage sait dire qu'une version plus récente existe, et l'installer en un clic
 { "branch": "sillage/482-slug", "base": "main",
   "files": [ { "path": "a/b.go", "additions": 10, "deletions": 2,
                "hunks": [ { "header": "@@ -1,4 +1,6 @@",
-                            "lines": [ {"type":"ctx|add|del", "text":"..."} ] } ] } ] }
+                            "lines": [ {"type":"ctx|add|del", "text":"..."} ] } ] } ],
+  "tool": "meld" }
 ```
+
+`tool` est l'outil de diff réglé dans git (`git config diff.tool`) pour le worktree, vide s'il n'y en a pas : l'interface le nomme sur son bouton d'ouverture.
 
 ### Livrables
 
@@ -586,6 +712,11 @@ Sillage sait dire qu'une version plus récente existe, et l'installer en un clic
 - `previewLog` : `{runId, line}` : une ligne de sortie d'un run de recette.
 - `taskDeleted` : `{taskId, cardId, projectId}` (après `DELETE /api/tasks/{id}`, une fois par tâche supprimée y compris en cascade).
 - `cardDeleted` : `{cardId, projectId}` (après `DELETE /api/cards/{id}`).
+- `signal` : Signal (détection, début et fin d'analyse, changement de statut).
+- `watch` : WatchStatus (début et fin de chaque relève).
+- `lan` : LanStatus (ouverture ou fermeture de l'accès réseau local).
+- `watch` est aussi publié à chaque outil employé par l'analyste (`current.steps`).
+- `autoconfig` : AutoconfigRun (lancement, chaque outil employé, fin, oubli avec `status:""`).
 - `projectDeleted` : `{projectId}` (après `DELETE /api/projects/{id}` ; le frontend recharge l'état complet plutôt que de rejouer la cascade).
 
 Le frontend maintient son état en mémoire à partir de `/api/state` + SSE ; reconnexion SSE automatique (EventSource natif) et re-fetch de `/api/state` à la reconnexion.
