@@ -609,6 +609,11 @@ func TestWorkspaceCommitFiresOncePerInterval(t *testing.T) {
 	if err := InitWorkspaceGit(dir, ""); err != nil {
 		t.Fatalf("InitWorkspaceGit: %v", err)
 	}
+	// gc.auto bas (256) + estimation de git sur le seul dossier objects/17 : un
+	// commit peut lancer un gc détaché qui écrit encore dans .git/objects quand
+	// t.TempDir nettoie (échec « directory not empty »). Ce test ne porte pas
+	// sur la compaction.
+	runTestGit(t, dir, "config", "gc.auto", "0")
 	baseCount := strings.TrimSpace(runTestGit(t, dir, "rev-list", "--count", "HEAD"))
 	if baseCount != "1" {
 		t.Fatalf("un seul commit initial attendu, reçu %q", baseCount)
