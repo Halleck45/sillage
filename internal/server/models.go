@@ -135,7 +135,13 @@ type Signal struct {
 
 	DetectedAt time.Time `json:"detectedAt"`
 	// Status : "queued" | "analyzing" | "ready" | "error" | "dismissed" | "handled"
+	// | "closed" (mergée ou fermée sur la forge, constaté par la relève : voir
+	// closeGoneSignals ; ClosedAs dit comment).
 	Status string `json:"status"`
+	// ClosedAs : "merged" | "closed" quand Status vaut "closed", vide sinon.
+	ClosedAs string `json:"closedAs,omitempty"`
+	// ClosedAt : quand la relève a constaté la fermeture (tri de « Livré »).
+	ClosedAt *time.Time `json:"closedAt,omitempty"`
 	// Priority, donnée par l'analyse : "high" | "normal" | "low".
 	Priority string `json:"priority"`
 	// Decision est le jugement de l'agent, ce que le mainteneur doit faire.
@@ -218,7 +224,8 @@ type WatchLogEntry struct {
 	Older      int       `json:"older"`
 	Drafts     int       `json:"drafts"`
 	Known      int       `json:"known"`
-	Updated    int       `json:"updated"` // signaux relancés par de nouveaux commentaires
+	Updated    int       `json:"updated"`          // signaux relancés par de nouveaux commentaires
+	Closed     int       `json:"closed,omitempty"` // signaux mergés ou fermés sur la forge depuis la relève précédente
 	From       time.Time `json:"from"`
 	Number     int       `json:"number"`
 	DurationMs int64     `json:"durationMs"`

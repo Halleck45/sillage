@@ -120,6 +120,34 @@ func (s *Server) handleUpdateSignal(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, sig)
 }
 
+// handleRefreshSignal relit tout de suite l'état d'une PR ou d'une issue sur la
+// forge (lecture seule), sans attendre la prochaine relève : l'interface
+// l'appelle au retour d'un passage sur GitHub, où l'on vient peut-être de
+// merger. Rend le signal, fermé s'il l'est sur la forge.
+func (s *Server) handleRefreshSignal(w http.ResponseWriter, r *http.Request) {
+	sig, ok := s.store.GetSignal(r.PathValue("id"))
+	if !ok {
+		writeError(w, http.StatusNotFound, "signal not found")
+		return
+	}
+	if signalTerminal(sig.Status) || sig.Number == 0 || (sig.Kind != "pr" && sig.Kind != "issue") {
+		writeJSON(w, http.StatusOK, sig)
+		return
+	}
+	project, ok := s.store.GetProject(sig.ProjectID)
+	if !ok {
+		writeError(w, http.StatusNotFound, "project not found")
+		return
+	}
+	repo, ok := repoByName(project, sig.RepoName)
+	if !ok {
+		writeError(w, http.StatusNotFound, "repo not found")
+		return
+	}
+	sig, _ = s.closeIfGone(r.Context(), s.watch.stateTool(), repo.Path, sig)
+	writeJSON(w, http.StatusOK, sig)
+}
+
 // handleStopSignal arrête la relecture en cours d'un signal. Le signal passe en
 // "error" avec l'erreur "stopped", et se relance comme une analyse échouée.
 func (s *Server) handleStopSignal(w http.ResponseWriter, r *http.Request) {

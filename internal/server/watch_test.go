@@ -44,8 +44,87 @@ func newWatchFixture(t *testing.T, items map[string][]forgeItem) (*Server, Proje
 		t.Errorf("le diff ne doit pas être demandé pour l'agent simulé")
 		return "", nil
 	}
+	// Par défaut tout est encore ouvert : aucun test ne contacte gh.
+	srv.watch.state = func(ctx context.Context, dir, kind string, n int) (string, error) { return "OPEN", nil }
 	srv.watch.mu.Unlock()
 	return srv, p
+}
+
+// TestWatchClosesMergedSignals : une PR qui quitte la liste des ouvertes et que
+// la forge dit mergée sort de la Vigie ; une sortie sans état confirmé ne
+// ferme rien ; une réouverture la ramène.
+func TestWatchClosesMergedSignals(t *testing.T) {
+	recent := time.Now().UTC().Add(-time.Hour).Format(time.RFC3339)
+	items := map[string][]forgeItem{
+		"pr":    {{Number: 17, Title: "Fix leak", CreatedAt: recent, Author: "chris"}},
+		"issue": {{Number: 13, Title: "Leak", CreatedAt: recent}},
+	}
+	srv, p := newWatchFixture(t, items)
+	srv.watchOnce(context.Background())
+	pr, ok := srv.store.FindSignal(p.ID, "widget", "pr", 17)
+	if !ok || pr.Status != "ready" {
+		t.Fatalf("PR non suivie : %+v", pr)
+	}
+
+	// Disparue de la liste, mais encore ouverte selon la forge (liste
+	// partielle) : rien ne change.
+	items["pr"] = nil
+	srv.watchOnce(context.Background())
+	if got, _ := srv.store.GetSignal(pr.ID); got.Status != "ready" {
+		t.Fatalf("une absence non confirmée ne doit rien fermer : %+v", got)
+	}
+
+	srv.watch.mu.Lock()
+	srv.watch.state = func(ctx context.Context, dir, kind string, n int) (string, error) {
+		if kind == "pr" && n == 17 {
+			return "MERGED", nil
+		}
+		return "OPEN", nil
+	}
+	srv.watch.mu.Unlock()
+	srv.watchOnce(context.Background())
+	got, _ := srv.store.GetSignal(pr.ID)
+	if got.Status != "closed" || got.ClosedAs != "merged" || got.ClosedAt == nil {
+		t.Fatalf("la PR mergée devrait être fermée : %+v", got)
+	}
+	if issue, _ := srv.store.FindSignal(p.ID, "widget", "issue", 13); issue.Status != "ready" {
+		t.Fatalf("l'issue toujours ouverte ne doit pas bouger : %+v", issue)
+	}
+	// Exposée tant qu'elle n'est pas archivée : « Livré » la montre.
+	exposed := false
+	for _, sig := range srv.store.Snapshot().Signals {
+		exposed = exposed || sig.ID == pr.ID
+	}
+	if !exposed {
+		t.Fatal("une PR mergée doit rester exposée jusqu'à son archivage")
+	}
+	if _, signals, err := srv.store.ArchiveShippedCards(p.ID); err != nil || len(signals) != 1 || signals[0].Status != "dismissed" {
+		t.Fatalf("archiver « Livré » doit classer la PR mergée : %+v, %v", signals, err)
+	}
+	if _, err := srv.store.UpdateSignal(pr.ID, func(x *Signal) { x.Status = "closed" }); err != nil {
+		t.Fatal(err)
+	}
+
+	// Relecture à la demande : l'issue fermée sur la forge se ferme sans
+	// attendre la relève.
+	issue, _ := srv.store.FindSignal(p.ID, "widget", "issue", 13)
+	srv.watch.mu.Lock()
+	srv.watch.state = func(ctx context.Context, dir, kind string, n int) (string, error) { return "CLOSED", nil }
+	srv.watch.mu.Unlock()
+	req := httptest.NewRequest(http.MethodPost, "/api/signals/"+issue.ID+"/refresh", strings.NewReader("{}"))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+	if got, _ := srv.store.GetSignal(issue.ID); rec.Code != 200 || got.Status != "closed" || got.ClosedAs != "closed" {
+		t.Fatalf("la relecture à la demande devrait fermer l'issue : %d %+v", rec.Code, got)
+	}
+
+	// Rouverte : elle revient, avec son analyse.
+	items["pr"] = []forgeItem{{Number: 17, Title: "Fix leak", CreatedAt: recent, Author: "chris"}}
+	srv.watchOnce(context.Background())
+	if got, _ := srv.store.GetSignal(pr.ID); got.Status != "ready" || got.ClosedAs != "" {
+		t.Fatalf("une PR rouverte doit revenir : %+v", got)
+	}
 }
 
 func TestWatchOnceRecordsAndAnalyzes(t *testing.T) {

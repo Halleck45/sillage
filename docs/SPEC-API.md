@@ -213,7 +213,7 @@ Watch   { "enabled": true, "agentId": "bolt", "since": "...", "upkeepAt": "..." 
 Signal  { "id": "s1", "projectId": "p1", "repoName": "api", "kind": "pr|issue|upkeep",
           "number": 552, "title": "...", "url": "https://github.com/...", "author": "login",
           "body": "...", "labels": ["bug"], "createdAt": "...", "detectedAt": "...",
-          "status": "queued|analyzing|ready|error|dismissed|handled",
+          "status": "queued|analyzing|ready|error|dismissed|handled|closed", "closedAs": "merged|closed",
           "decision": "merge|changes|rework|close|fix|feature|needs-info",
           "priority": "high|normal|low", "verdict": "...", "review": "...", "error": "",
           "cardId": "", "analyzedAt": null,
@@ -224,7 +224,14 @@ Signal  { "id": "s1", "projectId": "p1", "repoName": "api", "kind": "pr|issue|up
           // kind "upkeep" : un constat de la veille d'entretien, sans numéro ni URL, créé
           // directement "ready" avec decision "upgrade" ; review porte le plan de travail.
           // Une PR ou une issue repérée par la Vigie, avec l'analyse de l'agent. Persisté.
-          // GET /api/state n'expose que les signaux actifs (ni dismissed ni handled).
+          // GET /api/state expose tous les signaux sauf dismissed et handled. Les closed ne
+          // figurent ni dans la Vigie ni dans la boîte de réception : le kanban les range dans
+          // « Livré » (tri par closedAt) jusqu'à l'archivage de la colonne.
+          // closed : la PR ou l'issue a quitté la liste des éléments ouverts et la forge la dit
+          // mergée ou fermée (`gh pr view` / `issue view`, champ state seul, une requête par
+          // élément disparu ; une absence non confirmée ne ferme rien). closedAs dit comment.
+          // Une relecture en cours est arrêtée. Rouverte sur la forge, elle revient : ready si
+          // elle avait été analysée, queued sinon.
           // decision : le jugement (PR : merge, changes, rework, close ; issue : fix, feature,
           // needs-info, close), vide si l'agent n'en a pas donné de valide.
           // review : texte destiné à GitHub (commentaires de revue, réponse à l'issue),
@@ -289,6 +296,7 @@ WatchLogEntry { "at": "...", "kind": "list|analysis|error", "projectId": "p1", "
 | POST | `/api/projects/{id}/upkeep/stop` | | 202 : arrête la veille en cours du projet ; 409 si rien ne tourne |
 | GET | `/api/projects/{id}/claude-sessions` | | `{sessions:[ClaudeSession]}` : les sessions Claude Code interactives lancées dans un dépôt du projet (voir « Sessions Claude Code ») |
 | POST | `/api/signals/{id}/stop` | | 202 : arrête la relecture en cours du signal, qui passe `error` avec `error:"stopped"` ; 409 si ce n'est pas lui qui est relu. Classer (`dismissed`) un signal en cours de relecture l'arrête aussi |
+| POST | `/api/signals/{id}/refresh` | | Signal : relit tout de suite l'état de la PR ou de l'issue sur la forge (`gh pr view` / `issue view`, champ state seul) et la ferme si elle est mergée ou fermée, sans attendre la relève. Sans effet sur un signal terminal ou d'entretien. L'UI l'appelle à l'ouverture de la fiche et au retour sur l'onglet après un lien sortant vers la forge (au plus une fois toutes les 20 s par signal) |
 | POST | `/api/projects/{id}/autoconfigure` | `{agentId?}` | 202 AutoconfigRun : lance la configuration automatique en tâche de fond (voir ci-dessous). `agentId` vide = l'analyste de la Vigie, sinon le choix par défaut de la Vigie. 400 `"this agent cannot run read-only"` hors claude/codex/fake, 409 si une tourne déjà |
 | POST | `/api/projects/{id}/autoconfigure/stop` | | 202 ; 409 si rien ne tourne |
 | DELETE | `/api/projects/{id}/autoconfigure` | | 204 : oublie la proposition ; 409 si elle tourne |
@@ -312,7 +320,7 @@ WatchLogEntry { "at": "...", "kind": "list|analysis|error", "projectId": "p1", "
 | GET | `/api/projects/{id}/issues?repoName=&q=` | | IssueListResponse : les issues **ouvertes** d'un dépôt du projet, lues via `gh`. **Lecture seule de bout en bout** : rien n'est écrit sur la forge, rien n'est créé dans l'état. `repoName` optionnel si le projet n'a qu'un dépôt, sinon obligatoire (mêmes règles et mêmes erreurs 400 que `POST /api/tasks`). `q` est passé à la recherche GitHub. 404 projet inconnu ; 502 si le dépôt n'est pas sur github.com (`"origin remote is not a github repository"`), si `gh` manque au PATH, expire (20 s) ou échoue. Voir « Import d'une issue GitHub » ci-dessous |
 | POST | `/api/cards` | `{projectId, title, column?, contextPrompt?}` | Card. `column`, si fourni, doit valoir `"soon"` (400 `"cards are created in the soon column"` sinon) : les cartes se créent toujours dans "Bientôt" |
 | PATCH | `/api/cards/{id}` | `{column?, title?, contextPrompt?, archived?}` | Card. `title`, si fourni, doit être non vide. Le déplacement manuel de colonne (toutes colonnes acceptées) reste indépendant de l'auto-déplacement (voir plus bas). `archived: true` archive le chantier (400 `"workstream has unfinished tasks"` si une tâche tourne, attend ou est à relire), `false` le désarchive ; ne modifie pas `updatedAt` |
-| POST | `/api/projects/{id}/archive-shipped` | | `{archived: n}` : archive d'un coup les chantiers livrés (`column == "done"`) du projet. **Aucune confirmation** côté serveur : action locale et réversible (le kanban la demande en deux temps) |
+| POST | `/api/projects/{id}/archive-shipped` | | `{archived: n, signals: m}` : archive d'un coup ce que montre « Livré » : les chantiers livrés (`column == "done"`) du projet, et ses signaux `closed`, qui passent `dismissed` (événement SSE `signal` pour chacun). **Aucune confirmation** côté serveur : action locale et réversible (le kanban la demande en deux temps) |
 | DELETE | `/api/cards/{id}` | `{confirm:true}` | 204 (voir « Suppressions » ci-dessous). **Validation humaine obligatoire** : refus 400 sans `confirm` |
 | GET | `/api/cards/{id}/delivery` | | DeliveryPreview : ce que la livraison ferait, avant tout clic (voir « Livraison d'un chantier »). Lecture seule |
 | POST | `/api/cards/{id}/ship` | `{confirm:true}` | ShipResponse : **la seule action sortante du produit** (push + pull request, ou fusion locale). 400 sans `confirm`, 409 si le chantier n'est pas livrable |

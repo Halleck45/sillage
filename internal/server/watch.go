@@ -136,6 +136,10 @@ func newOtherComments(comments []SignalComment, viewer, after string) int {
 // forgeLister liste les PR ("pr") ou issues ("issue") ouvertes du dépôt dir.
 type forgeLister func(ctx context.Context, dir, kind string) ([]forgeItem, error)
 
+// itemStater rend l'état d'une PR ou d'une issue sur la forge : "OPEN",
+// "MERGED" (PR seulement) ou "CLOSED".
+type itemStater func(ctx context.Context, dir, kind string, number int) (string, error)
+
 // prDiffer retourne le diff d'une PR.
 type prDiffer func(ctx context.Context, dir string, number int) (string, error)
 
@@ -147,6 +151,7 @@ type watcher struct {
 	kick   chan struct{}
 	list   forgeLister
 	diff   prDiffer
+	state  itemStater
 	// whoami : le compte gh de la machine, pour ne pas prendre ses propres
 	// réponses pour du nouveau. viewer le garde une fois connu.
 	whoami func(ctx context.Context) string
@@ -166,6 +171,7 @@ func newWatcher() *watcher {
 		kick:   make(chan struct{}, 1),
 		list:   ghListItems,
 		diff:   ghPRDiff,
+		state:  ghItemState,
 		whoami: ghViewer,
 		eol:    fetchEOL,
 	}
@@ -237,6 +243,12 @@ func (w *watcher) stopAnalysis(signalID string) bool {
 	}
 	w.cancel()
 	return true
+}
+
+func (w *watcher) stateTool() itemStater {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.state
 }
 
 func (w *watcher) tools() (forgeLister, prDiffer) {
@@ -362,10 +374,54 @@ func (s *Server) pollProject(ctx context.Context, p Project) string {
 				continue
 			}
 			entry := s.recordItems(p, repo.Name, kind, items, since, viewer)
+			entry.Closed = s.closeGoneSignals(ctx, p, repo.Path, repo.Name, kind, items)
 			s.watch.log(entry)
 		}
 	}
 	return firstErr
+}
+
+// closeGoneSignals constate la fin des signaux suivis qui ne sont plus dans la
+// liste des éléments ouverts : mergés ou fermés sur la forge. L'absence seule
+// ne suffit pas (la liste est bornée à watchListLimit, et une réponse partielle
+// de l'API ne doit rien fermer) : l'état de chacun est relu, une requête par
+// élément disparu. Une relecture en cours sur un élément fermé est arrêtée,
+// elle ne servirait plus à personne. Rend le nombre de signaux fermés.
+func (s *Server) closeGoneSignals(ctx context.Context, p Project, dir, repoName, kind string, items []forgeItem) int {
+	open := map[int]bool{}
+	for _, it := range items {
+		open[it.Number] = true
+	}
+	stateOf := s.watch.stateTool()
+	n := 0
+	for _, sig := range s.store.OpenSignals(p.ID, repoName, kind) {
+		if open[sig.Number] {
+			continue
+		}
+		if _, closed := s.closeIfGone(ctx, stateOf, dir, sig); closed {
+			n++
+		}
+	}
+	return n
+}
+
+// closeIfGone relit l'état d'un signal sur la forge et le ferme s'il est
+// mergé ou fermé. Rend le signal, à jour, et vrai s'il vient d'être fermé.
+func (s *Server) closeIfGone(ctx context.Context, stateOf itemStater, dir string, sig Signal) (Signal, bool) {
+	state, err := stateOf(ctx, dir, sig.Kind, sig.Number)
+	if err != nil || (state != "MERGED" && state != "CLOSED") {
+		return sig, false
+	}
+	s.watch.stopAnalysis(sig.ID)
+	updated, err := s.store.UpdateSignal(sig.ID, func(x *Signal) {
+		now := time.Now().UTC()
+		x.Status, x.ClosedAs, x.Error, x.ClosedAt = "closed", strings.ToLower(state), "", &now
+	})
+	if err != nil {
+		return sig, false
+	}
+	s.publishSignal(updated)
+	return updated, true
 }
 
 // recordItems ajoute les éléments nouveaux et postérieurs à since, les plus
@@ -386,6 +442,20 @@ func (s *Server) recordItems(p Project, repoName, kind string, items []forgeItem
 		}
 		// Un élément déjà suivi : seule une discussion nouvelle compte.
 		if existing, ok := s.store.FindSignal(p.ID, repoName, kind, it.Number); ok {
+			// Rouvert sur la forge : le signal revient, avec son analyse si
+			// elle existe, sinon en file.
+			if existing.Status == "closed" {
+				if updated, err := s.store.UpdateSignal(existing.ID, func(x *Signal) {
+					x.ClosedAs, x.ClosedAt = "", nil
+					x.Status = "queued"
+					if x.AnalyzedAt != nil {
+						x.Status = "ready"
+					}
+				}); err == nil {
+					existing = updated
+					s.publishSignal(updated)
+				}
+			}
 			if s.refreshSignalComments(existing, it, viewer) {
 				entry.Updated++
 			} else {
@@ -693,6 +763,20 @@ func ghViewer(ctx context.Context) string {
 		return ""
 	}
 	return strings.TrimSpace(string(out))
+}
+
+// ghItemState lit l'état d'une PR ou d'une issue (gh pr view / issue view,
+// lecture seule, le seul champ state).
+func ghItemState(ctx context.Context, dir, kind string, number int) (string, error) {
+	sub := "issue"
+	if kind == "pr" {
+		sub = "pr"
+	}
+	out, err := runGh(ctx, dir, sub, "view", strconv.Itoa(number), "--json", "state", "--jq", ".state")
+	if err != nil {
+		return "", err
+	}
+	return strings.ToUpper(strings.TrimSpace(string(out))), nil
 }
 
 func ghPRDiff(ctx context.Context, dir string, number int) (string, error) {

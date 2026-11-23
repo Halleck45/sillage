@@ -13,7 +13,7 @@ import (
 // signalTerminal : un signal classé ou transformé en chantier ne réapparaît
 // plus dans l'écran de la Vigie, mais reste en mémoire pour le dédoublonnage.
 func signalTerminal(status string) bool {
-	return status == "dismissed" || status == "handled"
+	return status == "dismissed" || status == "handled" || status == "closed"
 }
 
 // activeSignals est ce que l'écran de la Vigie montre : tout sauf les signaux
@@ -21,7 +21,9 @@ func signalTerminal(status string) bool {
 func activeSignals(m map[string]Signal) []Signal {
 	out := make([]Signal, 0, len(m))
 	for _, sig := range m {
-		if !signalTerminal(sig.Status) {
+		// Les signaux fermés sur la forge restent exposés : le kanban les
+		// montre dans « Livré » jusqu'à ce qu'on les archive (dismissed).
+		if sig.Status != "dismissed" && sig.Status != "handled" {
 			out = append(out, sig)
 		}
 	}
@@ -167,6 +169,21 @@ func (s *Store) FindSignal(projectID, repoName, kind string, number int) (Signal
 		}
 	}
 	return Signal{}, false
+}
+
+// OpenSignals : les signaux encore suivis (ni classés, ni devenus chantier, ni
+// fermés) d'un dépôt et d'un type, pour constater ceux qui ont quitté la liste
+// des éléments ouverts de la forge.
+func (s *Store) OpenSignals(projectID, repoName, kind string) []Signal {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var out []Signal
+	for _, sig := range s.Signals {
+		if sig.ProjectID == projectID && sig.RepoName == repoName && sig.Kind == kind && !signalTerminal(sig.Status) {
+			out = append(out, sig)
+		}
+	}
+	return out
 }
 
 func (s *Store) GetSignal(id string) (Signal, bool) {

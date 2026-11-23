@@ -1919,7 +1919,7 @@ func TestArchiveCard(t *testing.T) {
 	if _, err := s.UpdateCard(done.ID, &col, nil, nil); err != nil {
 		t.Fatal(err)
 	}
-	n, err := s.ArchiveShippedCards(project.ID)
+	n, _, err := s.ArchiveShippedCards(project.ID)
 	if err != nil || n != 1 {
 		t.Fatalf("un chantier livré attendu, reçu %d (%v)", n, err)
 	}

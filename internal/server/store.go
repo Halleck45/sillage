@@ -21,7 +21,7 @@ import (
 // les champs exportés du Store sont sérialisés tels quels, une version qui ne
 // connaît pas un champ le fait disparaître du fichier à sa première
 // sauvegarde, en silence (voir ErrStateTooNew).
-const stateFormatVersion = 11
+const stateFormatVersion = 12
 
 // agentSeedVersion tracks one-time additions to the built-in agent profiles.
 // Unlike checking for an ID at every startup, this lets users delete a seeded
@@ -1729,13 +1729,23 @@ func (s *Store) ArchiveCard(id string, archived bool) (Card, error) {
 	return s.Cards[id], nil
 }
 
-// ArchiveShippedCards archive d'un coup les chantiers livrés d'un projet
-// (colonne done) qui ne le sont pas encore. Rend leur nombre.
-func (s *Store) ArchiveShippedCards(projectID string) (int, error) {
+// ArchiveShippedCards archive d'un coup ce que montre « Livré » : les
+// chantiers livrés d'un projet (colonne done) qui ne le sont pas encore, et
+// ses PR et issues fermées sur la forge (classées, comme « Retirer de la
+// liste »). Rend le nombre de chantiers et les signaux classés.
+func (s *Store) ArchiveShippedCards(projectID string) (int, []Signal, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if _, ok := s.Projects[projectID]; !ok {
-		return 0, fmt.Errorf("project not found")
+		return 0, nil, fmt.Errorf("project not found")
+	}
+	var signals []Signal
+	for id, sig := range s.Signals {
+		if sig.ProjectID == projectID && sig.Status == "closed" {
+			sig.Status = "dismissed"
+			s.Signals[id] = sig
+			signals = append(signals, sig)
+		}
 	}
 	now := time.Now().UTC()
 	n := 0
@@ -1747,10 +1757,10 @@ func (s *Store) ArchiveShippedCards(projectID string) (int, error) {
 		s.Cards[id] = c
 		n++
 	}
-	if n == 0 {
-		return 0, nil
+	if n == 0 && len(signals) == 0 {
+		return 0, nil, nil
 	}
-	return n, s.save()
+	return n, signals, s.save()
 }
 
 // GetCardBranch retourne la branche de feature d'un chantier sur un dépôt

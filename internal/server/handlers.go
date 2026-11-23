@@ -195,6 +195,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/watch/check", s.handleWatchCheck)
 	mux.HandleFunc("PATCH /api/signals/{id}", s.handleUpdateSignal)
 	mux.HandleFunc("POST /api/signals/{id}/stop", s.handleStopSignal)
+	mux.HandleFunc("POST /api/signals/{id}/refresh", s.handleRefreshSignal)
 	mux.HandleFunc("POST /api/cards", s.handleCreateCard)
 	mux.HandleFunc("PATCH /api/cards/{id}", s.handleUpdateCard)
 	mux.HandleFunc("DELETE /api/cards/{id}", s.handleDeleteCard)
@@ -1017,7 +1018,7 @@ func (s *Server) handleUpdateCard(w http.ResponseWriter, r *http.Request) {
 // la colonne « Livré » ne grandit pas sans fin. Rien n'est détruit.
 func (s *Server) handleArchiveShipped(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	n, err := s.store.ArchiveShippedCards(id)
+	n, signals, err := s.store.ArchiveShippedCards(id)
 	if err != nil {
 		writeError(w, statusForStoreError(err), err.Error())
 		return
@@ -1025,7 +1026,10 @@ func (s *Server) handleArchiveShipped(w http.ResponseWriter, r *http.Request) {
 	if n > 0 {
 		s.runner.publishCards(id)
 	}
-	writeJSON(w, http.StatusOK, map[string]int{"archived": n})
+	for _, sig := range signals {
+		s.publishSignal(sig)
+	}
+	writeJSON(w, http.StatusOK, map[string]int{"archived": n, "signals": len(signals)})
 }
 
 // handleDeleteCard supprime une carte (chantier), avec cascade sur ses

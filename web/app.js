@@ -88,7 +88,7 @@
       'cardMenu.more': 'Plus d\'actions',
       'kanban.archiveShipped': 'Archiver',
       'kanban.archiveShippedConfirm': 'Archiver les {n} ?',
-      'kanban.archiveShippedHint': 'Ranger les chantiers livrés hors du kanban. Rien n\'est supprimé.',
+      'kanban.archiveShippedHint': 'Ranger hors du kanban les chantiers livrés et les PR et issues fermées. Rien n\'est supprimé.',
       'kanban.archived.one': '{n} chantier archivé',
       'kanban.archived.other': '{n} chantiers archivés',
       'workstream.archived': 'Archivé',
@@ -676,6 +676,10 @@
       'vigie.toCard': 'En faire un chantier',
       'vigie.toCardHint': 'Un chantier, puis un agent le découpe en tâches que vous relisez',
       'vigie.dismiss': 'Retirer de la liste',
+      'vigie.closed.merged': 'Mergée sur GitHub. La Vigie ne la suit plus.',
+      'vigie.closedShort.merged': 'Mergée sur GitHub',
+      'vigie.closedShort.closed': 'Fermée sur GitHub',
+      'vigie.closed.closed': 'Fermée sur GitHub. La Vigie ne la suit plus.',
       'vigie.retry': 'Réessayer',
       'vigie.reanalyze': 'Relire de nouveau',
       'vigie.localOnly': 'Sillage ne publie jamais rien sur GitHub. Les commentaires proposés restent ici : copiez-les et collez-les vous-même si vous êtes d\'accord.',
@@ -946,7 +950,7 @@
       'cardMenu.more': 'More actions',
       'kanban.archiveShipped': 'Archive',
       'kanban.archiveShippedConfirm': 'Archive all {n}?',
-      'kanban.archiveShippedHint': 'Move shipped workstreams off the board. Nothing is deleted.',
+      'kanban.archiveShippedHint': 'Move shipped workstreams and closed PRs and issues off the board. Nothing is deleted.',
       'kanban.archived.one': '{n} archived workstream',
       'kanban.archived.other': '{n} archived workstreams',
       'workstream.archived': 'Archived',
@@ -1534,6 +1538,10 @@
       'vigie.toCard': 'Turn into a workstream',
       'vigie.toCardHint': 'A workstream, then an agent splits it into tasks you review',
       'vigie.dismiss': 'Remove from list',
+      'vigie.closed.merged': 'Merged on GitHub. The Watch no longer follows it.',
+      'vigie.closedShort.merged': 'Merged on GitHub',
+      'vigie.closedShort.closed': 'Closed on GitHub',
+      'vigie.closed.closed': 'Closed on GitHub. The Watch no longer follows it.',
       'vigie.retry': 'Retry',
       'vigie.reanalyze': 'Review again',
       'vigie.localOnly': 'Sillage never posts anything to GitHub. Suggested comments stay here: copy and paste them yourself if you agree.',
@@ -2281,6 +2289,7 @@
     state.cardId = route.cardId || null;
     state.taskId = route.taskId || null;
     state.signalId = route.signalId || null;
+    if (state.signalId) refreshSignalState(state.signalId);
     if (state.cardId !== prevCardId) state.taskFilter = 'all';
     if (state.taskId) {
       state.panelTab = route.tab === 'diff' ? 'diff' : (route.tab === 'deliverables' ? 'files' : (route.tab === 'history' ? 'history' : 'chat'));
@@ -2747,7 +2756,7 @@
   }
 
   function vigieSignals() {
-    return state.signals.filter(function (s) { return s.status !== 'dismissed' && s.status !== 'handled'; })
+    return state.signals.filter(function (s) { return s.status !== 'dismissed' && s.status !== 'handled' && s.status !== 'closed'; })
       .sort(function (a, b) {
         var d = signalRank(a) - signalRank(b);
         if (d) return d;
@@ -2899,6 +2908,10 @@
   // L'état d'un signal en une ligne : le verdict une fois analysé, sinon où en
   // est l'agent.
   function signalStateHTML(s, cls) {
+    if (s.status === 'closed') {
+      return '<div class="' + cls + ' signal-closed">' + uiIconHTML('check', 12) +
+        '<span>' + escapeHtml(t('vigie.closedShort.' + (s.closedAs === 'merged' ? 'merged' : 'closed'))) + '</span></div>';
+    }
     if (s.status === 'ready') {
       return '<div class="' + cls + '">' + signalDecisionHTML(s) + '<span>' + escapeHtml(s.verdict) + '</span></div>';
     }
@@ -3038,6 +3051,7 @@
   // Les actions d'un signal, la principale en tête et seule en plein. compact :
   // sur une carte, seulement l'action principale (le reste est dans la fiche).
   function buildSignalActionsHTML(s, compact, opts) {
+    if (s.status === 'closed') return ''; // plus rien à décider : c'est fait sur la forge
     var actions = [];
     if (s.status === 'ready') {
       var primary = signalPrimaryAction(s);
@@ -3112,7 +3126,8 @@
     if (s.createdAt) byline.push(t(s.kind === 'upkeep' ? 'vigie.detail.foundBy' : 'vigie.detail.opened', { when: timeAgo(s.createdAt) }));
 
     var reviewHTML = '';
-    if (s.status === 'ready') {
+    // Fermée sur la forge : la relecture reste lisible, pour mémoire.
+    if (s.status === 'ready' || (s.status === 'closed' && s.analyzedAt)) {
       var heading = t(s.kind === 'upkeep' ? 'vigie.detail.plan' : (s.kind === 'pr' ? 'vigie.detail.review' : 'vigie.detail.reply'));
       reviewHTML = '<section class="sd-section sd-review">' +
         '<div class="sd-section-head"><h2>' + escapeHtml(heading) + '</h2>' +
@@ -3125,7 +3140,7 @@
             (s.kind === 'upkeep' ? '' : '<div class="sd-note">' + escapeHtml(t(s.kind === 'pr' ? 'vigie.reviewNote' : 'vigie.replyNote')) + '</div>')
           : '<div class="sd-empty">' + escapeHtml(t('vigie.detail.nothingToAdd')) + '</div>') +
       '</section>';
-    } else if (s.status !== 'error') {
+    } else if (s.status !== 'error' && s.status !== 'closed') {
       reviewHTML = '<section class="sd-section sd-review sd-live" data-signal-live="' + s.id + '">' + signalLiveInnerHTML(s) + '</section>';
     }
     // La discussion : les derniers messages sur la forge, ceux que l'analyste a lus.
@@ -3144,7 +3159,11 @@
 
     // Le panneau de décision.
     var verdict = '';
-    if (s.status === 'ready') {
+    if (s.status === 'closed') {
+      verdict = '<div class="sd-closed">' + uiIconHTML('check', 14) +
+        '<span>' + escapeHtml(t('vigie.closed.' + (s.closedAs === 'merged' ? 'merged' : 'closed'))) + '</span></div>' +
+        (s.verdict ? '<p class="sd-verdict">' + escapeHtml(s.verdict) + '</p>' : '');
+    } else if (s.status === 'ready') {
       verdict = '<div class="sd-decision">' + signalDecisionHTML(s) + '</div>' +
         '<p class="sd-verdict">' + escapeHtml(s.verdict) + '</p>';
     } else if (s.status === 'error') {
@@ -3237,6 +3256,35 @@
     var i = state.signals.findIndex(function (x) { return x.id === sig.id; });
     if (i >= 0) state.signals[i] = sig; else state.signals.push(sig);
   }
+
+  // On merge ou ferme sur GitHub, puis on revient : la relève périodique
+  // (10 min) le verrait trop tard. L'état d'une PR ou d'une issue est relu à
+  // l'ouverture de sa fiche et au retour sur l'onglet après un lien sortant.
+  // Au plus une relecture toutes les 20 s par signal.
+  var signalRefreshAt = {};
+  var signalsVisited = {};
+  function refreshSignalState(id) {
+    var sg = findSignal(id);
+    if (!sg || !sg.number || (sg.kind !== 'pr' && sg.kind !== 'issue')) return;
+    if (sg.status === 'closed' || sg.status === 'dismissed' || sg.status === 'handled') return;
+    var now = Date.now();
+    if (signalRefreshAt[id] && now - signalRefreshAt[id] < 20000) return;
+    signalRefreshAt[id] = now;
+    api('/api/signals/' + encodeURIComponent(id) + '/refresh', { method: 'POST', body: {} })
+      .then(function (fresh) { if (fresh && fresh.status !== sg.status) { upsertSignal(fresh); refreshVigie(); } })
+      .catch(function () {});
+  }
+  function noteSignalVisit(el) {
+    var holder = el.closest('[data-signal-id]');
+    var id = holder ? holder.getAttribute('data-signal-id') : state.signalId;
+    if (id) signalsVisited[id] = true;
+  }
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState !== 'visible') return;
+    var ids = Object.keys(signalsVisited);
+    signalsVisited = {};
+    ids.forEach(function (id) { delete signalRefreshAt[id]; refreshSignalState(id); });
+  });
 
   function refreshVigie() {
     renderSidebar();
@@ -3551,9 +3599,13 @@
 
     var signals = projectWatched(project) ? vigieSignals().filter(function (sg) { return sg.projectId === state.projectId; }) : [];
     var archivedCards = cards.filter(function (c) { return c.archivedAt; }).sort(compareCardsForColumn);
+    // Une PR mergée ou une issue fermée sur la forge, c'est du travail livré :
+    // elle se range dans « Livré » jusqu'à l'archivage de la colonne.
+    var closedSignals = state.signals.filter(function (sg) { return sg.projectId === state.projectId && sg.status === 'closed'; })
+      .sort(function (a, b) { return String(b.closedAt || '').localeCompare(String(a.closedAt || '')); });
     var colsHTML = LANE_ORDER.map(function (key) {
       var list = cards.filter(function (c) { return cardLane(c) === key; }).sort(compareCardsForColumn);
-      var laneSignals = signals.filter(function (sg) { return signalLane(sg) === key; });
+      var laneSignals = key === 'shipped' ? closedSignals : signals.filter(function (sg) { return signalLane(sg) === key; });
       var addBtn = key === 'next'
         ? '<button class="add-card-btn" data-action="open-new-card">' + escapeHtml(t('kanban.addCard')) + '</button>'
         : '';
@@ -3562,9 +3614,9 @@
       var headAction = '', archivedHTML = '';
       if (key === 'shipped') {
         var shippedDone = list.filter(function (c) { return c.column === 'done'; });
-        if (shippedDone.length) {
+        if (shippedDone.length + closedSignals.length) {
           var akey = 'archive-shipped:' + state.projectId;
-          var confirmLabel = t('kanban.archiveShippedConfirm', { n: shippedDone.length });
+          var confirmLabel = t('kanban.archiveShippedConfirm', { n: shippedDone.length + closedSignals.length });
           headAction = '<button class="col-action" data-action="confirm-click" data-confirm-key="' + akey + '" data-confirm-action="archive-shipped" data-confirm-id="' + escapeHtml(state.projectId) + '"' +
             ' data-default-label="' + escapeHtml(t('kanban.archiveShipped')) + '" data-confirm-label="' + escapeHtml(confirmLabel) + '" title="' + escapeHtml(t('kanban.archiveShippedHint')) + '">' +
             escapeHtml(isPendingConfirm(akey) ? confirmLabel : t('kanban.archiveShipped')) + '</button>';
@@ -10214,7 +10266,7 @@
       case 'open-workspace-modal': openWorkspaceModal(); break;
       case 'open-settings-agents': closeSidebarDrawer(); settingsModalTab = 'agents'; openModal(buildWorkspaceModalHTML()); break;
       case 'open-signal': openSignal(el.getAttribute('data-signal-id')); break;
-      case 'external': break; // lien sortant dans une carte : le navigateur l'ouvre, la carte reste fermée
+      case 'external': noteSignalVisit(el); break; // lien sortant dans une carte : le navigateur l'ouvre, la carte reste fermée
       case 'set-settings-tab': setSettingsTab(el.getAttribute('data-settings-tab')); break;
       case 'save-workspace-remote': saveWorkspaceRemote(); break;
       case 'toggle-autosync': saveAutoSync(el.checked); break;

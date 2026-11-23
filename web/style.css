@@ -2700,6 +2700,11 @@ body { background: var(--canvas); }
 .default-agent { margin-bottom: 18px; }
 .default-agent .update-note { margin-top: 6px; }
 
+.sd-closed { display: flex; align-items: flex-start; gap: 8px; color: var(--green); font-weight: 550; margin: 10px 0 8px; }
+.sd-closed svg { flex: none; margin-top: 3px; }
+
+.signal-closed { display: flex; align-items: center; gap: 6px; color: var(--green); font-weight: 550; }
+
 /* ---------- Transitions des éléments cliquables ---------- */
 
 /* Ce bloc doit rester le dernier du fichier. `transition` est un raccourci :
