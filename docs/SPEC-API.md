@@ -69,7 +69,8 @@ Card    { "id": "c1", "projectId": "p1", "ref": 101, "column": "soon|doing|done"
           "branches": [CardBranch, ...], "shipReady": false,
           "shipBlocker": "|no-tasks|nothing-accepted|nothing-to-ship",
           "awaitingShip": false,
-          "contextPrompt": "...", "updatedAt": "2026-08-02T10:00:00Z" }
+          "contextPrompt": "...", "updatedAt": "2026-08-02T10:00:00Z",
+          "archivedAt": null }
           // Card = chantier (vocabulaire produit) ; nom technique inchangé. contextPrompt :
           // texte libre transmis aux agents (voir plus bas), peut être vide.
           // ref : référence courte du projet (compteur partagé avec les tâches), utilisée
@@ -82,7 +83,12 @@ Card    { "id": "c1", "projectId": "p1", "ref": 101, "column": "soon|doing|done"
           // awaitingShip : dérivé, vrai si toutes les tâches sont terminales (acceptées ou
           // refusées), qu'au moins une est acceptée, et que le chantier n'a pas été livré
           // (aucune branche shippedAt) ; c'est le signal affiché dans la liste des chantiers
-          // et la boîte de réception. Faux pour un chantier entièrement refusé : rien à livrer.
+          // et la boîte de réception. Faux pour un chantier entièrement refusé : rien à livrer,
+          // et faux pour un chantier archivé.
+          // archivedAt : date d'archivage, null si le chantier est visible. Un chantier
+          // archivé quitte les colonnes du kanban (replié sous « Livré »), la boîte de
+          // réception et « À livrer » ; rien n'est détruit. Remis à null dès qu'une de ses
+          // tâches n'est plus terminale (nouvelle tâche, relance).
 
 Agent   { "id": "bolt", "name": "Bolt", "emoji": "🐝", "color": "#f2b705",
           "model": "claude-sonnet-5", "cli": "claude", "contextPrompt": "...",
@@ -142,7 +148,9 @@ WorkspaceStatus { "setupDone": true, "gitEnabled": true, "remote": "git@host:org
                   // uniquement (jamais persisté, remis à "" à chaque redémarrage) ; voir
                   // "Synchronisation automatique" ci-dessous.
 
-Settings { "displayName": "Ada", "lang": "fr", "updateCheck": true | false | null, "lan": false }
+Settings { "displayName": "Ada", "lang": "fr", "updateCheck": true | false | null, "lan": false, "defaultAgentId": "" }
+// defaultAgentId : agent présélectionné dans les listes (nouvelle tâche, planification,
+// configuration automatique), "" pour le premier agent en bon état. Effacé à la suppression de l'agent.
           // lang : ""|"fr"|"en". updateCheck : vérification périodique des mises à jour ;
           // null/absent = activé (voir "Mises à jour de Sillage" ci-dessous).
           // lan : accès depuis le réseau local (voir "Accès réseau local").
@@ -289,7 +297,7 @@ WatchLogEntry { "at": "...", "kind": "list|analysis|error", "projectId": "p1", "
 | POST | `/api/workspace/setup` | `{mode:"local"\|"init"\|"clone", remote?}` | WorkspaceStatus (voir ci-dessous) |
 | PATCH | `/api/workspace` | `{remote?, autoSync?}` | WorkspaceStatus (au moins un des deux champs requis ; `remote` définit/remplace origin, 400 si git non initialisé ; `autoSync:true` exige git initialisé ET un remote déjà défini, celui fourni dans le même appel compte, 400 sinon ; voir "Synchronisation automatique" ci-dessous) |
 | POST | `/api/workspace/sync` | `{confirm:true}` | `{output, lastSyncAt}` (voir ci-dessous). **Validation humaine obligatoire** : refus 400 sans `confirm` |
-| PATCH | `/api/settings` | `{displayName?, lang?, updateCheck?, lan?}` | Settings (`lang` doit être `""`, `"fr"` ou `"en"`, 400 sinon ; `updateCheck` démarre ou arrête la vérification périodique ; `lan` ouvre ou ferme l'accès réseau local, 400 sans mot de passe ou si le port est pris, le réglage n'est alors pas enregistré) |
+| PATCH | `/api/settings` | `{displayName?, lang?, updateCheck?, lan?, defaultAgentId?}` | Settings (`defaultAgentId` doit être un agent existant ou `""`, 404 sinon ; `lang` doit être `""`, `"fr"` ou `"en"`, 400 sinon ; `updateCheck` démarre ou arrête la vérification périodique ; `lan` ouvre ou ferme l'accès réseau local, 400 sans mot de passe ou si le port est pris, le réglage n'est alors pas enregistré) |
 | GET | `/api/update` | | UpdateStatus. Lecture du cache mémoire uniquement : **aucun appel réseau** |
 | POST | `/api/update/check` | `{}` | UpdateStatus après un appel à l'API GitHub. 400 sur une compilation locale (rien à comparer), 502 si GitHub est injoignable |
 | POST | `/api/update/apply` | `{confirm:true}` | `{output, version, restarting, note}` : installe la version publiée puis remplace le process. 400 sans `confirm`, 502 si l'installation échoue ou n'est pas possible en un clic (voir ci-dessous) |
@@ -303,7 +311,8 @@ WatchLogEntry { "at": "...", "kind": "list|analysis|error", "projectId": "p1", "
 | POST | `/api/projects/{id}/mark-all-read` | | 204 (marque `unread=false` sur toutes les tâches non lues du projet, ne modifie jamais `updatedAt` : même règle que `/api/tasks/{id}/read`). **Aucune confirmation** : action locale et réversible |
 | GET | `/api/projects/{id}/issues?repoName=&q=` | | IssueListResponse : les issues **ouvertes** d'un dépôt du projet, lues via `gh`. **Lecture seule de bout en bout** : rien n'est écrit sur la forge, rien n'est créé dans l'état. `repoName` optionnel si le projet n'a qu'un dépôt, sinon obligatoire (mêmes règles et mêmes erreurs 400 que `POST /api/tasks`). `q` est passé à la recherche GitHub. 404 projet inconnu ; 502 si le dépôt n'est pas sur github.com (`"origin remote is not a github repository"`), si `gh` manque au PATH, expire (20 s) ou échoue. Voir « Import d'une issue GitHub » ci-dessous |
 | POST | `/api/cards` | `{projectId, title, column?, contextPrompt?}` | Card. `column`, si fourni, doit valoir `"soon"` (400 `"cards are created in the soon column"` sinon) : les cartes se créent toujours dans "Bientôt" |
-| PATCH | `/api/cards/{id}` | `{column?, title?, contextPrompt?}` | Card. `title`, si fourni, doit être non vide. Le déplacement manuel de colonne (toutes colonnes acceptées) reste indépendant de l'auto-déplacement (voir plus bas) |
+| PATCH | `/api/cards/{id}` | `{column?, title?, contextPrompt?, archived?}` | Card. `title`, si fourni, doit être non vide. Le déplacement manuel de colonne (toutes colonnes acceptées) reste indépendant de l'auto-déplacement (voir plus bas). `archived: true` archive le chantier (400 `"workstream has unfinished tasks"` si une tâche tourne, attend ou est à relire), `false` le désarchive ; ne modifie pas `updatedAt` |
+| POST | `/api/projects/{id}/archive-shipped` | | `{archived: n}` : archive d'un coup les chantiers livrés (`column == "done"`) du projet. **Aucune confirmation** côté serveur : action locale et réversible (le kanban la demande en deux temps) |
 | DELETE | `/api/cards/{id}` | `{confirm:true}` | 204 (voir « Suppressions » ci-dessous). **Validation humaine obligatoire** : refus 400 sans `confirm` |
 | GET | `/api/cards/{id}/delivery` | | DeliveryPreview : ce que la livraison ferait, avant tout clic (voir « Livraison d'un chantier »). Lecture seule |
 | POST | `/api/cards/{id}/ship` | `{confirm:true}` | ShipResponse : **la seule action sortante du produit** (push + pull request, ou fusion locale). 400 sans `confirm`, 409 si le chantier n'est pas livrable |
@@ -316,6 +325,7 @@ WatchLogEntry { "at": "...", "kind": "list|analysis|error", "projectId": "p1", "
 | POST | `/api/tasks/{id}/messages` | `{text, attachments?}` | 202 ; relance l'agent (statut → running). `attachments` : `[{name, mime, data}]`, images en base64 (voir « Images jointes »). 400 `"text is required"` si le message est vide de texte **et** d'image |
 | GET | `/api/tasks/{id}/attachments/{attId}` | | L'image elle-même (`Content-Type` de la pièce jointe). 404 si l'id est inconnu ou si le fichier a disparu |
 | POST | `/api/tasks/{id}/interrupt` | | Task (running → review) |
+| POST | `/api/tasks/{id}/restart` | `{confirm: true}` | Task. « Repartir de zéro » : seulement une tâche `review` sans agent ni rebase en cours (400 sinon). Le worktree revient à la pointe de `base` (`reset --hard` + `clean -fd`, les fichiers ignorés restent), `sessionId`, vérification, verdicts et journal de commandes sont vidés, et un message marqueur `[restarted:<agentId>]` borne le fil : le prochain message part sans rien rejouer d'avant. Destructif pour le travail non accepté, rien n'est poussé |
 | POST | `/api/tasks/{id}/start` | | Task (waiting → running) : démarre manuellement une tâche en attente sans attendre sa dépendance (voir « Démarrage différé d'une tâche »). 400 si `status≠waiting` |
 | POST | `/api/tasks/{id}/accept` | | `{task, workstreamBranch, output}` : commite le worktree de la tâche puis fusionne sa branche dans celle du chantier. Accepté depuis `review` uniquement (400 sinon). **Aucune confirmation** : action locale, réversible par `/reopen`. 409 en cas de conflit (voir ci-dessous) |
 | POST | `/api/tasks/{id}/cancel` | | Task (waiting/running/review → cancelled, c'est le « refuser » de l'UI). Si `running`, l'agent est d'abord interrompu (même mécanique qu'`/interrupt`). 400 depuis accepted/cancelled |

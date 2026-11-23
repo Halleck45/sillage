@@ -21,7 +21,7 @@ import (
 // les champs exportés du Store sont sérialisés tels quels, une version qui ne
 // connaît pas un champ le fait disparaître du fichier à sa première
 // sauvegarde, en silence (voir ErrStateTooNew).
-const stateFormatVersion = 9
+const stateFormatVersion = 11
 
 // agentSeedVersion tracks one-time additions to the built-in agent profiles.
 // Unlike checking for an ID at every startup, this lets users delete a seeded
@@ -638,6 +638,11 @@ func (s *Store) recomputeCard(cardID string) {
 	c.TasksTotal, c.TasksDone, c.ReviewCount = total, done, review
 	c.DocsCount, c.MessagesCount, c.Progress = docs, msgs, progress
 	c.LiveActivity = live
+	if !allTerminal {
+		// Du travail nouveau (tâche créée, relancée) ressort le chantier des
+		// archives, comme il ressort de « Livré ».
+		c.ArchivedAt = nil
+	}
 	if c.Branches == nil {
 		// Cartes antérieures aux branches de chantier : toujours exposer un
 		// tableau, jamais null (voir le modèle Card de SPEC-API.md).
@@ -652,7 +657,8 @@ func (s *Store) recomputeCard(cardID string) {
 			break
 		}
 	}
-	c.AwaitingShip = hasTasks && allTerminal && done > 0 && !shipped
+	// Un chantier archivé n'attend plus rien : il quitte « À livrer ».
+	c.AwaitingShip = hasTasks && allTerminal && done > 0 && !shipped && c.ArchivedAt == nil
 	if hasTasks {
 		if allTerminal && shipped {
 			c.Column = "done"
@@ -1330,6 +1336,23 @@ func (s *Store) UpdateSettings(displayName, lang *string, updateCheck *bool) (Se
 	return s.Settings, nil
 }
 
+// SetDefaultAgent choisit l'agent présélectionné dans les listes ; "" revient
+// au choix automatique.
+func (s *Store) SetDefaultAgent(id string) (Settings, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if id != "" {
+		if _, ok := s.Agents[id]; !ok {
+			return Settings{}, fmt.Errorf("agent not found")
+		}
+	}
+	s.Settings.DefaultAgentID = id
+	if err := s.save(); err != nil {
+		return Settings{}, err
+	}
+	return s.Settings, nil
+}
+
 // SetLAN enregistre le réglage d'accès réseau ; le listener est géré par le
 // serveur (lan.go).
 func (s *Store) SetLAN(on bool) error {
@@ -1661,6 +1684,73 @@ func (s *Store) UpdateCard(id string, column, title, contextPrompt *string) (Car
 		return Card{}, err
 	}
 	return c, nil
+}
+
+// errCardUnfinished : on n'archive pas un chantier dont une tâche tourne,
+// attend ou est à relire, le travail disparaîtrait du kanban sans être fini.
+var errCardUnfinished = fmt.Errorf("workstream has unfinished tasks")
+
+// cardUnfinished dit si une tâche du chantier n'est pas terminale. Verrou tenu.
+func (s *Store) cardUnfinished(cardID string) bool {
+	for _, t := range s.Tasks {
+		if t.CardID == cardID && t.Status != "accepted" && t.Status != "cancelled" {
+			return true
+		}
+	}
+	return false
+}
+
+// ArchiveCard range un chantier hors du kanban (archived) ou l'y ramène.
+// Ne touche pas UpdatedAt : ranger n'est pas une activité du chantier.
+func (s *Store) ArchiveCard(id string, archived bool) (Card, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	c, ok := s.Cards[id]
+	if !ok {
+		return Card{}, fmt.Errorf("card not found")
+	}
+	if archived == (c.ArchivedAt != nil) {
+		return c, nil
+	}
+	if archived {
+		if s.cardUnfinished(id) {
+			return Card{}, errCardUnfinished
+		}
+		now := time.Now().UTC()
+		c.ArchivedAt = &now
+	} else {
+		c.ArchivedAt = nil
+	}
+	s.Cards[id] = c
+	s.recomputeCard(id)
+	if err := s.save(); err != nil {
+		return Card{}, err
+	}
+	return s.Cards[id], nil
+}
+
+// ArchiveShippedCards archive d'un coup les chantiers livrés d'un projet
+// (colonne done) qui ne le sont pas encore. Rend leur nombre.
+func (s *Store) ArchiveShippedCards(projectID string) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.Projects[projectID]; !ok {
+		return 0, fmt.Errorf("project not found")
+	}
+	now := time.Now().UTC()
+	n := 0
+	for id, c := range s.Cards {
+		if c.ProjectID != projectID || c.Column != "done" || c.ArchivedAt != nil || s.cardUnfinished(id) {
+			continue
+		}
+		c.ArchivedAt = &now
+		s.Cards[id] = c
+		n++
+	}
+	if n == 0 {
+		return 0, nil
+	}
+	return n, s.save()
 }
 
 // GetCardBranch retourne la branche de feature d'un chantier sur un dépôt
@@ -2117,6 +2207,9 @@ func (s *Store) DeleteAgent(id string) error {
 		}
 	}
 	delete(s.Agents, id)
+	if s.Settings.DefaultAgentID == id {
+		s.Settings.DefaultAgentID = ""
+	}
 	return s.save()
 }
 

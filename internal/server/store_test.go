@@ -1877,3 +1877,84 @@ func TestDowngradeWarning(t *testing.T) {
 		}
 	}
 }
+
+// TestArchiveCard couvre l'archivage d'un chantier : refusé tant qu'une tâche
+// n'est pas terminale, sans effet sur « À livrer » une fois archivé, annulé
+// par du travail nouveau ; et l'archivage groupé des chantiers livrés.
+func TestArchiveCard(t *testing.T) {
+	s, err := NewStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+	project, err := s.AddProject("p", "", "", []Repo{{Path: "/tmp/p"}}, nil, nil)
+	if err != nil {
+		t.Fatalf("AddProject: %v", err)
+	}
+	c, _ := s.AddCard(project.ID, "Vieux chantier", "", "")
+	if _, err := s.CreateTask("t1", 1, c.ID, project.ID, "Tâche", "bolt", "b", "main", "", ""); err != nil {
+		t.Fatalf("CreateTask: %v", err)
+	}
+	if _, err := s.ArchiveCard(c.ID, true); err != errCardUnfinished {
+		t.Fatalf("une tâche en cours doit bloquer l'archivage, reçu %v", err)
+	}
+	if _, err := s.PatchTask("t1", func(tk *Task) { tk.Status = "accepted" }); err != nil {
+		t.Fatal(err)
+	}
+	archived, err := s.ArchiveCard(c.ID, true)
+	if err != nil || archived.ArchivedAt == nil || archived.AwaitingShip {
+		t.Fatalf("archivage mal posé : %+v, %v", archived, err)
+	}
+
+	// Une nouvelle tâche le ressort des archives.
+	if _, err := s.CreateTask("t2", 2, c.ID, project.ID, "Suite", "bolt", "b2", "main", "", ""); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := s.GetCard(c.ID); got.ArchivedAt != nil {
+		t.Fatal("du travail nouveau doit désarchiver le chantier")
+	}
+
+	// Archivage groupé : seuls les chantiers livrés (colonne done) partent.
+	done, _ := s.AddCard(project.ID, "Livré", "", "")
+	col := "done"
+	if _, err := s.UpdateCard(done.ID, &col, nil, nil); err != nil {
+		t.Fatal(err)
+	}
+	n, err := s.ArchiveShippedCards(project.ID)
+	if err != nil || n != 1 {
+		t.Fatalf("un chantier livré attendu, reçu %d (%v)", n, err)
+	}
+	if got, _ := s.GetCard(done.ID); got.ArchivedAt == nil {
+		t.Fatal("le chantier livré devrait être archivé")
+	}
+	if got, _ := s.GetCard(c.ID); got.ArchivedAt != nil {
+		t.Fatal("un chantier en cours ne doit pas être archivé en masse")
+	}
+	if back, err := s.ArchiveCard(done.ID, false); err != nil || back.ArchivedAt != nil {
+		t.Fatalf("désarchivage raté : %+v, %v", back, err)
+	}
+}
+
+// TestDefaultAgent : l'agent présélectionné doit exister, se remet à vide, et
+// ne survit pas à la suppression de l'agent.
+func TestDefaultAgent(t *testing.T) {
+	s, err := NewStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+	if _, err := s.SetDefaultAgent("inconnu"); err == nil {
+		t.Fatal("un agent inconnu doit être refusé")
+	}
+	a, err := s.AddAgent("Scribe", "", "", "fake", "", "")
+	if err != nil {
+		t.Fatalf("AddAgent: %v", err)
+	}
+	if got, err := s.SetDefaultAgent(a.ID); err != nil || got.DefaultAgentID != a.ID {
+		t.Fatalf("défaut mal posé : %+v, %v", got, err)
+	}
+	if err := s.DeleteAgent(a.ID); err != nil {
+		t.Fatal(err)
+	}
+	if s.GetSettings().DefaultAgentID != "" {
+		t.Fatal("supprimer l'agent doit effacer le défaut")
+	}
+}

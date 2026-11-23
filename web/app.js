@@ -39,6 +39,9 @@
       'sidebar.agentsAtWork': 'Au travail',
       'sidebar.newAgentTooltip': 'Nouvel agent',
       'sidebar.noAgents': 'Aucun agent',
+      'settings.defaultAgent': 'Agent proposé par défaut',
+      'settings.defaultAgentAuto': 'Automatique : le premier en bon état',
+      'settings.defaultAgentHint': 'Présélectionné pour une nouvelle tâche, la planification et la configuration automatique. On peut toujours en choisir un autre.',
       'aria.menu': 'Menu',
       'header.newTask': 'Nouvelle tâche',
       'header.newTaskTooltip': 'Nouvelle tâche (N)',
@@ -79,6 +82,16 @@
       'kanban.stage.checking.other': '{n} en vérification',
       'inbox.awaitingShip.title': 'Chantiers à livrer',
       'cardMenu.moveTo': 'Déplacer vers {column}',
+      'cardMenu.archive': 'Archiver',
+      'cardMenu.unarchive': 'Désarchiver',
+      'cardMenu.archiveBlocked': 'Une tâche n\'est pas terminée : acceptez-la ou refusez-la d\'abord.',
+      'cardMenu.more': 'Plus d\'actions',
+      'kanban.archiveShipped': 'Archiver',
+      'kanban.archiveShippedConfirm': 'Archiver les {n} ?',
+      'kanban.archiveShippedHint': 'Ranger les chantiers livrés hors du kanban. Rien n\'est supprimé.',
+      'kanban.archived.one': '{n} chantier archivé',
+      'kanban.archived.other': '{n} chantiers archivés',
+      'workstream.archived': 'Archivé',
       'project.editTooltip': 'Modifier le projet',
       'project.editTitle': 'Réglages du projet',
       'project.tabGeneral': 'Général',
@@ -271,6 +284,9 @@
       'action.cancelTaskConfirm': 'Confirmer l\'annulation ?',
       'task.delete': 'Supprimer la tâche',
       'task.deleteConfirm': 'Confirmer la suppression ?',
+      'task.restart': 'Repartir de zéro',
+      'task.restartConfirm': 'Jeter le travail et repartir ?',
+      'task.restartHint': 'Le code revient à la pointe du chantier et l\'agent oublie la conversation. Le travail de la tâche est perdu.',
       'task.moreActions': 'Autres actions',
       'task.filesCount.one': '{n} fichier',
       'task.filesCount.other': '{n} fichiers',
@@ -739,6 +755,7 @@
       'time.inDay': 'dans {n} j',
       'reassign.tooltip': 'Réassigner la tâche',
       'chat.reassignedTo': 'Tâche réassignée à {name}',
+      'chat.restarted': 'Repartie de zéro : le code est revenu à la pointe du chantier et l\'agent ne se souvient de rien avant cette ligne.',
       'errors.reassignFailed': 'Échec de la réassignation.',
       'login.passwordPlaceholder': 'Mot de passe',
       'login.submit': 'Se connecter',
@@ -880,6 +897,9 @@
       'sidebar.agentsAtWork': 'At work',
       'sidebar.newAgentTooltip': 'New agent',
       'sidebar.noAgents': 'No agents',
+      'settings.defaultAgent': 'Default agent',
+      'settings.defaultAgentAuto': 'Automatic: the first healthy one',
+      'settings.defaultAgentHint': 'Preselected for a new task, planning and automatic setup. You can still pick another one.',
       'aria.menu': 'Menu',
       'header.newTask': 'New task',
       'header.newTaskTooltip': 'New task (N)',
@@ -920,6 +940,16 @@
       'kanban.stage.checking.other': '{n} checking',
       'inbox.awaitingShip.title': 'Workstreams ready to ship',
       'cardMenu.moveTo': 'Move to {column}',
+      'cardMenu.archive': 'Archive',
+      'cardMenu.unarchive': 'Unarchive',
+      'cardMenu.archiveBlocked': 'A task is not finished yet: accept or reject it first.',
+      'cardMenu.more': 'More actions',
+      'kanban.archiveShipped': 'Archive',
+      'kanban.archiveShippedConfirm': 'Archive all {n}?',
+      'kanban.archiveShippedHint': 'Move shipped workstreams off the board. Nothing is deleted.',
+      'kanban.archived.one': '{n} archived workstream',
+      'kanban.archived.other': '{n} archived workstreams',
+      'workstream.archived': 'Archived',
       'project.editTooltip': 'Edit project',
       'project.editTitle': 'Project settings',
       'project.tabGeneral': 'General',
@@ -1112,6 +1142,9 @@
       'action.cancelTaskConfirm': 'Confirm cancellation?',
       'task.delete': 'Delete the task',
       'task.deleteConfirm': 'Confirm deletion?',
+      'task.restart': 'Start over',
+      'task.restartConfirm': 'Discard the work and start over?',
+      'task.restartHint': 'The code goes back to the workstream tip and the agent forgets the conversation. The task\'s work is lost.',
       'task.moreActions': 'More actions',
       'task.filesCount.one': '{n} file',
       'task.filesCount.other': '{n} files',
@@ -1580,6 +1613,7 @@
       'time.inDay': 'in {n} d',
       'reassign.tooltip': 'Reassign the task',
       'chat.reassignedTo': 'Task reassigned to {name}',
+      'chat.restarted': 'Started over: the code is back at the workstream tip and the agent remembers nothing above this line.',
       'errors.reassignFailed': 'Failed to reassign.',
       'login.passwordPlaceholder': 'Password',
       'login.submit': 'Log in',
@@ -1739,7 +1773,8 @@
 
   var state = {
     lang: detectInitialLang(),
-    dictation: null, // dictée en cours : { taskId, rec }
+    dictation: null, // dictée en cours : { target, taskId, rec }
+    showArchived: {}, // projectId -> archives dépliées sous « Livré »
     workspace: null,
     settings: { displayName: '', lang: '' },
     projects: [], cards: [], tasks: [], agents: [],
@@ -2155,7 +2190,9 @@
       else if (kind === 'workspace-sync') doWorkspaceSync();
       else if (kind === 'task-cancel') doCancelTask(id);
       else if (kind === 'task-delete') doDeleteTask(id);
+      else if (kind === 'task-restart') doRestartTask(id);
       else if (kind === 'card-delete') doDeleteCard(id);
+      else if (kind === 'archive-shipped') archiveShipped(id);
       else if (kind === 'project-delete') doDeleteProject(id);
     });
   }
@@ -3402,12 +3439,14 @@
     // Les colonnes suivent les tâches : seul un chantier sans tâche se range à
     // la main (le classer, ou le remettre à lancer).
     var menuItemsHTML = '';
-    if (!c.tasksTotal && !state.tasks.some(function (tk) { return tk.cardId === c.id; })) {
+    if (!c.archivedAt && !c.tasksTotal && !state.tasks.some(function (tk) { return tk.cardId === c.id; })) {
       var target = c.column === 'done' ? 'soon' : 'done';
       menuItemsHTML = '<button class="card-menu-item" data-action="move-card" data-card-id="' + c.id + '" data-column="' + target + '">' +
         escapeHtml(t('cardMenu.moveTo', { column: t(target === 'done' ? 'lane.shipped' : 'lane.next') })) + '</button>';
     }
-    return '<article class="kanban-card" data-action="open-card" data-card-id="' + c.id + '">' +
+    // Ranger un chantier fini (livré ou abandonné) se fait d'ici, sans l'ouvrir.
+    if (c.archivedAt || !cardUnfinished(c.id)) menuItemsHTML += archiveMenuItemHTML(c);
+    return '<article class="kanban-card' + (c.archivedAt ? ' kanban-card-archived' : '') + '" data-action="open-card" data-card-id="' + c.id + '">' +
       '<div class="card-top">' +
         runningGlyph +
         '<h3 class="card-title ' + (colKey === 'done' ? 'card-title-done' : '') + '">' + escapeHtml(c.title) + '</h3>' +
@@ -3457,6 +3496,7 @@
   // reste la colonne done du serveur (tout terminal et livré).
   var LANE_ORDER = ['next', 'agents', 'you', 'shipped'];
   function cardLane(c) {
+    if (c.archivedAt) return 'archived'; // hors des colonnes, sous « Livré »
     if (c.column === 'done') return 'shipped';
     if (c.reviewCount || c.awaitingShip) return 'you';
     var tasks = state.tasks.filter(function (tk) { return tk.cardId === c.id; });
@@ -3470,6 +3510,35 @@
     return (sg.status === 'queued' || sg.status === 'analyzing') ? 'agents' : 'you';
   }
 
+  // Une tâche qui tourne, attend ou est à relire : le chantier n'est pas fini,
+  // il ne s'archive pas (le serveur refuse aussi, voir Store.ArchiveCard).
+  function cardUnfinished(cardId) {
+    return state.tasks.some(function (tk) {
+      return tk.cardId === cardId && tk.status !== 'accepted' && tk.status !== 'cancelled';
+    });
+  }
+
+  function archiveMenuItemHTML(c) {
+    if (c.archivedAt) {
+      return '<button class="card-menu-item" data-action="archive-card" data-card-id="' + c.id + '" data-archived="false">' + escapeHtml(t('cardMenu.unarchive')) + '</button>';
+    }
+    var blocked = cardUnfinished(c.id);
+    return '<button class="card-menu-item" data-action="archive-card" data-card-id="' + c.id + '" data-archived="true"' +
+      (blocked ? ' disabled title="' + escapeHtml(t('cardMenu.archiveBlocked')) + '"' : '') + '>' + escapeHtml(t('cardMenu.archive')) + '</button>';
+  }
+
+  function archiveCard(cardId, archived) {
+    closeAllCardMenus();
+    api('/api/cards/' + cardId, { method: 'PATCH', body: { archived: archived } }).then(function (updated) {
+      upsertCard(updated); renderSidebar(); renderMain();
+    }).catch(function () {});
+  }
+
+  function archiveShipped(projectId) {
+    api('/api/projects/' + encodeURIComponent(projectId) + '/archive-shipped', { method: 'POST', body: {} })
+      .then(function () { renderMain(); }).catch(function () {});
+  }
+
   function compareCardsForColumn(a, b) {
     var diff = new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
     if (diff !== 0) return diff;
@@ -3481,18 +3550,39 @@
     var cards = state.cards.filter(function (c) { return c.projectId === state.projectId; });
 
     var signals = projectWatched(project) ? vigieSignals().filter(function (sg) { return sg.projectId === state.projectId; }) : [];
+    var archivedCards = cards.filter(function (c) { return c.archivedAt; }).sort(compareCardsForColumn);
     var colsHTML = LANE_ORDER.map(function (key) {
       var list = cards.filter(function (c) { return cardLane(c) === key; }).sort(compareCardsForColumn);
       var laneSignals = signals.filter(function (sg) { return signalLane(sg) === key; });
       var addBtn = key === 'next'
         ? '<button class="add-card-btn" data-action="open-new-card">' + escapeHtml(t('kanban.addCard')) + '</button>'
         : '';
+      // « Livré » ne grandit pas sans fin : un geste range tout ce qui est
+      // livré, et les archives se replient sous la colonne.
+      var headAction = '', archivedHTML = '';
+      if (key === 'shipped') {
+        var shippedDone = list.filter(function (c) { return c.column === 'done'; });
+        if (shippedDone.length) {
+          var akey = 'archive-shipped:' + state.projectId;
+          var confirmLabel = t('kanban.archiveShippedConfirm', { n: shippedDone.length });
+          headAction = '<button class="col-action" data-action="confirm-click" data-confirm-key="' + akey + '" data-confirm-action="archive-shipped" data-confirm-id="' + escapeHtml(state.projectId) + '"' +
+            ' data-default-label="' + escapeHtml(t('kanban.archiveShipped')) + '" data-confirm-label="' + escapeHtml(confirmLabel) + '" title="' + escapeHtml(t('kanban.archiveShippedHint')) + '">' +
+            escapeHtml(isPendingConfirm(akey) ? confirmLabel : t('kanban.archiveShipped')) + '</button>';
+        }
+        if (archivedCards.length) {
+          var open = !!state.showArchived[state.projectId];
+          archivedHTML = '<button class="lane-archived-toggle" data-action="toggle-archived" aria-expanded="' + open + '">' +
+            '<span class="rv-chevron" aria-hidden="true">' + uiIconHTML('chevron', 12) + '</span>' +
+            escapeHtml(tCount('kanban.archived', archivedCards.length)) + '</button>' +
+            (open ? archivedCards.map(function (c) { return buildKanbanCardHTML(c, 'done'); }).join('') : '');
+        }
+      }
       return '<section class="kanban-col kanban-lane-' + key + '">' +
         '<div class="col-head"><span class="col-dot"></span>' +
-        '<span class="col-label">' + escapeHtml(t('lane.' + key)) + '</span><span class="col-count">' + (list.length + laneSignals.length) + '</span></div>' +
+        '<span class="col-label">' + escapeHtml(t('lane.' + key)) + '</span><span class="col-count">' + (list.length + laneSignals.length) + '</span>' + headAction + '</div>' +
         list.map(function (c) { return buildKanbanCardHTML(c, c.column === 'done' ? 'done' : key); }).join('') +
         laneSignals.map(function (sg) { return buildSignalCardHTML(sg); }).join('') +
-        addBtn +
+        addBtn + archivedHTML +
         '</section>';
     }).join('');
 
@@ -3901,6 +3991,7 @@
   // (⌂ ◎ ◫ ⌕ ✎ ⚙) n'avaient ni la même graisse ni la même ligne de base d'une
   // police à l'autre : la barre latérale avait l'air composée de pièces rapportées.
   var UI_ICON_PATHS = {
+    chevron: 'M4.5 6.25 8 9.75l3.5-3.5',
     mic: 'M8 1.75a2.25 2.25 0 0 0-2.25 2.25v3.5a2.25 2.25 0 0 0 4.5 0V4A2.25 2.25 0 0 0 8 1.75ZM3.75 7.25a4.25 4.25 0 0 0 8.5 0M8 11.5v2.75M5.75 14.25h4.5',
     inbox: 'M2.5 9.5h3l1 1.75h3l1-1.75h3M3.6 3.5h8.8l1.6 6v3a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1v-3l1.6-6Z',
     watch: 'M1.75 8S4 3.5 8 3.5 14.25 8 14.25 8 12 12.5 8 12.5 1.75 8 1.75 8ZM8 10a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z',
@@ -4887,7 +4978,10 @@
     }
     if (state.screen === 'inbox') {
       return {
-        tasksAll: state.tasks.filter(function (t) { return t.unread || t.status === 'review'; }),
+        tasksAll: state.tasks.filter(function (t) {
+          var c = state.cardsById[t.cardId];
+          return (t.unread || t.status === 'review') && !(c && c.archivedAt);
+        }),
         opts: { showProject: true, emptyMsg: t('inbox.empty'), bodyClass: 'inbox-body', paneTopHTML: buildInboxHelloHTML() + buildInboxSignalsHTML() + buildAwaitingShipBannerHTML() }
       };
     }
@@ -4965,9 +5059,24 @@
     if (!card) return '';
     var branch = card.branches && card.branches.length ? card.branches[0].branch : '';
     var edit = escapeHtml(t('workstream.editTooltip'));
+    var more = escapeHtml(t('cardMenu.more'));
+    // Archiver et supprimer, actions rares, vivent dans le « ⋯ » du titre,
+    // comme la suppression d'une tâche.
+    var deleteKey = 'card-delete:' + card.id;
+    var deleteLabel = isPendingConfirm(deleteKey) ? t('workstream.deleteConfirm') : t('workstream.delete');
+    var menuHTML = '<div class="detail-menu-wrap">' +
+      '<button class="icon-btn work-hero-more" data-action="toggle-card-menu" data-card-id="hero:' + card.id + '" title="' + more + '" aria-label="' + more + '">⋯</button>' +
+      '<div class="card-menu detail-menu hidden" data-card-menu="hero:' + card.id + '">' +
+        archiveMenuItemHTML(card) +
+        '<button class="card-menu-item card-menu-item-danger" data-action="confirm-click" data-confirm-key="' + deleteKey + '" data-confirm-action="card-delete" data-confirm-id="' + card.id + '"' +
+        ' data-default-label="' + escapeHtml(t('workstream.delete')) + '" data-confirm-label="' + escapeHtml(t('workstream.deleteConfirm')) + '"' +
+        ' title="' + escapeHtml(tCount('workstream.deleteSubtext', card.tasksTotal || 0)) + '">' + escapeHtml(deleteLabel) + '</button>' +
+      '</div></div>';
     return '<header class="work-hero">' +
       '<div class="work-hero-row"><h1 class="work-hero-title">' + escapeHtml(card.title) + '</h1>' +
-      '<button class="icon-btn work-hero-edit" data-action="open-edit-card" title="' + edit + '" aria-label="' + edit + '">' + uiIconHTML('edit', 16) + '</button></div>' +
+      (card.archivedAt ? '<span class="work-hero-archived">' + escapeHtml(t('workstream.archived')) + '</span>' : '') +
+      '<button class="icon-btn work-hero-edit" data-action="open-edit-card" title="' + edit + '" aria-label="' + edit + '">' + uiIconHTML('edit', 16) + '</button>' +
+      menuHTML + '</div>' +
       (branch ? '<div class="work-hero-branch mono">' + escapeHtml(branch) + '</div>' : '') +
       '</header>';
   }
@@ -5580,9 +5689,19 @@
     // qu'on ouvre vingt fois par jour.
     var deleteTaskKey = 'task-delete:' + task.id;
     var deleteTaskLabel = isPendingConfirm(deleteTaskKey) ? t('task.deleteConfirm') : t('task.delete');
+    // Repartir de zéro : seulement quand rien ne tourne sur la tâche. Destructif
+    // pour le travail non accepté, d'où la confirmation en deux temps.
+    var restartItemHTML = '';
+    if (task.status === 'review' && !task.rebasing) {
+      var restartKey = 'task-restart:' + task.id;
+      restartItemHTML = '<button class="card-menu-item" data-action="confirm-click" data-confirm-key="' + restartKey + '" data-confirm-action="task-restart" data-confirm-id="' + task.id + '"' +
+        ' data-default-label="' + escapeHtml(t('task.restart')) + '" data-confirm-label="' + escapeHtml(t('task.restartConfirm')) + '" title="' + escapeHtml(t('task.restartHint')) + '">' +
+        escapeHtml(isPendingConfirm(restartKey) ? t('task.restartConfirm') : t('task.restart')) + '</button>';
+    }
     var menuHTML = '<div class="detail-menu-wrap">' +
       '<button class="icon-btn" data-action="toggle-task-menu" title="' + escapeHtml(t('task.moreActions')) + '" aria-label="' + escapeHtml(t('task.moreActions')) + '">⋯</button>' +
       '<div class="card-menu detail-menu hidden" data-task-menu="' + task.id + '">' +
+        restartItemHTML +
         '<button class="card-menu-item card-menu-item-danger" data-action="confirm-click" data-confirm-key="' + deleteTaskKey + '" data-confirm-action="task-delete" data-confirm-id="' + task.id + '" data-default-label="' + escapeHtml(t('task.delete')) + '" data-confirm-label="' + escapeHtml(t('task.deleteConfirm')) + '">' + escapeHtml(deleteTaskLabel) + '</button>' +
       '</div>' +
     '</div>';
@@ -5705,6 +5824,9 @@
       var targetAgent = state.agentsById[reassignedAgentId];
       var targetName = targetAgent ? targetAgent.name : reassignedAgentId;
       return '<div class="msg-system">' + escapeHtml(t('chat.reassignedTo', { name: targetName })) + '</div>';
+    }
+    if (parseMarker('restarted', m.text)) {
+      return '<div class="msg-system msg-system-warning">' + escapeHtml(t('chat.restarted')) + '</div>';
     }
     var acceptedBranch = parseMarker('accepted', m.text);
     if (acceptedBranch) {
@@ -6801,6 +6923,25 @@
     }).catch(function (e) { if (e instanceof ApiError) showDetailError(taskId, e.message || t('errors.deleteTaskFailed')); });
   }
 
+  // Après « Repartir de zéro », la consigne d'origine (premier message humain
+  // du fil) revient dans le composeur : on la relit, on la corrige, on
+  // l'envoie. Rien ne part tout seul.
+  function doRestartTask(taskId) {
+    closeAllCardMenus();
+    var first = (state.messagesByTask[taskId] || []).find(function (m) { return m.author === 'user' && m.text; });
+    api('/api/tasks/' + taskId + '/restart', { method: 'POST', body: { confirm: true } }).then(function (task) {
+      upsertTask(task);
+      renderMain();
+      var el = document.getElementById('composer-input');
+      if (el && first && !el.value) {
+        el.value = first.text;
+        autoGrowComposer(el);
+        refreshComposerState();
+      }
+      if (el) el.focus();
+    }).catch(function (e) { if (e instanceof ApiError) showDetailError(taskId, e.message); });
+  }
+
   function moveCard(cardId, column) {
     closeAllCardMenus();
     api('/api/cards/' + cardId, { method: 'PATCH', body: { column: column } }).then(function (updated) {
@@ -6820,7 +6961,7 @@
   }
   // Un seul panneau de détail est ouvert à la fois : pas besoin d'identifiant.
   function toggleTaskMenu() {
-    var el = document.querySelector('.detail-menu');
+    var el = document.querySelector('.detail-menu[data-task-menu]');
     if (!el) return;
     var willOpen = el.classList.contains('hidden');
     closeAllCardMenus();
@@ -7223,7 +7364,7 @@
     if (!state.projectsById[projectId]) return;
     newTaskProjectId = projectId;
     newTaskSignalId = signalId || null;
-    var defaultAgent = state.agentsById.bolt || state.agents.find(function (a) { return !a.warning; }) || state.agents[0];
+    var defaultAgent = preferredAgent(state.agents);
     modalAgentId = defaultAgent ? defaultAgent.id : null;
     modalAttachments = [];
     newTaskDraft = draft || null;
@@ -7235,7 +7376,7 @@
     newTaskSignalId = null;
     var card = state.cardsById[cardId];
     if (!card) return;
-    var defaultAgent = state.agentsById.bolt || state.agents.find(function (a) { return !a.warning; }) || state.agents[0];
+    var defaultAgent = preferredAgent(state.agents);
     modalAgentId = defaultAgent ? defaultAgent.id : null;
     modalAttachments = [];
     newTaskDraft = null;
@@ -7873,8 +8014,7 @@
     // premier agent en bon état de la liste.
     var agents = planCapableAgents();
     var kept = agents.filter(function (a) { return a.id === modalAgentId; })[0];
-    var fallback = agents.filter(function (a) { return !a.warning; })[0] || agents[0];
-    modalAgentId = (kept || fallback || {}).id || null;
+    modalAgentId = (kept || preferredAgent(agents) || {}).id || null;
     renderPlanModal();
   }
 
@@ -8201,20 +8341,12 @@
   // Édition d'un chantier (titre + contexte)
 
   function buildCardEditModalHTML(card) {
-    var deleteKey = 'card-delete:' + card.id;
-    var deletePending = isPendingConfirm(deleteKey);
-    var deleteLabel = deletePending ? t('workstream.deleteConfirm') : t('workstream.delete');
-    var taskCount = card.tasksTotal || 0;
     return '<div class="modal modal-sm">' +
       '<div class="modal-head"><span class="modal-title">' + escapeHtml(t('workstream.editTitle')) + '</span><button class="icon-btn" data-action="close-modal" aria-label="' + escapeHtml(t('common.close')) + '">✕</button></div>' +
       '<div class="modal-label">' + escapeHtml(t('newCard.titleLabel')) + '</div><input id="card-edit-title" class="modal-input" value="' + escapeHtml(card.title) + '">' +
       '<div class="modal-label">' + escapeHtml(t('project.contextPrompt')) + '</div>' +
       '<textarea id="card-edit-context" class="modal-textarea" rows="3" placeholder="' + escapeHtml(t('project.contextPromptPlaceholder')) + '">' + escapeHtml(card.contextPrompt || '') + '</textarea>' +
       '<div id="card-edit-error" class="modal-error hidden"></div>' +
-      '<div class="modal-delete-row">' +
-        '<button class="delete-link" data-action="confirm-click" data-confirm-key="' + deleteKey + '" data-confirm-action="card-delete" data-confirm-id="' + card.id + '" data-default-label="' + escapeHtml(t('workstream.delete')) + '" data-confirm-label="' + escapeHtml(t('workstream.deleteConfirm')) + '">' + escapeHtml(deleteLabel) + '</button>' +
-        '<div class="modal-delete-subtext">' + escapeHtml(tCount('workstream.deleteSubtext', taskCount)) + '</div>' +
-      '</div>' +
       '<div class="modal-foot"><button class="btn-outline" data-action="close-modal">' + escapeHtml(t('common.cancel')) + '</button>' +
       '<button class="btn-green" data-action="submit-card-edit" data-card-id="' + card.id + '">' + escapeHtml(t('common.save')) + '</button></div>' +
       '</div>';
@@ -8554,6 +8686,8 @@
     var agents = analystAgents();
     var watchAgent = project.watch && project.watch.agentId;
     if (watchAgent && agents.some(function (a) { return a.id === watchAgent; })) return watchAgent;
+    var pref = state.settings && state.settings.defaultAgentId;
+    if (pref && agents.some(function (a) { return a.id === pref; })) return pref;
     var real = agents.filter(function (a) { return a.cli !== 'fake' && !a.warning; })[0];
     return (real || agents[0] || {}).id || '';
   }
@@ -9136,6 +9270,27 @@
   // Onglet Agents : la liste complète, sortie de la barre latérale où elle ne
   // servait qu'à ouvrir cette même modale d'édition. Une ligne par agent, son
   // modèle en sous-titre, son avertissement d'installation s'il en a un.
+  // L'agent présélectionné dans les listes : celui des réglages s'il fait
+  // partie de la liste proposée, sinon le premier en bon état.
+  function preferredAgent(list) {
+    var id = state.settings && state.settings.defaultAgentId;
+    return list.find(function (a) { return a.id === id; }) ||
+      list.find(function (a) { return !a.warning; }) || list[0] || null;
+  }
+
+  function buildDefaultAgentSelectHTML() {
+    var current = (state.settings && state.settings.defaultAgentId) || '';
+    var opts = '<option value="">' + escapeHtml(t('settings.defaultAgentAuto')) + '</option>' +
+      state.agents.map(function (a) {
+        return '<option value="' + escapeHtml(a.id) + '"' + (a.id === current ? ' selected' : '') + '>' + escapeHtml(a.emoji + ' ' + a.name) + '</option>';
+      }).join('');
+    return '<div class="default-agent">' +
+      '<label class="modal-label" for="default-agent-select">' + escapeHtml(t('settings.defaultAgent')) + '</label>' +
+      '<select id="default-agent-select" class="modal-input">' + opts + '</select>' +
+      '<div class="update-note">' + escapeHtml(t('settings.defaultAgentHint')) + '</div>' +
+    '</div>';
+  }
+
   function buildSettingsAgentsHTML() {
     var rows = state.agents.map(function (a) {
       var warn = a.warning
@@ -9150,7 +9305,8 @@
         (a.active ? '<span class="agent-dot"></span>' : '') +
       '</button>';
     }).join('');
-    return '<div class="agent-manage-list">' +
+    return (state.agents.length ? buildDefaultAgentSelectHTML() : '') +
+      '<div class="agent-manage-list">' +
         (rows || '<div class="empty-note-sm">' + escapeHtml(t('sidebar.noAgents')) + '</div>') +
       '</div>' +
       '<div class="secondary-row"><button class="btn-outline btn-block" data-action="open-new-agent">+ ' +
@@ -9895,7 +10051,10 @@
     var action = el.getAttribute('data-action');
     // Le menu « ⋯ » du détail d'une tâche partage la classe .card-menu (donc sa
     // fermeture au clic ailleurs) : il faut exempter les deux bascules.
-    if (action !== 'toggle-card-menu' && action !== 'toggle-task-menu') closeAllCardMenus();
+    // Une confirmation en deux temps posée dans un menu doit rester visible
+    // entre ses deux clics.
+    var inMenuConfirm = action === 'confirm-click' && el.closest('.card-menu');
+    if (action !== 'toggle-card-menu' && action !== 'toggle-task-menu' && !inMenuConfirm) closeAllCardMenus();
     if (action !== 'toggle-reassign-menu') closeAllReassignMenus();
     if (action !== 'toggle-project-menu') closeAllProjectMenus();
     switch (action) {
@@ -9940,6 +10099,11 @@
       case 'mark-project-read': markProjectAllRead(el.getAttribute('data-project-id')); break;
       case 'toggle-project-sidebar-visibility': toggleProjectSidebarVisibility(el.getAttribute('data-project-id')); break;
       case 'move-card': moveCard(el.getAttribute('data-card-id'), el.getAttribute('data-column')); break;
+      case 'archive-card': archiveCard(el.getAttribute('data-card-id'), el.getAttribute('data-archived') === 'true'); break;
+      case 'toggle-archived':
+        state.showArchived[state.projectId] = !state.showArchived[state.projectId];
+        renderMain();
+        break;
       case 'open-new-card': openNewCardModal(); break;
       case 'open-new-task': if (state.cardId) openNewTaskModal(state.cardId); break;
       case 'open-new-project-task': if (state.projectId) openNewTaskInProject(state.projectId); break;
@@ -10163,6 +10327,12 @@
       // Le champ est vidé pour que rechoisir le même fichier redéclenche
       // l'événement (sinon la valeur ne change pas et rien ne se passe).
       e.target.value = '';
+      return;
+    }
+    if (e.target && e.target.id === 'default-agent-select') {
+      api('/api/settings', { method: 'PATCH', body: { defaultAgentId: e.target.value } }).then(function (settings) {
+        state.settings = settings || state.settings;
+      }).catch(function () {});
       return;
     }
     if (e.target && e.target.classList && e.target.classList.contains('vigie-agent-select')) {

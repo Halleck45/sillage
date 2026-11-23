@@ -1021,6 +1021,7 @@ button, input, textarea { font-family: inherit; }
 /* Le menu « ⋯ » du détail : ancré à droite de l'en-tête, sous le bouton. */
 .detail-menu-wrap { position: relative; flex: none; }
 .detail-menu { top: 30px; right: 0; min-width: 180px; }
+.detail-menu .card-menu-item { white-space: nowrap; }
 .card-menu-item-danger { color: var(--red); }
 .card-menu-item-danger:hover { background: var(--red-bg); }
 .btn-action {
@@ -2671,6 +2672,33 @@ body { background: var(--canvas); }
 .modal-attach-row { gap: 4px; }
 .modal-attach-row .composer-mic { height: 28px; font-size: 11.5px; }
 @keyframes om-mic { from { transform: scale(0.6); opacity: 0.9; } to { transform: scale(1.6); opacity: 0; } }
+
+/* Archives : un geste discret dans l'en-tête de « Livré », et les chantiers
+   rangés repliés sous la colonne, en retrait. Rien n'est supprimé. */
+.col-action {
+  margin-left: auto; height: 22px; padding: 0 8px; border: 0; border-radius: 999px;
+  background: transparent; color: var(--muted-3); font: inherit; font-size: 11.5px; cursor: pointer;
+}
+.col-action:hover { background: var(--hover); color: var(--text); }
+.lane-archived-toggle {
+  display: flex; align-items: center; gap: 6px; width: 100%; margin-top: 6px; padding: 8px 6px;
+  border: 0; border-radius: 8px; background: transparent; color: var(--muted-3);
+  font: inherit; font-size: 12px; cursor: pointer; text-align: left;
+}
+.lane-archived-toggle:hover { background: var(--hover); color: var(--text); }
+.lane-archived-toggle .rv-chevron { display: inline-flex; transform: rotate(-90deg); transition: transform .18s ease; }
+.lane-archived-toggle[aria-expanded="true"] .rv-chevron { transform: none; }
+.kanban-card-archived { opacity: .62; }
+.kanban-card-archived:hover { opacity: 1; }
+.work-hero-archived {
+  flex: none; padding: 2px 9px; border-radius: 999px; background: var(--hover);
+  color: var(--muted-2); font-size: 12px; font-weight: 550;
+}
+.work-hero-more { color: var(--muted-3); }
+.card-menu-item:disabled { color: var(--muted-4); cursor: not-allowed; background: transparent; }
+
+.default-agent { margin-bottom: 18px; }
+.default-agent .update-note { margin-top: 6px; }
 
 /* ---------- Transitions des éléments cliquables ---------- */
 

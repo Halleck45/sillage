@@ -183,6 +183,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("PATCH /api/projects/{id}", s.handleUpdateProject)
 	mux.HandleFunc("DELETE /api/projects/{id}", s.handleDeleteProject)
 	mux.HandleFunc("POST /api/projects/{id}/mark-all-read", s.handleMarkProjectAllRead)
+	mux.HandleFunc("POST /api/projects/{id}/archive-shipped", s.handleArchiveShipped)
 	mux.HandleFunc("GET /api/projects/{id}/issues", s.handleProjectIssues)
 	mux.HandleFunc("PUT /api/projects/{id}/watch", s.handleProjectWatch)
 	mux.HandleFunc("GET /api/projects/{id}/claude-sessions", s.handleClaudeSessions)
@@ -207,6 +208,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/tasks/{id}", s.handleGetTask)
 	mux.HandleFunc("POST /api/tasks/{id}/messages", s.handlePostMessage)
 	mux.HandleFunc("POST /api/tasks/{id}/interrupt", s.handleInterrupt)
+	mux.HandleFunc("POST /api/tasks/{id}/restart", s.handleRestartTask)
 	mux.HandleFunc("POST /api/tasks/{id}/start", s.handleStartWaitingTask)
 	mux.HandleFunc("POST /api/tasks/{id}/accept", s.handleAccept)
 	mux.HandleFunc("POST /api/tasks/{id}/cancel", s.handleCancel)
@@ -361,6 +363,8 @@ func (s *Server) handleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 		Lang        *string `json:"lang"`
 		UpdateCheck *bool   `json:"updateCheck"`
 		LAN         *bool   `json:"lan"`
+		// DefaultAgentID : "" revient au choix automatique.
+		DefaultAgentID *string `json:"defaultAgentId"`
 	}
 	if err := decodeJSON(r, &body); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid request body")
@@ -383,6 +387,12 @@ func (s *Server) handleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		s.publishLan()
+	}
+	if body.DefaultAgentID != nil {
+		if _, err := s.store.SetDefaultAgent(*body.DefaultAgentID); err != nil {
+			writeError(w, statusForStoreError(err), err.Error())
+			return
+		}
 	}
 	settings, err := s.store.UpdateSettings(body.DisplayName, body.Lang, body.UpdateCheck)
 	if err != nil {
@@ -985,18 +995,37 @@ func (s *Server) handleUpdateCard(w http.ResponseWriter, r *http.Request) {
 		Column        *string `json:"column"`
 		Title         *string `json:"title"`
 		ContextPrompt *string `json:"contextPrompt"`
+		Archived      *bool   `json:"archived"`
 	}
 	if err := decodeJSON(r, &body); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 	card, err := s.store.UpdateCard(id, body.Column, body.Title, body.ContextPrompt)
+	if err == nil && body.Archived != nil {
+		card, err = s.store.ArchiveCard(id, *body.Archived)
+	}
 	if err != nil {
 		writeError(w, statusForStoreError(err), err.Error())
 		return
 	}
 	s.runner.publishCards(card.ProjectID)
 	writeJSON(w, http.StatusOK, card)
+}
+
+// handleArchiveShipped archive d'un coup les chantiers livrés d'un projet :
+// la colonne « Livré » ne grandit pas sans fin. Rien n'est détruit.
+func (s *Server) handleArchiveShipped(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	n, err := s.store.ArchiveShippedCards(id)
+	if err != nil {
+		writeError(w, statusForStoreError(err), err.Error())
+		return
+	}
+	if n > 0 {
+		s.runner.publishCards(id)
+	}
+	writeJSON(w, http.StatusOK, map[string]int{"archived": n})
 }
 
 // handleDeleteCard supprime une carte (chantier), avec cascade sur ses
@@ -1388,6 +1417,25 @@ func (s *Server) handleInterrupt(w http.ResponseWriter, r *http.Request) {
 	task, err := s.runner.Interrupt(id)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, task)
+}
+
+// handleRestartTask jette le travail d'une tâche à relire et oublie la session
+// de son agent (voir Runner.RestartTask). Destructif pour le travail non
+// accepté : {"confirm": true} est exigé, comme pour une suppression.
+func (s *Server) handleRestartTask(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Confirm bool `json:"confirm"`
+	}
+	if err := decodeJSON(r, &body); err != nil || !body.Confirm {
+		writeError(w, http.StatusBadRequest, "confirmation required")
+		return
+	}
+	task, _, err := s.runner.RestartTask(r.PathValue("id"))
+	if err != nil {
+		writeError(w, statusForStoreError(err), err.Error())
 		return
 	}
 	writeJSON(w, http.StatusOK, task)

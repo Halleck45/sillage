@@ -322,6 +322,12 @@ type Card struct {
 	// UpdatedAt de ses tâches. Sert à trier les chantiers d'une colonne du plus
 	// récent au plus ancien (voir buildKanbanHTML côté frontend).
 	UpdatedAt time.Time `json:"updatedAt"`
+
+	// ArchivedAt range un chantier hors du kanban sans rien détruire (branches,
+	// worktrees et tâches restent) : un chantier livré ou abandonné qu'on ne
+	// veut plus voir. Seul un chantier sans travail en cours s'archive, et une
+	// nouvelle tâche le fait revenir (voir createTask). nil : visible.
+	ArchivedAt *time.Time `json:"archivedAt"`
 }
 
 // Agent est un profil d'agent IA (claude, codex, copilot, agy, kiro ou fake).
@@ -579,6 +585,10 @@ type Settings struct {
 	UpdateCheck *bool `json:"updateCheck"`
 	// LAN : Sillage répond aussi sur le réseau local, en HTTPS (voir lan.go).
 	LAN bool `json:"lan"`
+	// DefaultAgentID : l'agent présélectionné dans les listes (nouvelle tâche,
+	// planification, configuration automatique). Vide : le premier agent en bon
+	// état. Un agent supprimé ne laisse pas de référence morte (DeleteAgent).
+	DefaultAgentID string `json:"defaultAgentId"`
 }
 
 // UpdateStatus décrit les mises à jour de Sillage (GET /api/update, champ

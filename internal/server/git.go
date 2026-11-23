@@ -19,6 +19,21 @@ const (
 	gitPushTimeout    = 120 * time.Second
 )
 
+// ResetWorktreeTo ramène un worktree de tâche à la pointe de base : commits de
+// la tâche et modifications jetés, fichiers non suivis supprimés (les fichiers
+// ignorés, caches et dépendances installées, restent). Aucune écriture hors du
+// worktree, rien n'est poussé.
+func ResetWorktreeTo(dir, base string) error {
+	if dir == "" || base == "" {
+		return fmt.Errorf("task has no worktree")
+	}
+	if _, err := runGit(dir, gitDefaultTimeout, "reset", "--hard", base); err != nil {
+		return err
+	}
+	_, err := runGit(dir, gitDefaultTimeout, "clean", "-fd")
+	return err
+}
+
 // runGit exécute une commande git dans dir, avec un timeout et l'environnement
 // hérité complété de GIT_TERMINAL_PROMPT=0 (jamais de prompt interactif).
 func runGit(dir string, timeout time.Duration, args ...string) (string, error) {

@@ -247,6 +247,13 @@ func (r *Runner) prepareCliInput(task Task, text string) string {
 		return text
 	}
 	msgs := r.store.GetMessages(task.ID)
+	// Après « Repartir de zéro », rien d'avant ne compte.
+	for i := len(msgs) - 1; i >= 0; i-- {
+		if strings.HasPrefix(msgs[i].Text, "[restarted:") {
+			msgs = msgs[i+1:]
+			break
+		}
+	}
 	for len(msgs) > 0 && msgs[len(msgs)-1].Author == "user" {
 		msgs = msgs[:len(msgs)-1]
 	}
@@ -295,7 +302,7 @@ func (r *Runner) startQueued(taskID, text string) {
 // markerPrefixes liste les préfixes des messages marqueurs posés par le
 // backend (le frontend les remplace par une ligne système localisée). Ce ne
 // sont pas des tours de conversation : ils sont exclus du transcript rejoué.
-var markerPrefixes = []string{"[reassigned:", "[accepted:", "[auto-accepted:", "[merge-conflict:", "[tool-denied:", "[interrupted:"}
+var markerPrefixes = []string{"[restarted:", "[reassigned:", "[accepted:", "[auto-accepted:", "[merge-conflict:", "[tool-denied:", "[interrupted:"}
 
 func isMarkerMessage(text string) bool {
 	for _, prefix := range markerPrefixes {
@@ -314,7 +321,8 @@ func buildTranscript(msgs []Message) string {
 	const perMsg, total = 600, 6000
 	var lines []string
 	for _, m := range msgs {
-		if isMarkerMessage(m.Text) {
+		// Les échecs d'exécution (« ⚠️ … ») ne sont pas de la conversation.
+		if isMarkerMessage(m.Text) || strings.HasPrefix(m.Text, "⚠️ ") {
 			continue
 		}
 		who := "assistant"
@@ -338,11 +346,66 @@ func buildTranscript(msgs []Message) string {
 // contextualizeCliInput préfixe text par un rappel minimal de la tâche
 // ("Task: <title>") : utilisé au lancement initial et chaque fois qu'un
 // message est envoyé sans session CLI à reprendre (départ frais).
+// lastLine rend la dernière ligne non vide de s, tronquée.
+func lastLine(s string) string {
+	lines := strings.Split(strings.TrimSpace(s), "\n")
+	for i := len(lines) - 1; i >= 0; i-- {
+		if l := strings.TrimSpace(lines[i]); l != "" {
+			return truncate(l, 300)
+		}
+	}
+	return ""
+}
+
 func contextualizeCliInput(title, text string) string {
 	if text == "" {
 		return "Task: " + title
 	}
 	return "Task: " + title + "\n\n" + text
+}
+
+// RestartTask fait repartir une tâche à relire de zéro : le worktree revient à
+// la pointe de la branche du chantier (le travail de la tâche est jeté), la
+// session de l'agent est oubliée, et un marqueur borne le fil : le prochain
+// message part neuf, sans rien rejouer d'avant (voir prepareCliInput). Les
+// verdicts et la vérification, attachés à l'ancien travail, tombent aussi.
+func (r *Runner) RestartTask(taskID string) (Task, Message, error) {
+	task, ok := r.store.GetTask(taskID)
+	if !ok {
+		return Task{}, Message{}, fmt.Errorf("task not found")
+	}
+	if r.IsRunning(taskID) || task.Status == "running" {
+		return Task{}, Message{}, fmt.Errorf("interrupt the agent before restarting")
+	}
+	if task.Status != "review" || task.Rebasing {
+		return Task{}, Message{}, fmt.Errorf("only a task under review can restart")
+	}
+	r.CancelCheck(taskID)
+	if err := ResetWorktreeTo(task.WorktreeDir, task.Base); err != nil {
+		return Task{}, Message{}, err
+	}
+	files, docs, commits := TaskWorkCounts(task.WorktreeDir, task.Base)
+	sha := WorkFingerprint(task.WorktreeDir, task.Base)
+	if _, err := r.store.UpdateTask(taskID, func(t *Task) {
+		t.SessionID = ""
+		t.Checks = []Check{}
+		t.Review, t.Tested = nil, nil
+		t.WorkSha = sha
+		t.FilesCount, t.DocsCount, t.CommitsCount = files, docs, commits
+		t.CommandLog = nil
+		t.LiveActivity = nil
+		t.Unread = false
+	}); err != nil {
+		return Task{}, Message{}, err
+	}
+	msg, task, err := r.store.AddMessage(taskID, "agent", "", "[restarted:"+task.AgentID+"]")
+	if err != nil {
+		return Task{}, Message{}, err
+	}
+	r.publishTask(task)
+	r.publishMessage(msg)
+	r.publishCards(task.ProjectID)
+	return task, msg, nil
 }
 
 // Interrupt arrête l'agent en cours pour une tâche : SIGINT au groupe de
@@ -866,6 +929,8 @@ func (r *Runner) runClaude(task *Task, agent Agent, project Project, card Card, 
 	handle.cmd = cmd
 
 	lastAgentText := ""
+	resultErr := false
+	var stdoutNotes []string // lignes hors JSON : claude y écrit parfois la raison d'un échec
 	// pendingTools rattache un tool_result à l'appel qui l'a produit : le
 	// résultat ne porte que l'identifiant, pas le nom de l'outil demandé.
 	// deniedTools garde un seul marqueur par outil et par exécution, sinon un
@@ -881,6 +946,9 @@ func (r *Runner) runClaude(task *Task, agent Agent, project Project, card Card, 
 		}
 		var env claudeEnvelope
 		if err := json.Unmarshal([]byte(line), &env); err != nil {
+			if len(stdoutNotes) < 20 {
+				stdoutNotes = append(stdoutNotes, line)
+			}
 			continue
 		}
 		switch env.Type {
@@ -974,7 +1042,7 @@ func (r *Runner) runClaude(task *Task, agent Agent, project Project, card Card, 
 				}
 			}
 			if env.IsError {
-				return fmt.Errorf("the agent reported an error")
+				resultErr = true // la raison arrive sur stderr : on attend la fin du process
 			}
 		}
 	}
@@ -984,7 +1052,26 @@ func (r *Runner) runClaude(task *Task, agent Agent, project Project, card Card, 
 	if waitErr == nil && scanErr != nil {
 		waitErr = scanErr
 	}
-	if waitErr != nil && !handle.interrupted.Load() {
+	if handle.interrupted.Load() {
+		return nil
+	}
+	diag := strings.TrimSpace(stderrBuf.String() + "\n" + strings.Join(stdoutNotes, "\n"))
+	// Session introuvable : elle a été créée sous un autre compte ou un autre
+	// dossier de config de claude (CLAUDE_CONFIG_DIR), ou effacée. On l'oublie
+	// et on repart une fois sans --resume, avec l'historique du fil rejoué.
+	if resultErr && task.SessionID != "" && strings.Contains(diag, "No conversation found") {
+		if t, err := r.store.UpdateTask(task.ID, func(t *Task) { t.SessionID = "" }); err == nil {
+			*task = t
+			return r.runClaude(task, agent, project, card, handle, r.prepareCliInput(t, cliInput), runtime)
+		}
+	}
+	if resultErr {
+		if line := lastLine(diag); line != "" {
+			return fmt.Errorf("the agent reported an error: %s", line)
+		}
+		return fmt.Errorf("the agent reported an error")
+	}
+	if waitErr != nil {
 		msg := strings.TrimSpace(stderrBuf.String())
 		if msg == "" {
 			msg = waitErr.Error()
