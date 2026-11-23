@@ -367,9 +367,27 @@ type AgentQuota struct {
 }
 
 // Check est le résultat d'une vérification projet (ex : go test) pour une tâche.
+// Sha est l'empreinte du travail vérifié (WorkFingerprint) : différente de
+// Task.WorkSha, le résultat ne décrit plus le code de la tâche et l'UI le donne
+// pour périmé. Output garde la fin de la sortie, succès compris : sur un
+// échec, c'est là qu'on lit quoi corriger ; sur un succès, ce qui a tourné.
 type Check struct {
-	Label string `json:"label"`
-	Ok    bool   `json:"ok"`
+	Label      string     `json:"label"`
+	Ok         bool       `json:"ok"`
+	Reason     string     `json:"reason,omitempty"` // "exit 1", "timeout", "error: ..." ; vide si ok
+	Output     string     `json:"output,omitempty"`
+	Sha        string     `json:"sha,omitempty"`
+	At         *time.Time `json:"at,omitempty"`
+	DurationMs int64      `json:"durationMs,omitempty"`
+}
+
+// TaskReview est un verdict humain sur une tâche (relecture ou recette), posé sur une
+// empreinte du travail : si l'agent change le code ensuite (Task.WorkSha
+// différent de Sha), la relecture est périmée et l'UI redemande de relire.
+type TaskReview struct {
+	Verdict string    `json:"verdict"` // approved|changes
+	Sha     string    `json:"sha"`
+	At      time.Time `json:"at"`
 }
 
 // CommandLogEntry est une commande jouée par l'agent (tool_use), horodatée.
@@ -415,6 +433,21 @@ type Task struct {
 	// arrêt brutal en plein rebase ne laisse pas un fuseau tourner sans fin.
 	Rebasing bool `json:"rebasing"`
 
+	// Checking indique qu'une vérification projet tourne dans le worktree de la
+	// tâche (voir check.go), depuis CheckStartedAt. Volatile comme Rebasing :
+	// remis à faux au chargement.
+	Checking       bool       `json:"checking"`
+	CheckStartedAt *time.Time `json:"checkStartedAt"`
+
+	// WorkSha est l'empreinte du travail de la tâche (WorkFingerprint), relue à
+	// chaque fin d'exécution, après un rebase et à chaque verdict. Review est le
+	// dernier verdict de relecture, nil tant que personne n'a relu.
+	WorkSha string      `json:"workSha"`
+	Review  *TaskReview `json:"review"`
+	// Tested est le verdict de recette (le dépôt a une commande de recette et
+	// l'humain a essayé le résultat), mêmes règles que Review.
+	Tested *TaskReview `json:"tested"`
+
 	// WaitsForTaskID, si non vide, indique que le lancement de l'agent est
 	// retardé jusqu'à l'acceptation de la tâche référencée (statut "waiting"
 	// tant que ce n'est pas le cas ; voir Server.startWaitingTask et
@@ -457,7 +490,11 @@ type PreviewRun struct {
 
 	Cmd string `json:"cmd"` // la commande telle qu'elle a été lancée
 	URL string `json:"url"` // previewUrl du dépôt, variables substituées
-	Dir string `json:"dir"` // worktree d'exécution, jamais le dépôt du projet
+	// Static : la previewUrl était un file:///, URL pointe alors vers
+	// /preview/<jeton>/, servi par Sillage (voir staticPreviewTarget). Le lien
+	// reste valable après la fin de la commande, qui a produit les fichiers.
+	Static bool   `json:"static"`
+	Dir    string `json:"dir"` // worktree d'exécution, jamais le dépôt du projet
 
 	Status   string `json:"status"` // running|exited|stopped|failed
 	ExitCode int    `json:"exitCode"`

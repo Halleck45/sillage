@@ -21,7 +21,7 @@ import (
 // les champs exportés du Store sont sérialisés tels quels, une version qui ne
 // connaît pas un champ le fait disparaître du fichier à sa première
 // sauvegarde, en silence (voir ErrStateTooNew).
-const stateFormatVersion = 8
+const stateFormatVersion = 9
 
 // agentSeedVersion tracks one-time additions to the built-in agent profiles.
 // Unlike checking for an ID at every startup, this lets users delete a seeded
@@ -175,8 +175,10 @@ func migrateAgentSeeds(s *Store) {
 func resetTransientTaskFlags(s *Store) {
 	var interrupted []string
 	for id, t := range s.Tasks {
-		if t.Rebasing {
+		if t.Rebasing || t.Checking {
 			t.Rebasing = false
+			t.Checking = false
+			t.CheckStartedAt = nil
 			s.Tasks[id] = t
 		}
 		if t.Status == "running" {
@@ -1362,12 +1364,14 @@ func NormalizeRepos(repos []Repo) ([]Repo, error) {
 		}
 		seen[name] = true
 		previewURL := strings.TrimSpace(r.PreviewURL)
-		// L'URL de recette devient un lien cliquable dans l'interface : seuls
-		// http(s) sont acceptés, comme pour les liens épinglés. Elle n'est pas
-		// validée par url.Parse, parce que c'est un gabarit qui contient encore
-		// ses variables (http://127.0.0.1:$((4000 + SILLAGE_N))).
-		if previewURL != "" && !strings.HasPrefix(previewURL, "http://") && !strings.HasPrefix(previewURL, "https://") {
-			return nil, fmt.Errorf("invalid preview url %q: only http(s) URLs are allowed", previewURL)
+		// L'URL de recette devient un lien cliquable dans l'interface : http(s),
+		// ou file:// pour une recette qui produit des fichiers statiques (un
+		// rapport HTML), que Sillage sert alors lui-même (voir
+		// staticPreviewTarget). Elle n'est pas validée par url.Parse, parce que
+		// c'est un gabarit qui contient encore ses variables
+		// (http://127.0.0.1:$((4000 + SILLAGE_N))).
+		if previewURL != "" && !strings.HasPrefix(previewURL, "http://") && !strings.HasPrefix(previewURL, "https://") && !strings.HasPrefix(previewURL, "file:///") {
+			return nil, fmt.Errorf("invalid preview url %q: only http(s) and file:/// URLs are allowed", previewURL)
 		}
 		out[i] = Repo{
 			Name:       name,
@@ -1817,6 +1821,13 @@ func (s *Store) UpdateTask(id string, fn func(t *Task)) (Task, error) {
 // liste des tâches sous le curseur de l'utilisateur.
 func (s *Store) SetTaskRebasing(id string, rebasing bool) (Task, error) {
 	return s.updateTask(id, func(t *Task) { t.Rebasing = rebasing }, false)
+}
+
+// PatchTask modifie une tâche sans toucher à UpdatedAt : résultat d'une
+// vérification, verdict de relecture. Comme SetTaskRebasing, ces écritures ne
+// doivent pas réordonner la liste sous le curseur.
+func (s *Store) PatchTask(id string, fn func(t *Task)) (Task, error) {
+	return s.updateTask(id, fn, false)
 }
 
 // MarkTaskRead marque une tâche comme lue (Unread=false) sans mettre à jour

@@ -36,13 +36,15 @@ type signalAnalysis struct {
 }
 
 // AnalyzeSignal fait analyser sig par agent dans dir (le dépôt local, lu tel
-// quel). diff est le diff de la PR, vide pour une issue.
+// quel). diff est le diff de la PR, vide pour une issue. maintainer est le
+// compte gh de la machine (vide s'il est inconnu) : ses messages dans la
+// discussion sont les retours déjà donnés par le mainteneur.
 // onStep reçoit une ligne par outil employé par l'agent (peut être nil).
-func AnalyzeSignal(ctx context.Context, agent Agent, project Project, sig Signal, dir, diff, lang string, onStep func(string)) (signalAnalysis, error) {
+func AnalyzeSignal(ctx context.Context, agent Agent, project Project, sig Signal, dir, diff, lang, maintainer string, onStep func(string)) (signalAnalysis, error) {
 	if !canPlan(agent.Cli) {
 		return signalAnalysis{}, fmt.Errorf("%s cannot analyze", agent.Name)
 	}
-	prompt := signalInstructions(project, sig, diff, lang)
+	prompt := signalInstructions(project, sig, diff, lang, maintainer)
 
 	ctx, cancel := context.WithTimeout(ctx, signalAnalysisTimeout)
 	defer cancel()
@@ -77,7 +79,7 @@ func fenceUntrusted(s string) string {
 	return strings.ReplaceAll(s, "</untrusted>", "</untrusted_>")
 }
 
-func signalInstructions(project Project, sig Signal, diff, lang string) string {
+func signalInstructions(project Project, sig Signal, diff, lang, maintainer string) string {
 	what := "issue"
 	if sig.Kind == "pr" {
 		what = "pull request"
@@ -112,7 +114,11 @@ func signalInstructions(project Project, sig Signal, diff, lang string) string {
 	if len(sig.Comments) > 0 {
 		b.WriteString("\nDiscussion, oldest first:\n")
 		for _, c := range sig.Comments {
-			fmt.Fprintf(&b, "--- @%s, %s:\n%s\n", fenceUntrusted(c.Author), c.CreatedAt, fenceUntrusted(c.Body))
+			who := "@" + fenceUntrusted(c.Author)
+			if isMaintainer(c.Author, maintainer) {
+				who += " (the maintainer)"
+			}
+			fmt.Fprintf(&b, "--- %s, %s:\n%s\n", who, c.CreatedAt, fenceUntrusted(c.Body))
 		}
 	}
 	b.WriteString("</untrusted>\n\n")
@@ -124,6 +130,15 @@ func signalInstructions(project Project, sig Signal, diff, lang string) string {
 		b.WriteString(" and make the review answer them first.\n\n")
 	} else if len(sig.Comments) > 0 {
 		b.WriteString("Take the discussion into account: do not repeat what was already said or answered.\n\n")
+	}
+	if maintainerSpoke(sig.Comments, maintainer) {
+		// Une relecture de suivi : le mainteneur a déjà donné ses retours. La
+		// revue doit dire où en sont ces retours, pas recommencer à zéro.
+		fmt.Fprintf(&b, "The maintainer (@%s) already gave feedback in this discussion. This is a follow-up review, written as the maintainer:\n", maintainer)
+		b.WriteString("1. Start from the maintainer's latest requests: for each one, say whether the current code addresses it, citing file:line.\n")
+		b.WriteString("2. Then only raise problems that are new or that the maintainer missed and that block the merge.\n")
+		b.WriteString("3. Never re-raise a point the maintainer already accepted, fixed or decided, and do not restart the review from scratch.\n")
+		b.WriteString("If the author addressed everything and nothing blocks, the decision is merge and the review is a short thank-you.\n\n")
 	}
 	if sig.Kind == "pr" {
 		b.WriteString("Review this pull request as a senior maintainer: is it correct, safe, consistent with the codebase,")
@@ -151,10 +166,12 @@ func signalInstructions(project Project, sig Signal, diff, lang string) string {
 	b.WriteString("- priority: high when the maintainer should look soon (security issue, regression, data loss, a good")
 	b.WriteString(" pull request ready to merge); low when it can wait or is noise (spam, duplicate, question, out of scope); normal otherwise.\n")
 	b.WriteString("- verdict: one or two sentences for the maintainer explaining the decision.\n")
+	b.WriteString("- review: short and direct, as a busy maintainer writes: no opening praise paragraph, at most five points,")
+	b.WriteString(" the blocking ones first, each in two or three sentences with file:line and the change expected. Leave nits out unless nothing else is left.\n")
 	if sig.Kind == "pr" {
-		b.WriteString("- review: the review comments to post on GitHub, in Markdown, each one pointing to file:line. Empty if the decision is merge and there is nothing to add.\n")
+		b.WriteString("  For a pull request: the review comments to post on GitHub, in Markdown. Empty if the decision is merge and there is nothing to add.\n")
 	} else {
-		b.WriteString("- review: your reply to post on the GitHub issue, in Markdown: likely cause with file:line, suggested fix, or the questions the reporter must answer.\n")
+		b.WriteString("  For an issue: your reply to post on GitHub, in Markdown: likely cause with file:line, suggested fix, or the questions the reporter must answer.\n")
 	}
 	// Ce qui part sur GitHub est en anglais, la langue des projets publics ;
 	// le verdict, lui, ne s'adresse qu'au mainteneur.
@@ -165,6 +182,21 @@ func signalInstructions(project Project, sig Signal, diff, lang string) string {
 		b.WriteString("Write the verdict in French.\n")
 	}
 	return b.String()
+}
+
+// isMaintainer : author est le compte gh de la machine.
+func isMaintainer(author, maintainer string) bool {
+	return maintainer != "" && strings.EqualFold(author, maintainer)
+}
+
+// maintainerSpoke : le mainteneur a déjà écrit dans la discussion.
+func maintainerSpoke(comments []SignalComment, maintainer string) bool {
+	for _, c := range comments {
+		if isMaintainer(c.Author, maintainer) {
+			return true
+		}
+	}
+	return false
 }
 
 // extractSignalAnalysis garde le dernier objet JSON exploitable de la réponse

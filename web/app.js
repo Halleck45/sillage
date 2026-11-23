@@ -59,6 +59,24 @@
       'kanban.card.noTask': 'Aucune tâche',
       'kanban.card.reviewCount': '{n} à relire',
       'kanban.card.awaitingShip': 'À livrer',
+      'kanban.stage.ready.one': 'Prête à accepter',
+      'kanban.stage.ready.other': '{n} prêtes à accepter',
+      'kanban.stage.checkFailed.one': 'Vérification en échec',
+      'kanban.stage.checkFailed.other': '{n} vérifications en échec',
+      'kanban.stage.changes.one': 'Changements demandés',
+      'kanban.stage.changes.other': '{n} avec changements demandés',
+      'kanban.stage.toReview.one': 'À relire',
+      'kanban.stage.toReview.other': '{n} à relire',
+      'kanban.stage.reviewAgain.one': 'À relire de nouveau',
+      'kanban.stage.reviewAgain.other': '{n} à relire de nouveau',
+      'kanban.stage.toTest.one': 'À recetter',
+      'kanban.stage.toTest.other': '{n} à recetter',
+      'kanban.stage.testAgain.one': 'À recetter de nouveau',
+      'kanban.stage.testAgain.other': '{n} à recetter de nouveau',
+      'kanban.stage.toCheck.one': 'À vérifier',
+      'kanban.stage.toCheck.other': '{n} à vérifier',
+      'kanban.stage.checking.one': 'Vérification…',
+      'kanban.stage.checking.other': '{n} en vérification',
       'inbox.awaitingShip.title': 'Chantiers à livrer',
       'cardMenu.moveTo': 'Déplacer vers {column}',
       'project.editTooltip': 'Modifier le projet',
@@ -97,7 +115,7 @@
       'project.addRepo': '+ dépôt',
       'project.removeRepo': 'Retirer',
       'project.previewCmdPlaceholder': 'Commande de recette (optionnelle)',
-      'project.previewUrlPlaceholder': 'URL à ouvrir (optionnelle)',
+      'project.previewUrlPlaceholder': 'URL à ouvrir : http://… ou file:///… (optionnelle)',
       'project.previewHintIntro': 'Recette manuelle : la commande est lancée dans le worktree du chantier ou de la tâche.',
       'project.previewVarIdDesc': 'noms : base de données, conteneur, répertoire',
       'project.previewVarNDesc': 'arithmétique explicite',
@@ -131,7 +149,7 @@
       'filter.running': 'En cours {n}',
       'filter.review': 'À relire {n}',
       'filter.finished': 'Traitées {n}',
-      'badge.new': 'NOUVEAU',
+      'badge.new': 'Nouveau',
       'status.waiting': 'En attente',
       'status.running': 'En cours',
       'status.review': 'À relire',
@@ -147,6 +165,93 @@
       'action.refuse': 'Refuser',
       'action.refuseTooltip': 'Écarter cette tâche du chantier',
       'action.reopen': 'Rouvrir la tâche',
+      'review.label.check': 'Vérification',
+      'review.label.read': 'Relecture',
+      'review.label.test': 'Recette',
+      'review.label.decide': 'Décision',
+      'review.short.check.ok': 'Réussie',
+      'review.short.check.fail': 'En échec',
+      'review.short.check.run': 'En cours…',
+      'review.short.check.stale': 'À relancer',
+      'review.short.check.todo': 'À lancer',
+      'review.short.check.off': 'Non configurée',
+      'review.short.read.ok': 'Faite',
+      'review.short.read.todo': 'À faire',
+      'review.short.read.changes': 'Changements demandés',
+      'review.short.read.stale': 'À refaire',
+      'review.short.test.ok': 'Validée',
+      'review.short.test.todo': 'À faire',
+      'review.short.test.run': 'En cours',
+      'review.short.test.changes': 'Changements demandés',
+      'review.short.test.stale': 'À refaire',
+      'review.short.decide.current': 'À vous',
+      'review.short.decide.todo': 'En attente',
+      'review.hint.check.ok': 'Le code actuel passe la vérification.',
+      'review.hint.check.fail': 'Envoyez l\'échec à l\'agent pour qu\'il corrige, ou relancez si la cause était ailleurs.',
+      'review.hint.check.run': 'Vous pouvez relire le code pendant que la vérification tourne.',
+      'review.hint.check.stale': 'Le code a changé depuis : relancez pour vérifier la version actuelle.',
+      'review.hint.check.todo': 'Lancez la vérification sur la version actuelle du code.',
+      'review.hint.check.off': 'Une commande comme go test ./... ou npm test dit, avant d\'accepter, si le code tient.',
+      'review.hint.read.todo': 'Lisez le diff, puis validez ou demandez des changements à l\'agent.',
+      'review.hint.read.ok': 'Vous avez relu cette version du code.',
+      'review.hint.read.changes': 'L\'agent n\'a pas encore modifié le code depuis votre demande.',
+      'review.hint.read.stale': 'L\'agent a modifié le code depuis votre relecture.',
+      'review.hint.test.todo': 'Lancez la recette sur la version de la tâche et essayez le résultat.',
+      'review.hint.test.run': 'La recette tourne : essayez-la, puis rendez votre verdict dans sa fenêtre.',
+      'review.hint.test.ok': 'Vous avez essayé cette version.',
+      'review.hint.test.changes': 'L\'agent n\'a pas encore modifié le code depuis votre demande.',
+      'review.hint.test.stale': 'Le code a changé depuis votre essai.',
+      'review.hint.decide.ready': 'Tout est fait. Accepter fusionne la tâche, refuser l\'écarte.',
+      'review.hint.decide.missing': 'Reste à faire : {steps}. Vous pouvez quand même trancher.',
+      'review.title.check.run': 'Vérification en cours',
+      'review.title.check.ok': 'Vérification réussie',
+      'review.title.check.fail': 'Vérification en échec',
+      'review.title.check.stale': 'Vérification à relancer',
+      'review.title.check.todo': 'Vérification à lancer',
+      'review.title.check.off': 'Pas de vérification',
+      'review.title.read.todo': 'Relire le code',
+      'review.title.read.ok': 'Code relu',
+      'review.title.read.changes': 'Changements demandés',
+      'review.title.read.stale': 'Code repris par l\'agent, à relire',
+      'review.title.test.todo': 'Essayer le résultat',
+      'review.title.test.run': 'Recette en cours, à essayer',
+      'review.title.test.ok': 'Recette validée',
+      'review.title.test.changes': 'Changements demandés à la recette',
+      'review.title.test.stale': 'Code changé depuis la recette',
+      'review.title.decide': 'Accepter ou refuser',
+      'review.sub.files.one': '1 fichier modifié',
+      'review.sub.files.other': '{n} fichiers modifiés',
+      'review.sub.decide': 'vers {branch}',
+      'review.stage.toCheck': 'À vérifier',
+      'review.stage.toTest': 'À recetter',
+      'review.stage.testAgain': 'À recetter de nouveau',
+      'review.test.open': 'Ouvrir la recette',
+      'review.test.start': 'Lancer la recette',
+      'review.action.approveTest': 'Ça marche',
+      'review.check.configure': 'Configurer',
+      'review.check.rerun': 'Relancer',
+      'review.check.run': 'Lancer',
+      'review.check.showLog': 'Voir le journal',
+      'review.check.hideLog': 'Masquer le journal',
+      'review.check.timeout': 'délai dépassé',
+      'review.check.exit': 'code {code}',
+      'review.check.noOutput': 'Aucune sortie conservée pour cette vérification. Relancez-la pour voir son journal.',
+      'review.read.openDiff': 'Ouvrir le diff',
+      'review.read.undo': 'Annuler',
+      'review.action.approve': 'J\'ai relu, c\'est bon',
+      'review.action.requestChanges': 'Demander des changements',
+      'review.action.fixCheck': 'Faire corriger par l\'agent',
+      'review.stage.checking': 'Vérification…',
+      'review.stage.checkFailed': 'Vérification en échec',
+      'review.stage.ready': 'Prête à accepter',
+      'review.stage.changes': 'Changements demandés',
+      'review.stage.reviewAgain': 'À relire de nouveau',
+      'review.stage.toReview': 'À relire',
+      'review.changes.bar': 'Demande de changements : {name} reprendra la main avec ce message.',
+      'review.changes.placeholder': 'Qu\'est-ce qui doit changer ?',
+      'review.changes.send': 'Demander les changements',
+      'review.error': 'L\'action n\'a pas abouti.',
+      'review.fixPrompt': 'La vérification du projet (`{cmd}`) échoue ({reason}). Fin de la sortie :\n\n```\n{output}\n```\n\nCorrige la cause, puis relance la vérification pour t\'assurer qu\'elle passe.',
       'taskRow.waitingFor': 'En attente de « {title} »',
       'waitingFor.note': 'Démarrera automatiquement quand « {title} » sera acceptée.',
       'waitingFor.unknownTask': 'La tâche attendue n\'existe plus : démarrez-la manuellement.',
@@ -272,6 +377,14 @@
       'chat.copyCode': 'Copier le code',
       'chat.copied': 'Copié',
       'chat.attach': 'Joindre une image',
+      'chat.speak': 'Parler',
+      'chat.speakHint': 'Dicter le message (cliquer de nouveau pour arrêter)',
+      'chat.listening': 'J\'écoute…',
+      'chat.micDenied': 'Le navigateur a refusé l\'accès au micro.',
+      'chat.micError': 'La dictée s\'est arrêtée : {error}',
+      'term.copy': 'Copier la sortie',
+      'term.running': 'En cours',
+      'term.passed': 'Réussie',
       'chat.attachRemove': 'Retirer l\'image',
       'chat.attachTooMany': 'Six images au maximum par message.',
       'chat.attachTooLarge': '{name} : image trop lourde (8 Mo maximum).',
@@ -548,6 +661,7 @@
       'vigie.toCardHint': 'Un chantier, puis un agent le découpe en tâches que vous relisez',
       'vigie.dismiss': 'Retirer de la liste',
       'vigie.retry': 'Réessayer',
+      'vigie.reanalyze': 'Relire de nouveau',
       'vigie.localOnly': 'Sillage ne publie jamais rien sur GitHub. Les commentaires proposés restent ici : copiez-les et collez-les vous-même si vous êtes d\'accord.',
       'vigie.promptAnalysis': 'Analyse préalable de la Vigie :',
       'vigie.log.error': 'Lecture de {repo} impossible : {error}',
@@ -786,6 +900,24 @@
       'kanban.card.noTask': 'No task',
       'kanban.card.reviewCount': '{n} to review',
       'kanban.card.awaitingShip': 'Ready to ship',
+      'kanban.stage.ready.one': 'Ready to accept',
+      'kanban.stage.ready.other': '{n} ready to accept',
+      'kanban.stage.checkFailed.one': 'Check failing',
+      'kanban.stage.checkFailed.other': '{n} checks failing',
+      'kanban.stage.changes.one': 'Changes requested',
+      'kanban.stage.changes.other': '{n} with changes requested',
+      'kanban.stage.toReview.one': 'To review',
+      'kanban.stage.toReview.other': '{n} to review',
+      'kanban.stage.reviewAgain.one': 'Review again',
+      'kanban.stage.reviewAgain.other': '{n} to review again',
+      'kanban.stage.toTest.one': 'To try',
+      'kanban.stage.toTest.other': '{n} to try',
+      'kanban.stage.testAgain.one': 'Try again',
+      'kanban.stage.testAgain.other': '{n} to try again',
+      'kanban.stage.toCheck.one': 'To check',
+      'kanban.stage.toCheck.other': '{n} to check',
+      'kanban.stage.checking.one': 'Checking…',
+      'kanban.stage.checking.other': '{n} checking',
       'inbox.awaitingShip.title': 'Workstreams ready to ship',
       'cardMenu.moveTo': 'Move to {column}',
       'project.editTooltip': 'Edit project',
@@ -824,7 +956,7 @@
       'project.addRepo': '+ repo',
       'project.removeRepo': 'Remove',
       'project.previewCmdPlaceholder': 'Preview command (optional)',
-      'project.previewUrlPlaceholder': 'URL to open (optional)',
+      'project.previewUrlPlaceholder': 'URL to open: http://… or file:///… (optional)',
       'project.previewHintIntro': 'Manual preview: the command runs in the workstream or task worktree.',
       'project.previewVarIdDesc': 'names: database, container, directory',
       'project.previewVarNDesc': 'explicit arithmetic',
@@ -858,7 +990,7 @@
       'filter.running': 'In progress {n}',
       'filter.review': 'To review {n}',
       'filter.finished': 'Handled {n}',
-      'badge.new': 'NEW',
+      'badge.new': 'New',
       'status.waiting': 'Waiting',
       'status.running': 'In progress',
       'status.review': 'To review',
@@ -874,6 +1006,93 @@
       'action.refuse': 'Refuse',
       'action.refuseTooltip': 'Leave this task out of the workstream',
       'action.reopen': 'Reopen the task',
+      'review.label.check': 'Check',
+      'review.label.read': 'Review',
+      'review.label.test': 'Try it',
+      'review.label.decide': 'Decision',
+      'review.short.check.ok': 'Passed',
+      'review.short.check.fail': 'Failing',
+      'review.short.check.run': 'Running…',
+      'review.short.check.stale': 'To run again',
+      'review.short.check.todo': 'To run',
+      'review.short.check.off': 'Not set up',
+      'review.short.read.ok': 'Done',
+      'review.short.read.todo': 'To do',
+      'review.short.read.changes': 'Changes requested',
+      'review.short.read.stale': 'To redo',
+      'review.short.test.ok': 'Approved',
+      'review.short.test.todo': 'To do',
+      'review.short.test.run': 'Running',
+      'review.short.test.changes': 'Changes requested',
+      'review.short.test.stale': 'To redo',
+      'review.short.decide.current': 'Your call',
+      'review.short.decide.todo': 'Waiting',
+      'review.hint.check.ok': 'The current code passes the check.',
+      'review.hint.check.fail': 'Send the failure to the agent to fix it, or run it again if the cause was elsewhere.',
+      'review.hint.check.run': 'You can review the code while the check runs.',
+      'review.hint.check.stale': 'The code changed since: run it again to check the current version.',
+      'review.hint.check.todo': 'Run the check on the current version of the code.',
+      'review.hint.check.off': 'A command such as go test ./... or npm test tells you, before accepting, whether the code holds.',
+      'review.hint.read.todo': 'Read the diff, then approve or ask the agent for changes.',
+      'review.hint.read.ok': 'You reviewed this version of the code.',
+      'review.hint.read.changes': 'The agent has not changed the code since your request yet.',
+      'review.hint.read.stale': 'The agent changed the code since your review.',
+      'review.hint.test.todo': 'Start the preview on the task version and try the result.',
+      'review.hint.test.run': 'The preview is running: try it, then give your verdict in its window.',
+      'review.hint.test.ok': 'You tried this version.',
+      'review.hint.test.changes': 'The agent has not changed the code since your request yet.',
+      'review.hint.test.stale': 'The code changed since you tried it.',
+      'review.hint.decide.ready': 'All done. Accepting merges the task, refusing sets it aside.',
+      'review.hint.decide.missing': 'Still to do: {steps}. You can decide anyway.',
+      'review.title.check.run': 'Check running',
+      'review.title.check.ok': 'Check passed',
+      'review.title.check.fail': 'Check failing',
+      'review.title.check.stale': 'Check to run again',
+      'review.title.check.todo': 'Check to run',
+      'review.title.check.off': 'No check',
+      'review.title.read.todo': 'Review the code',
+      'review.title.read.ok': 'Code reviewed',
+      'review.title.read.changes': 'Changes requested',
+      'review.title.read.stale': 'Code updated by the agent, review again',
+      'review.title.test.todo': 'Try the result',
+      'review.title.test.run': 'Preview running, try it',
+      'review.title.test.ok': 'Preview approved',
+      'review.title.test.changes': 'Changes requested after trying',
+      'review.title.test.stale': 'Code changed since you tried it',
+      'review.title.decide': 'Accept or refuse',
+      'review.sub.files.one': '1 file changed',
+      'review.sub.files.other': '{n} files changed',
+      'review.sub.decide': 'into {branch}',
+      'review.stage.toCheck': 'To check',
+      'review.stage.toTest': 'To try',
+      'review.stage.testAgain': 'Try again',
+      'review.test.open': 'Open the preview',
+      'review.test.start': 'Start the preview',
+      'review.action.approveTest': 'It works',
+      'review.check.configure': 'Set up',
+      'review.check.rerun': 'Run again',
+      'review.check.run': 'Run',
+      'review.check.showLog': 'Show log',
+      'review.check.hideLog': 'Hide log',
+      'review.check.timeout': 'timed out',
+      'review.check.exit': 'exit code {code}',
+      'review.check.noOutput': 'No output kept for this check. Run it again to see its log.',
+      'review.read.openDiff': 'Open the diff',
+      'review.read.undo': 'Undo',
+      'review.action.approve': 'Reviewed, looks good',
+      'review.action.requestChanges': 'Request changes',
+      'review.action.fixCheck': 'Have the agent fix it',
+      'review.stage.checking': 'Checking…',
+      'review.stage.checkFailed': 'Check failing',
+      'review.stage.ready': 'Ready to accept',
+      'review.stage.changes': 'Changes requested',
+      'review.stage.reviewAgain': 'Review again',
+      'review.stage.toReview': 'To review',
+      'review.changes.bar': 'Requesting changes: {name} picks the task back up with this message.',
+      'review.changes.placeholder': 'What should change?',
+      'review.changes.send': 'Request changes',
+      'review.error': 'That did not go through.',
+      'review.fixPrompt': 'The project check (`{cmd}`) fails ({reason}). End of its output:\n\n```\n{output}\n```\n\nFix the cause, then run the check again to make sure it passes.',
       'taskRow.waitingFor': 'Waiting for "{title}"',
       'waitingFor.note': 'Will start automatically once "{title}" is accepted.',
       'waitingFor.unknownTask': 'The task it was waiting for no longer exists: start it manually.',
@@ -999,6 +1218,14 @@
       'chat.copyCode': 'Copy code',
       'chat.copied': 'Copied',
       'chat.attach': 'Attach an image',
+      'chat.speak': 'Speak',
+      'chat.speakHint': 'Dictate the message (click again to stop)',
+      'chat.listening': 'Listening…',
+      'chat.micDenied': 'The browser denied microphone access.',
+      'chat.micError': 'Dictation stopped: {error}',
+      'term.copy': 'Copy output',
+      'term.running': 'Running',
+      'term.passed': 'Passed',
       'chat.attachRemove': 'Remove image',
       'chat.attachTooMany': 'Six images per message at most.',
       'chat.attachTooLarge': '{name}: image too large (8 MB maximum).',
@@ -1275,6 +1502,7 @@
       'vigie.toCardHint': 'A workstream, then an agent splits it into tasks you review',
       'vigie.dismiss': 'Remove from list',
       'vigie.retry': 'Retry',
+      'vigie.reanalyze': 'Review again',
       'vigie.localOnly': 'Sillage never posts anything to GitHub. Suggested comments stay here: copy and paste them yourself if you agree.',
       'vigie.promptAnalysis': 'Prior analysis from the lookout:',
       'vigie.log.error': 'Could not read {repo}: {error}',
@@ -1511,6 +1739,7 @@
 
   var state = {
     lang: detectInitialLang(),
+    dictation: null, // dictée en cours : { taskId, rec }
     workspace: null,
     settings: { displayName: '', lang: '' },
     projects: [], cards: [], tasks: [], agents: [],
@@ -1530,6 +1759,10 @@
     deliveryByCard: {}, // aperçu de livraison (GET /api/cards/{id}/delivery), non persisté
     shipResultByCard: {}, // dernier résultat de livraison, affiché dans la modale
     catchUpErrorByCard: {}, // échec de rattrapage hors conflit, affiché dans la barre
+    checkLogOpen: {}, // journal de vérification déplié ou replié par tâche (défaut : déplié sur un échec)
+    changesModeTask: null,
+    changesModeStep: 'read', // étape d'où vient la demande de changements : read|test
+    reviewStepSel: {}, // étape de revue affichée par tâche (défaut : celle qui attend) // tâche dont le composeur porte une demande de changements
     acceptingByTask: {}, // acceptation en vol : le bouton attend sa fusion, sans deuxième clic possible
     attachDrafts: {}, // images jointes en attente d'envoi, par tâche : [{key, name, mime, size, dataUrl}]
     loading: {},
@@ -2135,14 +2368,14 @@
 
   function buildSidebarHTML() {
     var navItems = [
-      { key: 'inbox', icon: '⌂', label: t('nav.inbox'), action: 'nav-inbox' },
-      { key: 'vigie', icon: '◎', label: t('nav.vigie'), action: 'nav-vigie', badge: vigieAttentionCount() },
-      { key: 'projects', icon: '◫', label: t('nav.allProjects'), action: 'nav-projects' }
+      { key: 'inbox', icon: 'inbox', label: t('nav.inbox'), action: 'nav-inbox' },
+      { key: 'vigie', icon: 'watch', label: t('nav.vigie'), action: 'nav-vigie', badge: vigieAttentionCount() },
+      { key: 'projects', icon: 'projects', label: t('nav.allProjects'), action: 'nav-projects' }
     ];
     var navHTML = navItems.map(function (n) {
       var active = state.screen === n.key;
       return '<button class="nav-item ' + (active ? 'active' : '') + '" data-action="' + n.action + '">' +
-        '<span class="nav-icon">' + n.icon + '</span><span class="nav-label">' + escapeHtml(n.label) + '</span>' +
+        '<span class="nav-icon">' + uiIconHTML(n.icon) + '</span><span class="nav-label">' + escapeHtml(n.label) + '</span>' +
         (n.badge ? '<span class="badge-unread">' + n.badge + '</span>' : '') + '</button>';
     }).join('');
 
@@ -2153,7 +2386,7 @@
       // même repère visuel qu'une tâche en cours, vu de la sidebar.
       var hashHTML = projectHasRunningTask(p.id)
         ? '<span class="task-spinner project-item-spinner" title="' + escapeHtml(t('status.running')) + '"></span>'
-        : '<span class="hash">#</span>';
+        : projectDotHTML(p.id);
       return '<div class="project-item-wrap">' +
         '<button class="project-item ' + (active ? 'active' : '') + '" data-action="nav-project" data-project-id="' + p.id + '">' +
           hashHTML + '<span class="project-name">' + escapeHtml(p.name) + '</span>' +
@@ -2200,12 +2433,12 @@
         '<span class="brand-mark"></span><span class="brand-name">Sillage</span>' +
       '</div>' +
       '<div class="sidebar-search-wrap">' +
-        '<button class="search-btn" data-action="open-search"><span>⌕</span><span class="search-btn-label">' + escapeHtml(t('search.buttonLabel')) + '</span>' +
+        '<button class="search-btn" data-action="open-search">' + uiIconHTML('search', 14) + '<span class="search-btn-label">' + escapeHtml(t('search.buttonLabel')) + '</span>' +
         '<span class="kbd">' + (isMac() ? '⌘K' : 'Ctrl+K') + '</span></button>' +
       '</div>' +
       '<div class="nav-list">' + navHTML + '</div>' +
       '<div class="sidebar-section-head"><span>' + escapeHtml(t('sidebar.projectsHeading')) + '</span>' +
-      '<button class="icon-btn-sm" data-action="open-new-project" title="' + escapeHtml(t('sidebar.newProjectTooltip')) + '" aria-label="' + escapeHtml(t('sidebar.newProjectTooltip')) + '">+</button></div>' +
+      '<button class="icon-btn-sm" data-action="open-new-project" title="' + escapeHtml(t('sidebar.newProjectTooltip')) + '" aria-label="' + escapeHtml(t('sidebar.newProjectTooltip')) + '">' + uiIconHTML('plus', 13) + '</button></div>' +
       '<nav class="project-list">' + (projectsHTML || '<div class="empty-note-sm">' + escapeHtml(t('sidebar.noProjects')) + '</div>') + '</nav>' +
       agentsSectionHTML +
       // Le pied ne garde que ce qui appelle une action : une recette en cours, une
@@ -2215,7 +2448,7 @@
       '<div class="sidebar-footer">' +
         buildPreviewCounterHTML() +
         buildUpdateLineHTML() +
-        '<button class="settings-btn" data-action="open-workspace-modal">⚙ ' + escapeHtml(t('sidebar.settingsButton')) + '</button>' +
+        '<button class="settings-btn" data-action="open-workspace-modal">' + uiIconHTML('settings', 15) + escapeHtml(t('sidebar.settingsButton')) + '</button>' +
         '<div class="sidebar-footer-actions">' +
           '<button class="icon-btn-sm" data-action="open-shortcuts" title="' + escapeHtml(t('shortcuts.title')) + '" aria-label="' + escapeHtml(t('shortcuts.title')) + '">?</button>' +
         '</div>' +
@@ -2391,14 +2624,14 @@
         // suffit à l'afficher, absente tant qu'aucune tâche n'a créé la branche.
         var branchName = c.branches && c.branches.length ? c.branches[0].branch : '';
         if (branchName) branchHTML = '<span class="crumb-branch mono">' + escapeHtml(branchName) + '</span>';
-        editBtn = '<button class="icon-btn" data-action="open-edit-card" title="' + escapeHtml(t('workstream.editTooltip')) + '" aria-label="' + escapeHtml(t('workstream.editTooltip')) + '">✎</button>';
+        editBtn = '<button class="icon-btn" data-action="open-edit-card" title="' + escapeHtml(t('workstream.editTooltip')) + '" aria-label="' + escapeHtml(t('workstream.editTooltip')) + '">' + uiIconHTML('edit', 15) + '</button>';
         // Recette avant Livrer : on éprouve, puis on livre. Le bouton est
         // toujours là, même sans commande configurée (le panneau propose alors
         // le chemin du worktree).
         actions = buildPreviewButtonHTML(c) + buildShipButtonHTML(c);
       }
     }
-    var hamburger = '<button class="icon-btn hamburger-btn" data-action="toggle-sidebar" aria-label="' + escapeHtml(t('aria.menu')) + '">☰</button>';
+    var hamburger = '<button class="icon-btn hamburger-btn" data-action="toggle-sidebar" aria-label="' + escapeHtml(t('aria.menu')) + '">' + uiIconHTML('menu', 17) + '</button>';
     // Sur le kanban, la barre du haut n'a plus rien à montrer (le titre du
     // projet est déjà le gros titre de buildKanbanHTML) : elle ne reste
     // visible que sur mobile, pour le hamburger d'ouverture de la sidebar.
@@ -2448,7 +2681,7 @@
       var pulse = projectPulseText(p, cardCount);
       return '<div class="project-tile-wrap">' +
         '<article class="project-tile" data-action="nav-project" data-project-id="' + p.id + '">' +
-          '<div class="project-tile-top"><span class="project-hash">#</span><h3>' + escapeHtml(p.name) + '</h3>' +
+          '<div class="project-tile-top">' + projectDotHTML(p.id) + '<h3>' + escapeHtml(p.name) + '</h3>' +
           (unread ? '<span class="badge-unread">' + unread + '</span>' : '') + '</div>' +
           '<div class="project-tile-meta"><span class="' + (pulse.you ? 'project-pulse-you' : '') + '">' + escapeHtml(pulse.text) + '</span>' +
           (p.hiddenFromSidebar ? '<span class="project-tile-hidden-note">' + escapeHtml(t('allProjects.hiddenBadge')) + '</span>' : '') +
@@ -2531,7 +2764,7 @@
     } else {
       var signals = vigieSignals();
       var listHTML = signals.length
-        ? '<div class="signal-grid">' + signals.map(function (sg) { return buildSignalCardHTML(sg, { showProject: true, actions: true }); }).join('') + '</div>'
+        ? '<div class="signal-grid">' + signals.map(function (sg) { return buildSignalCardHTML(sg, { showProject: true }); }).join('') + '</div>'
         : '<div class="empty-state big"><div class="empty-title">' + escapeHtml(t('vigie.emptyTitle')) + '</div>' +
           '<div class="empty-sub">' + escapeHtml(t('vigie.emptySub')) + '</div></div>';
       body = (state.vigieError ? '<div class="modal-error">' + escapeHtml(state.vigieError) + '</div>' : '') +
@@ -2683,7 +2916,7 @@
     var c = signalProgress(s);
     var analyst = signalAnalyst(s);
     return '<span class="task-spinner"></span><span class="signal-line-text">' +
-      '<span>' + escapeHtml(analyst ? t('vigie.live.title', { agent: analyst.name }) : t('vigie.analyzing')) +
+      '<span class="shimmer">' + escapeHtml(analyst ? t('vigie.live.title', { agent: analyst.name }) : t('vigie.analyzing')) +
       (c ? ' · ' + elapsedHTML(c.startedAt) : '') + '</span>' +
       (c ? '<span class="signal-line-now mono">' + escapeHtml(progressNowText(c)) + '</span>' : '') +
     '</span>';
@@ -2700,7 +2933,7 @@
     var analyst = signalAnalyst(s);
     var steps = (c && c.steps) || [];
     var html = '<div class="sd-live-head"><span class="task-spinner"></span>' +
-      '<span class="sd-live-title">' + escapeHtml(t('vigie.live.title', { agent: analyst ? analyst.name : '' })) + '</span>' +
+      '<span class="sd-live-title shimmer">' + escapeHtml(t('vigie.live.title', { agent: analyst ? analyst.name : '' })) + '</span>' +
       (c ? '<span class="sd-live-time">' + elapsedHTML(c.startedAt) +
         (c.timeoutSec ? ' · ' + escapeHtml(t('vigie.live.limit', { n: Math.round(c.timeoutSec / 60) })) : '') + '</span>' : '') +
       (c ? '<button class="btn-quiet sd-live-stop" data-action="signal-stop" data-signal-id="' + s.id + '">' + escapeHtml(t('vigie.live.stop')) + '</button>' : '') +
@@ -2710,7 +2943,7 @@
     }
     if (steps.length) {
       html += '<ol class="live-steps">' + steps.map(function (line, i) {
-        return '<li class="mono' + (i === steps.length - 1 ? ' live-step-now' : '') + '">' + escapeHtml(line) + '</li>';
+        return '<li class="mono' + (i === steps.length - 1 ? ' live-step-now' : '') + '"><span' + (i === steps.length - 1 ? ' class="shimmer"' : '') + '>' + escapeHtml(line) + '</span></li>';
       }).join('') + '</ol>';
     }
     return html;
@@ -2789,6 +3022,11 @@
       }
     } else if (s.status === 'error') {
       actions.push('<button class="' + (compact ? 'btn-outline' : 'btn-primary') + '" data-action="signal-retry" data-signal-id="' + s.id + '">' + escapeHtml(t('vigie.retry')) + '</button>');
+    }
+    // Relire de nouveau : après une réponse sur GitHub, ou quand la revue
+    // proposée date. Discret, à côté de Retirer.
+    if (!compact && s.status === 'ready' && s.kind !== 'upkeep') {
+      actions.push('<button class="btn-quiet" data-action="signal-retry" data-signal-id="' + s.id + '">' + escapeHtml(t('vigie.reanalyze')) + '</button>');
     }
     if (!compact) {
       actions.push('<button class="btn-quiet signal-dismiss" data-action="signal-dismiss" data-signal-id="' + s.id + '">' + escapeHtml(t('vigie.dismiss')) + '</button>');
@@ -2875,7 +3113,7 @@
     } else if (s.status === 'error') {
       verdict = '<p class="sd-verdict signal-verdict-error">' + escapeHtml(signalErrorText(s)) + '</p>';
     } else {
-      verdict = '<p class="sd-verdict signal-verdict-pending">' + escapeHtml(t('vigie.detail.waiting')) + '</p>';
+      verdict = '<p class="sd-verdict signal-verdict-pending"><span class="task-spinner"></span><span class="shimmer">' + escapeHtml(t('vigie.detail.waiting')) + '</span></p>';
     }
     var who = analyst
       ? '<div class="sd-analyst"><span class="agent-avatar-sm" style="background:' + softColor(analyst.color) + '">' + analyst.emoji + '</span>' +
@@ -3104,6 +3342,37 @@
   // Rendu : Kanban
   // ---------------------------------------------------------------------
 
+  // Où en est la revue d'un chantier, sur sa carte : une ligne par étape où
+  // attendent des tâches, la plus avancée d'abord (« Prête à accepter » avant
+  // « À relire »), chacune précédée de ses segments de revue (vérification,
+  // relecture, recette), verts quand l'étape est acquise. On retrouve d'un coup
+  // d'œil ce qu'il reste à faire, sans ouvrir le chantier.
+  var CARD_STAGE_ORDER = ['ready', 'checkFailed', 'changes', 'testAgain', 'toTest', 'reviewAgain', 'toReview', 'toCheck', 'checking'];
+  function buildCardReviewHTML(c) {
+    if (!c.reviewCount) return '';
+    var groups = {};
+    state.tasks.forEach(function (task) {
+      if (task.cardId !== c.id || task.status !== 'review' || task.rebasing) return;
+      var info = reviewInfo(task);
+      var key = reviewStageKey(info);
+      if (!groups[key]) groups[key] = { n: 0, info: info };
+      groups[key].n++;
+    });
+    var keys = CARD_STAGE_ORDER.filter(function (k) { return groups[k]; });
+    if (!keys.length) {
+      return '<span class="card-attention">' + escapeHtml(t('kanban.card.reviewCount', { n: c.reviewCount })) + '</span>';
+    }
+    return '<span class="card-review">' + keys.map(function (k) {
+      var segs = groups[k].info.steps.filter(function (st) { return st.key !== 'decide'; }).map(function (st) {
+        var cls = (st.state === 'ok' || st.state === 'off') ? 'ok' : (st.state === 'fail' ? 'fail' : 'todo');
+        return '<i class="card-seg card-seg-' + cls + '"></i>';
+      }).join('');
+      return '<span class="card-stage card-stage-' + k + '">' +
+        '<span class="card-segs" aria-hidden="true">' + segs + '</span>' +
+        escapeHtml(tCount('kanban.stage.' + k, groups[k].n)) + '</span>';
+    }).join('') + '</span>';
+  }
+
   function buildKanbanCardHTML(c, colKey) {
     var agents = activeAgentsForCard(c.id);
     var avatarsHTML = agents.map(function (a) {
@@ -3126,7 +3395,7 @@
       : '';
     var liveHTML = c.liveActivity ? '<div class="card-live"><span class="live-dot"></span><span class="live-text mono">' +
       escapeHtml(c.liveActivity) + '</span></div>' : '';
-    var attention = c.reviewCount ? '<span class="card-attention">' + escapeHtml(t('kanban.card.reviewCount', { n: c.reviewCount })) + '</span>' : '';
+    var attention = buildCardReviewHTML(c);
     var awaitingShip = c.awaitingShip
       ? '<span class="card-awaiting-ship">' + shipIconHTML() + escapeHtml(t('kanban.card.awaitingShip')) + '</span>'
       : '';
@@ -3222,7 +3491,7 @@
         '<div class="col-head"><span class="col-dot"></span>' +
         '<span class="col-label">' + escapeHtml(t('lane.' + key)) + '</span><span class="col-count">' + (list.length + laneSignals.length) + '</span></div>' +
         list.map(function (c) { return buildKanbanCardHTML(c, c.column === 'done' ? 'done' : key); }).join('') +
-        laneSignals.map(function (sg) { return buildSignalCardHTML(sg, { actions: sg.status === 'ready' }); }).join('') +
+        laneSignals.map(function (sg) { return buildSignalCardHTML(sg); }).join('') +
         addBtn +
         '</section>';
     }).join('');
@@ -3230,9 +3499,14 @@
     var head = '<div class="kanban-head"><div class="kanban-title-col">' +
       '<div class="kanban-title-row"><h1>' + escapeHtml(project ? project.name : '') + '</h1>';
     if (project) {
-      head += '<button class="icon-btn" data-action="open-edit-project" title="' + escapeHtml(t('project.editTooltip')) + '" aria-label="' + escapeHtml(t('project.editTooltip')) + '">✎</button>';
+      head += '<button class="icon-btn" data-action="open-edit-project" title="' + escapeHtml(t('project.editTooltip')) + '" aria-label="' + escapeHtml(t('project.editTooltip')) + '">' + uiIconHTML('edit', 15) + '</button>';
     }
     head += '</div>';
+    // La description dit ce qu'est le projet : elle se lit sous son nom, avant
+    // les invitations et les boutons, pas en dessous d'eux comme une note.
+    if (project && project.description) {
+      head += '<div class="kanban-description">' + escapeHtml(project.description) + '</div>';
+    }
     if (project) {
       fetchClaudeSessions(project.id);
       head += '<div class="kanban-pills">' + buildAutoconfPillHTML(project) + buildSessionsPillHTML(project) + '</div>';
@@ -3242,9 +3516,6 @@
         buildCreateButtonHTML('open-new-project-task', t('header.newTask'), t('kanban.newTaskTooltip'), 'btn-primary') +
         '<button class="btn-quiet" data-action="open-new-card">' + escapeHtml(t('kanban.newWorkstream')) + '</button>' +
         '</div>';
-    }
-    if (project && project.description) {
-      head += '<div class="kanban-description">' + escapeHtml(project.description) + '</div>';
     }
     head += '</div>';
     head += '</div>';
@@ -3332,6 +3603,7 @@
       return '<span class="task-glyph task-glyph-running" title="' + escapeHtml(t2('status.running')) + '">' +
         '<span class="task-spinner"></span></span>';
     }
+    if (task.status === 'review') return buildReviewGlyphHTML(task);
     return '<span class="task-glyph task-glyph-' + task.status + '" title="' + escapeHtml(t2('status.' + task.status)) + '"' +
       ' style="color:' + glyph.color + '">' + glyph.icon + '</span>';
   }
@@ -3374,7 +3646,7 @@
       // pour un dixième de seconde). Le retour, c'est l'onde de playWake.
       var busy = !!state.acceptingByTask[t.id];
       var busyAttr = busy ? ' disabled' : '';
-      return '<div class="task-row-actions' + (busy ? ' task-row-actions-busy' : '') + '">' +
+      return buildReviewStagePillHTML(t) + '<div class="task-row-actions' + (busy ? ' task-row-actions-busy' : '') + '">' +
         '<button class="row-btn row-btn-accept"' + busyAttr + ' data-action="accept-task" data-task-id="' + t.id + '" title="' + escapeHtml(t2('action.acceptTooltip')) + '">' + escapeHtml(t2('action.accept')) + '</button>' +
         '<button class="row-btn"' + busyAttr + ' data-action="refuse-task" data-task-id="' + t.id + '" title="' + escapeHtml(t2('action.refuseTooltip')) + '">' + escapeHtml(t2('action.refuse')) + '</button>' +
         '</div>';
@@ -3624,6 +3896,45 @@
       '</svg>';
   }
 
+  // Icônes d'interface : un seul dessin au trait (1.5 px, bouts arrondis), en
+  // currentColor, sur une grille de 16. Les glyphes unicode qu'elles remplacent
+  // (⌂ ◎ ◫ ⌕ ✎ ⚙) n'avaient ni la même graisse ni la même ligne de base d'une
+  // police à l'autre : la barre latérale avait l'air composée de pièces rapportées.
+  var UI_ICON_PATHS = {
+    mic: 'M8 1.75a2.25 2.25 0 0 0-2.25 2.25v3.5a2.25 2.25 0 0 0 4.5 0V4A2.25 2.25 0 0 0 8 1.75ZM3.75 7.25a4.25 4.25 0 0 0 8.5 0M8 11.5v2.75M5.75 14.25h4.5',
+    inbox: 'M2.5 9.5h3l1 1.75h3l1-1.75h3M3.6 3.5h8.8l1.6 6v3a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1v-3l1.6-6Z',
+    watch: 'M1.75 8S4 3.5 8 3.5 14.25 8 14.25 8 12 12.5 8 12.5 1.75 8 1.75 8ZM8 10a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z',
+    projects: 'M2.75 2.75h4v4h-4zM9.25 2.75h4v4h-4zM2.75 9.25h4v4h-4zM9.25 9.25h4v4h-4z',
+    search: 'M7 12a5 5 0 1 0 0-10 5 5 0 0 0 0 10ZM10.6 10.6l3.4 3.4',
+    edit: 'M10.5 2.75l2.75 2.75-7.5 7.5H3v-2.75l7.5-7.5ZM9 4.25l2.75 2.75',
+    settings: 'M8 10.25a2.25 2.25 0 1 0 0-4.5 2.25 2.25 0 0 0 0 4.5ZM8 1.75v1.5M8 12.75v1.5M14.25 8h-1.5M3.25 8h-1.5M12.42 3.58l-1.06 1.06M4.64 11.36l-1.06 1.06M12.42 12.42l-1.06-1.06M4.64 4.64 3.58 3.58',
+    plus: 'M8 3v10M3 8h10',
+    menu: 'M2.5 4.5h11M2.5 8h11M2.5 11.5h11',
+    check: 'M3.5 8.5l3 3 6-7',
+    alert: 'M8 14.25a6.25 6.25 0 1 0 0-12.5 6.25 6.25 0 0 0 0 12.5ZM8 4.75v3.75M8 11.1v.15',
+    redo: 'M13.25 3.5v3.25H10M13 6.5A5.25 5.25 0 1 0 13.1 10',
+    dash: 'M5 8h6'
+  };
+  // Chaque projet a sa teinte, prise dans une palette courte et choisie, jamais
+  // tirée au hasard : l'ambiance derrière le verre la prend, et on sait dans
+  // quel projet on est avant d'avoir lu un mot. Dérivée de l'identifiant, donc
+  // stable et sans rien persister.
+  var PROJECT_TINTS = 8;
+  function projectTint(id) {
+    var h = 0;
+    for (var i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
+    return h % PROJECT_TINTS;
+  }
+  function projectDotHTML(id) {
+    return '<span class="project-dot" data-tint="' + projectTint(id) + '" aria-hidden="true"></span>';
+  }
+
+  function uiIconHTML(name, size) {
+    var s = size || 16;
+    return '<svg class="ui-icon" viewBox="0 0 16 16" width="' + s + '" height="' + s + '" aria-hidden="true" focusable="false">' +
+      '<path fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" d="' + UI_ICON_PATHS[name] + '"/></svg>';
+  }
+
   function shipIconHTML() {
     return '<svg class="btn-icon" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false">' +
       '<path fill="currentColor" d="M7.6 1.5a.5.5 0 0 1 .95-.2l3.2 6.4a.5.5 0 0 1-.45.72H8.1a.5.5 0 0 1-.5-.5V1.5Z"/>' +
@@ -3707,6 +4018,9 @@
   // livraison ou de l'ancre « déjà arrivé », peu importe l'état du chantier.
   function buildCommitsChipHTML(prev) {
     if (!prev || !prev.repos || !prev.repos.length) return '';
+    // Pas de « 0 nouveaux commits » : un zéro ne décide de rien (même règle que
+    // les lignes de tâche, voir buildTaskCountsHTML).
+    if (!deliveryTotalCommits(prev)) return '';
     return '<span class="ship-commit-chip">' + escapeHtml(tCount('ship.commits', deliveryTotalCommits(prev))) + '</span>';
   }
 
@@ -3740,7 +4054,11 @@
     else if (prev) sub = deliveryActionLabel(prev);
     else sub = t('common.loading');
 
-    if (prev && shipAlreadyOnTarget(prev)) {
+    // Une branche de chantier vide est trivialement « arrivée » : sans rien
+    // d'accepté, l'ancre « Déjà sur main » mentirait sur un chantier dont les
+    // tâches attendent encore une relecture. Le bouton désactivé dit pourquoi.
+    var nothingYet = card.shipBlocker === 'no-tasks' || card.shipBlocker === 'nothing-accepted';
+    if (prev && !nothingYet && shipAlreadyOnTarget(prev)) {
       var base = prev.target || (prev.repos[0] && prev.repos[0].base) || '';
       var label = t('ship.alreadyOnTarget', { base: base });
       var tip = t('ship.alreadyOnTargetSub', { base: base });
@@ -4200,7 +4518,11 @@
     }
 
     var middle = '<span class="preview-status">' + escapeHtml(previewStatusLabel(run)) + '</span>';
-    if (running && run.url) {
+    // Une recette statique (rapport HTML servi par Sillage) reste ouvrable une
+    // fois la commande finie : c'est elle qui a produit les fichiers. Même
+    // après un code de sortie non nul, puisqu'un rapport de tests en échec est
+    // justement ce qu'on vient lire.
+    if (run && run.url && (running || (run.static && run.status !== 'failed'))) {
       middle = '<a class="preview-url mono" href="' + escapeHtml(run.url) + '" target="_blank" rel="noopener">' +
         escapeHtml(run.url) + '</a>';
     }
@@ -4243,10 +4565,19 @@
 
   function buildPreviewLogHTML(scope) {
     var lines = (scope.runId && state.previewLogByRun[scope.runId]) || [];
+    var run = scope.runId ? state.previews.filter(function (r) { return r.id === scope.runId; })[0] : null;
+    var running = !!run && run.status === 'running';
+    var status = !run ? 'idle' : (running ? 'run' : (run.status === 'failed' || (run.status === 'exited' && run.exitCode) ? 'fail' : 'ok'));
     var body = lines.length
-      ? lines.map(function (l) { return escapeHtml(l); }).join('\n')
-      : '<span class="preview-log-empty">' + escapeHtml(t('preview.logEmpty')) + '</span>';
-    return '<pre class="preview-log" id="preview-log">' + body + '</pre>';
+      ? lines.map(ansiToHTML).join('\n')
+      : '<span class="term-empty preview-log-empty">' + escapeHtml(t('preview.logEmpty')) + '</span>';
+    return '<div class="preview-log">' + terminalHTML({
+      wrapId: 'preview-log', id: 'preview-log-body',
+      title: run ? run.cmd : '',
+      status: status,
+      statusText: run ? previewStatusLabel(run) : '',
+      body: body, streaming: running
+    }) + '</div>';
   }
 
   function buildPreviewModalHTML(scope) {
@@ -4272,8 +4603,22 @@
       cmdHint +
       '<div id="preview-modal-error" class="modal-error hidden"></div>' +
       buildPreviewLogHTML(scope) +
-      '<div class="modal-foot"><button class="btn-outline" data-action="close-modal">' + escapeHtml(t('common.close')) + '</button></div>' +
+      buildPreviewVerdictHTML(scope) +
       '</div>';
+  }
+
+  // Le pied de la fenêtre de recette d'une tâche porte le verdict : on le rend
+  // là où l'on vient d'essayer, sans revenir chercher le bouton dans la revue.
+  function buildPreviewVerdictHTML(scope) {
+    var close = '<button class="btn-outline" data-action="close-modal">' + escapeHtml(t('common.close')) + '</button>';
+    var task = scope.kind === 'task' ? state.tasksById[scope.id] : null;
+    if (!task || task.status !== 'review') return '<div class="modal-foot">' + close + '</div>';
+    var done = verdictState(task.tested, task) === 'ok';
+    var right = done
+      ? '<span class="preview-verdict-done">' + escapeHtml(t('review.hint.test.ok')) + '</span>'
+      : rvBtn('btn-outline', 'preview-request-changes', task.id, t('review.action.requestChanges')) +
+        rvBtn('btn-green', 'preview-approve', task.id, t('review.action.approveTest'));
+    return '<div class="modal-foot preview-verdict">' + close + '<span class="preview-verdict-actions">' + right + '</span></div>';
   }
 
   function openPreviewModal(kind, id) {
@@ -4340,9 +4685,10 @@
   function onPreviewStarted(run) {
     if (!run) return;
     upsertPreview(run);
-    // Un nouveau run repart d'un journal vide : celui du run précédent ne
-    // raconte plus ce qui se passe.
-    state.previewLogByRun[run.id] = [];
+    // Un nouveau run a un identifiant neuf, donc un journal à lui. Ne pas le
+    // vider ici : ses premières lignes arrivent souvent en SSE avant la
+    // réponse du POST.
+    if (!state.previewLogByRun[run.id]) state.previewLogByRun[run.id] = [];
     if (state.previewScope) state.previewScope.runId = run.id;
     refreshPreviewModal();
     renderPreviewLog();
@@ -4376,10 +4722,11 @@
     if (!scope || !el) return;
     var wrapper = document.createElement('div');
     wrapper.innerHTML = buildPreviewLogHTML(scope);
-    var fresh = wrapper.firstElementChild;
+    var fresh = wrapper.querySelector('#preview-log');
     if (fresh) {
       el.replaceWith(fresh);
-      fresh.scrollTop = fresh.scrollHeight;
+      var sc = fresh.querySelector('.term-scroll');
+      if (sc) sc.scrollTop = sc.scrollHeight;
     }
   }
 
@@ -4390,13 +4737,18 @@
     buffer.push(line);
     if (buffer.length > 2000) buffer.splice(0, buffer.length - 2000);
     if (!state.previewScope || state.previewScope.runId !== runId) return;
-    var el = document.getElementById('preview-log');
+    var el = document.getElementById('preview-log-body');
     if (!el) return;
-    var atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
+    var sc = el.parentNode;
+    var atBottom = sc.scrollHeight - sc.scrollTop - sc.clientHeight < 40;
     var empty = el.querySelector('.preview-log-empty');
-    if (empty) el.textContent = '';
-    el.appendChild(document.createTextNode((el.textContent ? '\n' : '') + line));
-    if (atBottom) el.scrollTop = el.scrollHeight;
+    if (empty) empty.remove();
+    var cursor = el.querySelector('.term-cursor');
+    var hasText = el.textContent.length > 0;
+    var frag = document.createElement('span');
+    frag.innerHTML = (hasText ? '\n' : '') + ansiToHTML(line);
+    el.insertBefore(frag, cursor);
+    if (atBottom) sc.scrollTop = sc.scrollHeight;
   }
 
   function writeClipboard(text, done) {
@@ -4429,6 +4781,71 @@
   // Bouton de copie en icône : la coche remplace l'icône le temps d'un battement,
   // seule confirmation possible sur un bouton de 20 px. Le libellé accessible
   // suit, sinon un lecteur d'écran annoncerait encore « copier ».
+  // --- Terminal : la sortie d'une commande (vérification, recette) ---
+  //
+  // Une seule apparence pour toute sortie de commande : un bandeau (état,
+  // commande, copier) au-dessus d'un fond sombre. Les couleurs ANSI de la
+  // commande sont rendues ; une sortie sans couleur reçoit les nôtres, ligne à
+  // ligne, pour que l'échec se repère sans lire (FAIL, panic, Error en rouge,
+  // ok et PASS en vert, chemins fichier:ligne soulignés).
+  var ANSI_FG = { 30: 'k', 31: 'r', 32: 'g', 33: 'y', 34: 'b', 35: 'm', 36: 'c', 37: 'w', 90: 'k', 91: 'r', 92: 'g', 93: 'y', 94: 'b', 95: 'm', 96: 'c', 97: 'w' };
+  var ANSI_ANY = /\x1b\[[0-9;?]*[A-Za-z]/g;
+  var LOG_FAIL = /^\s*(--- FAIL|FAIL\b|panic:|fatal|error\b|Error\b|ERROR\b|✗|✕|×|not ok\b|E\s{2,})/;
+  var LOG_OK = /^\s*(ok\s|PASS\b|--- PASS|✓|✔|Tests?:?\s.*\bpassed\b)/;
+  var LOG_PATH = /([\w./-]+\.[A-Za-z]{1,5}:\d+(?::\d+)?)/g;
+
+  function logLineHTML(line) {
+    var cls = LOG_FAIL.test(line) ? 'tl-fail' : (LOG_OK.test(line) ? 'tl-ok' : '');
+    var html = escapeHtml(line).replace(LOG_PATH, '<span class="tl-path">$1</span>');
+    return cls ? '<span class="' + cls + '">' + html + '</span>' : html;
+  }
+
+  function ansiToHTML(text) {
+    text = String(text || '');
+    if (text.indexOf('\x1b[') === -1) return text.split('\n').map(logLineHTML).join('\n');
+    var out = '', open = 0, last = 0, m;
+    var re = /\x1b\[([0-9;]*)m/g;
+    var clean = text.replace(/\x1b\[[0-9;?]*[A-La-ln-z]/g, '');
+    while ((m = re.exec(clean))) {
+      out += escapeHtml(clean.slice(last, m.index));
+      last = re.lastIndex;
+      var codes = (m[1] || '0').split(';').map(Number);
+      var cls = [];
+      codes.forEach(function (c) {
+        if (c === 1) cls.push('ab');
+        else if (ANSI_FG[c]) cls.push('af-' + ANSI_FG[c]);
+      });
+      while (open) { out += '</span>'; open--; }
+      if (cls.length) { out += '<span class="' + cls.join(' ') + '">'; open++; }
+    }
+    out += escapeHtml(clean.slice(last));
+    while (open) { out += '</span>'; open--; }
+    return out;
+  }
+
+  // opts : id (du corps), title (la commande), status ok|fail|run|idle,
+  // statusText, body (HTML déjà échappé), streaming (curseur au bout).
+  function terminalHTML(opts) {
+    var icon = opts.status === 'run' ? '<span class="task-spinner"></span>'
+      : (opts.status === 'ok' ? uiIconHTML('check', 12) : (opts.status === 'fail' ? uiIconHTML('alert', 12) : ''));
+    return '<div class="term term-' + (opts.status || 'idle') + '"' + (opts.wrapId ? ' id="' + opts.wrapId + '"' : '') + '>' +
+      '<div class="term-head">' +
+        (icon ? '<span class="term-state">' + icon + '</span>' : '') +
+        '<span class="term-title mono">' + escapeHtml(opts.title || '') + '</span>' +
+        (opts.statusText ? '<span class="term-status' + (opts.status === 'run' ? ' shimmer' : '') + '">' + escapeHtml(opts.statusText) + '</span>' : '') +
+        '<button class="term-copy" data-action="copy-terminal" title="' + escapeHtml(t('term.copy')) + '" aria-label="' + escapeHtml(t('term.copy')) + '">' + copyIconHTML() + '</button>' +
+      '</div>' +
+      '<div class="term-scroll"><pre class="term-body"' + (opts.id ? ' id="' + opts.id + '"' : '') + '>' + (opts.body || '') +
+        (opts.streaming ? '<span class="term-cursor" aria-hidden="true"></span>' : '') + '</pre></div>' +
+    '</div>';
+  }
+
+  function copyTerminal(el) {
+    var term = el.closest('.term');
+    var body = term && term.querySelector('.term-body');
+    if (body) copyToClipboardIcon(body.textContent, el);
+  }
+
   function copyToClipboardIcon(text, el) {
     if (!el || el.classList.contains('copied')) return;
     writeClipboard(text, function () {
@@ -4462,6 +4879,7 @@
         tasksAll: state.tasks.filter(function (t) { return t.cardId === state.cardId; }),
         opts: {
           showProject: false,
+          paneTopHTML: buildCardHeroHTML(state.cardsById[state.cardId]),
           emptyMsg: t('work.emptyCard'),
           emptyCta: { action: 'open-new-task', label: t('work.emptyCardAction') }
         }
@@ -4541,6 +4959,19 @@
       '</div>';
   }
 
+  // Le titre du chantier est le titre de la page, pas une ligne de la barre du
+  // haut : grand, posé sur la teinte du projet, la branche en dessous.
+  function buildCardHeroHTML(card) {
+    if (!card) return '';
+    var branch = card.branches && card.branches.length ? card.branches[0].branch : '';
+    var edit = escapeHtml(t('workstream.editTooltip'));
+    return '<header class="work-hero">' +
+      '<div class="work-hero-row"><h1 class="work-hero-title">' + escapeHtml(card.title) + '</h1>' +
+      '<button class="icon-btn work-hero-edit" data-action="open-edit-card" title="' + edit + '" aria-label="' + edit + '">' + uiIconHTML('edit', 16) + '</button></div>' +
+      (branch ? '<div class="work-hero-branch mono">' + escapeHtml(branch) + '</div>' : '') +
+      '</header>';
+  }
+
   function buildWorkHTML() {
     var ctx = currentTaskListContext();
     return buildTaskListShell(ctx.tasksAll, ctx.opts);
@@ -4559,7 +4990,7 @@
     if (!ctx) return false;
     var pane = document.querySelector('.task-list-pane');
     if (!pane) return false;
-    pane.innerHTML = buildTaskListPaneInnerHTML(ctx.tasksAll, ctx.opts);
+    pane.innerHTML = (ctx.opts.paneTopHTML || '') + buildTaskListPaneInnerHTML(ctx.tasksAll, ctx.opts);
     return true;
   }
 
@@ -4748,6 +5179,340 @@
     });
   }
 
+  // ---------------------------------------------------------------------
+  // Revue d'une tâche : vérification, relecture, recette, décision
+  // ---------------------------------------------------------------------
+
+  // Un verdict humain (relecture, recette) posé sur une autre empreinte du
+  // travail que l'actuelle est périmé : le code a changé depuis.
+  function verdictState(v, task) {
+    if (!v) return 'todo';
+    if (v.sha && task.workSha && v.sha !== task.workSha) return 'stale';
+    return v.verdict === 'approved' ? 'ok' : 'changes';
+  }
+
+  function taskPreviewCmd(task) {
+    var project = state.projectsById[task.projectId];
+    var repo = project ? (project.repos || []).filter(function (r) { return r.name === task.repoName; })[0] : null;
+    return repo && repo.previewCmd ? repo.previewCmd : '';
+  }
+
+  // reviewInfo décrit la revue d'une tâche à relire : une étape par fait à
+  // établir, chacune dans un état (ok, fail, run, changes, stale, todo, off),
+  // et l'étape qui attend l'humain. La recette n'existe que si le dépôt a une
+  // commande de recette ; une vérification non configurée ne bloque rien.
+  function reviewInfo(task) {
+    var project = state.projectsById[task.projectId];
+    var hasCmd = !!(project && project.checkCmd);
+    var c = (task.checks || [])[0] || null;
+    var check;
+    if (task.checking) check = 'run';
+    else if (!hasCmd) check = 'off';
+    else if (!c) check = 'todo';
+    else if (c.sha && task.workSha && c.sha !== task.workSha) check = 'stale';
+    else check = c.ok ? 'ok' : 'fail';
+
+    var read = verdictState(task.review, task);
+    var steps = [{ key: 'check', state: check }, { key: 'read', state: read }];
+    var hasTest = !!taskPreviewCmd(task);
+    var run = previewRunForDir(task.worktreeDir);
+    var previewOn = !!run && (run.status === 'running' || (run.static && run.status !== 'failed'));
+    if (hasTest) {
+      var test = verdictState(task.tested, task);
+      if (test === 'todo' && previewOn) test = 'run';
+      steps.push({ key: 'test', state: test });
+    }
+    var next;
+    if (check === 'fail' || check === 'stale' || check === 'todo') next = 'check';
+    else if (read !== 'ok') next = 'read';
+    else if (hasTest && steps[2].state !== 'ok') next = 'test';
+    else next = 'decide';
+    // Une vérification qui tourne ne bloque pas la relecture : on lit pendant
+    // que les tests passent, comme sur une PR.
+    if (check === 'run') next = read !== 'ok' ? 'read' : (hasTest && steps[2].state !== 'ok' ? 'test' : 'decide');
+    steps.push({ key: 'decide', state: next === 'decide' ? 'current' : 'todo' });
+    var byKey = {};
+    steps.forEach(function (s) { byKey[s.key] = s.state; });
+    return { steps: steps, byKey: byKey, check: check, result: c, read: read, next: next, previewOn: previewOn, hasTest: hasTest };
+  }
+
+  function reviewSelectedStep(task, info) {
+    var sel = state.reviewStepSel[task.id];
+    if (sel && info.byKey[sel]) return sel;
+    return info.next;
+  }
+
+  // Le repère d'une ligne de la liste : une seule étiquette, celle qui dit quoi
+  // faire en revenant sur la tâche.
+  function reviewStageKey(info) {
+    if (info.check === 'run' && info.next !== 'decide') return 'checking';
+    if (info.check === 'fail') return 'checkFailed';
+    if (info.next === 'decide') return 'ready';
+    if (info.next === 'check') return 'toCheck';
+    if (info.next === 'test') return info.byKey.test === 'changes' ? 'changes' : (info.byKey.test === 'stale' ? 'testAgain' : 'toTest');
+    if (info.read === 'changes') return 'changes';
+    if (info.read === 'stale') return 'reviewAgain';
+    return 'toReview';
+  }
+  function buildReviewStagePillHTML(task) {
+    var key = reviewStageKey(reviewInfo(task));
+    var lead = key === 'checking' ? '<span class="task-spinner"></span>' : '';
+    return '<span class="review-pill review-pill-' + key + '">' + lead + (key === 'checking' ? '<span class="shimmer">' + escapeHtml(t('review.stage.' + key)) + '</span>' : escapeHtml(t('review.stage.' + key))) + '</span>';
+  }
+
+  // Une tâche à relire n'a pas de pastille : l'étiquette de la ligne dit en
+  // toutes lettres où en est la revue. La place reste réservée, pour que les
+  // titres restent alignés avec ceux des autres états.
+  function buildReviewGlyphHTML(task) {
+    return '<span class="task-glyph task-glyph-none" aria-hidden="true"></span>';
+  }
+
+  function durationText(ms) {
+    if (!ms && ms !== 0) return '';
+    var s = Math.round(ms / 1000);
+    if (s < 60) return s + ' s';
+    return Math.floor(s / 60) + ' min ' + (s % 60 < 10 ? '0' : '') + (s % 60) + ' s';
+  }
+
+  function checkReasonText(reason) {
+    if (!reason) return '';
+    if (reason === 'timeout') return t('review.check.timeout');
+    var m = /^exit (\d+)$/.exec(reason);
+    if (m) return t('review.check.exit', { code: m[1] });
+    return reason;
+  }
+
+  function checkLogOpen(task, info) {
+    var v = state.checkLogOpen[task.id];
+    return v === undefined ? info.check === 'fail' : !!v;
+  }
+
+  // Le rond d'une étape : plein et coché quand elle est acquise, plein et
+  // marqué d'un point d'exclamation quand elle échoue, numéroté sinon.
+  function rvNodeHTML(stateKey, n) {
+    var inner;
+    if (stateKey === 'ok' || stateKey === 'off') inner = uiIconHTML('check', 12);
+    else if (stateKey === 'fail') inner = '<span class="rv-bang">!</span>';
+    else if (stateKey === 'run') inner = '<span class="task-spinner"></span>';
+    else inner = '<span class="rv-num">' + n + '</span>';
+    return '<span class="rv-node">' + inner + '</span>';
+  }
+
+  function rvBtn(cls, action, taskId, label, extra) {
+    return '<button class="' + cls + '" data-action="' + action + '" data-task-id="' + taskId + '"' + (extra || '') + '>' + escapeHtml(label) + '</button>';
+  }
+  var RV_PRIMARY = 'btn-green rv-btn rv-btn-primary';
+  var RV_SECONDARY = 'btn-outline rv-btn';
+
+  // Ce qu'une étape affiche. Dans la ligne d'étapes : son nom et un état en
+  // deux ou trois mots. Ouverte, au pied de la carte : un titre qui dit la
+  // situation, le détail (commande, code de sortie, ancienneté), une phrase
+  // qui dit quoi faire, le journal d'un échec et les boutons.
+  function reviewStepView(task, info, key, refuseBtnHTML) {
+    var id = task.id;
+    var st = info.byKey[key];
+    var v = { short: t('review.short.' + key + '.' + st), title: '', meta: '', hint: '', body: '', actions: '' };
+    var c = info.result;
+    var cmd = state.projectsById[task.projectId] ? state.projectsById[task.projectId].checkCmd : '';
+    var code = function (x) { return '<code>' + escapeHtml(x) + '</code>'; };
+    var bits = function (list) { return list.filter(Boolean).map(escapeHtml).join(' · '); };
+    var hintKey = 'review.hint.' + key + '.' + st;
+
+    if (key === 'check') {
+      v.title = t('review.title.check.' + st);
+      if (st === 'run') v.meta = code(cmd) + ' · ' + elapsedHTML(task.checkStartedAt);
+      else if (st === 'ok') v.meta = code(cmd) + ' · ' + bits([c.durationMs ? durationText(c.durationMs) : '', c.at ? timeAgo(c.at) : '']);
+      else if (st === 'fail') v.meta = code(cmd) + ' · ' + bits([checkReasonText(c.reason), c.at ? timeAgo(c.at) : '']);
+      else if (st !== 'off') v.meta = code(cmd);
+      v.hint = t(hintKey);
+      if (st === 'fail' || st === 'ok') v.titleAction = 'toggle-check-log';
+      if ((st === 'fail' || st === 'ok') && checkLogOpen(task, info)) {
+        v.body = '<div class="check-log">' + terminalHTML({
+          title: cmd,
+          status: st,
+          statusText: st === 'ok' ? t('term.passed') : checkReasonText(c.reason),
+          body: c.output ? ansiToHTML(c.output) : '<span class="term-empty">' + escapeHtml(t('review.check.noOutput')) + '</span>'
+        }) + '</div>';
+      }
+      if (st === 'fail') {
+        v.actions = rvBtn(RV_SECONDARY, 'toggle-check-log', id, checkLogOpen(task, info) ? t('review.check.hideLog') : t('review.check.showLog')) +
+          rvBtn(RV_SECONDARY, 'run-check', id, t('review.check.rerun')) +
+          rvBtn(RV_PRIMARY, 'review-fix-check', id, t('review.action.fixCheck'));
+      } else if (st === 'stale' || st === 'todo') {
+        v.actions = rvBtn(RV_PRIMARY, 'run-check', id, st === 'todo' ? t('review.check.run') : t('review.check.rerun'));
+      } else if (st === 'ok') {
+        v.actions = rvBtn(RV_SECONDARY, 'toggle-check-log', id, checkLogOpen(task, info) ? t('review.check.hideLog') : t('review.check.showLog')) +
+          rvBtn(RV_SECONDARY, 'run-check', id, t('review.check.rerun'));
+      } else if (st === 'off') {
+        v.actions = '<button class="' + RV_SECONDARY + '" data-action="open-edit-project">' + escapeHtml(t('review.check.configure')) + '</button>';
+      }
+    } else if (key === 'read' || key === 'test') {
+      var verdict = key === 'read' ? task.review : task.tested;
+      v.title = t('review.title.' + key + '.' + st);
+      if (st === 'ok' || st === 'changes') v.meta = escapeHtml(timeAgo(verdict.at));
+      else if (key === 'read') v.meta = escapeHtml(tCount('review.sub.files', task.filesCount || 0));
+      else v.meta = code(taskPreviewCmd(task));
+      v.hint = t(hintKey);
+      if (st === 'ok') {
+        v.actions = rvBtn(RV_SECONDARY, 'review-clear', id, t('review.read.undo'), ' data-step="' + key + '"');
+      } else {
+        var approve = rvBtn(RV_PRIMARY, 'review-approve', id, t('review.action.' + (key === 'read' ? 'approve' : 'approveTest')), ' data-step="' + key + '"');
+        var changes = rvBtn(RV_SECONDARY, 'review-request-changes', id, t('review.action.requestChanges'), ' data-step="' + key + '"');
+        if (key === 'read') {
+          var diffBtn = state.panelTab === 'diff' ? '' : '<button class="' + RV_SECONDARY + '" data-action="set-tab" data-panel-tab="diff">' + escapeHtml(t('review.read.openDiff')) + '</button>';
+          v.actions = diffBtn + changes + approve;
+        } else {
+          // Un seul bouton, toujours à la même place : le verdict se rend dans
+          // la fenêtre de la recette, là où l'on essaie (buildPreviewVerdictHTML).
+          // « Lancer la recette » lance pour de vrai : la fenêtre s'ouvre sur le
+          // journal du run qui démarre, sans second clic.
+          v.actions = '<button class="' + RV_PRIMARY + '" data-action="' + (info.previewOn ? 'open-task-preview' : 'launch-task-preview') + '" data-task-id="' + id + '">' +
+            escapeHtml(info.previewOn ? t('review.test.open') : t('review.test.start')) + '</button>';
+        }
+      }
+    } else {
+      var accepting = !!state.acceptingByTask[id];
+      var missing = info.steps.filter(function (s) {
+        return s.key !== 'decide' && s.state !== 'ok' && s.state !== 'off' && s.state !== 'run';
+      }).map(function (s) { return t('review.label.' + s.key); });
+      v.title = t('review.title.decide');
+      v.meta = escapeHtml(t('review.sub.decide', { branch: task.base || '' }));
+      v.hint = missing.length ? t('review.hint.decide.missing', { steps: missing.join(', ') }) : t('review.hint.decide.ready');
+      v.warn = missing.length > 0;
+      v.actions = refuseBtnHTML + '<button id="task-primary-action" class="' + RV_PRIMARY + '"' + (accepting ? ' disabled' : '') + ' data-action="accept-task" data-task-id="' + id + '" title="' + escapeHtml(t('action.acceptTooltip')) + '">' +
+        escapeHtml(accepting ? t('action.accepting') : t('action.accept')) + '</button>';
+    }
+    return v;
+  }
+
+  // La revue d'une tâche tient dans une carte. En tête, les étapes en ligne,
+  // reliées par un trait continu qui verdit à mesure qu'elles sont acquises :
+  // on voit d'un coup d'œil où on en est. Au pied, l'étape ouverte (par défaut
+  // celle qui attend) : ce qui se passe, quoi faire, et ses boutons à droite,
+  // le bouton plein en dernier. Les autres étapes se cliquent pour s'ouvrir.
+  function buildReviewFlowHTML(task, refuseBtnHTML) {
+    var info = reviewInfo(task);
+    var sel = reviewSelectedStep(task, info);
+    var open = null;
+    var parts = [];
+    info.steps.forEach(function (s, i) {
+      var v = reviewStepView(task, info, s.key, refuseBtnHTML);
+      var isOpen = s.key === sel;
+      if (isOpen) open = { step: s, view: v };
+      if (i > 0) {
+        var prev = info.steps[i - 1].state;
+        parts.push('<span class="rv-line' + (prev === 'ok' || prev === 'off' ? ' rv-line-done' : '') + '" aria-hidden="true"></span>');
+      }
+      parts.push('<button class="rv-step rv-' + s.state + (isOpen ? ' rv-open' : '') + (s.key === info.next ? ' rv-next' : '') + '"' +
+        ' data-action="review-select-step" data-step="' + s.key + '" data-task-id="' + task.id + '"' +
+        (isOpen ? ' aria-current="step"' : '') + '>' +
+        rvNodeHTML(s.state, i + 1) +
+        '<span class="rv-head"><span class="rv-label">' + escapeHtml(t('review.label.' + s.key)) + '</span>' +
+        '<span class="rv-short">' + escapeHtml(v.short) + '</span></span>' +
+        '</button>');
+    });
+    var foot = '';
+    if (open) {
+      var v = open.view;
+      foot = '<div class="rv-foot rv-foot-' + open.step.state + (v.warn ? ' rv-foot-warn' : '') + '">' +
+        '<div class="rv-foot-row">' +
+          '<div class="rv-foot-text">' +
+            '<div class="rv-foot-title">' +
+              // Le titre d'une vérification terminée ouvre son journal : c'est
+              // là qu'on clique pour savoir ce qui a tourné.
+              (v.titleAction
+                ? '<button class="rv-foot-toggle" data-action="' + v.titleAction + '" data-task-id="' + task.id + '" aria-expanded="' + (checkLogOpen(task, info) ? 'true' : 'false') + '">' +
+                  escapeHtml(v.title) + '<svg class="rv-chevron" viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M4.5 6.25 8 9.75l3.5-3.5"/></svg></button>'
+                : escapeHtml(v.title)) +
+              (v.meta ? '<span class="rv-foot-meta">' + v.meta + '</span>' : '') + '</div>' +
+            (v.hint ? '<div class="rv-foot-hint">' + escapeHtml(v.hint) + '</div>' : '') +
+          '</div>' +
+          (v.actions ? '<div class="rv-actions">' + v.actions + '</div>' : '') +
+        '</div>' + v.body +
+        '</div>';
+    }
+    return '<div class="review-flow"><div class="rv-track">' + parts.join('') + '</div>' + foot + '</div>';
+  }
+
+  function selectReviewStep(taskId, step) {
+    var task = state.tasksById[taskId];
+    if (!task) return;
+    var info = reviewInfo(task);
+    state.reviewStepSel[taskId] = step === info.next ? null : step;
+    patchDetailHead(taskId);
+  }
+
+  function postReview(taskId, verdict, step) {
+    var body = { verdict: verdict };
+    if (step === 'test') body.step = 'test';
+    // Un verdict fait avancer la revue : le panneau suit l'étape suivante.
+    state.reviewStepSel[taskId] = null;
+    return api('/api/tasks/' + taskId + '/review', { method: 'POST', body: body }).then(function (task) {
+      if (task) upsertTask(task);
+      if (state.taskId === taskId) patchDetailHead(taskId);
+      refreshTaskListAndFilters();
+      return task;
+    }).catch(function (e) {
+      showDetailError(taskId, (e && e.message) || t('review.error'));
+      throw e;
+    });
+  }
+
+  function runTaskCheck(taskId) {
+    api('/api/tasks/' + taskId + '/check', { method: 'POST' }).then(function (task) {
+      if (task) upsertTask(task);
+      if (state.taskId === taskId) patchDetailHead(taskId);
+      refreshTaskListAndFilters();
+    }).catch(function (e) {
+      showDetailError(taskId, (e && e.message) || t('review.error'));
+    });
+  }
+
+  function toggleCheckLog(taskId) {
+    var task = state.tasksById[taskId];
+    if (!task) return;
+    state.checkLogOpen[taskId] = !checkLogOpen(task, reviewInfo(task));
+    patchDetailHead(taskId);
+  }
+
+  // Faire corriger la vérification : le journal part à l'agent tel quel, sans
+  // passer par le composeur. C'est une demande de changements comme une autre,
+  // donc le verdict suit.
+  function sendCheckFailure(taskId) {
+    var task = state.tasksById[taskId];
+    var c = task && (task.checks || [])[0];
+    if (!c) return;
+    var output = (c.output || '').slice(-6000);
+    var text = t('review.fixPrompt', { cmd: c.label, reason: checkReasonText(c.reason) || c.reason || '', output: output });
+    postReview(taskId, 'changes').then(function () {
+      return api('/api/tasks/' + taskId + '/messages', { method: 'POST', body: { text: text } });
+    }).then(function () {
+      if (state.panelTab !== 'chat') setTab('chat');
+    }).catch(function () {});
+  }
+
+  // Demander des changements se fait dans le composeur de la conversation : on
+  // y bascule, il annonce le mode, et l'envoi pose le verdict (de relecture ou
+  // de recette, selon l'étape d'où vient la demande) avant le message.
+  function startRequestChanges(taskId, step) {
+    state.changesModeTask = taskId;
+    state.changesModeStep = step === 'test' ? 'test' : 'read';
+    if (state.panelTab !== 'chat') setTab('chat');
+    else renderMain();
+    setTimeout(function () {
+      var el = document.getElementById('composer-input');
+      if (el) el.focus();
+    }, 60);
+  }
+  function cancelRequestChanges() {
+    var el = document.getElementById('composer-input');
+    var draft = el ? el.value : '';
+    state.changesModeTask = null;
+    renderMain();
+    var el2 = document.getElementById('composer-input');
+    if (el2) { el2.value = draft; syncComposer(); el2.focus(); }
+  }
+
   function buildDetailHeadHTML(task) {
     var agent = state.agentsById[task.agentId] || { emoji: '?', name: '?', model: '?', color: '#ccc' };
     var soft = softColor(agent.color);
@@ -4822,6 +5587,11 @@
       '</div>' +
     '</div>';
 
+    // Une tâche à relire montre où en est sa revue (vérification, relecture,
+    // décision) à la place du bandeau d'état ; pendant un rebase, le bandeau
+    // reprend la main, c'est l'information du moment.
+    var inReview = task.status === 'review' && !task.rebasing;
+    var previewBtnHTML = buildTaskPreviewButtonHTML(task);
     return '<div class="detail-head">' +
         '<div class="detail-head-row">' +
           buildTaskGlyphHTML(task) +
@@ -4837,14 +5607,16 @@
           menuHTML +
           '<button class="icon-btn" data-action="close-panel" aria-label="' + escapeHtml(t('common.close')) + '">✕</button>' +
         '</div>' +
-        buildStatusBadgeHTML(task) +
-        behindRow +
-        waitingRow +
-        '<div class="action-row">' + primaryBtnHTML +
-          secondaryBtnHTML +
-          buildTaskPreviewButtonHTML(task) +
-          '<span class="checks">' + renderChecks(task.checks) + '</span>' +
-        '</div>' +
+        (inReview
+          ? behindRow + buildReviewFlowHTML(task, secondaryBtnHTML)
+          : buildStatusBadgeHTML(task) +
+            behindRow +
+            waitingRow +
+            '<div class="action-row">' + primaryBtnHTML +
+              secondaryBtnHTML +
+              previewBtnHTML +
+              '<span class="checks">' + renderChecks(task.checks) + '</span>' +
+            '</div>') +
         '<div class="tabs">' + tabsHTML + '</div>' +
       '</div>';
   }
@@ -5033,9 +5805,9 @@
 
   function thinkingLineInnerHTML(task, agent) {
     if (task.liveActivity) {
-      return '<span class="live-line mono"><span class="live-dot"></span>' + escapeHtml(task.liveActivity) + '</span>';
+      return '<span class="live-line mono"><span class="live-dot"></span><span class="shimmer">' + escapeHtml(task.liveActivity) + '</span></span>';
     }
-    return '<span class="thinking-label">' + escapeHtml(t('chat.working')) + '</span>';
+    return '<span class="thinking-label shimmer">' + escapeHtml(t('chat.working')) + '</span>';
   }
 
   // Met l'indicateur à jour sans toucher aux messages. Appelé sur chaque
@@ -5077,16 +5849,26 @@
     var thinking = buildThinkingHTML(task, agent);
     var items = msgs.map(function (m) { return buildMessageHTML(m, agent); }).join('');
     if (!items && !thinking) items = '<div class="empty-note">' + escapeHtml(t('conversation.empty')) + '</div>';
+    // Demande de changements : le composeur le dit au-dessus du champ, et
+    // l'envoi pose le verdict avant le message (voir sendMessage).
+    var changes = state.changesModeTask === task.id && task.status === 'review';
+    var changesBar = changes
+      ? '<div class="composer-mode"><span>' + escapeHtml(t('review.changes.bar', { name: agent.name })) + '</span>' +
+        '<button class="icon-btn composer-mode-close" data-action="review-cancel-changes" aria-label="' + escapeHtml(t('common.cancel')) + '" title="' + escapeHtml(t('common.cancel')) + '">✕</button></div>'
+      : '';
+    var placeholder = changes ? t('review.changes.placeholder') : t('chat.placeholder', { name: agent.name });
     return '<div class="conversation" id="conversation-list">' + items + thinking + '</div>' +
-      '<div class="composer-wrap">' + buildConvJumpHTML() + '<div class="composer">' +
+      '<div class="composer-wrap">' + buildConvJumpHTML() + '<div class="composer' + (changes ? ' composer-changes' : '') + '">' +
+        changesBar +
         buildAttachDraftsHTML(task.id) +
-        '<textarea id="composer-input" rows="1" placeholder="' + escapeHtml(t('chat.placeholder', { name: agent.name })) + '"></textarea>' +
+        '<textarea id="composer-input" rows="1" placeholder="' + escapeHtml(placeholder) + '"></textarea>' +
         '<div class="composer-row">' +
           '<button class="composer-attach" data-action="attach-image" data-target="composer-file"' +
             ' title="' + escapeHtml(t('chat.attach')) + '" aria-label="' + escapeHtml(t('chat.attach')) + '">' + attachIconHTML() + '</button>' +
           '<input type="file" id="composer-file" class="hidden" accept="image/png,image/jpeg,image/gif,image/webp" multiple data-scope="task:' + task.id + '">' +
+          micButtonHTML('composer-input', task.id) +
           '<span class="composer-model"><span class="agent-avatar-sm" style="background:' + softColor(agent.color) + '">' + agent.emoji + '</span>' + escapeHtml(agent.model || '') + '</span>' +
-          '<button class="btn-send" data-action="send-message" data-task-id="' + task.id + '" disabled>' + escapeHtml(t('chat.send')) + '</button>' +
+          '<button class="btn-send" data-action="send-message" data-task-id="' + task.id + '" disabled>' + escapeHtml(changes ? t('review.changes.send') : t('chat.send')) + '</button>' +
         '</div>' +
       '</div></div>';
   }
@@ -5368,7 +6150,83 @@
       .catch(function () {});
   }
 
+  // --- Dictée : « Parler » remplit le composeur ---
+  //
+  // Web Speech API du navigateur (Chrome, Edge, Safari) : le texte arrive en
+  // direct dans le champ, à la suite de ce qui est déjà écrit, et on relit
+  // avant d'envoyer. Rien ne passe par Sillage. Le bouton n'existe pas là où
+  // l'API manque (Firefox) ni hors contexte sûr (HTTP hors localhost).
+  var SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+  // target : l'id du champ qui reçoit le texte (composeur d'une tâche, ou
+  // consigne de la modale de nouvelle tâche). taskId sert aux erreurs.
+  function micButtonHTML(target, taskId) {
+    if (!SpeechRec || !window.isSecureContext) return '';
+    var on = !!state.dictation && state.dictation.target === target;
+    return '<button class="composer-mic' + (on ? ' is-listening' : '') + '" data-action="toggle-dictation" data-target="' + target + '"' +
+      (taskId ? ' data-task-id="' + taskId + '"' : '') +
+      ' title="' + escapeHtml(t('chat.speakHint')) + '" aria-pressed="' + (on ? 'true' : 'false') + '">' +
+      (on ? '<span class="mic-live" aria-hidden="true"></span>' : uiIconHTML('mic', 14)) +
+      '<span>' + escapeHtml(on ? t('chat.listening') : t('chat.speak')) + '</span></button>';
+  }
+
+  function refreshMicButton() {
+    document.querySelectorAll('.composer-mic').forEach(function (btn) {
+      var holder = document.createElement('div');
+      holder.innerHTML = micButtonHTML(btn.getAttribute('data-target'), btn.getAttribute('data-task-id'));
+      if (holder.firstElementChild) btn.replaceWith(holder.firstElementChild);
+    });
+  }
+
+  function stopDictation() {
+    var d = state.dictation;
+    if (!d) return;
+    state.dictation = null;
+    try { d.rec.stop(); } catch (e) {}
+    refreshMicButton();
+  }
+
+  function toggleDictation(target, taskId) {
+    var was = state.dictation && state.dictation.target;
+    if (state.dictation) stopDictation();
+    if (was === target) return;
+    var el = document.getElementById(target);
+    if (!el || !SpeechRec) return;
+    var rec = new SpeechRec();
+    rec.lang = state.lang === 'en' ? 'en-US' : 'fr-FR';
+    rec.continuous = true;
+    rec.interimResults = true;
+    var base = el.value && !/\s$/.test(el.value) ? el.value + ' ' : el.value;
+    var d = { target: target, taskId: taskId, rec: rec };
+    rec.onresult = function (ev) {
+      var input = document.getElementById(target);
+      if (!input || state.dictation !== d) { stopDictation(); return; }
+      var finalText = '', interim = '';
+      for (var i = 0; i < ev.results.length; i++) {
+        var part = ev.results[i][0].transcript;
+        if (ev.results[i].isFinal) finalText += part; else interim += part;
+      }
+      input.value = base + finalText + interim;
+      if (target === 'composer-input') { autoGrowComposer(input); refreshComposerState(); }
+    };
+    rec.onerror = function (ev) {
+      if (ev.error === 'no-speech' || ev.error === 'aborted') return;
+      var msg = ev.error === 'not-allowed' || ev.error === 'service-not-allowed' ? t('chat.micDenied') : t('chat.micError', { error: ev.error });
+      if (taskId) { showDetailError(taskId, msg); return; }
+      var errEl = document.getElementById('new-task-error');
+      if (errEl) { errEl.textContent = msg; errEl.classList.remove('hidden'); }
+    };
+    rec.onend = function () {
+      if (state.dictation === d) { state.dictation = null; refreshMicButton(); }
+    };
+    state.dictation = d;
+    try { rec.start(); } catch (e) { state.dictation = null; return; }
+    refreshMicButton();
+    el.focus();
+  }
+
   function sendMessage(taskId) {
+    stopDictation();
     var el = document.getElementById('composer-input');
     if (!el) return;
     var text = el.value.trim();
@@ -5384,7 +6242,20 @@
     }
     el.disabled = true;
     syncComposer();
-    api('/api/tasks/' + taskId + '/messages', { method: 'POST', body: { text: text, attachments: attachments } })
+    var changes = state.changesModeTask === taskId;
+    var verdict = changes ? postReview(taskId, 'changes', state.changesModeStep) : Promise.resolve();
+    if (changes) {
+      state.changesModeTask = null;
+      var bar = document.querySelector('.composer-mode');
+      if (bar) bar.remove();
+      var composerEl = document.querySelector('.composer');
+      if (composerEl) composerEl.classList.remove('composer-changes');
+      var sendBtn = document.querySelector('.composer [data-action="send-message"]');
+      if (sendBtn) sendBtn.textContent = t('chat.send');
+    }
+    verdict.then(function () {
+      return api('/api/tasks/' + taskId + '/messages', { method: 'POST', body: { text: text, attachments: attachments } });
+    })
       .catch(function () {})
       .then(function () {
         var el2 = document.getElementById('composer-input');
@@ -5981,6 +6852,7 @@
     var prevDiff = document.getElementById('diff-scroll');
     var prevDiffScroll = prevDiff ? prevDiff.scrollTop : null;
 
+    document.documentElement.setAttribute('data-tint', state.projectId ? String(projectTint(state.projectId)) : 'none');
     mainEl.innerHTML = buildMainHTML();
 
     var newDiff = document.getElementById('diff-scroll');
@@ -6165,6 +7037,7 @@
     document.getElementById('modal-overlay').addEventListener('click', overlayBgCloseModal);
   }
   function closeModal() {
+    if (state.dictation && !state.dictation.taskId) stopDictation();
     state.modal = null;
     state.previewScope = null;
     resetPlanWait();
@@ -6307,6 +7180,7 @@
         '<button class="attach-btn" data-action="attach-image" data-target="new-task-file">' +
           attachIconHTML() + '<span>' + escapeHtml(t('newTask.attachHint')) + '</span></button>' +
         '<input type="file" id="new-task-file" class="hidden" accept="image/png,image/jpeg,image/gif,image/webp" multiple data-scope="new-task">' +
+        micButtonHTML('new-task-prompt') +
       '</div>' +
       '<div class="attach-strip" id="new-task-attach-strip">' + buildAttachStripHTML(modalAttachments, 'new-task') + '</div>' +
       repoSelectHTML +
@@ -6450,6 +7324,7 @@
   // mode 'chat' : la conversation s'ouvre. mode 'another' : le formulaire reste
   // ouvert, agent et dépôt conservés, titre et prompt vidés (saisie en série).
   function submitNewTask(cardId, mode) {
+    stopDictation();
     var titleEl = document.getElementById('new-task-title');
     var promptEl = document.getElementById('new-task-prompt');
     var errEl = document.getElementById('new-task-error');
@@ -7718,11 +8593,11 @@
     if (run.status === 'running') {
       var steps = run.steps || [];
       return head + '<div class="autoconf-live"><span class="task-spinner"></span>' +
-          '<span>' + escapeHtml(t('autoconf.running', { agent: agentName, repo: run.repoName || '' })) + ' · ' + elapsedHTML(run.startedAt) +
+          '<span class="shimmer">' + escapeHtml(t('autoconf.running', { agent: agentName, repo: run.repoName || '' })) + ' · ' + elapsedHTML(run.startedAt) +
           (run.timeoutSec ? ' · ' + escapeHtml(t('vigie.live.limit', { n: Math.round(run.timeoutSec / 60) })) : '') + '</span>' +
           '<button class="btn-quiet" data-action="autoconf-stop" data-project-id="' + pid + '">' + escapeHtml(t('autoconf.stop')) + '</button></div></div></div>' +
         (steps.length ? '<ol class="live-steps">' + steps.map(function (line, i) {
-          return '<li class="mono' + (i === steps.length - 1 ? ' live-step-now' : '') + '">' + escapeHtml(line) + '</li>';
+          return '<li class="mono' + (i === steps.length - 1 ? ' live-step-now' : '') + '"><span' + (i === steps.length - 1 ? ' class="shimmer"' : '') + '>' + escapeHtml(line) + '</span></li>';
         }).join('') + '</ol>' : '<div class="sd-live-now">' + escapeHtml(t('vigie.live.start')) + '</div>');
     }
     var again = '<button class="btn-quiet" data-action="autoconf-start" data-project-id="' + pid + '">' + escapeHtml(t('autoconf.retry')) + '</button>' +
@@ -8898,6 +9773,8 @@
   function onPreviewEvent(run) {
     upsertPreview(run);
     refreshPreviewModal();
+    // Le terminal du run affiché suit son état (en cours, terminé, échec).
+    if (state.previewScope && state.previewScope.runId === run.id) renderPreviewLog();
     renderSidebar();
     if (state.screen === 'work') refreshPreviewButton();
     if (state.taskId) patchDetailHead(state.taskId);
@@ -9108,6 +9985,22 @@
       case 'start-task': doStartWaitingTask(el.getAttribute('data-task-id')); break;
       case 'reopen': doReopen(el.getAttribute('data-task-id')); break;
       case 'accept-task': doAcceptTask(el.getAttribute('data-task-id')); break;
+      case 'review-approve': postReview(el.getAttribute('data-task-id'), 'approved', el.getAttribute('data-step')).catch(function () {}); break;
+      case 'review-clear': postReview(el.getAttribute('data-task-id'), '', el.getAttribute('data-step')).catch(function () {}); break;
+      case 'review-request-changes': startRequestChanges(el.getAttribute('data-task-id'), el.getAttribute('data-step')); break;
+      case 'preview-approve':
+        closeModal();
+        postReview(el.getAttribute('data-task-id'), 'approved', 'test').catch(function () {});
+        break;
+      case 'preview-request-changes':
+        closeModal();
+        startRequestChanges(el.getAttribute('data-task-id'), 'test');
+        break;
+      case 'review-select-step': selectReviewStep(el.getAttribute('data-task-id'), el.getAttribute('data-step')); break;
+      case 'review-cancel-changes': cancelRequestChanges(); break;
+      case 'review-fix-check': sendCheckFailure(el.getAttribute('data-task-id')); break;
+      case 'run-check': runTaskCheck(el.getAttribute('data-task-id')); break;
+      case 'toggle-check-log': toggleCheckLog(el.getAttribute('data-task-id')); break;
       case 'refuse-task': doCancelTask(el.getAttribute('data-task-id')); break;
       case 'ask-rebase': askRebase(el.getAttribute('data-task-id')); break;
       case 'open-ship-modal': openShipModal(el.getAttribute('data-card-id')); break;
@@ -9115,6 +10008,10 @@
       case 'catch-up-card': catchUpCard(el.getAttribute('data-card-id')); break;
       case 'open-card-preview': openPreviewModal('card', el.getAttribute('data-card-id')); break;
       case 'open-task-preview': openPreviewModal('task', el.getAttribute('data-task-id')); break;
+      case 'launch-task-preview':
+        openPreviewModal('task', el.getAttribute('data-task-id'));
+        startTaskPreview(el.getAttribute('data-task-id'));
+        break;
       case 'open-all-previews': openPreviewModal('all', null); break;
       case 'start-card-preview':
         startCardPreview(el.getAttribute('data-card-id'), el.getAttribute('data-repo-name'));
@@ -9140,6 +10037,8 @@
       case 'jump-to-bottom': jumpConversationToBottom(); break;
       case 'copy-message': copyToClipboardIcon(el.getAttribute('data-copy') || '', el); break;
       case 'copy-code': copyCodeBlock(el); break;
+      case 'copy-terminal': copyTerminal(el); break;
+      case 'toggle-dictation': toggleDictation(el.getAttribute('data-target'), el.getAttribute('data-task-id')); break;
       case 'open-search': openSearch(); break;
       case 'search-goto-project': closeSearch(); goProject(el.getAttribute('data-project-id')); break;
       case 'search-goto-card': closeSearch(); goCard(el.getAttribute('data-card-id')); break;

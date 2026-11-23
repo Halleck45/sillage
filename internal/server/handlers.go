@@ -212,6 +212,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/tasks/{id}/cancel", s.handleCancel)
 	mux.HandleFunc("POST /api/tasks/{id}/reopen", s.handleReopen)
 	mux.HandleFunc("POST /api/tasks/{id}/read", s.handleRead)
+	mux.HandleFunc("POST /api/tasks/{id}/check", s.handleRunCheck)
+	mux.HandleFunc("POST /api/tasks/{id}/review", s.handleReview)
 	mux.HandleFunc("GET /api/tasks/{id}/attachments/{attId}", s.handleGetAttachment)
 	mux.HandleFunc("GET /api/tasks/{id}/diff", s.handleDiff)
 	mux.HandleFunc("POST /api/tasks/{id}/difftool", s.handleDifftool)
@@ -220,6 +222,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/tasks/{id}/preview", s.handleTaskPreview)
 	mux.HandleFunc("POST /api/previews/{id}/stop", s.handlePreviewStop)
 	mux.HandleFunc("GET /api/previews/{id}/log", s.handlePreviewLog)
+	mux.HandleFunc("GET /preview/{token}/{path...}", s.handlePreviewStatic)
 	mux.HandleFunc("GET /api/events", s.hub.ServeSSE)
 	mux.Handle("/", s.static)
 
@@ -1476,6 +1479,9 @@ func (s *Server) handleAccept(w http.ResponseWriter, r *http.Request) {
 func (s *Server) acceptTaskInto(w http.ResponseWriter, task Task, cardBranch CardBranch) {
 	id := task.ID
 
+	// Accepter tranche : une vérification encore en cours s'arrête, sinon
+	// CommitAll embarquerait ses artefacts à moitié écrits.
+	s.runner.CancelCheck(id)
 	output, err := CommitAll(task.WorktreeDir, "Sillage: "+task.Title)
 	if err != nil {
 		writeError(w, http.StatusBadGateway, err.Error())
@@ -1576,6 +1582,9 @@ func (s *Server) rebaseSiblingTasks(cardID, acceptedTaskID string, cardBranch Ca
 		if IsBranchMergedInto(task.WorktreeDir, cardBranch.Branch, task.Branch) {
 			continue // déjà à jour : la branche du chantier est contenue dans la tâche
 		}
+		// La vérification relancée après le rebase remplacera celle-ci, qui
+		// laisserait sinon ses artefacts dans le commit ci-dessous.
+		s.runner.CancelCheck(task.ID)
 		if _, err := CommitAll(task.WorktreeDir, "Sillage: "+task.Title); err != nil {
 			continue
 		}
@@ -1598,6 +1607,17 @@ func (s *Server) rebaseOneTask(task Task, cardBranch CardBranch) {
 	}
 
 	marker := "[rebased:" + cardBranch.Branch + "]"
+	if err == nil {
+		// Le code a changé de base : la vérification d'avant ne dit plus rien.
+		// L'empreinte, elle, survit à un rebase sans conflit (WorkFingerprint),
+		// la relecture reste donc acquise.
+		if sha := WorkFingerprint(task.WorktreeDir, task.Base); sha != "" {
+			if updated, setErr := s.store.PatchTask(task.ID, func(t *Task) { t.WorkSha = sha }); setErr == nil {
+				s.runner.publishTask(updated)
+			}
+		}
+		s.runner.StartCheck(task.ID)
+	}
 	if err != nil {
 		if len(conflicts) == 0 {
 			// Échec sans conflit (worktree cassé, git indisponible) : rien à
@@ -2087,6 +2107,96 @@ func (s *Server) handleRead(w http.ResponseWriter, r *http.Request) {
 	}
 	s.runner.publishTask(task)
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// handleRunCheck relance la vérification projet d'une tâche (bouton
+// « Relancer »). Rend la tâche, Checking à vrai ; le résultat suit par SSE.
+func (s *Server) handleRunCheck(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	task, ok := s.store.GetTask(id)
+	if !ok {
+		writeError(w, http.StatusNotFound, "task not found")
+		return
+	}
+	project, _ := s.store.GetProject(task.ProjectID)
+	if strings.TrimSpace(project.CheckCmd) == "" {
+		writeError(w, http.StatusBadRequest, "project has no check command")
+		return
+	}
+	if task.Status != "review" {
+		writeError(w, http.StatusBadRequest, "only a task in review can be checked")
+		return
+	}
+	if task.Rebasing {
+		writeError(w, http.StatusConflict, "task is being rebased, retry in a moment")
+		return
+	}
+	if !s.runner.StartCheck(id) {
+		writeError(w, http.StatusConflict, "an agent is running for this task")
+		return
+	}
+	task, _ = s.store.GetTask(id)
+	writeJSON(w, http.StatusAccepted, task)
+}
+
+// handleReview pose (ou retire) un verdict humain, de relecture (step "read",
+// défaut) ou de recette (step "test") : "approved"
+// (j'ai relu, c'est bon), "changes" (des changements sont demandés, le message
+// part ensuite par POST /messages), "" pour l'effacer. Le verdict est attaché à
+// l'empreinte du travail relue maintenant, pas à celle du dernier événement.
+func (s *Server) handleReview(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	task, ok := s.store.GetTask(id)
+	if !ok {
+		writeError(w, http.StatusNotFound, "task not found")
+		return
+	}
+	var body struct {
+		Verdict string `json:"verdict"`
+		Step    string `json:"step"` // "read" (défaut) ou "test"
+	}
+	if err := decodeJSON(r, &body); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid body")
+		return
+	}
+	if body.Step != "" && body.Step != "read" && body.Step != "test" {
+		writeError(w, http.StatusBadRequest, "step must be read or test")
+		return
+	}
+	switch body.Verdict {
+	case "", "approved", "changes":
+	default:
+		writeError(w, http.StatusBadRequest, "verdict must be approved, changes or empty")
+		return
+	}
+	if body.Verdict != "" && task.Status != "review" {
+		writeError(w, http.StatusBadRequest, "only a task in review can be reviewed")
+		return
+	}
+	sha := ""
+	if body.Verdict != "" && !s.runner.IsRunning(id) {
+		sha = WorkFingerprint(task.WorktreeDir, task.Base)
+	}
+	updated, err := s.store.PatchTask(id, func(t *Task) {
+		target := &t.Review
+		if body.Step == "test" {
+			target = &t.Tested
+		}
+		if body.Verdict == "" {
+			*target = nil
+			return
+		}
+		if sha != "" {
+			t.WorkSha = sha
+		}
+		*target = &TaskReview{Verdict: body.Verdict, Sha: t.WorkSha, At: time.Now().UTC()}
+	})
+	if err != nil {
+		writeError(w, statusForStoreError(err), err.Error())
+		return
+	}
+	s.runner.publishTask(updated)
+	writeJSON(w, http.StatusOK, updated)
 }
 
 func (s *Server) handleDiff(w http.ResponseWriter, r *http.Request) {

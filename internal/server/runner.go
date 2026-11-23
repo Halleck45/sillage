@@ -99,6 +99,11 @@ type Runner struct {
 	// qui manque, sans quoi t.TempDir() supprime un répertoire pendant qu'un
 	// agent y écrit encore.
 	runWG sync.WaitGroup
+
+	// checks : vérification projet en cours par tâche (check.go), protégé par
+	// mu. checkWG est son pendant de runWG pour les tests.
+	checks  map[string]*checkHandle
+	checkWG sync.WaitGroup
 }
 
 // waitTasks attend la fin des agents en cours. Réservé aux tests : en
@@ -107,7 +112,7 @@ func (r *Runner) waitTasks() { r.runWG.Wait() }
 
 // NewRunner crée un runner lié à un store et un hub SSE.
 func NewRunner(store *Store, hub *Hub) *Runner {
-	return &Runner{procs: map[string]*procHandle{}, pending: map[string][]string{}, store: store, hub: hub}
+	return &Runner{procs: map[string]*procHandle{}, pending: map[string][]string{}, checks: map[string]*checkHandle{}, store: store, hub: hub}
 }
 
 // Message ajoute un message utilisateur à la tâche et le transmet à l'agent :
@@ -197,6 +202,9 @@ func (r *Runner) Start(taskID string, initial bool, text string, atts ...Attachm
 	if !ok {
 		return fmt.Errorf("agent not found")
 	}
+	// L'agent va réécrire le worktree : une vérification en cours n'y décrirait
+	// plus rien (voir check.go).
+	r.CancelCheck(taskID)
 
 	task, err := r.store.UpdateTask(taskID, func(t *Task) { t.Status = "running"; t.LiveActivity = nil })
 	if err != nil {
@@ -262,6 +270,7 @@ func (r *Runner) startQueued(taskID, text string) {
 	if !ok {
 		return
 	}
+	r.CancelCheck(taskID)
 	task, err := r.store.UpdateTask(taskID, func(t *Task) { t.Status = "running"; t.LiveActivity = nil })
 	if err != nil {
 		return
@@ -385,6 +394,7 @@ func (r *Runner) Cancel(taskID string) (Task, error) {
 		}
 	}
 
+	r.CancelCheck(taskID)
 	updated, err := r.store.CancelTask(taskID)
 	if err != nil {
 		return Task{}, err
@@ -420,6 +430,7 @@ func (r *Runner) deleteTaskQuiet(taskID string) (Task, error) {
 		handle.interrupted.Store(true)
 		go killProcessGroup(handle)
 	}
+	r.CancelCheck(taskID)
 
 	if project, ok := r.store.GetProject(task.ProjectID); ok {
 		for _, repo := range project.Repos {
@@ -617,24 +628,21 @@ func (r *Runner) run(task Task, agent Agent, handle *procHandle, cliInput string
 		}
 	}
 
-	r.finalize(task.ID, runtime.Env)
+	r.finalize(task.ID)
 }
 
-// finalize exécute le check éventuel du projet et clôt l'exécution.
-func (r *Runner) finalize(taskID string, env []string) {
+// finalize clôt l'exécution : compteurs et empreinte relus depuis git, passage
+// en revue, puis vérification projet lancée en tâche de fond (check.go). La
+// tâche est relisible tout de suite ; le résultat de la vérification arrive
+// par SSE quand elle a fini.
+func (r *Runner) finalize(taskID string) {
 	task, ok := r.store.GetTask(taskID)
 	if !ok {
 		return
 	}
-	project, _ := r.store.GetProject(task.ProjectID)
-
-	checks := []Check{}
-	if project.CheckCmd != "" {
-		ok, _ := runCheck(task.WorktreeDir, project.CheckCmd, 120*time.Second, env)
-		checks = []Check{{Label: project.CheckCmd, Ok: ok}}
-	}
 
 	filesCount, docsCount, commitsCount := TaskWorkCounts(task.WorktreeDir, task.Base)
+	workSha := WorkFingerprint(task.WorktreeDir, task.Base)
 
 	updated, err := r.store.UpdateTask(taskID, func(t *Task) {
 		if t.Status == "running" {
@@ -642,10 +650,12 @@ func (r *Runner) finalize(taskID string, env []string) {
 			t.Unread = true
 		}
 		t.LiveActivity = nil
-		t.Checks = checks
 		t.FilesCount = filesCount
 		t.DocsCount = docsCount
 		t.CommitsCount = commitsCount
+		if workSha != "" {
+			t.WorkSha = workSha
+		}
 	})
 	if err != nil {
 		return
@@ -654,16 +664,10 @@ func (r *Runner) finalize(taskID string, env []string) {
 	r.publishCards(updated.ProjectID)
 	r.publishAgents()
 	r.publishActivity(updated.ID, nil)
-}
 
-func runCheck(dir, command string, timeout time.Duration, env []string) (bool, string) {
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-	cmd := exec.CommandContext(ctx, "sh", "-c", command)
-	cmd.Dir = dir
-	cmd.Env = env
-	out, err := cmd.CombinedOutput()
-	return err == nil, string(out)
+	if updated.Status == "review" {
+		r.startCheck(taskID)
+	}
 }
 
 func isDocFile(path string) bool {

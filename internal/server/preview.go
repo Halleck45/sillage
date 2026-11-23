@@ -2,9 +2,14 @@ package server
 
 import (
 	"bufio"
+	"crypto/rand"
+	"crypto/subtle"
+	"encoding/hex"
 	"fmt"
+	"net/url"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -51,6 +56,11 @@ type previewProc struct {
 
 	logMu sync.Mutex
 	log   []string
+
+	// staticRoot et token : une recette statique (previewUrl en file:///) est
+	// servie sous /preview/<token>/ depuis staticRoot. Vides sinon.
+	staticRoot string
+	token      string
 }
 
 func NewPreviewSupervisor(hub *Hub) *PreviewSupervisor {
@@ -111,6 +121,21 @@ func (p *PreviewSupervisor) Start(target previewTarget) (PreviewRun, error) {
 		Dir:       target.dir,
 		Status:    "running",
 		StartedAt: time.Now(),
+	}
+	if root, file, ok := staticPreviewTarget(proc.run.URL); ok {
+		token, err := randomPreviewToken()
+		if err != nil {
+			return PreviewRun{}, err
+		}
+		proc.staticRoot = root
+		proc.token = token
+		// http.FileServer redirige …/index.html vers …/ : autant donner
+		// directement l'adresse finale.
+		if file == "index.html" {
+			file = ""
+		}
+		proc.run.URL = "/preview/" + token + "/" + (&url.URL{Path: file}).EscapedPath()
+		proc.run.Static = true
 	}
 
 	cmd := exec.Command("sh", "-c", target.cmd)
@@ -308,6 +333,57 @@ func (p *PreviewSupervisor) Log(runID string) ([]string, bool) {
 	proc.logMu.Lock()
 	defer proc.logMu.Unlock()
 	return append([]string{}, proc.log...), true
+}
+
+// staticPreviewTarget lit une previewUrl développée en file:///chemin : le
+// dossier à servir et le fichier à ouvrir dedans. Un chemin terminé par « / »
+// ou qui désigne un dossier existant est servi tel quel (index.html s'il y en
+// a un). Le fichier n'existe pas forcément encore : c'est souvent la commande
+// de recette qui le produit.
+func staticPreviewTarget(expanded string) (root, file string, ok bool) {
+	if !strings.HasPrefix(expanded, "file://") {
+		return "", "", false
+	}
+	raw := strings.TrimPrefix(expanded, "file://")
+	if unescaped, err := url.PathUnescape(raw); err == nil {
+		raw = unescaped
+	}
+	if !filepath.IsAbs(raw) {
+		return "", "", false
+	}
+	clean := filepath.Clean(raw)
+	if strings.HasSuffix(raw, "/") {
+		return clean, "", true
+	}
+	if info, err := os.Stat(clean); err == nil && info.IsDir() {
+		return clean, "", true
+	}
+	return filepath.Dir(clean), filepath.Base(clean), true
+}
+
+// randomPreviewToken : 128 bits, l'adresse d'une recette statique est son
+// seul secret (voir handlePreviewStatic).
+func randomPreviewToken() (string, error) {
+	b := make([]byte, 16)
+	if _, err := rand.Read(b); err != nil {
+		return "", fmt.Errorf("cannot generate preview token: %w", err)
+	}
+	return hex.EncodeToString(b), nil
+}
+
+// StaticRoot retourne le dossier servi pour un jeton de recette statique.
+func (p *PreviewSupervisor) StaticRoot(token string) (string, bool) {
+	if token == "" {
+		return "", false
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	for _, proc := range p.runs {
+		if proc.token != "" && subtle.ConstantTimeCompare([]byte(proc.token), []byte(token)) == 1 {
+			return proc.staticRoot, true
+		}
+	}
+	return "", false
 }
 
 func (p *PreviewSupervisor) snapshot(proc *previewProc) PreviewRun {

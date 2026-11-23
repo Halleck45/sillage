@@ -5,10 +5,13 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
 	"testing"
+	"testing/fstest"
 	"time"
 )
 
@@ -359,4 +362,77 @@ func previewPID(t *testing.T, sup *PreviewSupervisor, runID string) int {
 	}
 	t.Fatalf("run %s introuvable", runID)
 	return 0
+}
+
+func TestStaticPreviewTarget(t *testing.T) {
+	dir := t.TempDir()
+	cases := []struct {
+		in, root, file string
+		ok             bool
+	}{
+		{"http://127.0.0.1:4001/", "", "", false},
+		{"file://relative/index.html", "", "", false},
+		{"file:///tmp/report7/index.html", "/tmp/report7", "index.html", true},
+		{"file:///tmp/report7/", "/tmp/report7", "", true},
+		{"file://" + dir, dir, "", true},
+	}
+	for _, c := range cases {
+		root, file, ok := staticPreviewTarget(c.in)
+		if ok != c.ok || root != c.root || file != c.file {
+			t.Errorf("%s : reçu (%q, %q, %v), attendu (%q, %q, %v)", c.in, root, file, ok, c.root, c.file, c.ok)
+		}
+	}
+}
+
+func TestStaticPreviewIsServedSandboxedWithoutSession(t *testing.T) {
+	dataDir := t.TempDir()
+	store, err := NewStore(dataDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := NewServer(store, "", dataDir, fstest.MapFS{})
+	report := t.TempDir()
+	worktree := t.TempDir()
+	run, err := srv.previews.Start(previewTarget{
+		dir: worktree, cmd: "printf '<h1>ok</h1>' > " + report + "/index.html",
+		url: "file://" + report + "/index.html", id: "t-1", n: 1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(srv.previews.StopAll)
+	if !run.Static || !strings.HasPrefix(run.URL, "/preview/") || !strings.HasSuffix(run.URL, "/") {
+		t.Fatalf("URL de recette statique inattendue : %+v", run)
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		if _, err := os.Stat(filepath.Join(report, "index.html")); err == nil || time.Now().After(deadline) {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+
+	// Aucune session : le jeton suffit, et le contenu est isolé.
+	h := srv.Handler()
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, httptest.NewRequest(http.MethodGet, run.URL, nil))
+	if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), "<h1>ok</h1>") {
+		t.Fatalf("rapport non servi : %d %q", w.Code, w.Body.String())
+	}
+	if csp := w.Header().Get("Content-Security-Policy"); !strings.HasPrefix(csp, "sandbox") {
+		t.Fatalf("CSP sandbox absente : %q", csp)
+	}
+
+	// Un jeton inconnu, ou une sortie du dossier, ne servent rien.
+	w = httptest.NewRecorder()
+	h.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/preview/deadbeef/", nil))
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("jeton inconnu servi : %d", w.Code)
+	}
+	token := strings.Split(strings.TrimPrefix(run.URL, "/preview/"), "/")[0]
+	w = httptest.NewRecorder()
+	h.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/preview/"+token+"/../../etc/passwd", nil))
+	if w.Code == http.StatusOK && strings.Contains(w.Body.String(), "root:") {
+		t.Fatal("sortie du dossier de recette")
+	}
 }

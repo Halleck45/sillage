@@ -85,7 +85,7 @@ Deux niveaux de worktree, un par branche (voir docs/SPEC-LIVRAISON.md) :
 2. Ajouter le Message user (sauf lancement initial où le prompt = titre + description).
 3. Lancer le process selon `agent.cli` (voir ci-dessous), cwd = worktree de la tâche.
 4. Goroutine : lire stdout ligne par ligne (JSONL), publier `activity`, créer les Messages agent, cumuler les tokens (SSE `tokens`).
-5. Fin de process : lancer le check éventuel du projet (`Project.checkCmd`, timeout 120 s) → Task.checks ; statut → `review` (sauf si interrompu : déjà review) ; `unread=true` ; `liveActivity=null` ; SSE `task`, `cards`, `agents`, `activity(null)`.
+5. Fin de process : compteurs et `workSha` relus depuis git ; statut → `review` (sauf si interrompu : déjà review) ; `unread=true` ; `liveActivity=null` ; SSE `task`, `cards`, `agents`, `activity(null)`. Puis la vérification du projet (`Project.checkCmd`) part en tâche de fond (`check.go`, `Runner.startCheck`, délai 10 min, groupe de process tué à l'annulation) ; son résultat (`Task.checks`, avec la fin de la sortie) arrive par SSE `task`. Tout départ d'agent, rebase, acceptation, refus ou suppression appelle d'abord `Runner.CancelCheck`.
 
 `Interrupt(taskID)` : SIGINT au groupe de process (Setpgid à la création), 5 s, puis SIGKILL. Statut → review.
 

@@ -447,6 +447,14 @@ func (s *Server) refreshSignalComments(sig Signal, it forgeItem, viewer string) 
 		return false
 	}
 	if lastOtherComment(it.Comments, viewer) <= sig.SeenCommentAt {
+		// Rien de neuf d'un tiers, mais la discussion a pu bouger (une
+		// réponse du mainteneur) : on la garde à jour sans relancer, pour que
+		// la fiche et la prochaine relecture la voient.
+		if latest != "" && latest > sig.SeenCommentAt {
+			if updated, err := s.store.UpdateSignal(sig.ID, func(x *Signal) { x.Comments, x.SeenCommentAt = it.Comments, latest }); err == nil {
+				s.publishSignal(updated)
+			}
+		}
 		return false
 	}
 	n := newOtherComments(it.Comments, viewer, sig.SeenCommentAt)
@@ -549,7 +557,7 @@ func (s *Server) analyzeOne(ctx context.Context, sig Signal) {
 		s.watch.setProgress(func(p *AnalysisProgress) { p.Steps = appendStep(p.Steps, line) })
 		s.publishWatch()
 	}
-	res, err := AnalyzeSignal(ctx, agent, project, sig, repo.Path, diff, s.store.GetSettings().Lang, onStep)
+	res, err := AnalyzeSignal(ctx, agent, project, sig, repo.Path, diff, s.store.GetSettings().Lang, s.watch.viewerLogin(ctx), onStep)
 	if errors.Is(err, errAnalysisStopped) {
 		// Arrêtée par l'humain : ce n'est pas une panne. Le signal attend
 		// qu'on le relance, sans message d'erreur.

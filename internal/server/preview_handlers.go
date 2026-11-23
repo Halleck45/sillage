@@ -138,3 +138,27 @@ func cardBranchByRepo(card Card, repoName string) (CardBranch, bool) {
 	}
 	return CardBranch{}, false
 }
+
+// handlePreviewStatic sert une recette statique (previewUrl en file:///) sous
+// /preview/<jeton>/. Hors de /api, donc sans cookie de session : les
+// ressources d'un rapport (scripts, styles) sont chargées depuis un document
+// isolé, qui n'enverrait pas le cookie. Le jeton de 128 bits du run fait office
+// de secret, et disparaît avec le run (relance, arrêt du serveur).
+//
+// Le contenu vient d'un dossier que l'agent a pu écrire : il est servi avec une
+// CSP « sandbox » (origine opaque), pour que son JavaScript ne puisse ni lire
+// ni appeler l'API de Sillage au nom de l'utilisateur.
+func (s *Server) handlePreviewStatic(w http.ResponseWriter, r *http.Request) {
+	token := r.PathValue("token")
+	root, ok := s.previews.StaticRoot(token)
+	if !ok {
+		http.NotFound(w, r)
+		return
+	}
+	h := w.Header()
+	h.Set("Content-Security-Policy", "sandbox allow-scripts allow-forms allow-popups allow-modals allow-downloads")
+	h.Set("X-Content-Type-Options", "nosniff")
+	h.Set("Referrer-Policy", "no-referrer")
+	h.Set("Cache-Control", "no-store")
+	http.StripPrefix("/preview/"+token, http.FileServer(http.Dir(root))).ServeHTTP(w, r)
+}
