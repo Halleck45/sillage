@@ -291,7 +291,13 @@ func migrateProjectAllowedTools(s *Store) {
 		if p.AllowedTools == nil {
 			p.AllowedTools = append([]string{}, legacyGoAllowedTools...)
 			s.Projects[id] = p
+			continue
 		}
+		// Des règles saisies avant le nettoyage de NormalizeAllowedTools
+		// (guillemets, étiquette d'un bloc de code collé) : nettoyées ici
+		// pour que les réglages montrent ce que le CLI reçoit vraiment.
+		p.AllowedTools = NormalizeAllowedTools(p.AllowedTools)
+		s.Projects[id] = p
 	}
 }
 
@@ -1489,21 +1495,35 @@ func (s *Store) AddProject(name, description, contextPrompt string, repos []Repo
 }
 
 // NormalizeAllowedTools nettoie la liste saisie par l'humain : une entrée par
-// ligne dans l'UI, donc espaces superflus et lignes vides à retirer. Aucune
-// validation du contenu : c'est le refus figé passé au CLI (claudeDeniedTools)
-// qui garantit l'invariant, pas un filtre de saisie qui donnerait une fausse
+// ligne dans l'UI. La règle se colle souvent depuis un extrait de
+// settings.json : les guillemets, la virgule de fin et les lignes qui ne sont
+// pas des règles (l'étiquette « json » d'un bloc de code, « "allow": [ »)
+// sont retirés, sinon le CLI reçoit "Bash(act:*)" guillemets compris et ne
+// l'applique jamais. Seule la forme est vérifiée (Outil ou Outil(motif)), pas
+// le contenu : c'est le refus figé passé au CLI (claudeDeniedTools) qui
+// garantit l'invariant, pas un filtre de saisie qui donnerait une fausse
 // impression de sûreté (Bash(sh:*) contournerait n'importe quelle liste noire).
 // Retourne une liste vide non nulle plutôt que nil : nil veut dire « projet
 // antérieur au champ » pour migrateProjectAllowedTools.
 func NormalizeAllowedTools(tools []string) []string {
 	out := []string{}
 	for _, tool := range tools {
-		if trimmed := strings.TrimSpace(tool); trimmed != "" {
-			out = append(out, trimmed)
+		rule := strings.TrimSpace(tool)
+		rule = strings.TrimSpace(strings.TrimSuffix(rule, ","))
+		for len(rule) >= 2 && strings.ContainsRune("\"'`", rune(rule[0])) && rule[len(rule)-1] == rule[0] {
+			rule = strings.TrimSpace(rule[1 : len(rule)-1])
+		}
+		if allowedToolRule.MatchString(rule) {
+			out = append(out, rule)
 		}
 	}
 	return out
 }
+
+// allowedToolRule : la forme d'une règle de Claude CLI, un nom d'outil
+// (majuscule initiale, ou serveur MCP mcp__…) suivi ou non d'un motif entre
+// parenthèses.
+var allowedToolRule = regexp.MustCompile(`^(?:[A-Z][A-Za-z0-9_]*|mcp__[A-Za-z0-9_-]+(?:__[A-Za-z0-9_-]+)?)(?:\(.+\))?$`)
 
 // UpdateProject modifie le nom, la description, la commande de vérification,
 // le contexte agent, les outils autorisés, la liste des dépôts, les liens

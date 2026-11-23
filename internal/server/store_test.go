@@ -1706,6 +1706,12 @@ func TestNormalizeAllowedTools(t *testing.T) {
 	if len(got) != 2 || got[0] != "Bash(pytest:*)" || got[1] != "Bash(ruff:*)" {
 		t.Fatalf("liste nettoyée attendue [Bash(pytest:*) Bash(ruff:*)], reçue %v", got)
 	}
+	// Collé depuis un extrait de settings.json : l'étiquette du bloc de code,
+	// la structure JSON, les guillemets et la virgule de fin disparaissent.
+	pasted := NormalizeAllowedTools([]string{"json", `"allow": [`, `"Bash(act:*)",`, "`Bash(make test)`", "'WebSearch'", "]", "mcp__github__get_issue"})
+	if strings.Join(pasted, " ") != "Bash(act:*) Bash(make test) WebSearch mcp__github__get_issue" {
+		t.Fatalf("règles collées mal nettoyées : %q", pasted)
+	}
 	// Non nulle même vide : nil est réservé aux projets antérieurs au champ,
 	// que migrateProjectAllowedTools amorce au chargement.
 	if empty := NormalizeAllowedTools(nil); empty == nil {
