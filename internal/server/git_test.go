@@ -672,10 +672,15 @@ func TestShipPartialWorkstream(t *testing.T) {
 	}
 	// Seul le travail accepté est parti : la tâche en revue n'est pas fusionnée.
 	out := runTestGit(t, f.bare, "log", "--oneline", cb.Branch)
-	if !strings.Contains(out, "Première") {
+	if !strings.Contains(out, "102-premiere") {
 		t.Fatalf("le travail accepté devrait être poussé, reçu : %q", out)
 	}
-	if strings.Contains(out, "Seconde") {
+	// Aucun message de Sillage ne reprend le titre de la tâche, écrit dans la
+	// langue de l'humain et non dans celle des conventions du projet.
+	if strings.Contains(out, "Première") || strings.Contains(out, "Sillage:") {
+		t.Fatalf("un message de commit de Sillage reprend le titre de la tâche : %q", out)
+	}
+	if strings.Contains(out, "103-seconde") {
 		t.Fatalf("le travail non accepté ne doit jamais être poussé, reçu : %q", out)
 	}
 	card, _ = f.srv.store.GetCard(f.card.ID)
@@ -693,7 +698,7 @@ func TestShipPartialWorkstream(t *testing.T) {
 	if w := f.ship(t, `{"confirm":true}`); w.Code != http.StatusOK {
 		t.Fatalf("seconde livraison : attendu 200, reçu %d (%s)", w.Code, w.Body.String())
 	}
-	if out := runTestGit(t, f.bare, "log", "--oneline", cb.Branch); !strings.Contains(out, "Seconde") {
+	if out := runTestGit(t, f.bare, "log", "--oneline", cb.Branch); !strings.Contains(out, "103-seconde") {
 		t.Fatalf("le travail de la seconde tâche devrait être poussé, reçu : %q", out)
 	}
 	card, _ = f.srv.store.GetCard(f.card.ID)
@@ -1435,7 +1440,7 @@ func TestShipAgainAfterNewWork(t *testing.T) {
 	}
 	// Le remote a bien reçu le nouveau commit.
 	out := runTestGit(t, f.bare, "log", "--oneline", cb.Branch)
-	if !strings.Contains(out, "Seconde") {
+	if !strings.Contains(out, "103-seconde") {
 		t.Fatalf("le travail de la seconde tâche devrait être poussé, reçu : %q", out)
 	}
 }

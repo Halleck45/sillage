@@ -21,25 +21,30 @@ import (
 // Socle : uniquement ce qui ne dépend d'aucun langage. Aucune commande de
 // build, de test ou de format n'y figure, quel que soit le langage : elles
 // vont toutes dans Project.AllowedTools, sinon un projet Python hérite d'une
-// allowlist écrite pour Go. Le git est en lecture seule et reste dans le socle
-// parce qu'il est le modèle même du produit (une tâche vit dans un worktree),
-// pas un choix de stack.
+// allowlist écrite pour Go. Le git reste dans le socle parce qu'il est le
+// modèle même du produit (une tâche vit dans un worktree), pas un choix de
+// stack : lecture, plus `git add` et `git commit` pour que l'agent commite son
+// travail selon les conventions du projet (commitNote). Un commit ne quitte
+// pas la branche jetable de la tâche ; ni fusion, ni rebase, ni réécriture.
 // Tout ce qui touche au push reste hors de cette liste (invariant 1) et est en
 // plus explicitement refusé par claudeDeniedTools.
 const claudeAllowedTools = "Read,Edit,Write,Glob,Grep,WebFetch," +
 	"Bash(git status:*),Bash(git diff:*),Bash(git log:*),Bash(git show:*)," +
+	"Bash(git add:*),Bash(git commit:*)," +
 	"Bash(ls:*),Bash(cat:*),Bash(mkdir:*)"
 
 // claudeDeniedTools est le refus figé, passé en --disallowedTools : le refus
 // l'emporte sur l'autorisation, donc aucune entrée de Project.AllowedTools ne
-// peut ouvrir ces portes. Deux familles : ce qui peut pousser (invariant 1) et
+// peut ouvrir ces portes. Trois familles : ce qui peut pousser (invariant 1),
 // les fichiers qui pilotent l'agent lui-même, qu'un agent capable de les écrire
-// utiliserait pour s'accorder de nouveaux droits au run suivant.
+// utiliserait pour s'accorder de nouveaux droits au run suivant, et `git commit
+// --amend`, qui sur une tâche sans commit réécrirait la pointe du chantier.
 // Ce refus attrape la maladresse, pas la détermination (Bash(sh:*) le
 // contournerait) : le confinement réel reste le worktree dédié, la branche
 // jetable et la revue humaine avant toute sortie. À faire grandir quand un
 // nouveau binaire sortant apparaît, jamais à réduire.
 const claudeDeniedTools = "Bash(git push:*),Bash(gh:*),Bash(glab:*)," +
+	"Bash(git commit --amend:*)," +
 	"Edit(.claude/settings*.json),Write(.claude/settings*.json)," +
 	"Edit(.claude/hooks/**),Write(.claude/hooks/**)"
 
@@ -775,6 +780,12 @@ func contextParts(projectContext, workstreamContext string) []string {
 	return parts
 }
 
+// commitNote demande à un agent capable de commiter (tous sauf agy, dont le
+// sandbox interdit l'écriture git) de le faire lui-même : lui seul sait décrire
+// son travail dans la langue et le format que le contexte du projet impose.
+// Sillage ne commite que ce qui reste, sous fallbackCommitMessage.
+const commitNote = "Commit your work before you finish: focused commits whose messages follow the commit conventions of the project context, or else those of `git log`. Only create new commits: never amend, rebase or rewrite existing ones, and never push."
+
 // buildSystemPrompt combine le contexte de l'agent, celui du projet et celui
 // du chantier (Card) pour --append-system-prompt (adaptateur claude) : chaque
 // bloc n'est ajouté que s'il est non vide, séparés par des lignes vides.
@@ -785,6 +796,17 @@ func buildSystemPrompt(agentContext, projectContext, workstreamContext string) s
 		parts = append([]string{agentContext}, parts...)
 	}
 	return strings.Join(parts, "\n\n")
+}
+
+// joinNonEmpty joint les blocs non vides, séparés par une ligne vide.
+func joinNonEmpty(blocks ...string) string {
+	kept := blocks[:0:0]
+	for _, b := range blocks {
+		if b != "" {
+			kept = append(kept, b)
+		}
+	}
+	return strings.Join(kept, "\n\n")
 }
 
 // prefixAgentContext is used by one-shot CLIs that do not expose a dedicated
@@ -903,9 +925,7 @@ func (r *Runner) runClaude(task *Task, agent Agent, project Project, card Card, 
 	if agent.Model != "" {
 		args = append(args, "--model", agent.Model)
 	}
-	if systemPrompt := buildSystemPrompt(agent.ContextPrompt, project.ContextPrompt, card.ContextPrompt); systemPrompt != "" {
-		args = append(args, "--append-system-prompt", systemPrompt)
-	}
+	args = append(args, "--append-system-prompt", joinNonEmpty(commitNote, buildSystemPrompt(agent.ContextPrompt, project.ContextPrompt, card.ContextPrompt)))
 	if task.SessionID != "" {
 		args = append(args, "--resume", task.SessionID)
 	}
@@ -1206,9 +1226,7 @@ func (r *Runner) runCodex(task *Task, agent Agent, project Project, card Card, h
 	if sandbox == "" {
 		sandbox = "workspace-write"
 	}
-	if blocks := strings.Join(contextParts(project.ContextPrompt, card.ContextPrompt), "\n\n"); blocks != "" {
-		cliInput = blocks + "\n\n---\n\n" + cliInput
-	}
+	cliInput = joinNonEmpty(commitNote, strings.Join(contextParts(project.ContextPrompt, card.ContextPrompt), "\n\n")) + "\n\n---\n\n" + cliInput
 	args := codexArgs(task.WorktreeDir, sandbox, runtime.WritableDirs, agent, cliInput)
 
 	cmd := exec.Command("codex", args...)
@@ -1419,7 +1437,7 @@ func (r *Runner) runKiro(task *Task, agent Agent, project Project, card Card, ha
 	}
 	defer os.RemoveAll(home)
 
-	cliInput = prefixAgentContext(agent, project, card, cliInput)
+	cliInput = prefixAgentContext(agent, project, card, commitNote+"\n\n"+cliInput)
 	return r.runTextCLI(task, agent, handle, "kiro-cli", kiroArgs(cliInput), kiroEnv(home, runtime.Env))
 }
 
@@ -1482,7 +1500,7 @@ func antigravityArgs(agent Agent, worktreeDir, gitCommonDir, cliInput string) []
 }
 
 func (r *Runner) runCopilot(task *Task, agent Agent, project Project, card Card, handle *procHandle, cliInput string, runtime permissionRuntime) error {
-	cliInput = prefixAgentContext(agent, project, card, cliInput)
+	cliInput = prefixAgentContext(agent, project, card, commitNote+"\n\n"+cliInput)
 	return r.runTextCLI(task, agent, handle, "copilot", copilotArgs(agent, cliInput), copilotEnv(runtime.Env))
 }
 

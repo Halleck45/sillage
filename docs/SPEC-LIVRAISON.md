@@ -42,8 +42,11 @@ Modèle mental : *je relis une tâche, je l'accepte ; je relis le chantier, je l
 Statuts : `running` → `review` → `accepted`, plus `cancelled`.
 
 - **Accepter** (`POST /api/tasks/{id}/accept`, depuis `review`) : dans le worktree de la tâche,
-  `git add -A` puis commit `Sillage: <titre>` si l'arbre est sale ; puis, dans le worktree du
-  chantier, `git merge --no-ff <branche de tâche>` avec pour sujet `Sillage: <titre>`. Aucun
+  `git add -A` puis commit `chore: commit uncommitted agent changes` si l'agent a laissé du travail
+  hors commit ; puis, dans le worktree du chantier, `git merge --no-ff --no-edit <branche de tâche>`
+  (sujet par défaut de git, « Merge branch '<branche>' into <chantier> »). Le titre de la tâche
+  n'entre dans aucun message : il est dans la langue de l'humain, pas forcément dans celle que le
+  projet impose à ses commits. C'est l'agent qui commite son travail, selon ces conventions. Aucun
   réseau, aucune confirmation (l'action est locale et réversible par `/reopen`).
   Le `--no-ff` est délibéré : un merge commit par tâche acceptée rend lisible, dans l'historique
   du chantier, ce qui a été accepté et par quelle tâche.

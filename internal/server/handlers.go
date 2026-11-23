@@ -1534,13 +1534,13 @@ func (s *Server) acceptTaskInto(w http.ResponseWriter, task Task, cardBranch Car
 	// Accepter tranche : une vérification encore en cours s'arrête, sinon
 	// CommitAll embarquerait ses artefacts à moitié écrits.
 	s.runner.CancelCheck(id)
-	output, err := CommitAll(task.WorktreeDir, "Sillage: "+task.Title)
+	output, err := CommitAll(task.WorktreeDir, fallbackCommitMessage)
 	if err != nil {
 		writeError(w, http.StatusBadGateway, err.Error())
 		return
 	}
 	shaBefore := HeadSha(cardBranch.WorktreeDir)
-	mergeOut, conflicts, err := MergeBranch(cardBranch.WorktreeDir, task.Branch, "Sillage: "+task.Title)
+	mergeOut, conflicts, err := MergeBranch(cardBranch.WorktreeDir, task.Branch)
 	output += mergeOut
 	if err != nil {
 		if len(conflicts) > 0 {
@@ -1637,7 +1637,7 @@ func (s *Server) rebaseSiblingTasks(cardID, acceptedTaskID string, cardBranch Ca
 		// La vérification relancée après le rebase remplacera celle-ci, qui
 		// laisserait sinon ses artefacts dans le commit ci-dessous.
 		s.runner.CancelCheck(task.ID)
-		if _, err := CommitAll(task.WorktreeDir, "Sillage: "+task.Title); err != nil {
+		if _, err := CommitAll(task.WorktreeDir, fallbackCommitMessage); err != nil {
 			continue
 		}
 		if !IsWorktreeClean(task.WorktreeDir) {
@@ -2012,7 +2012,7 @@ func (s *Server) shipCardBranch(card Card, project Project, b CardBranch) ShipRe
 		return res
 	}
 
-	out, err := Ship(b.WorktreeDir, b.Branch, card.Title)
+	out, err := Ship(b.WorktreeDir, b.Branch)
 	res.Output = out
 	if err != nil {
 		res.Error = err.Error()
@@ -2082,7 +2082,7 @@ func (s *Server) catchUpCardBranch(card Card, project Project, b CardBranch) Cat
 		return res
 	}
 
-	out, conflicts, err := MergeBranch(b.WorktreeDir, target, "Sillage: catch up with "+target)
+	out, conflicts, err := MergeBranch(b.WorktreeDir, target)
 	res.Output = out
 	if err != nil {
 		if len(conflicts) > 0 {

@@ -652,11 +652,15 @@ func TestClaudeSocleStaysLanguageAgnostic(t *testing.T) {
 			t.Fatalf("le socle contient %q : les commandes de langage vont dans Project.AllowedTools", forbidden)
 		}
 	}
-	// Le git du socle est en lecture seule : aucune sous-commande qui écrive.
-	for _, forbidden := range []string{"git push", "git commit", "git merge", "git rebase", "Bash(git:*)"} {
+	// Le git du socle lit et commite, rien d'autre : ni fusion, ni rebase, ni
+	// réécriture, ni joker qui ouvrirait toutes les sous-commandes.
+	for _, forbidden := range []string{"git push", "git merge", "git rebase", "git reset", "git checkout", "Bash(git:*)"} {
 		if strings.Contains(claudeAllowedTools, forbidden) {
-			t.Fatalf("le socle contient %q : le git du socle est en lecture seule", forbidden)
+			t.Fatalf("le socle contient %q : le git du socle ne fait que lire et commiter", forbidden)
 		}
+	}
+	if !strings.Contains(claudeDeniedTools, "Bash(git commit --amend:*)") {
+		t.Fatalf("le refus figé doit couvrir git commit --amend")
 	}
 }
 

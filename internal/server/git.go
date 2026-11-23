@@ -350,6 +350,12 @@ func TaskWorkCounts(worktreeDir, base string) (files, docs, commits int) {
 	return files, docs, commits
 }
 
+// fallbackCommitMessage est le message des commits que Sillage fait à la place
+// de l'agent, pour ne pas perdre ce qu'il a laissé hors commit (voir
+// commitNote). Jamais le titre de la tâche : il est dans la langue de
+// l'humain, pas forcément dans celle que le projet impose à ses commits.
+const fallbackCommitMessage = "chore: commit uncommitted agent changes"
+
 // CommitAll indexe tout l'arbre de travail de dir et commite s'il y a quelque
 // chose à commiter (sinon ne fait rien, sans erreur). Aucun réseau.
 func CommitAll(dir, message string) (string, error) {
@@ -412,13 +418,15 @@ func IsBranchMergedInto(dir, branch, target string) bool {
 
 // MergeBranch fusionne branch dans la branche courante du worktree dir, avec
 // un merge commit dédié (--no-ff) : l'historique du chantier garde une trace
-// lisible de chaque tâche acceptée. Aucun réseau.
+// lisible de chaque tâche acceptée. Le message est celui de git (« Merge branch
+// '<branch>' into <courante> ») : en anglais, et ignoré par les linters de
+// conventional commits, quelle que soit la langue du titre. Aucun réseau.
 //
 // En cas de conflit, la fusion est annulée (git merge --abort, l'arbre revient
 // intact) et l'erreur enveloppe ErrMergeConflict avec la liste des fichiers en
 // conflit : rien n'est résolu automatiquement.
-func MergeBranch(dir, branch, message string) (string, []string, error) {
-	out, err := runGit(dir, gitDefaultTimeout, "merge", "--no-ff", "-m", message, branch)
+func MergeBranch(dir, branch string) (string, []string, error) {
+	out, err := runGit(dir, gitDefaultTimeout, "merge", "--no-ff", "--no-edit", branch)
 	if err == nil {
 		return out, nil, nil
 	}
@@ -497,10 +505,10 @@ func pushBranch(dir, branch string, setUpstream bool) (string, error) {
 // de même commité pour ne rien perdre). Utilisé par les modes de livraison
 // "pr" et "push" (voir Delivery.Mode) : la différence entre les deux est
 // l'ouverture de la pull request, pas le push.
-func Ship(dir, branch, title string) (string, error) {
+func Ship(dir, branch string) (string, error) {
 	var out strings.Builder
 
-	commitOut, err := CommitAll(dir, "Sillage: "+title)
+	commitOut, err := CommitAll(dir, fallbackCommitMessage)
 	out.WriteString(commitOut)
 	if err != nil {
 		return out.String(), err
