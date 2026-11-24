@@ -105,7 +105,7 @@ Task    { "id": "t1", "cardId": "c1", "projectId": "p1", "ref": 482, "title": ".
           "messagesCount": 5, "filesCount": 3, "docsCount": 1, "commitsCount": 2,
           "checks": [ Check ],   // [] si aucun ; au plus un
           "checking": false, "checkStartedAt": "..." | null,
-          "workSha": "1b66ab97ce0bf17c", "review": TaskReview | null, "tested": TaskReview | null,
+          "workSha": "1b66ab97ce0bf17c", "acceptedBase": "9f2c1e0…", "review": TaskReview | null, "tested": TaskReview | null,
           "liveActivity": "Edit · internal/server/store.go" | null,
           "commandLog": [ { "text": "Edit · internal/server/store.go", "at": "..." } ],
           "unread": true, "updatedAt": "2026-08-02T10:00:00Z", "tokens": Tokens,
@@ -294,6 +294,8 @@ WatchLogEntry { "at": "...", "kind": "list|analysis|error", "projectId": "p1", "
 | POST | `/api/watch/check` | | 202 (relève immédiate, en tâche de fond) |
 | POST | `/api/projects/{id}/upkeep` | | 202 : redemande la veille d'entretien du projet (remet `watch.upkeepAt` à null) et lance une relève ; 400 si la Vigie est coupée |
 | POST | `/api/projects/{id}/upkeep/stop` | | 202 : arrête la veille en cours du projet ; 409 si rien ne tourne |
+| GET | `/api/projects/{id}/target-status` | | `{repos:[TargetStatus]}` : retard de la branche de destination locale sur `origin` (voir « Branche de destination en retard ») |
+| POST | `/api/projects/{id}/target-status/update` | | `{repos:[TargetStatus]}` : avance en fast-forward chaque destination en retard. **Aucune confirmation** : local, rien n'est poussé |
 | GET | `/api/projects/{id}/claude-sessions` | | `{sessions:[ClaudeSession]}` : les sessions Claude Code interactives lancées dans un dépôt du projet (voir « Sessions Claude Code ») |
 | POST | `/api/signals/{id}/stop` | | 202 : arrête la relecture en cours du signal, qui passe `error` avec `error:"stopped"` ; 409 si ce n'est pas lui qui est relu. Classer (`dismissed`) un signal en cours de relecture l'arrête aussi |
 | POST | `/api/signals/{id}/refresh` | | Signal : relit tout de suite l'état de la PR ou de l'issue sur la forge (`gh pr view` / `issue view`, champ state seul) et la ferme si elle est mergée ou fermée, sans attendre la relève. Sans effet sur un signal terminal ou d'entretien. L'UI l'appelle à l'ouverture de la fiche et au retour sur l'onglet après un lien sortant vers la forge (au plus une fois toutes les 20 s par signal) |
@@ -323,8 +325,9 @@ WatchLogEntry { "at": "...", "kind": "list|analysis|error", "projectId": "p1", "
 | POST | `/api/projects/{id}/archive-shipped` | | `{archived: n, signals: m}` : archive d'un coup ce que montre « Livré » : les chantiers livrés (`column == "done"`) du projet, et ses signaux `closed`, qui passent `dismissed` (événement SSE `signal` pour chacun). **Aucune confirmation** côté serveur : action locale et réversible (le kanban la demande en deux temps) |
 | DELETE | `/api/cards/{id}` | `{confirm:true}` | 204 (voir « Suppressions » ci-dessous). **Validation humaine obligatoire** : refus 400 sans `confirm` |
 | GET | `/api/cards/{id}/delivery` | | DeliveryPreview : ce que la livraison ferait, avant tout clic (voir « Livraison d'un chantier »). Lecture seule |
-| POST | `/api/cards/{id}/ship` | `{confirm:true}` | ShipResponse : **la seule action sortante du produit** (push + pull request, ou fusion locale). 400 sans `confirm`, 409 si le chantier n'est pas livrable |
+| POST | `/api/cards/{id}/ship` | `{confirm:true, prs?:[{repoName,title,body}]}` | ShipResponse : **la seule action sortante du produit** (push + pull request, ou fusion locale). 400 sans `confirm`, 409 si le chantier n'est pas livrable |
 | POST | `/api/cards/{id}/catch-up` | | CatchUpResponse : fusionne la branche de destination dans celle du chantier pour débloquer la livraison (voir « Livraison d'un chantier »). Local, aucune confirmation ; un conflit est annulé et rapporté par dépôt |
+| POST | `/api/cards/{id}/pr-draft` | `{repoName}` | PRDraft `{repoName, agentId, title, body}` : un agent rédige le titre et la description de la pull request du dépôt. **Lecture seule, n'écrit rien**, ni état ni forge. Synchrone, jusqu'à 5 min. 404 sans branche de chantier pour ce dépôt, 422 `"no agent can draft a pull request"`, 502 si l'agent échoue ou ne rend rien d'exploitable. Voir « Titre et description de la pull request » |
 | POST | `/api/cards/{id}/plan` | `{agentId, repoName?, prompt?}` | PlanResponse : un agent propose un découpage du chantier en tâches. **Ne crée rien** (ni tâche, ni branche de chantier), **lecture seule**. Synchrone, jusqu'à 5 min. 400 si `agentId` manque, est inconnu, ou si son CLI ne sait pas planifier (`"this agent cannot plan"`) ; 400 sur `repoName` inconnu/manquant ; 502 si l'agent échoue, expire ou ne rend pas de plan. Voir « Plan de tâches » ci-dessous |
 | POST | `/api/tasks` | `{cardId \| projectId, title, agentId, prompt?, repoName?, waitsForTaskId?, attachments?, signalId?}` | Task (créée `running`, agent lancé avec title+prompt). `projectId` sans `cardId` : chantier implicite, voir ci-dessous. `signalId` : le signal de la Vigie passe en `handled`, rattaché au chantier de la tâche. `attachments` : mêmes règles et mêmes limites que pour un message (voir « Images jointes »). `repoName` optionnel si le projet n'a qu'un repo ; sinon 400 `"repoName required (project has several repositories)"` ou 400 si inconnu. `waitsForTaskId` : voir « Démarrage différé d'une tâche » ci-dessous |
 | PATCH | `/api/tasks/{id}` | `{agentId}` | Task : réassigne l'agent (voir « Réassignation » ci-dessous). 400 si `status=running` (`"interrupt the agent before reassigning"`) ou si l'agent est inconnu |
@@ -335,7 +338,7 @@ WatchLogEntry { "at": "...", "kind": "list|analysis|error", "projectId": "p1", "
 | POST | `/api/tasks/{id}/interrupt` | | Task (running → review) |
 | POST | `/api/tasks/{id}/restart` | `{confirm: true}` | Task. « Repartir de zéro » : seulement une tâche `review` sans agent ni rebase en cours (400 sinon). Le worktree revient à la pointe de `base` (`reset --hard` + `clean -fd`, les fichiers ignorés restent), `sessionId`, vérification, verdicts et journal de commandes sont vidés, et un message marqueur `[restarted:<agentId>]` borne le fil : le prochain message part sans rien rejouer d'avant. Destructif pour le travail non accepté, rien n'est poussé |
 | POST | `/api/tasks/{id}/start` | | Task (waiting → running) : démarre manuellement une tâche en attente sans attendre sa dépendance (voir « Démarrage différé d'une tâche »). 400 si `status≠waiting` |
-| POST | `/api/tasks/{id}/accept` | | `{task, workstreamBranch, output}` : commite le worktree de la tâche puis fusionne sa branche dans celle du chantier. Accepté depuis `review` uniquement (400 sinon). **Aucune confirmation** : action locale, réversible par `/reopen`. 409 en cas de conflit (voir ci-dessous) |
+| POST | `/api/tasks/{id}/accept` | | `{task, workstreamBranch, output}` : commite le worktree de la tâche puis fusionne sa branche dans celle du chantier. Accepté depuis `review` uniquement (400 sinon). **Aucune confirmation** : action locale, réversible par `/reopen`. 409 en cas de conflit (voir ci-dessous). 422 `task worktree is not on the task branch <branche>` quand l'agent a changé de branche dans son worktree : fusionner la branche de la tâche n'accepterait rien. La constatation d'une fusion faite à la main et le rebase des tâches sœurs ignorent une telle tâche pour la même raison |
 | POST | `/api/tasks/{id}/cancel` | | Task (waiting/running/review → cancelled, c'est le « refuser » de l'UI). Si `running`, l'agent est d'abord interrompu (même mécanique qu'`/interrupt`). 400 depuis accepted/cancelled |
 | POST | `/api/tasks/{id}/reopen` | | Task (accepted/cancelled → review). 400 sinon |
 | POST | `/api/tasks/{id}/read` | | 204 (unread=false, ne modifie jamais `updatedAt` : voir plus bas) |
@@ -343,6 +346,7 @@ WatchLogEntry { "at": "...", "kind": "list|analysis|error", "projectId": "p1", "
 | POST | `/api/tasks/{id}/review` | `{verdict: "approved"\|"changes"\|"", step?: "read"\|"test"}` | 200 Task : pose (ou efface avec `""`) le verdict de relecture (`step` absent ou `read`, champ `review`) ou de recette (`step: "test"`, champ `tested`) sur l'empreinte courante du travail. 400 pour un verdict inconnu, ou un verdict non vide hors `review`. N'envoie rien à l'agent : une demande de changements enchaîne avec `POST /messages`. Ne modifie jamais `updatedAt` |
 | GET | `/api/tasks/{id}/diff` | | voir ci-dessous |
 | POST | `/api/tasks/{id}/difftool` | `{path?}` | 204 : lance `git difftool` entre `task.base` et l'état courant du worktree, avec l'outil configuré par l'utilisateur (`git config diff.tool`). `path` vide ou absent : toutes les modifications d'un coup (`--dir-diff`, fichiers non suivis compris), sinon ce seul fichier. Ne bloque pas la requête (l'outil est graphique et peut rester ouvert). 400 si aucun `diff.tool` n'est configuré. **Aucune confirmation** : local, lecture seule côté état |
+| GET | `/api/tasks/{id}/commits` | | `{commits:[{hash, subject, body, author, relTime}], uncommitted}` : les commits de la tâche, du plus récent au plus ancien (même base que le diff), et le nombre de chemins encore hors commit, que l'acceptation commitera sous `chore: commit uncommitted agent changes`. Onglet Commits du détail |
 | GET | `/api/tasks/{id}/deliverables` | | voir ci-dessous |
 | POST | `/api/cards/{id}/preview` | `{repoName?}` | PreviewRun : lance la recette dans le worktree de la branche de chantier. `repoName` optionnel si le chantier n'a qu'une branche ; 400 `"repoName is required"` sinon, 400 si aucune branche de chantier ou aucune commande configurée. **Aucune confirmation** : local et réversible |
 | POST | `/api/tasks/{id}/preview` | | PreviewRun : même chose dans le worktree de la tâche |
@@ -592,6 +596,16 @@ Deux états supplémentaires ne se calculent qu'avec git, donc dans l'aperçu (`
 
 Pourquoi « en retard » suffit à bloquer : une fusion fast-forward avance la destination jusqu'à la branche du chantier. Si la branche est en retard, cette avance serait un recul (les commits de la destination disparaîtraient), et git refuse. Être derrière ne veut pas dire que le travail du chantier est déjà arrivé : c'est `mergedIntoTarget` qui répond à cette question, pas `behind`.
 
+Chaque mesure de la branche du chantier (`commits`, `files`, `behind`, et le « rien à livrer » de la livraison) se fait contre `origin/<destination>` quand la destination locale en est un ancêtre strict, contre la destination locale sinon : le chantier est parti de là (voir « Branche de destination en retard »), et le main local en retard compterait l'écart comme du travail du chantier.
+
+### Branche de destination en retard
+
+Une branche de chantier part de la version la plus fraîche de la destination que le dépôt connaît : `origin/<destination>` quand la destination locale en est un ancêtre strict (retard pur), la destination locale sinon (en avance ou divergente : du travail local que seul l'humain tranche). `CardBranch.base` reste le nom de la destination.
+
+`GET /api/projects/{id}/target-status` fait un `git fetch origin <destination>` par dépôt, au plus une fois toutes les cinq minutes (lecture réseau, rien n'est envoyé, aucune invite d'identifiants), puis compare : `TargetStatus = {repoName, target, behind, ahead, error?}`. Un fetch en échec n'empêche pas la comparaison sur les refs locales ; il est porté par `error`. L'UI l'appelle à l'ouverture d'un projet et affiche, sous son titre, une ligne par dépôt en retard.
+
+`POST /api/projects/{id}/target-status/update` avance chaque destination en retard **en fast-forward seulement** : `merge --ff-only` si elle est extraite dans le dépôt (refusé s'il écraserait une modification locale), une mise à jour de ref sinon (refusée si la branche est extraite dans un autre worktree). Une destination divergente (`ahead > 0`) n'est jamais touchée : son `error` le dit, et l'UI renvoie au terminal.
+
 **Rattraper la destination** : `POST /api/cards/{id}/catch-up` (aucun corps requis) fusionne la branche de destination **dans** la branche du chantier, un dépôt après l'autre : `git merge <destination>` dans le worktree du chantier, avec le sujet par défaut de git (« Merge branch '<destination>' into <chantier> »). La branche du chantier contient alors la destination, donc la livraison redevient fast-forward.
 
 Une fusion, pas un rebase : les branches des tâches acceptées descendent de la branche du chantier, réécrire son historique les laisserait orphelines. Aucun réseau (la destination est une branche locale), donc aucune confirmation, comme `/accept`. Réponse `{card, repos:[{repoName, target, merged, upToDate, conflictFilePaths, output, error}]}` en 200 même en cas de conflit : chaque dépôt porte son résultat.
@@ -614,7 +628,8 @@ Un conflit annule la fusion (`git merge --abort`) : le worktree du chantier revi
   "repos": [ { "repoName": "api", "branch": "sillage/ws-101-refonte-auth", "base": "main",
                "commits": 4, "files": 11, "pending": 4, "behind": 2,
                "mergedIntoTarget": false, "fastForwardable": true,
-               "prUrl": "", "shippedAt": null } ],
+               "prUrl": "", "shippedAt": null,
+               "prTitle": "fix(auth): refresh expired sessions", "prBody": "- fix(auth): refresh expired sessions" } ],
   "behind": { "t12": 2 } }
 ```
 
@@ -625,7 +640,7 @@ Un conflit annule la fusion (`git merge --abort`) : le worktree du chantier revi
 **Retard sur la base** (`behind`, deux niveaux, jamais persistés, calculés par `git rev-list --count`) :
 
 - `repos[].behind` = commits que la base a et que la branche du chantier n'a pas (`branche..base`) : le chantier est en retard sur la release. Ne bloque pas la livraison, l'annonce seulement.
-- `behind` (table à la racine, par identifiant de tâche) = commits que la branche du chantier a et que la branche de la tâche n'a pas. Renseignée uniquement pour les tâches `running` et `review` ; une tâche à jour n'y figure pas. C'est le retard qui produit un conflit à l'acceptation, typiquement après l'acceptation d'une autre tâche du même chantier (deux commits par acceptation : celui de la tâche, puis le commit de fusion `--no-ff`).
+- `behind` (table à la racine, par identifiant de tâche) = commits que la branche du chantier a et que la branche de la tâche n'a pas. Renseignée uniquement pour les tâches `running` et `review` ; une tâche à jour n'y figure pas. C'est le retard qui produit un conflit à l'acceptation, typiquement après l'acceptation d'une autre tâche du même chantier (les commits de la tâche acceptée : l'acceptation avance le chantier en fast-forward, sans merge commit).
 
 Une révision manquante (branche jamais poussée, worktree retiré) rend `0` : mieux vaut n'annoncer aucun retard qu'un retard faux.
 
@@ -641,6 +656,8 @@ Un retard qui subsiste veut donc dire que le rebase automatique de l'acceptation
                "merged": false, "skipped": false, "prUrl": "https://...",
                "output": "...", "error": "" } ] }
 ```
+
+**Titre et description de la pull request.** `repos[].prTitle` et `repos[].prBody` ne sont renseignés qu'en mode `pr`, pour un dépôt qui a quelque chose à livrer et pas encore de pull request (`prUrl` vide) : ce sont les valeurs par défaut, le sujet du commit quand le chantier n'en a qu'un (sinon le titre du chantier) et la liste des sujets de commits, merge commits exclus. À l'ouverture de la modale de livraison, l'UI les met dans deux champs éditables et lance `POST /api/cards/{id}/pr-draft` pour chacun de ces dépôts : l'agent de la dernière tâche acceptée du dépôt s'il sait tourner en lecture seule (claude, codex, fake), sinon le premier agent claude puis codex sans avertissement de santé. Il lit les commits, le `diff --stat` et le diff au besoin, avec le contexte du projet et du chantier, et rend un titre selon les conventions du projet et une description courte, dans la langue des commits. Les lignes de signature d'outil (« Generated with », `Co-Authored-By`) sont retirées de sa réponse. La proposition remplace les champs tant que l'humain n'y a rien tapé ; sinon elle s'offre en un clic (« La reprendre »). Ce qui est dans les champs au clic sur Livrer part dans `prs` ; un dépôt absent de `prs` prend les valeurs par défaut. Le titre et la description servent à `gh pr create` / `glab mr create`, et, sans CLI de la forge, sont ajoutés à l'URL de création préremplie (`title`/`body`, `merge_request[title]`/`merge_request[description]`, description tronquée à 2000 caractères). Une pull request déjà ouverte n'est jamais retitrée.
 
 Un dépôt en échec n'annule pas les autres : chaque ligne porte sa propre erreur, et la livraison est rejouable telle quelle (les dépôts déjà livrés sont `skipped`). `pushed`/`merged` décrivent ce qui a réellement eu lieu : `pushed` seul dans les modes `pr` et `push`, `merged` seul en `merge`, les deux en `merge-push`.
 
@@ -717,6 +734,8 @@ Sillage sait dire qu'une version plus récente existe, et l'installer en un clic
 
 ### Diff
 
+La base du diff (et des commits, des livrables, de `git difftool` et des compteurs `filesCount`/`docsCount`/`commitsCount`) est `task.base`, la branche du chantier, tant que la tâche n'y est pas fusionnée. Une fois acceptée, la pointe du chantier contient ce travail et le diff serait vide : la base devient `task.acceptedBase`, la pointe du chantier juste avant l'acceptation (`TaskDiffBase` ; une tâche acceptée avant ce champ l'a été par un merge commit, dont le premier parent tient lieu de base). Lire le diff réécrit les trois compteurs s'ils le contredisent (événement `task`) : ils ne sont sinon relus qu'en fin d'exécution, et une branche déplacée entre-temps les laissait faux.
+
 ```jsonc
 { "branch": "sillage/482-slug", "base": "main",
   "files": [ { "path": "a/b.go", "additions": 10, "deletions": 2,
@@ -730,7 +749,7 @@ Sillage sait dire qu'une version plus récente existe, et l'installer en un clic
 ### Livrables
 
 ```jsonc
-{ "code":   [ { "kind": "commit|branch", "title": "...", "meta": "abc1234 · il y a 2 h" } ],
+{ "code":   [ { "kind": "branch", "title": "...", "meta": "base: sillage/ws-…" } ],
   "docs":   [ { "kind": "doc",   "title": "README.md", "meta": "+12 −0", "path": "README.md" } ],
   "images": [ { "kind": "image", "title": "...", "meta": "...", "path": "..." } ] }
 ```

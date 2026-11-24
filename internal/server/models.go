@@ -455,8 +455,12 @@ type Task struct {
 	// WorkSha est l'empreinte du travail de la tâche (WorkFingerprint), relue à
 	// chaque fin d'exécution, après un rebase et à chaque verdict. Review est le
 	// dernier verdict de relecture, nil tant que personne n'a relu.
-	WorkSha string      `json:"workSha"`
-	Review  *TaskReview `json:"review"`
+	WorkSha string `json:"workSha"`
+	// AcceptedBase est la pointe de la branche du chantier juste avant la
+	// dernière acceptation de la tâche (fast-forward, sans merge commit) : la
+	// base de son diff une fois acceptée (TaskDiffBase).
+	AcceptedBase string      `json:"acceptedBase,omitempty"`
+	Review       *TaskReview `json:"review"`
 	// Tested est le verdict de recette (le dépôt a une commande de recette et
 	// l'humain a essayé le résultat), mêmes règles que Review.
 	Tested *TaskReview `json:"tested"`
@@ -722,9 +726,20 @@ type DiffResponse struct {
 
 // CommitInfo est une ligne de `git log`.
 type CommitInfo struct {
-	Hash    string
-	Subject string
-	RelTime string
+	Hash    string `json:"hash"`
+	Subject string `json:"subject"`
+	Body    string `json:"body"`
+	Author  string `json:"author"`
+	RelTime string `json:"relTime"`
+}
+
+// CommitsResponse est la réponse de GET /api/tasks/{id}/commits : les commits
+// de la tâche, du plus récent au plus ancien, et le nombre de fichiers encore
+// hors commit, que Sillage commitera sous fallbackCommitMessage à
+// l'acceptation.
+type CommitsResponse struct {
+	Commits     []CommitInfo `json:"commits"`
+	Uncommitted int          `json:"uncommitted"`
 }
 
 // Item est un livrable (code, doc ou image) affiché dans le détail de tâche.
@@ -826,6 +841,13 @@ type DeliveryRepoPreview struct {
 
 	PrURL     string     `json:"prUrl"`
 	ShippedAt *time.Time `json:"shippedAt"`
+
+	// PrTitle et PrBody : titre et description par défaut de la pull request
+	// que la livraison ouvrira (mode "pr", aucune PR encore ouverte, quelque
+	// chose à livrer), vides sinon. La modale les préremplit avant qu'un agent
+	// n'en propose une rédaction (POST /api/cards/{id}/pr-draft).
+	PrTitle string `json:"prTitle,omitempty"`
+	PrBody  string `json:"prBody,omitempty"`
 }
 
 // DeliveryPreview est la réponse de GET /api/cards/{id}/delivery : tout ce

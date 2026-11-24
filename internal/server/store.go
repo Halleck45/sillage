@@ -21,7 +21,7 @@ import (
 // les champs exportés du Store sont sérialisés tels quels, une version qui ne
 // connaît pas un champ le fait disparaître du fichier à sa première
 // sauvegarde, en silence (voir ErrStateTooNew).
-const stateFormatVersion = 12
+const stateFormatVersion = 13
 
 // agentSeedVersion tracks one-time additions to the built-in agent profiles.
 // Unlike checking for an ID at every startup, this lets users delete a seeded
@@ -194,7 +194,7 @@ func resetTransientTaskFlags(s *Store) {
 		t.Status = "review"
 		t.Unread = true
 		t.LiveActivity = nil
-		t.FilesCount, t.DocsCount, t.CommitsCount = TaskWorkCounts(t.WorktreeDir, t.Base)
+		t.FilesCount, t.DocsCount, t.CommitsCount = TaskWorkCounts(t)
 		s.Tasks[id] = t
 		s.appendMessage(id, "agent", "", "[interrupted:server-restart]")
 	}

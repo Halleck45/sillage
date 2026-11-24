@@ -43,13 +43,16 @@ Statuts : `running` → `review` → `accepted`, plus `cancelled`.
 
 - **Accepter** (`POST /api/tasks/{id}/accept`, depuis `review`) : dans le worktree de la tâche,
   `git add -A` puis commit `chore: commit uncommitted agent changes` si l'agent a laissé du travail
-  hors commit ; puis, dans le worktree du chantier, `git merge --no-ff --no-edit <branche de tâche>`
-  (sujet par défaut de git, « Merge branch '<branche>' into <chantier> »). Le titre de la tâche
-  n'entre dans aucun message : il est dans la langue de l'humain, pas forcément dans celle que le
+  hors commit ; la branche de la tâche est rejouée sur la pointe du chantier si elle n'en part
+  plus (`git rebase`, un conflit est traité comme un conflit de fusion) ; puis, dans le worktree
+  du chantier, `git merge --ff-only <branche de tâche>`. Le titre de la tâche n'entre dans aucun
+  message : il est dans la langue de l'humain, pas forcément dans celle que le
   projet impose à ses commits. C'est l'agent qui commite son travail, selon ces conventions. Aucun
   réseau, aucune confirmation (l'action est locale et réversible par `/reopen`).
-  Le `--no-ff` est délibéré : un merge commit par tâche acceptée rend lisible, dans l'historique
-  du chantier, ce qui a été accepté et par quelle tâche.
+  Historique linéaire, sans merge commit : la pull request ne porte que les commits des agents.
+  Un merge commit par tâche (le choix initial, `--no-ff`) doublait chaque PR d'un commit sans
+  contenu. La pointe du chantier d'avant l'acceptation est gardée (`Task.acceptedBase`) : c'est
+  la base du diff d'une tâche acceptée.
 - **Refuser** : c'est `POST /api/tasks/{id}/cancel`, déjà existant (statut `cancelled`). Pas de
   nouvel endpoint : refuser et abandonner sont la même chose côté git (la branche reste, rien
   n'est fusionné, rien n'est supprimé). Seul le libellé UI change selon le contexte.

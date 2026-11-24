@@ -672,16 +672,13 @@ func TestShipPartialWorkstream(t *testing.T) {
 	}
 	// Seul le travail accepté est parti : la tâche en revue n'est pas fusionnée.
 	out := runTestGit(t, f.bare, "log", "--oneline", cb.Branch)
-	if !strings.Contains(out, "102-premiere") {
-		t.Fatalf("le travail accepté devrait être poussé, reçu : %q", out)
+	if tree := runTestGit(t, f.bare, "ls-tree", "--name-only", cb.Branch); !strings.Contains(tree, "un.txt") || strings.Contains(tree, "deux.txt") {
+		t.Fatalf("seul le travail accepté devrait être poussé, reçu : %q", tree)
 	}
 	// Aucun message de Sillage ne reprend le titre de la tâche, écrit dans la
 	// langue de l'humain et non dans celle des conventions du projet.
 	if strings.Contains(out, "Première") || strings.Contains(out, "Sillage:") {
 		t.Fatalf("un message de commit de Sillage reprend le titre de la tâche : %q", out)
-	}
-	if strings.Contains(out, "103-seconde") {
-		t.Fatalf("le travail non accepté ne doit jamais être poussé, reçu : %q", out)
 	}
 	card, _ = f.srv.store.GetCard(f.card.ID)
 	if card.Column != "doing" {
@@ -698,7 +695,7 @@ func TestShipPartialWorkstream(t *testing.T) {
 	if w := f.ship(t, `{"confirm":true}`); w.Code != http.StatusOK {
 		t.Fatalf("seconde livraison : attendu 200, reçu %d (%s)", w.Code, w.Body.String())
 	}
-	if out := runTestGit(t, f.bare, "log", "--oneline", cb.Branch); !strings.Contains(out, "103-seconde") {
+	if out := runTestGit(t, f.bare, "ls-tree", "--name-only", cb.Branch); !strings.Contains(out, "deux.txt") {
 		t.Fatalf("le travail de la seconde tâche devrait être poussé, reçu : %q", out)
 	}
 	card, _ = f.srv.store.GetCard(f.card.ID)
@@ -792,12 +789,11 @@ func TestDeliveryPreviewReportsBehind(t *testing.T) {
 	if w := f.accept(t, first); w.Code != http.StatusOK {
 		t.Fatalf("accept: attendu 200, reçu %d (%s)", w.Code, w.Body.String())
 	}
-	// Deux commits, pas un : celui de la tâche acceptée, puis le commit de
-	// fusion (MergeBranch fusionne en --no-ff). On compte des commits absents,
-	// comme le fait une forge, pas des acceptations.
+	// Un commit, celui de la tâche acceptée : l'acceptation avance le chantier
+	// en fast-forward, sans merge commit.
 	prev := f.delivery(t)
-	if prev.Behind[second] != 2 {
-		t.Fatalf("la seconde tâche devrait être en retard de deux commits, reçu %d (%v)", prev.Behind[second], prev.Behind)
+	if prev.Behind[second] != 1 {
+		t.Fatalf("la seconde tâche devrait être en retard d'un commit, reçu %d (%v)", prev.Behind[second], prev.Behind)
 	}
 	if _, ok := prev.Behind[first]; ok {
 		t.Fatalf("une tâche acceptée n'a rien à rebaser, elle ne doit pas figurer dans behind : %v", prev.Behind)
@@ -1439,9 +1435,8 @@ func TestShipAgainAfterNewWork(t *testing.T) {
 		t.Fatalf("seconde livraison inattendue : %+v", resp.Repos[0])
 	}
 	// Le remote a bien reçu le nouveau commit.
-	out := runTestGit(t, f.bare, "log", "--oneline", cb.Branch)
-	if !strings.Contains(out, "103-seconde") {
-		t.Fatalf("le travail de la seconde tâche devrait être poussé, reçu : %q", out)
+	if tree := runTestGit(t, f.bare, "ls-tree", "--name-only", cb.Branch); !strings.Contains(tree, "deux.txt") {
+		t.Fatalf("le travail de la seconde tâche devrait être poussé, reçu : %q", tree)
 	}
 }
 

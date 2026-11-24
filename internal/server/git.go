@@ -97,9 +97,87 @@ func CreateWorktree(repoPath, dataDir, taskID, branch, base string) (dir, resolv
 // avec son worktree dédié : c'est là que les tâches acceptées sont fusionnées,
 // et c'est cette branche que la livraison pousse. base vide = branche courante
 // du dépôt.
+//
+// La branche part de la version la plus fraîche de base que le dépôt connaît
+// (freshestRef) : un main local en retard sur origin donnerait sinon un
+// chantier en retard dès sa naissance, dont chaque tâche embarquerait l'écart.
+// resolvedBase reste le nom de base, c'est la destination de la livraison.
 func CreateCardWorktree(repoPath, dataDir, cardID, repoName, branch, base string) (dir, resolvedBase string, err error) {
+	if base == "" {
+		if base, err = currentBranch(repoPath); err != nil {
+			return "", "", err
+		}
+	}
 	name := "ws-" + cardID + "-" + Slugify(repoName)
-	return createWorktree(repoPath, filepath.Join(dataDir, "worktrees", name), branch, base)
+	dir, _, err = createWorktree(repoPath, filepath.Join(dataDir, "worktrees", name), branch, freshestRef(repoPath, base))
+	return dir, base, err
+}
+
+// remoteTargetRef est la branche de suivi d'origin pour target.
+func remoteTargetRef(target string) string {
+	return "refs/remotes/origin/" + target
+}
+
+// freshestRef retourne origin/<base> quand base en est un ancêtre strict
+// (retard pur, rien de local à perdre), base sinon : une branche locale en
+// avance ou divergente porte du travail que seul l'humain sait trancher.
+// Sert de point de départ d'un chantier, et de point de comparaison de tout
+// ce qui le mesure : un chantier parti d'origin/main, comparé au main local
+// en retard, compterait l'écart entre les deux comme son propre travail.
+func freshestRef(repoPath, base string) string {
+	if behind, ahead, ok := TargetDrift(repoPath, base); ok && behind > 0 && ahead == 0 {
+		return remoteTargetRef(base)
+	}
+	return base
+}
+
+// TargetDrift compare la branche locale target à origin/target, telle que le
+// dernier fetch l'a vue : behind commits à rattraper, ahead commits locaux
+// absents d'origin. ok est faux sans branche de suivi (pas d'origin, branche
+// jamais poussée). Aucun réseau.
+func TargetDrift(repoPath, target string) (behind, ahead int, ok bool) {
+	out, err := runGit(repoPath, gitDefaultTimeout, "rev-list", "--left-right", "--count",
+		"refs/heads/"+target+"..."+remoteTargetRef(target))
+	if err != nil {
+		return 0, 0, false
+	}
+	if _, err := fmt.Sscan(out, &ahead, &behind); err != nil {
+		return 0, 0, false
+	}
+	return behind, ahead, true
+}
+
+// FetchTarget met à jour origin/target depuis le remote. C'est une lecture
+// réseau (rien n'est envoyé), sans invite d'identifiants (GIT_TERMINAL_PROMPT=0
+// dans runGit) : un remote qui en demande échoue au lieu de bloquer.
+func FetchTarget(repoPath, target string) error {
+	_, err := runGit(repoPath, gitPushTimeout, "fetch", "--quiet", "--no-tags", "origin",
+		"+refs/heads/"+target+":"+remoteTargetRef(target))
+	return err
+}
+
+// FastForwardTarget avance la branche locale target jusqu'à origin/target,
+// en fast-forward seulement : un main local divergent est refusé, jamais
+// réécrit. Branche extraite dans le dépôt : `merge --ff-only`, qui refuse
+// aussi d'écraser une modification locale. Sinon une mise à jour de ref par
+// `fetch .`, qui refuse elle-même un non fast-forward et une branche extraite
+// dans un autre worktree. Aucun réseau.
+func FastForwardTarget(repoPath, target string) error {
+	if current, err := currentBranch(repoPath); err == nil && current == target {
+		_, err := runGit(repoPath, gitDefaultTimeout, "merge", "--ff-only", "--quiet", remoteTargetRef(target))
+		return err
+	}
+	_, err := runGit(repoPath, gitDefaultTimeout, "fetch", "--quiet", ".", remoteTargetRef(target)+":refs/heads/"+target)
+	return err
+}
+
+// IsOnBranch indique si le worktree dir a branch extraite. Un agent qui change
+// de branche dans son worktree laisse la branche de la tâche derrière lui :
+// la fusionner n'accepterait rien, et ses compteurs (lus depuis HEAD)
+// décriraient un autre travail que celui qui serait accepté.
+func IsOnBranch(dir, branch string) bool {
+	current, err := currentBranch(dir)
+	return err == nil && current == branch
 }
 
 // createWorktree est l'implémentation commune : crée dir comme worktree du
@@ -309,21 +387,19 @@ func CountCommits(dir, from, to string) (int, error) {
 
 // Commits liste les commits de base..HEAD (le plus récent en premier, comme git log).
 func Commits(dir, base string) ([]CommitInfo, error) {
-	out, err := runGit(dir, gitDefaultTimeout, "log", base+"..HEAD", "--pretty=format:%h|%s|%cr")
+	// Séparateurs ASCII d'unité (\x1f) et d'enregistrement (\x1e) : un sujet
+	// ou un corps peut contenir n'importe quel caractère imprimable.
+	out, err := runGit(dir, gitDefaultTimeout, "log", base+"..HEAD", "--pretty=format:%h%x1f%s%x1f%b%x1f%an%x1f%cr%x1e")
 	if err != nil {
 		return nil, err
 	}
-	out = strings.TrimSpace(out)
-	if out == "" {
-		return []CommitInfo{}, nil
-	}
-	var commits []CommitInfo
-	for _, line := range strings.Split(out, "\n") {
-		parts := strings.SplitN(line, "|", 3)
-		if len(parts) != 3 {
+	commits := []CommitInfo{}
+	for _, rec := range strings.Split(out, "\x1e") {
+		parts := strings.Split(strings.TrimLeft(rec, "\n"), "\x1f")
+		if len(parts) != 5 {
 			continue
 		}
-		commits = append(commits, CommitInfo{Hash: parts[0], Subject: parts[1], RelTime: parts[2]})
+		commits = append(commits, CommitInfo{Hash: parts[0], Subject: parts[1], Body: strings.TrimSpace(parts[2]), Author: parts[3], RelTime: parts[4]})
 	}
 	return commits, nil
 }
@@ -332,16 +408,50 @@ func Commits(dir, base string) ([]CommitInfo, error) {
 // sa base : fichiers touchés, documents parmi eux, et commits. Best-effort, car
 // ces trois nombres ne sont qu'un affichage : un worktree disparu ou une base
 // inconnue rendent des zéros plutôt qu'une erreur.
-func TaskWorkCounts(worktreeDir, base string) (files, docs, commits int) {
-	if worktreeDir == "" || base == "" {
+func TaskWorkCounts(t Task) (files, docs, commits int) {
+	if t.WorktreeDir == "" || t.Base == "" {
 		return 0, 0, 0
 	}
-	if changed, err := Diff(worktreeDir, base); err == nil {
-		files = len(changed)
-		for _, f := range changed {
-			if isDocFile(f.Path) {
-				docs++
-			}
+	base := TaskDiffBase(t)
+	changed, _ := Diff(t.WorktreeDir, base)
+	return countWork(t.WorktreeDir, base, changed)
+}
+
+// TaskDiffBase est la révision contre laquelle lire le travail d'une tâche.
+// Tant qu'elle n'est pas fusionnée, c'est sa base (la branche du chantier). Une
+// fois acceptée, la branche du chantier contient ce travail et le diff contre
+// sa pointe est vide : la base devient la pointe du chantier juste avant
+// l'acceptation (Task.AcceptedBase, voir acceptTaskInto). Une tâche acceptée
+// avant ce champ l'a été par un merge commit : son premier parent tient lieu de
+// base. Sans l'un ni l'autre (fusion faite à la main), la base reste.
+func TaskDiffBase(t Task) string {
+	dir, base := t.WorktreeDir, t.Base
+	if dir == "" || base == "" || !IsBranchMergedInto(dir, "HEAD", base) {
+		return base
+	}
+	if t.AcceptedBase != "" && IsBranchMergedInto(dir, t.AcceptedBase, "HEAD") {
+		return t.AcceptedBase
+	}
+	head := HeadSha(dir)
+	out, err := runGit(dir, gitDefaultTimeout, "rev-list", "--merges", "--parents", "--ancestry-path", "HEAD.."+base)
+	if err != nil || head == "" {
+		return base
+	}
+	for _, line := range strings.Split(strings.TrimSpace(out), "\n") {
+		if f := strings.Fields(line); len(f) >= 3 && f[2] == head {
+			return f[1]
+		}
+	}
+	return base
+}
+
+// countWork est TaskWorkCounts sur un diff déjà calculé contre base, déjà
+// résolue par TaskDiffBase (voir handleDiff).
+func countWork(worktreeDir, base string, changed []DiffFile) (files, docs, commits int) {
+	files = len(changed)
+	for _, f := range changed {
+		if isDocFile(f.Path) {
+			docs++
 		}
 	}
 	if log, err := Commits(worktreeDir, base); err == nil {
@@ -397,6 +507,16 @@ func HeadSha(dir string) string {
 	return strings.TrimSpace(out)
 }
 
+// UncommittedCount compte les chemins modifiés ou non suivis du worktree dir
+// (zéro sur erreur : ce n'est qu'un affichage).
+func UncommittedCount(dir string) int {
+	out, err := runGit(dir, gitDefaultTimeout, "status", "--porcelain")
+	if err != nil || strings.TrimSpace(out) == "" {
+		return 0
+	}
+	return len(strings.Split(strings.TrimRight(out, "\n"), "\n"))
+}
+
 // IsWorktreeClean indique si un worktree n'a aucune modification en attente
 // (fichiers non suivis compris). Une erreur git vaut « pas propre » : on ne
 // prend jamais de décision automatique sur une information manquante.
@@ -416,17 +536,17 @@ func IsBranchMergedInto(dir, branch, target string) bool {
 	return err == nil
 }
 
-// MergeBranch fusionne branch dans la branche courante du worktree dir, avec
-// un merge commit dédié (--no-ff) : l'historique du chantier garde une trace
-// lisible de chaque tâche acceptée. Le message est celui de git (« Merge branch
-// '<branch>' into <courante> ») : en anglais, et ignoré par les linters de
-// conventional commits, quelle que soit la langue du titre. Aucun réseau.
+// MergeBranch fusionne branch dans la branche courante du worktree dir, en
+// fast-forward quand c'est possible, sinon avec le merge commit par défaut de
+// git (« Merge branch '<branch>' into <courante> »). Sert au rattrapage de la
+// destination, jamais à l'acceptation d'une tâche (FastForwardBranch). Aucun
+// réseau.
 //
 // En cas de conflit, la fusion est annulée (git merge --abort, l'arbre revient
 // intact) et l'erreur enveloppe ErrMergeConflict avec la liste des fichiers en
 // conflit : rien n'est résolu automatiquement.
 func MergeBranch(dir, branch string) (string, []string, error) {
-	out, err := runGit(dir, gitDefaultTimeout, "merge", "--no-ff", "--no-edit", branch)
+	out, err := runGit(dir, gitDefaultTimeout, "merge", "--no-edit", branch)
 	if err == nil {
 		return out, nil, nil
 	}
@@ -436,6 +556,18 @@ func MergeBranch(dir, branch string) (string, []string, error) {
 		return out, conflicts, fmt.Errorf("%w: %s", ErrMergeConflict, strings.Join(conflicts, ", "))
 	}
 	return out, nil, fmt.Errorf("git merge failed: %w", err)
+}
+
+// FastForwardBranch avance la branche courante du worktree dir jusqu'à branch,
+// qui doit la contenir (la tâche vient d'être rejouée dessus). Aucun merge
+// commit : la branche du chantier, puis la pull request, ne portent que les
+// commits des agents. Aucun réseau.
+func FastForwardBranch(dir, branch string) (string, error) {
+	out, err := runGit(dir, gitDefaultTimeout, "merge", "--ff-only", branch)
+	if err != nil {
+		return out, fmt.Errorf("git merge --ff-only failed: %w", err)
+	}
+	return out, nil
 }
 
 // ErrRebaseConflict signale un conflit de rebase (branche de tâche rejouée sur
@@ -747,25 +879,43 @@ func DetectForge(dir string) ForgeInfo {
 // branche déjà poussée sur origin. Aucune commande d'écriture git : la branche
 // a été poussée par Ship. En l'absence du CLI de la forge, ou en cas d'échec,
 // replie sur une URL de création pré-remplie, en lecture seule.
-func OpenPR(dir, branch, base, title string) (string, error) {
+func OpenPR(dir, branch, base, title, body string) (string, error) {
 	info := DetectForge(dir)
 	switch info.Provider {
 	case "github":
 		if _, lookErr := exec.LookPath("gh"); lookErr == nil {
-			if u, err := runForgeCreate(dir, "gh", "pr", "create", "--head", branch, "--base", base, "--title", title, "--body", prBody(title)); err == nil && u != "" {
+			if u, err := runForgeCreate(dir, "gh", "pr", "create", "--head", branch, "--base", base, "--title", title, "--body", body); err == nil && u != "" {
 				return u, nil
 			}
 		}
-		return GithubCompareURL(info.Host, info.Path, base, branch), nil
+		return GithubCompareURL(info.Host, info.Path, base, branch) + prefillQuery("title", "body", title, body), nil
 	case "gitlab":
 		if _, lookErr := exec.LookPath("glab"); lookErr == nil {
-			if u, err := runForgeCreate(dir, "glab", "mr", "create", "--source-branch", branch, "--target-branch", base, "--title", title, "--description", prBody(title), "--yes"); err == nil && u != "" {
+			if u, err := runForgeCreate(dir, "glab", "mr", "create", "--source-branch", branch, "--target-branch", base, "--title", title, "--description", body, "--yes"); err == nil && u != "" {
 				return u, nil
 			}
 		}
-		return GitlabNewMRURL(info.Host, info.Path, base, branch), nil
+		return GitlabNewMRURL(info.Host, info.Path, base, branch) + prefillQuery("merge_request[title]", "merge_request[description]", title, body), nil
 	}
 	return "", fmt.Errorf("origin remote is not a github or gitlab repository")
+}
+
+// prefillQuery ajoute le titre et la description validés à une URL de
+// création déjà pourvue d'une query : sans CLI de la forge, l'humain retrouve
+// sur la page ce qu'il a relu dans la modale. La description est tronquée pour
+// garder l'URL sous les limites des navigateurs et des forges.
+func prefillQuery(titleKey, bodyKey, title, body string) string {
+	if r := []rune(body); len(r) > 2000 {
+		body = string(r[:2000])
+	}
+	q := ""
+	if title != "" {
+		q += "&" + url.QueryEscape(titleKey) + "=" + url.QueryEscape(title)
+	}
+	if body != "" {
+		q += "&" + url.QueryEscape(bodyKey) + "=" + url.QueryEscape(body)
+	}
+	return q
 }
 
 // GithubCompareURL construit l'URL de création de pull request GitHub
@@ -781,9 +931,18 @@ func GitlabNewMRURL(host, path, base, branch string) string {
 		host, path, url.QueryEscape(branch), url.QueryEscape(base))
 }
 
-// prBody est le corps de la pull/merge request créée par Sillage.
-func prBody(title string) string {
-	return "Created with Sillage\n\n" + title
+// prBody est le corps de la pull/merge request : la liste des commits du
+// chantier, hors merge commits, du plus ancien au plus récent. Ce sont les
+// messages des agents, écrits selon les conventions du projet ; aucune
+// signature de l'outil, la PR est celle de l'humain. Vide si la liste ne se
+// lit pas.
+func prBody(dir, base, branch string) string {
+	out, err := runGit(dir, gitDefaultTimeout, "log", "--no-merges", "--reverse", "--format=- %s",
+		freshestRef(dir, base)+".."+branch)
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(out)
 }
 
 // runForgeCreate exécute le CLI de la forge (gh ou glab, timeout 60 s,

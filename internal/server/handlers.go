@@ -63,6 +63,9 @@ type Server struct {
 	// watch : la Vigie (voir watch.go). En mémoire, hors signaux.
 	watch *watcher
 
+	// targetFetches espace les fetch de la branche de destination (target.go).
+	targetFetches targetFetches
+
 	// autoconf : les autoconfigurations de projet (voir autoconfig.go).
 	autoconf *autoconfTracker
 }
@@ -187,6 +190,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/projects/{id}/issues", s.handleProjectIssues)
 	mux.HandleFunc("PUT /api/projects/{id}/watch", s.handleProjectWatch)
 	mux.HandleFunc("GET /api/projects/{id}/claude-sessions", s.handleClaudeSessions)
+	mux.HandleFunc("GET /api/projects/{id}/target-status", s.handleTargetStatus)
+	mux.HandleFunc("POST /api/projects/{id}/target-status/update", s.handleTargetUpdate)
 	mux.HandleFunc("POST /api/projects/{id}/upkeep", s.handleUpkeepNow)
 	mux.HandleFunc("POST /api/projects/{id}/upkeep/stop", s.handleUpkeepStop)
 	mux.HandleFunc("POST /api/projects/{id}/autoconfigure", s.handleStartAutoconfig)
@@ -203,6 +208,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/cards/{id}/ship", s.handleCardShip)
 	mux.HandleFunc("POST /api/cards/{id}/catch-up", s.handleCardCatchUp)
 	mux.HandleFunc("POST /api/cards/{id}/plan", s.handleCardPlan)
+	mux.HandleFunc("POST /api/cards/{id}/pr-draft", s.handleCardPRDraft)
 	mux.HandleFunc("POST /api/tasks", s.handleCreateTask)
 	mux.HandleFunc("PATCH /api/tasks/{id}", s.handleReassignTask)
 	mux.HandleFunc("DELETE /api/tasks/{id}", s.handleDeleteTask)
@@ -221,6 +227,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/tasks/{id}/diff", s.handleDiff)
 	mux.HandleFunc("POST /api/tasks/{id}/difftool", s.handleDifftool)
 	mux.HandleFunc("GET /api/tasks/{id}/deliverables", s.handleDeliverables)
+	mux.HandleFunc("GET /api/tasks/{id}/commits", s.handleTaskCommits)
 	mux.HandleFunc("POST /api/cards/{id}/preview", s.handleCardPreview)
 	mux.HandleFunc("POST /api/tasks/{id}/preview", s.handleTaskPreview)
 	mux.HandleFunc("POST /api/previews/{id}/stop", s.handlePreviewStop)
@@ -1530,6 +1537,10 @@ func (s *Server) handleAccept(w http.ResponseWriter, r *http.Request) {
 // celle du chantier, et écrit la réponse HTTP.
 func (s *Server) acceptTaskInto(w http.ResponseWriter, task Task, cardBranch CardBranch) {
 	id := task.ID
+	if !IsOnBranch(task.WorktreeDir, task.Branch) {
+		writeError(w, http.StatusUnprocessableEntity, "task worktree is not on the task branch "+task.Branch)
+		return
+	}
 
 	// Accepter tranche : une vérification encore en cours s'arrête, sinon
 	// CommitAll embarquerait ses artefacts à moitié écrits.
@@ -1539,9 +1550,22 @@ func (s *Server) acceptTaskInto(w http.ResponseWriter, task Task, cardBranch Car
 		writeError(w, http.StatusBadGateway, err.Error())
 		return
 	}
+	// Historique linéaire : la tâche est rejouée sur la pointe du chantier si
+	// elle n'en part plus (rebaseSiblingTasks l'a en général déjà fait), puis le
+	// chantier avance en fast-forward. Un merge commit par tâche se retrouvait
+	// dans chaque pull request, à côté du seul commit qui compte.
+	var conflicts []string
+	if !IsBranchMergedInto(task.WorktreeDir, cardBranch.Branch, task.Branch) {
+		var rebaseOut string
+		rebaseOut, conflicts, err = RebaseOnto(task.WorktreeDir, cardBranch.Branch)
+		output += rebaseOut
+	}
 	shaBefore := HeadSha(cardBranch.WorktreeDir)
-	mergeOut, conflicts, err := MergeBranch(cardBranch.WorktreeDir, task.Branch)
-	output += mergeOut
+	if err == nil {
+		var mergeOut string
+		mergeOut, err = FastForwardBranch(cardBranch.WorktreeDir, task.Branch)
+		output += mergeOut
+	}
 	if err != nil {
 		if len(conflicts) > 0 {
 			msg, updated, addErr := s.store.AddMessage(task.ID, "agent", "", "[merge-conflict:"+strings.Join(conflicts, " ")+"]")
@@ -1560,6 +1584,10 @@ func (s *Server) acceptTaskInto(w http.ResponseWriter, task Task, cardBranch Car
 			return
 		}
 		writeError(w, http.StatusBadGateway, err.Error())
+		return
+	}
+	if _, err := s.store.UpdateTask(id, func(t *Task) { t.AcceptedBase = shaBefore }); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
@@ -1628,7 +1656,7 @@ func (s *Server) rebaseSiblingTasks(cardID, acceptedTaskID string, cardBranch Ca
 		if task.ID == acceptedTaskID || task.Status != "review" || task.RepoName != cardBranch.RepoName {
 			continue
 		}
-		if task.WorktreeDir == "" || s.runner.IsRunning(task.ID) {
+		if task.WorktreeDir == "" || s.runner.IsRunning(task.ID) || !IsOnBranch(task.WorktreeDir, task.Branch) {
 			continue
 		}
 		if IsBranchMergedInto(task.WorktreeDir, cardBranch.Branch, task.Branch) {
@@ -1711,10 +1739,11 @@ func conflictRebasePrompt(branch string, conflicts []string) string {
 // l'aperçu de livraison (ouverture de la vue chantier, puis rafraîchissement
 // périodique côté frontend).
 //
-// Trois garde-fous, dans cet ordre : aucun agent en cours pour la tâche, son
+// Quatre garde-fous, dans cet ordre : aucun agent en cours pour la tâche, son
 // worktree propre (du travail non commité ne serait par définition pas fusionné
-// et serait perdu de vue), et sa branche effectivement contenue dans celle du
-// chantier. Aucune écriture git : la fusion a déjà eu lieu, on ne fait que
+// et serait perdu de vue) et resté sur la branche de la tâche (sinon c'est une
+// branche abandonnée qui serait constatée fusionnée), et sa branche
+// effectivement contenue dans celle du chantier. Aucune écriture git : la fusion a déjà eu lieu, on ne fait que
 // constater. Ne remet donc jamais le chantier en « non livré ».
 func (s *Server) autoAcceptMergedTasks(card Card) bool {
 	accepted := false
@@ -1732,7 +1761,7 @@ func (s *Server) autoAcceptMergedTasks(card Card) bool {
 		if task.FilesCount == 0 {
 			continue
 		}
-		if !IsWorktreeClean(task.WorktreeDir) {
+		if !IsWorktreeClean(task.WorktreeDir) || !IsOnBranch(task.WorktreeDir, task.Branch) {
 			continue
 		}
 		if !IsBranchMergedInto(cb.WorktreeDir, task.Branch, cb.Branch) {
@@ -1866,14 +1895,15 @@ func (s *Server) deliveryPreview(card Card, project Project) DeliveryPreview {
 		if prev.Provider == "" {
 			prev.Provider = DetectForge(b.WorktreeDir).Provider
 		}
-		if commits, err := Commits(b.WorktreeDir, b.Base); err == nil {
+		base := freshestRef(b.WorktreeDir, b.Base)
+		if commits, err := Commits(b.WorktreeDir, base); err == nil {
 			row.Commits = len(commits)
 		}
-		if files, err := Diff(b.WorktreeDir, b.Base); err == nil {
+		if files, err := Diff(b.WorktreeDir, base); err == nil {
 			row.Files = len(files)
 		}
 		row.Pending = pendingCommits(project, b, row.Commits)
-		if behind, err := CountCommits(b.WorktreeDir, b.Branch, b.Base); err == nil {
+		if behind, err := CountCommits(b.WorktreeDir, b.Branch, base); err == nil {
 			row.Behind = behind
 		}
 		// Où en est la branche du chantier par rapport à sa destination : déjà
@@ -1881,6 +1911,10 @@ func (s *Server) deliveryPreview(card Card, project Project) DeliveryPreview {
 		// se lisent avec merge-base, sans rien écrire.
 		target := deliveryTarget(project, b)
 		row.MergedIntoTarget = IsBranchMergedInto(b.WorktreeDir, b.Branch, target)
+		if project.Delivery.Mode == "pr" && b.PrURL == "" && row.Pending > 0 {
+			row.PrTitle = defaultPRTitle(b.WorktreeDir, b.Base, b.Branch, card.Title)
+			row.PrBody = prBody(b.WorktreeDir, b.Base, b.Branch)
+		}
 		row.FastForwardable = IsBranchMergedInto(b.WorktreeDir, target, b.Branch)
 		prev.Repos = append(prev.Repos, row)
 	}
@@ -1948,6 +1982,9 @@ func deliveryTarget(project Project, b CardBranch) string {
 func (s *Server) handleCardShip(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Confirm bool `json:"confirm"`
+		// PRs : titre et description relus par l'humain, par dépôt. Absent, la
+		// pull request prend le titre et le corps par défaut.
+		PRs []PRDraft `json:"prs"`
 	}
 	if err := decodeJSON(r, &body); err != nil || !body.Confirm {
 		writeError(w, http.StatusBadRequest, "confirmation required")
@@ -1964,7 +2001,13 @@ func (s *Server) handleCardShip(w http.ResponseWriter, r *http.Request) {
 
 	results := make([]ShipRepoResult, 0, len(card.Branches))
 	for _, b := range card.Branches {
-		results = append(results, s.shipCardBranch(card, project, b))
+		var draft PRDraft
+		for _, d := range body.PRs {
+			if d.RepoName == b.RepoName {
+				draft = d
+			}
+		}
+		results = append(results, s.shipCardBranch(card, project, b, draft))
 	}
 	card, _ = s.store.GetCard(card.ID)
 	s.runner.publishCards(card.ProjectID)
@@ -1973,10 +2016,10 @@ func (s *Server) handleCardShip(w http.ResponseWriter, r *http.Request) {
 
 // shipCardBranch livre la branche de chantier d'un seul dépôt et retourne son
 // résultat (jamais d'erreur remontée : elle est portée par le résultat).
-func (s *Server) shipCardBranch(card Card, project Project, b CardBranch) ShipRepoResult {
+func (s *Server) shipCardBranch(card Card, project Project, b CardBranch, draft PRDraft) ShipRepoResult {
 	res := ShipRepoResult{RepoName: b.RepoName, Branch: b.Branch, Base: b.Base}
 
-	commits, err := Commits(b.WorktreeDir, b.Base)
+	commits, err := Commits(b.WorktreeDir, freshestRef(b.WorktreeDir, b.Base))
 	if err != nil {
 		res.Error = err.Error()
 		return res
@@ -2031,7 +2074,15 @@ func (s *Server) shipCardBranch(card Card, project Project, b CardBranch) ShipRe
 	if b.PrURL != "" {
 		res.PrURL = b.PrURL
 	} else if project.Delivery.Mode == "pr" {
-		if prURL, err := OpenPR(b.WorktreeDir, b.Branch, b.Base, card.Title); err == nil {
+		title := strings.TrimSpace(strings.SplitN(draft.Title, "\n", 2)[0])
+		if title == "" {
+			title = defaultPRTitle(b.WorktreeDir, b.Base, b.Branch, card.Title)
+		}
+		text := strings.TrimSpace(draft.Body)
+		if draft.Title == "" && text == "" {
+			text = prBody(b.WorktreeDir, b.Base, b.Branch)
+		}
+		if prURL, err := OpenPR(b.WorktreeDir, b.Branch, b.Base, title, text); err == nil {
 			res.PrURL = prURL
 		}
 	}
@@ -2251,6 +2302,23 @@ func (s *Server) handleReview(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, updated)
 }
 
+// handleTaskCommits liste les commits de la tâche (onglet Commits) : de quoi
+// relire les messages avant d'accepter, puisqu'ils partent tels quels dans la
+// branche du chantier puis dans la pull request.
+func (s *Server) handleTaskCommits(w http.ResponseWriter, r *http.Request) {
+	task, ok := s.store.GetTask(r.PathValue("id"))
+	if !ok {
+		writeError(w, http.StatusNotFound, "task not found")
+		return
+	}
+	commits, err := Commits(task.WorktreeDir, TaskDiffBase(task))
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to list commits: "+err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, CommitsResponse{Commits: commits, Uncommitted: UncommittedCount(task.WorktreeDir)})
+}
+
 func (s *Server) handleDiff(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	task, ok := s.store.GetTask(id)
@@ -2258,10 +2326,21 @@ func (s *Server) handleDiff(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "task not found")
 		return
 	}
-	files, err := Diff(task.WorktreeDir, task.Base)
+	base := TaskDiffBase(task)
+	files, err := Diff(task.WorktreeDir, base)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to compute diff: "+err.Error())
 		return
+	}
+	// Les compteurs stockés ne sont relus qu'en fin d'exécution : une branche
+	// déplacée entre-temps (à la main, ou par une base de chantier rattrapée)
+	// les laisserait contredire le diff qu'on affiche. Le diff fait foi.
+	if nf, nd, nc := countWork(task.WorktreeDir, base, files); nf != task.FilesCount || nd != task.DocsCount || nc != task.CommitsCount {
+		if updated, err := s.store.UpdateTask(id, func(t *Task) {
+			t.FilesCount, t.DocsCount, t.CommitsCount = nf, nd, nc
+		}); err == nil {
+			s.runner.publishTask(updated)
+		}
 	}
 	writeJSON(w, http.StatusOK, DiffResponse{Branch: task.Branch, Base: task.Base, Files: files, Tool: DifftoolName(task.WorktreeDir)})
 }
@@ -2284,7 +2363,7 @@ func (s *Server) handleDifftool(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid body")
 		return
 	}
-	if err := OpenDifftool(task.WorktreeDir, task.Base, body.Path); err != nil {
+	if err := OpenDifftool(task.WorktreeDir, TaskDiffBase(task), body.Path); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
@@ -2301,12 +2380,8 @@ func (s *Server) handleDeliverables(w http.ResponseWriter, r *http.Request) {
 
 	resp := DeliverablesResponse{Code: []Item{}, Docs: []Item{}, Images: []Item{}}
 	resp.Code = append(resp.Code, Item{Kind: "branch", Title: task.Branch, Meta: "base: " + task.Base})
-	if commits, err := Commits(task.WorktreeDir, task.Base); err == nil {
-		for _, c := range commits {
-			resp.Code = append(resp.Code, Item{Kind: "commit", Title: c.Subject, Meta: c.Hash + " · " + c.RelTime})
-		}
-	}
-	if files, err := Diff(task.WorktreeDir, task.Base); err == nil {
+	base := TaskDiffBase(task)
+	if files, err := Diff(task.WorktreeDir, base); err == nil {
 		for _, f := range files {
 			meta := fmt.Sprintf("+%d −%d", f.Additions, f.Deletions)
 			switch {

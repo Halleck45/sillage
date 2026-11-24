@@ -389,7 +389,7 @@ func (r *Runner) RestartTask(taskID string) (Task, Message, error) {
 	if err := ResetWorktreeTo(task.WorktreeDir, task.Base); err != nil {
 		return Task{}, Message{}, err
 	}
-	files, docs, commits := TaskWorkCounts(task.WorktreeDir, task.Base)
+	files, docs, commits := TaskWorkCounts(task)
 	sha := WorkFingerprint(task.WorktreeDir, task.Base)
 	if _, err := r.store.UpdateTask(taskID, func(t *Task) {
 		t.SessionID = ""
@@ -709,7 +709,7 @@ func (r *Runner) finalize(taskID string) {
 		return
 	}
 
-	filesCount, docsCount, commitsCount := TaskWorkCounts(task.WorktreeDir, task.Base)
+	filesCount, docsCount, commitsCount := TaskWorkCounts(task)
 	workSha := WorkFingerprint(task.WorktreeDir, task.Base)
 
 	updated, err := r.store.UpdateTask(taskID, func(t *Task) {
@@ -784,7 +784,7 @@ func contextParts(projectContext, workstreamContext string) []string {
 // sandbox interdit l'écriture git) de le faire lui-même : lui seul sait décrire
 // son travail dans la langue et le format que le contexte du projet impose.
 // Sillage ne commite que ce qui reste, sous fallbackCommitMessage.
-const commitNote = "Commit your work before you finish: focused commits whose messages follow the commit conventions of the project context, or else those of `git log`. Only create new commits: never amend, rebase or rewrite existing ones, and never push."
+const commitNote = "Commit your work before you finish: focused commits whose messages follow the commit conventions of the project context, or else those of `git log`. Only create new commits: never amend, rebase or rewrite existing ones, never switch branches, and never push."
 
 // buildSystemPrompt combine le contexte de l'agent, celui du projet et celui
 // du chantier (Card) pour --append-system-prompt (adaptateur claude) : chaque

@@ -322,6 +322,14 @@
       'catchUp.taskPrompt': 'La branche de ce chantier est en retard sur {base} et ne peut plus être fusionnée : {files} entre en conflit. Fusionne {base} dans la branche du chantier, règle les conflits en gardant les deux intentions, puis relance les vérifications du projet.',
       'ship.modalTitle': 'Livrer le chantier',
       'ship.modalConfirm': 'Livrer',
+      'ship.prTitleLabel': 'Titre de la pull request',
+      'ship.prBodyLabel': 'Description',
+      'ship.prDrafting': 'Un agent rédige le titre et la description…',
+      'ship.prDraftBy': 'Proposé par {agent}, à relire.',
+      'ship.prDraftEdited': '{agent} a fait une proposition.',
+      'ship.prDraftApply': 'La reprendre',
+      'ship.prDraftFailed': 'Pas de proposition : {error}',
+      'ship.prDraftRetry': 'Réessayer',
       'ship.shipping': 'Livraison…',
       'ship.repoNothing': 'Rien à livrer',
       'ship.repoShipped': 'Déjà livré',
@@ -381,6 +389,10 @@
       'delivery.warning.unknownForge': 'Forge inconnue : la branche sera poussée sans ouvrir de pull request.',
       'tabs.conversation': 'Conversation',
       'tabs.diff': 'Diff',
+      'tabs.commits': 'Commits',
+      'commits.empty': 'Aucun commit pour l\'instant.',
+      'commits.uncommitted.one': '1 fichier hors commit : il sera commité à l\'acceptation sous « {message} ».',
+      'commits.uncommitted.other': '{n} fichiers hors commit : ils seront commités à l\'acceptation sous « {message} ».',
       'tabs.deliverables': 'Livrables',
       'tabs.history': 'Historique',
       'chat.you': 'Vous',
@@ -617,6 +629,11 @@
       'autoconf.warning': 'Ces commandes s\'exécuteront sur votre machine : relisez-les avant d\'enregistrer.',
       'autoconf.noAgent': 'Il faut un agent capable de lire sans écrire (Claude Code ou Codex).',
       'autoconf.nudge': 'Sillage ne sait pas encore vérifier ni lancer ce projet.',
+      'target.behind.one': '{branch} local a 1 commit de retard sur origin. Les nouveaux chantiers partent déjà d\'origin/{branch}.',
+      'target.behind.other': '{branch} local a {n} commits de retard sur origin. Les nouveaux chantiers partent déjà d\'origin/{branch}.',
+      'target.diverged': '{branch} local et origin/{branch} ont divergé ({ahead} en local, {behind} sur origin) : à trancher dans votre terminal.',
+      'target.update': 'Mettre à jour {branch}',
+      'target.updating': 'Mise à jour…',
       'autoconf.nudgeAction': 'Configurer automatiquement',
       'vigie.analyzing': 'Analyse en cours…',
       'vigie.error': 'Analyse impossible : {error}',
@@ -778,6 +795,7 @@
       'errors.genericFailed': 'Échec.',
       'errors.acceptFailed': 'Échec de l\'acceptation.',
       'errors.acceptConflict': 'Conflit avec la branche du chantier : demandez à l\'agent de reprendre la base.',
+      'errors.acceptOffBranch': 'L\'agent a changé de branche dans son worktree : son travail n\'est pas sur la branche de la tâche. Demandez-lui de l\'y ramener avant d\'accepter.',
       'errors.cancelFailed': 'Échec de l\'annulation.',
       'errors.deleteTaskFailed': 'Échec de la suppression.',
       'errors.deleteCardFailed': 'Échec de la suppression.',
@@ -1184,6 +1202,14 @@
       'catchUp.taskPrompt': 'This workstream\'s branch is behind {base} and can no longer be merged: {files} conflicts. Merge {base} into the workstream branch, settle the conflicts keeping both intents, then run the project checks again.',
       'ship.modalTitle': 'Ship the workstream',
       'ship.modalConfirm': 'Ship',
+      'ship.prTitleLabel': 'Pull request title',
+      'ship.prBodyLabel': 'Description',
+      'ship.prDrafting': 'An agent is writing the title and description…',
+      'ship.prDraftBy': 'Suggested by {agent}, for you to review.',
+      'ship.prDraftEdited': '{agent} has a suggestion.',
+      'ship.prDraftApply': 'Use it',
+      'ship.prDraftFailed': 'No suggestion: {error}',
+      'ship.prDraftRetry': 'Try again',
       'ship.shipping': 'Shipping…',
       'ship.repoNothing': 'Nothing to ship',
       'ship.repoShipped': 'Already shipped',
@@ -1243,6 +1269,10 @@
       'delivery.warning.unknownForge': 'Unknown forge: the branch will be pushed without opening a pull request.',
       'tabs.conversation': 'Conversation',
       'tabs.diff': 'Diff',
+      'tabs.commits': 'Commits',
+      'commits.empty': 'No commits yet.',
+      'commits.uncommitted.one': '1 file outside any commit: it will be committed on acceptance as "{message}".',
+      'commits.uncommitted.other': '{n} files outside any commit: they will be committed on acceptance as "{message}".',
       'tabs.deliverables': 'Deliverables',
       'tabs.history': 'History',
       'chat.you': 'You',
@@ -1479,6 +1509,11 @@
       'autoconf.warning': 'These commands will run on your machine: review them before saving.',
       'autoconf.noAgent': 'This needs an agent that can read without writing (Claude Code or Codex).',
       'autoconf.nudge': 'Sillage does not know yet how to check or run this project.',
+      'target.behind.one': 'Local {branch} is 1 commit behind origin. New workstreams already start from origin/{branch}.',
+      'target.behind.other': 'Local {branch} is {n} commits behind origin. New workstreams already start from origin/{branch}.',
+      'target.diverged': 'Local {branch} and origin/{branch} have diverged ({ahead} local, {behind} on origin): settle it in your terminal.',
+      'target.update': 'Update {branch}',
+      'target.updating': 'Updating…',
       'autoconf.nudgeAction': 'Set up automatically',
       'vigie.analyzing': 'Analyzing…',
       'vigie.error': 'Analysis failed: {error}',
@@ -1640,6 +1675,7 @@
       'errors.genericFailed': 'Failed.',
       'errors.acceptFailed': 'Failed to accept.',
       'errors.acceptConflict': 'Conflict with the workstream branch: ask the agent to rebase on it.',
+      'errors.acceptOffBranch': 'The agent switched branches in its worktree: its work is not on the task branch. Ask it to bring it back before accepting.',
       'errors.cancelFailed': 'Failed to cancel.',
       'errors.deleteTaskFailed': 'Failed to delete.',
       'errors.deleteCardFailed': 'Failed to delete.',
@@ -1789,11 +1825,12 @@
     signals: [], watch: {}, // Vigie : signaux actifs et état du veilleur
     autoconfigs: {}, // configurations automatiques en cours ou à relire, par projet
     claudeSessions: {}, // sessions Claude Code hors Sillage, par projet : {at, list}
+    targetStatus: {},   // retard de la branche de destination, par projet : {at, repos, updating, error}
     vigieError: '',
     vigieLogOpen: false, // journal de la Vigie déplié
     projectsById: {}, cardsById: {}, tasksById: {}, agentsById: {},
     tokens: { global: { input: 0, output: 0, costUsd: 0 } },
-    messagesByTask: {}, diffByTask: {}, deliverablesByTask: {},
+    messagesByTask: {}, diffByTask: {}, commitsByTask: {}, deliverablesByTask: {},
     diffCollapsed: {}, diffTreeOpen: false,
     detailErrorByTask: {},
     previews: [], // runs de recette en cours ou terminés (jamais persistés côté serveur)
@@ -1801,6 +1838,7 @@
     previewScope: null, // { kind: 'card'|'task'|'all', id, runId } quand le panneau est ouvert
     deliveryByCard: {}, // aperçu de livraison (GET /api/cards/{id}/delivery), non persisté
     shipResultByCard: {}, // dernier résultat de livraison, affiché dans la modale
+    prDraftByCard: {}, // titre et description de PR par chantier puis dépôt (voir prDraftEntry)
     catchUpErrorByCard: {}, // échec de rattrapage hors conflit, affiché dans la barre
     checkLogOpen: {}, // journal de vérification déplié ou replié par tâche (défaut : déplié sur un échec)
     changesModeTask: null,
@@ -2125,6 +2163,7 @@
     delete state.tasksById[taskId];
     delete state.messagesByTask[taskId];
     delete state.diffByTask[taskId];
+    delete state.commitsByTask[taskId];
     delete state.deliverablesByTask[taskId];
     delete state.detailErrorByTask[taskId];
   }
@@ -2292,7 +2331,10 @@
     if (state.signalId) refreshSignalState(state.signalId);
     if (state.cardId !== prevCardId) state.taskFilter = 'all';
     if (state.taskId) {
-      state.panelTab = route.tab === 'diff' ? 'diff' : (route.tab === 'deliverables' ? 'files' : (route.tab === 'history' ? 'history' : 'chat'));
+      state.panelTab = ({ diff: 'diff', commits: 'commits', deliverables: 'files', history: 'history' })[route.tab] || 'chat';
+      // Les commits se relisent à chaque ouverture de l'onglet : l'agent a pu
+      // en ajouter depuis, et la liste est courte à recharger.
+      if (state.panelTab === 'commits') delete state.commitsByTask[state.taskId];
       if (state.taskId !== prevTaskId) {
         state.panelExpanded = false;
         var t = state.tasksById[state.taskId];
@@ -2359,6 +2401,7 @@
     if (!state.taskId) return;
     var h = '#/p/' + encodeURIComponent(state.projectId) + '/c/' + encodeURIComponent(state.cardId) + '/t/' + encodeURIComponent(state.taskId);
     if (tabKey === 'diff') h += '?tab=diff';
+    else if (tabKey === 'commits') h += '?tab=commits';
     else if (tabKey === 'files') h += '?tab=deliverables';
     else if (tabKey === 'history') h += '?tab=history';
     navigateTo(h);
@@ -3651,7 +3694,9 @@
     }
     if (project) {
       fetchClaudeSessions(project.id);
+      fetchTargetStatus(project.id);
       head += '<div class="kanban-pills">' + buildAutoconfPillHTML(project) + buildSessionsPillHTML(project) + '</div>';
+      head += buildTargetNudgeHTML(project);
     }
     if (project) {
       head += '<div class="kanban-actions">' +
@@ -4354,7 +4399,110 @@
       '<div class="ship-repo-head"><span class="repo-chip">' + escapeHtml(r.repoName) + '</span>' +
       '<span class="mono ship-repo-branch">' + escapeHtml(r.branch) + ' → ' + escapeHtml(target) + '</span></div>' +
       '<div class="ship-repo-meta">' + escapeHtml(meta) + '</div>' +
+      '</div>' + buildPrDraftHTML(prev, r);
+  }
+
+  // Titre et description de la pull request à ouvrir : préremplis par défaut
+  // (r.prTitle, r.prBody), puis par la rédaction d'un agent lancée à
+  // l'ouverture de la modale. Ce qui est dans les champs au clic sur Livrer est
+  // ce qui part. Une saisie de l'humain n'est jamais écrasée par une
+  // proposition arrivée après : elle s'offre alors en un clic.
+  function prDraftEntry(cardId, r) {
+    var byRepo = state.prDraftByCard[cardId] || (state.prDraftByCard[cardId] = {});
+    var key = r.branch + ':' + r.pending + ':' + r.prTitle;
+    var e = byRepo[r.repoName];
+    if (!e || e.key !== key) {
+      e = byRepo[r.repoName] = { key: key, title: r.prTitle, body: r.prBody || '', edited: false, status: 'idle' };
+    }
+    return e;
+  }
+
+  function buildPrDraftHTML(prev, r) {
+    if (prev.mode !== 'pr' || !r.prTitle) return '';
+    var e = prDraftEntry(prev.cardId, r);
+    var repo = escapeHtml(r.repoName);
+    return '<div class="pr-draft">' +
+      '<div class="modal-label">' + escapeHtml(t('ship.prTitleLabel')) + '</div>' +
+      '<input class="modal-input pr-draft-field" data-pr-repo="' + repo + '" data-pr-field="title" value="' + escapeHtml(e.title) + '">' +
+      '<div class="modal-label">' + escapeHtml(t('ship.prBodyLabel')) + '</div>' +
+      '<textarea class="modal-textarea pr-draft-field" data-pr-repo="' + repo + '" data-pr-field="body" rows="7">' + escapeHtml(e.body) + '</textarea>' +
+      '<div class="pr-draft-status" data-pr-status="' + repo + '">' + buildPrDraftStatusHTML(prev.cardId, r.repoName, e) + '</div>' +
       '</div>';
+  }
+
+  function buildPrDraftStatusHTML(cardId, repoName, e) {
+    var agent = state.agentsById[e.agentId];
+    var name = agent ? agent.name : '';
+    var attrs = ' data-card-id="' + escapeHtml(cardId) + '" data-repo="' + escapeHtml(repoName) + '"';
+    if (e.status === 'drafting') return '<span class="shimmer">' + escapeHtml(t('ship.prDrafting')) + '</span>';
+    if (e.status === 'error') {
+      return escapeHtml(t('ship.prDraftFailed', { error: e.error || '' })) +
+        ' <button class="detail-link" data-action="pr-draft-retry"' + attrs + '>' + escapeHtml(t('ship.prDraftRetry')) + '</button>';
+    }
+    if (e.status !== 'done') return '';
+    if (e.proposal && (e.title !== e.proposal.title || e.body !== e.proposal.body)) {
+      return escapeHtml(t('ship.prDraftEdited', { agent: name })) +
+        ' <button class="detail-link" data-action="pr-draft-apply"' + attrs + '>' + escapeHtml(t('ship.prDraftApply')) + '</button>';
+    }
+    return escapeHtml(t('ship.prDraftBy', { agent: name }));
+  }
+
+  // Remet les champs et la ligne d'état d'un dépôt à jour sans reconstruire la
+  // modale (ce qu'on est en train de taper resterait sinon en route).
+  function patchPrDraft(cardId, repoName, withFields) {
+    var e = (state.prDraftByCard[cardId] || {})[repoName];
+    if (!e) return;
+    var sel = '[data-pr-repo="' + CSS.escape(repoName) + '"]';
+    if (withFields) {
+      var title = document.querySelector(sel + '[data-pr-field="title"]');
+      var body = document.querySelector(sel + '[data-pr-field="body"]');
+      if (title) title.value = e.title;
+      if (body) body.value = e.body;
+    }
+    var status = document.querySelector('[data-pr-status="' + CSS.escape(repoName) + '"]');
+    if (status) status.innerHTML = buildPrDraftStatusHTML(cardId, repoName, e);
+  }
+
+  function startPrDraft(cardId, repoName) {
+    var e = (state.prDraftByCard[cardId] || {})[repoName];
+    if (!e || e.status === 'drafting') return;
+    e.status = 'drafting';
+    patchPrDraft(cardId, repoName, false);
+    api('/api/cards/' + cardId + '/pr-draft', { method: 'POST', body: { repoName: repoName } }).then(function (res) {
+      e.status = 'done';
+      e.agentId = res.agentId;
+      e.proposal = { title: res.title || '', body: res.body || '' };
+      if (!e.edited) { e.title = e.proposal.title; e.body = e.proposal.body; }
+      patchPrDraft(cardId, repoName, !e.edited);
+    }).catch(function (err) {
+      e.status = 'error';
+      e.error = (err instanceof ApiError && err.message) || '';
+      patchPrDraft(cardId, repoName, false);
+    });
+  }
+
+  function applyPrDraft(cardId, repoName) {
+    var e = (state.prDraftByCard[cardId] || {})[repoName];
+    if (!e || !e.proposal) return;
+    e.title = e.proposal.title; e.body = e.proposal.body; e.edited = false;
+    patchPrDraft(cardId, repoName, true);
+  }
+
+  function onPrDraftInput(el) {
+    var modal = document.querySelector('[data-action="submit-ship"]');
+    var cardId = modal && modal.getAttribute('data-card-id');
+    var e = cardId && (state.prDraftByCard[cardId] || {})[el.getAttribute('data-pr-repo')];
+    if (!e) return;
+    e[el.getAttribute('data-pr-field')] = el.value;
+    e.edited = true;
+    patchPrDraft(cardId, el.getAttribute('data-pr-repo'), false);
+  }
+
+  function shipPrDrafts(cardId) {
+    var byRepo = state.prDraftByCard[cardId] || {};
+    return Object.keys(byRepo).map(function (repo) {
+      return { repoName: repo, title: byRepo[repo].title, body: byRepo[repo].body };
+    });
   }
 
   function buildShipResultsHTML(cardId) {
@@ -4376,6 +4524,8 @@
   }
 
   function buildShipModalHTML(card, prev) {
+    prev = Object.assign({ cardId: card.id }, prev);
+    var drafting = prev.mode === 'pr' && (prev.repos || []).some(function (r) { return r.prTitle; });
     var reposHTML = (prev.repos || []).map(function (r) { return buildShipRepoRowHTML(prev, r); }).join('');
     var warnings = (prev.warnings || []).map(function (w) {
       return '<div class="modal-note modal-note-warning">⚠ ' + escapeHtml(deliveryWarningText(w)) + '</div>';
@@ -4391,7 +4541,7 @@
     var partialNote = partial > 0
       ? '<div class="modal-note">' + escapeHtml(tCount('ship.partialNote', partial)) + '</div>'
       : '';
-    return '<div class="modal modal-sm">' +
+    return '<div class="modal' + (drafting ? '' : ' modal-sm') + '">' +
       '<div class="modal-head"><span class="modal-title">' + escapeHtml(t('ship.modalTitle')) + '</span>' +
       '<button class="icon-btn" data-action="close-modal" aria-label="' + escapeHtml(t('common.close')) + '">✕</button></div>' +
       '<div class="ship-modal-sub">' + escapeHtml(deliveryActionLabel(prev)) + '</div>' +
@@ -4422,6 +4572,13 @@
     delete state.shipResultByCard[cardId];
     fetchClaudeSessions(card.projectId, true);
     openModal(buildShipModalHTML(card, prev));
+    // La rédaction part dès l'ouverture : le temps de relire le récapitulatif,
+    // la proposition arrive. Une proposition déjà faite pour ces commits reste.
+    if (prev.mode !== 'pr') return;
+    (prev.repos || []).forEach(function (r) {
+      var e = r.prTitle && prDraftEntry(cardId, r);
+      if (e && e.status === 'idle') startPrDraft(cardId, r.repoName);
+    });
   }
 
   // markShipSailing : le temps de la livraison, le bouton de la modale ne se
@@ -4449,8 +4606,9 @@
   function submitShip(cardId) {
     var errEl = document.getElementById('ship-modal-error');
     markShipSailing();
-    api('/api/cards/' + cardId + '/ship', { method: 'POST', body: { confirm: true } }).then(function (res) {
+    api('/api/cards/' + cardId + '/ship', { method: 'POST', body: { confirm: true, prs: shipPrDrafts(cardId) } }).then(function (res) {
       if (res && res.card) upsertCard(res.card);
+      if (!(res.repos || []).some(function (r) { return r.error; })) delete state.prDraftByCard[cardId];
       state.shipResultByCard[cardId] = res;
       var failed = (res.repos || []).filter(function (r) { return r.error; });
       if (!failed.length) armWake('ship', cardId);
@@ -5680,10 +5838,10 @@
     var taskProject = state.projectsById[task.projectId];
     var multiRepo = !!(taskProject && taskProject.repos && taskProject.repos.length > 1);
     var action = primaryActionInfo(task);
-    var tabs = ['chat', 'diff', 'files', 'history'];
-    var tabLabels = { chat: t('tabs.conversation'), diff: t('tabs.diff'), files: t('tabs.deliverables'), history: t('tabs.history') };
-    var tabCounts = { chat: task.messagesCount || 0, diff: task.filesCount || 0, files: (task.docsCount || 0) + (task.filesCount || 0), history: (task.commandLog || []).length };
-    var tabDataAttr = { chat: 'conversation', diff: 'diff', files: 'deliverables', history: 'history' };
+    var tabs = ['chat', 'diff', 'commits', 'files', 'history'];
+    var tabLabels = { chat: t('tabs.conversation'), diff: t('tabs.diff'), commits: t('tabs.commits'), files: t('tabs.deliverables'), history: t('tabs.history') };
+    var tabCounts = { chat: task.messagesCount || 0, diff: task.filesCount || 0, commits: task.commitsCount || 0, files: (task.docsCount || 0) + (task.filesCount || 0), history: (task.commandLog || []).length };
+    var tabDataAttr = { chat: 'conversation', diff: 'diff', commits: 'commits', files: 'deliverables', history: 'history' };
 
     var tabsHTML = tabs.map(function (tk) {
       var active = state.panelTab === tk;
@@ -5810,6 +5968,7 @@
     var bodyHTML = '';
     if (state.panelTab === 'chat') bodyHTML = buildConversationHTML(task, agent);
     else if (state.panelTab === 'diff') bodyHTML = buildDiffHTML(task);
+    else if (state.panelTab === 'commits') bodyHTML = buildCommitsHTML(task);
     else if (state.panelTab === 'files') bodyHTML = buildDeliverablesHTML(task);
     else if (state.panelTab === 'history') bodyHTML = buildHistoryHTML(task);
 
@@ -6825,6 +6984,47 @@
   }
 
   // ---------------------------------------------------------------------
+  // Onglet Commits
+  // ---------------------------------------------------------------------
+  // Les messages partent tels quels dans la branche du chantier puis dans la
+  // pull request : ils se relisent avant d'accepter, comme le diff.
+
+  var FALLBACK_COMMIT_MESSAGE = 'chore: commit uncommitted agent changes'; // fallbackCommitMessage, git.go
+
+  function loadCommits(taskId) {
+    var key = 'commits:' + taskId;
+    if (state.loading[key]) return;
+    state.loading[key] = true;
+    api('/api/tasks/' + taskId + '/commits').then(function (data) {
+      state.commitsByTask[taskId] = data || { commits: [], uncommitted: 0 };
+    }).catch(function () {
+      state.commitsByTask[taskId] = { commits: [], uncommitted: 0 };
+    }).then(function () {
+      delete state.loading[key];
+      renderMain();
+    });
+  }
+
+  function buildCommitsHTML(task) {
+    var d = state.commitsByTask[task.id];
+    if (!d) {
+      loadCommits(task.id);
+      return '<div class="conv-loading">' + escapeHtml(t('common.loading')) + '</div>';
+    }
+    var note = d.uncommitted > 0
+      ? '<div class="commits-note">' + escapeHtml(tCount('commits.uncommitted', d.uncommitted, { message: FALLBACK_COMMIT_MESSAGE })) + '</div>'
+      : '';
+    if (!d.commits.length) return '<div class="commits-list">' + note + '<div class="empty-note">' + escapeHtml(t('commits.empty')) + '</div></div>';
+    return '<div class="commits-list">' + note + d.commits.map(function (c) {
+      return '<article class="commit-item">' +
+        '<div class="commit-subject mono">' + escapeHtml(c.subject) + '</div>' +
+        (c.body ? '<div class="commit-body mono">' + escapeHtml(c.body) + '</div>' : '') +
+        '<div class="commit-meta mono">' + escapeHtml([c.hash, c.author, c.relTime].filter(Boolean).join(' · ')) + '</div>' +
+      '</article>';
+    }).join('') + '</div>';
+  }
+
+  // ---------------------------------------------------------------------
   // Onglet Historique
   // ---------------------------------------------------------------------
 
@@ -6928,6 +7128,7 @@
   // avec le message de l'API en repli pour tout le reste.
   function acceptErrorText(e) {
     if (e.status === 409) return t('errors.acceptConflict');
+    if (e.status === 422) return t('errors.acceptOffBranch');
     return e.message || t('errors.acceptFailed');
   }
 
@@ -8618,6 +8819,71 @@
     });
   }
 
+  // ---------------------------------------------------------------------
+  // Branche de destination en retard sur origin (voir target.go)
+  // ---------------------------------------------------------------------
+  // Lu à l'ouverture du projet ; le serveur ne fetch qu'une fois toutes les
+  // cinq minutes par dépôt, le navigateur ne redemande pas plus souvent.
+
+  var TARGET_STATUS_TTL = 300000;
+
+  function fetchTargetStatus(projectId, force) {
+    var cur = state.targetStatus[projectId];
+    if (!force && cur && (cur.loading || Date.now() - cur.at < TARGET_STATUS_TTL)) return;
+    state.targetStatus[projectId] = Object.assign({ repos: [] }, cur || {}, { loading: true });
+    api('/api/projects/' + encodeURIComponent(projectId) + '/target-status').then(function (res) {
+      state.targetStatus[projectId] = { at: Date.now(), repos: (res && res.repos) || [] };
+      refreshTargetNudge(projectId);
+    }).catch(function () {
+      state.targetStatus[projectId] = { at: Date.now(), repos: (cur && cur.repos) || [] };
+    });
+  }
+
+  function updateTarget(projectId) {
+    var cur = state.targetStatus[projectId];
+    if (!cur || cur.updating) return;
+    cur.updating = true;
+    cur.error = '';
+    refreshTargetNudge(projectId);
+    api('/api/projects/' + encodeURIComponent(projectId) + '/target-status/update', { method: 'POST' }).then(function (res) {
+      var repos = (res && res.repos) || [];
+      var failed = repos.filter(function (r) { return r.error; })[0];
+      state.targetStatus[projectId] = { at: Date.now(), repos: repos, error: failed ? failed.error : '' };
+      refreshTargetNudge(projectId);
+    }).catch(function (e) {
+      cur.updating = false;
+      cur.error = (e && e.message) || '';
+      refreshTargetNudge(projectId);
+    });
+  }
+
+  // Une ligne par dépôt en retard ; le nom du dépôt ne s'affiche que si le
+  // projet en a plusieurs. Un dépôt à jour ne dit rien.
+  function buildTargetNudgeHTML(project) {
+    var cur = state.targetStatus[project.id];
+    var attr = ' data-target-nudge="' + project.id + '"';
+    var lagging = ((cur && cur.repos) || []).filter(function (r) { return r.behind > 0; });
+    if (!lagging.length) return '<span' + attr + ' hidden></span>';
+    var multi = (project.repos || []).length > 1;
+    var lines = lagging.map(function (r) {
+      var vars = { branch: r.target, ahead: r.ahead, behind: r.behind };
+      var text = r.ahead > 0 ? t('target.diverged', vars) : tCount('target.behind', r.behind, vars);
+      return '<div class="target-nudge-line">' + (multi ? '<strong>' + escapeHtml(r.repoName) + '</strong> · ' : '') + escapeHtml(text) + '</div>';
+    }).join('');
+    var canUpdate = lagging.some(function (r) { return r.ahead === 0; });
+    var label = cur.updating ? t('target.updating') : t('target.update', { branch: lagging[0].target });
+    return '<div class="target-nudge"' + attr + ' role="status">' + lines +
+      (canUpdate ? '<button class="detail-link" data-action="target-update" data-project-id="' + project.id + '"' + (cur.updating ? ' disabled' : '') + '>' + escapeHtml(label) + '</button>' : '') +
+      (cur.error ? '<div class="target-nudge-error">' + escapeHtml(cur.error) + '</div>' : '') +
+      '</div>';
+  }
+
+  function refreshTargetNudge(projectId) {
+    var project = state.projectsById[projectId];
+    var el = document.querySelector('[data-target-nudge="' + projectId + '"]');
+    if (project && el) el.outerHTML = buildTargetNudgeHTML(project);
+  }
+
   function claudeSessionList(projectId) {
     var cur = state.claudeSessions[projectId];
     return (cur && cur.list) || [];
@@ -10123,6 +10389,7 @@
       case 'signal-dismiss': dismissSignal(el.getAttribute('data-signal-id')); break;
       case 'signal-stop': stopSignal(el.getAttribute('data-signal-id')); break;
       case 'open-claude-sessions': openClaudeSessionsModal(el.getAttribute('data-project-id')); break;
+      case 'target-update': updateTarget(el.getAttribute('data-project-id')); break;
       case 'claude-session-copy': copyClaudeSessionCmd(el.getAttribute('data-project-id'), el.getAttribute('data-session-id'), el); break;
       case 'claude-session-workstream': claudeSessionToWorkstream(el.getAttribute('data-project-id'), el.getAttribute('data-session-id')); break;
       case 'autoconf-start': startAutoconf(el.getAttribute('data-project-id')); break;
@@ -10221,6 +10488,8 @@
       case 'ask-rebase': askRebase(el.getAttribute('data-task-id')); break;
       case 'open-ship-modal': openShipModal(el.getAttribute('data-card-id')); break;
       case 'submit-ship': submitShip(el.getAttribute('data-card-id')); break;
+      case 'pr-draft-retry': startPrDraft(el.getAttribute('data-card-id'), el.getAttribute('data-repo')); break;
+      case 'pr-draft-apply': applyPrDraft(el.getAttribute('data-card-id'), el.getAttribute('data-repo')); break;
       case 'catch-up-card': catchUpCard(el.getAttribute('data-card-id')); break;
       case 'open-card-preview': openPreviewModal('card', el.getAttribute('data-card-id')); break;
       case 'open-task-preview': openPreviewModal('task', el.getAttribute('data-task-id')); break;
@@ -10414,6 +10683,10 @@
     if (e.target && e.target.id === 'composer-input') {
       autoGrowComposer(e.target);
       refreshComposerState();
+      return;
+    }
+    if (e.target && e.target.classList && e.target.classList.contains('pr-draft-field')) {
+      onPrDraftInput(e.target);
       return;
     }
     if (e.target && e.target.id === 'issue-search') {
