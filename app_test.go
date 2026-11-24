@@ -97,7 +97,7 @@ func TestInstallDesktopEntry(t *testing.T) {
 		t.Fatal(err)
 	}
 	text := string(entry)
-	for _, want := range []string{"[Desktop Entry]", "Icon=sillage", " -app -data \"/home/me/My Data\"\n", "Terminal=false"} {
+	for _, want := range []string{"[Desktop Entry]", "Icon=" + filepath.Join(dataHome, "icons", "hicolor", "scalable", "apps", "sillage.svg") + "\n", " -app -data \"/home/me/My Data\"\n", "Terminal=false"} {
 		if !strings.Contains(text, want) {
 			t.Errorf("desktop entry lacks %q:\n%s", want, text)
 		}

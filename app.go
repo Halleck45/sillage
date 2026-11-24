@@ -160,7 +160,11 @@ func installDesktopEntry(web fs.FS, extraArgs []string) (string, error) {
 	if err := os.MkdirAll(iconDir, 0o755); err != nil {
 		return "", err
 	}
-	if err := os.WriteFile(filepath.Join(iconDir, "sillage.svg"), icon, 0o644); err != nil {
+	// Chemin absolu dans Icon= plutôt qu'un nom de thème : un icon-theme.cache
+	// déjà présent dans ce dossier (posé par un autre installeur) fait foi pour
+	// GTK, qui ne voit alors pas une icône ajoutée après lui.
+	iconPath := filepath.Join(iconDir, "sillage.svg")
+	if err := os.WriteFile(iconPath, icon, 0o644); err != nil {
 		return "", err
 	}
 
@@ -174,7 +178,7 @@ func installDesktopEntry(web fs.FS, extraArgs []string) (string, error) {
 		"Name=Sillage",
 		"Comment=Pilot AI coding agents across your projects",
 		"Exec=" + strings.Join(execLine, " "),
-		"Icon=sillage",
+		"Icon=" + iconPath,
 		"Terminal=false",
 		"Categories=Development;",
 		"StartupNotify=false",
