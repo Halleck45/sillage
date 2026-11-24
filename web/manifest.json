@@ -1,0 +1,15 @@
+{
+  "id": "/",
+  "name": "Sillage",
+  "short_name": "Sillage",
+  "description": "Pilot AI coding agents across your projects",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f2f0eb",
+  "theme_color": "#f2f0eb",
+  "icons": [
+    { "src": "favicon.svg", "sizes": "any", "type": "image/svg+xml" },
+    { "src": "apple-touch-icon.png", "sizes": "180x180", "type": "image/png" }
+  ]
+}

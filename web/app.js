@@ -10790,8 +10790,17 @@
     if (e.key === '?') { e.preventDefault(); openShortcutsModal(); }
   }
 
+  // Service worker : sans cache, il ne sert qu'à la fenêtre installée (voir
+  // web/sw.js). Hors contexte sûr (accès réseau local au certificat auto-signé
+  // non accepté), l'enregistrement échoue et rien d'autre ne change.
+  function registerServiceWorker() {
+    if (!('serviceWorker' in navigator) || !window.isSecureContext) return;
+    navigator.serviceWorker.register('sw.js').catch(function () { /* facultatif */ });
+  }
+
   document.addEventListener('DOMContentLoaded', function () {
     applyStaticTranslations();
+    registerServiceWorker();
     var form = document.getElementById('login-form');
     if (form) form.addEventListener('submit', onLoginSubmit);
     document.addEventListener('click', onGlobalClick);

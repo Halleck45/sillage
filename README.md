@@ -60,6 +60,8 @@ Prefer doing it by hand? Grab a binary from the [releases page](https://github.c
 
 Then open http://127.0.0.1:8787. No login is required by default. To require a password, set `SILLAGE_PASSWORD=yourpassword sillage`.
 
+Rather have it in its own window? `sillage -app` opens Sillage as an app in Chrome, Edge, Brave or Chromium, starting the server first if it is not running yet. Closing the window leaves the agents working. On Linux, `sillage -install-app` adds it to the application menu with its icon. On macOS, run the server with `brew services start sillage` and choose "Install Sillage" in Chrome's address bar: it then lives in the Dock and Launchpad like any other app.
+
 Add a project (any local git repository), create a card, create a task, pick an agent: it starts working immediately in its own worktree. Try the free agent Écho first if you want to see the flow without any API cost.
 
 Project settings include explicit Ruby, Node.js, PHP, Python, Go, and Rust permission profiles. A profile allows the stack's local commands and redirects package/build caches to task-scoped writable directories managed by Sillage. For example, the Ruby profile keeps Bundler and gem executables out of `/usr/local/bin` without adding generated dependencies to the repository diff.

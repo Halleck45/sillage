@@ -15,7 +15,7 @@ node --check web/app.js                                   # syntaxe du frontend
 
 La CI (`.github/workflows/ci.yml`) exige les cinq : `gofmt -l .` vide, `go vet ./...`, `go test ./...`, `go build`, `node --check web/app.js`.
 
-Flags du binaire : `-addr` (défaut `127.0.0.1:8787`), `-data` (défaut `~/.local/share/sillage`), `-version`. Env : `SILLAGE_PASSWORD` (remplace le hash du mot de passe au démarrage, pratique en dev), `SILLAGE_CODEX_SANDBOX` (mode sandbox de codex, défaut `workspace-write`).
+Flags du binaire : `-addr` (défaut `127.0.0.1:8787`), `-data` (défaut `~/.local/share/sillage`), `-version`, `-app` (ouvre la fenêtre d'application, démarre le serveur s'il ne répond pas), `-install-app` (lanceur du menu d'applications, Linux). Env : `SILLAGE_PASSWORD` (remplace le hash du mot de passe au démarrage, pratique en dev), `SILLAGE_CODEX_SANDBOX` (mode sandbox de codex, défaut `workspace-write`), `SILLAGE_BROWSER` (navigateur de la fenêtre d'application).
 
 Le frontend est embarqué via `//go:embed web` : toute modification de `web/` demande un rebuild + redémarrage pour être visible.
 
@@ -53,7 +53,9 @@ Ce sont les promesses de sécurité du produit (voir `CONTRIBUTING.md`) :
 Binaire Go unique, frontend vanilla embarqué, persistance JSON, temps réel SSE.
 
 ```
-main.go                     flags, dataDir, init mot de passe, Store, embed web/, ListenAndServe
+main.go                     flags, dataDir, init mot de passe, Store, embed web/, écoute
+app.go                      mode app : fenêtre Chromium --app, lanceur .desktop
+instance.go                 une instance par dossier de données (flock sur sillage.lock + adresse publiée)
 internal/server/
   models.go                 tous les structs JSON de SPEC-API.md
   store.go                  état en mémoire + persistance atomique + compteurs dérivés
@@ -80,8 +82,18 @@ internal/server/
   workspace.go              dataDir en dépôt git optionnel (setup, clone, commit auto throttlé)
   auth.go                   bcrypt, sessions en mémoire, rate-limit login
   sse.go                    Hub pub/sub
-web/                        index.html + style.css + app.js (SPA vanilla, zéro dépendance)
+web/                        index.html + style.css + app.js (SPA vanilla, zéro dépendance),
+                            manifest.json + sw.js (application installable)
 ```
+
+### Fenêtre d'application (`app.go`, `web/sw.js`)
+
+L'« app » n'est pas un runtime embarqué : c'est une fenêtre `--app` d'un navigateur Chromium déjà installé, ouverte sur le serveur. Pas de webview natif (Wails, Tauri, webview_go) : cgo casserait la compilation croisée `CGO_ENABLED=0` de la release, et WebKitGTK rend mal le `backdrop-filter` du design. Fermer la fenêtre n'arrête rien, les agents vivent dans le serveur.
+
+- **Une instance par dossier de données, pas par port** (`instance.go`) : `flock` sur `<dataDir>/sillage.lock`, pris avant `NewStore` (qui réécrit `state.json` dès le chargement) et tenu toute la vie du process, puis l'adresse réelle publiée dans ce fichier une fois le port lié. Verrou déjà pris : `-app` lit l'adresse, ouvre la fenêtre dessus et sort sans charger l'état, quel que soit `-addr` ; un lancement ordinaire refuse de démarrer et dit où est l'instance. Le noyau libère le verrou à la mort du process (pas de verrou périmé après un crash) ; `O_CLOEXEC` l'empêche de passer aux agents et le relâche à l'`exec` de `restartInPlace`.
+- Verrou libre : démarrage normal, fenêtre ouverte une fois le port lié. Si le bind échoue et qu'un Sillage répond sur ce port (binaire antérieur au verrou), `-app` ouvre la fenêtre dessus. Le drapeau est retiré d'`os.Args` : `restartInPlace` rouvrirait sinon une fenêtre à chaque mise à jour, et le statut du service brew verrait des arguments personnalisés.
+- Le navigateur est lancé dans son propre groupe de process (un Ctrl+C sur le serveur ne le ferme pas), avec le profil de l'utilisateur : la fenêtre rejoint le process existant et reprend la session.
+- `sw.js` ne cache rien. Il ne sert qu'à la page « Sillage ne tourne pas » quand l'app installée s'ouvre sans serveur. Les règles de routage statique (`addRoutes`) sortent du service worker tout ce qui n'est pas une navigation, plus `/api/` et `/preview/` : ne jamais y ajouter de cache, ni intercepter le flux SSE.
 
 ### Store (`store.go`)
 
@@ -199,4 +211,4 @@ Le parser de diff se teste sur une fixture inline (`TestParseDiffFixture`).
 
 ## Données à l'exécution
 
-`~/.local/share/sillage/` : `state.json` (tout l'état), `config.json` (`passwordHash`), `worktrees/<taskId>/` (un worktree git par tâche), `worktrees/ws-<cardId>-<repo>/` (un par branche de chantier), `worktrees/.merge-<cardId>-<repo>/` (transitoire, mode de livraison « fusion locale »), `attachments/<taskId>/` (les images jointes aux messages, supprimées avec la tâche), `package-cache/<taskId>/<profil>/` (caches de toolchain hors diff, supprimés avec la tâche), et optionnellement un dépôt git de l'espace de travail qui ne versionne que `state.json`, `config.json` et `.gitignore`.
+`~/.local/share/sillage/` : `sillage.lock` (verrou d'instance et adresse du serveur en cours), `state.json` (tout l'état), `config.json` (`passwordHash`), `worktrees/<taskId>/` (un worktree git par tâche), `worktrees/ws-<cardId>-<repo>/` (un par branche de chantier), `worktrees/.merge-<cardId>-<repo>/` (transitoire, mode de livraison « fusion locale »), `attachments/<taskId>/` (les images jointes aux messages, supprimées avec la tâche), `package-cache/<taskId>/<profil>/` (caches de toolchain hors diff, supprimés avec la tâche), et optionnellement un dépôt git de l'espace de travail qui ne versionne que `state.json`, `config.json` et `.gitignore`.
