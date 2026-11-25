@@ -960,8 +960,10 @@ button, input, textarea { font-family: inherit; }
 .ship-btn:disabled { background: var(--border); color: var(--muted-3); box-shadow: none; cursor: not-allowed; opacity: 1; }
 .ship-btn:disabled:hover { background: var(--border); box-shadow: none; }
 .ship-links { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 2px; }
-.ship-link { font-size: 12px; color: var(--accent); text-decoration: none; }
-.ship-link:hover { text-decoration: underline; }
+/* La pull request d'un chantier livré : un bouton secondaire de l'en-tête,
+   juste avant celui de la livraison (voir buildPrButtonsHTML). */
+.ship-pr-btn { text-decoration: none; padding-left: 13px; }
+.ship-pr-btn .icon-link-svg, .ship-pr-btn .ui-icon { flex: none; }
 .forge-links { display: inline-flex; align-items: center; gap: 2px; }
 .ship-link-note { font-size: 12px; color: var(--green-live); }
 
@@ -2017,6 +2019,8 @@ button, input, textarea { font-family: inherit; }
   .main:has(.work-body.has-panel) .crumb-title-wrap { display: none; }
   .topbar-actions { gap: 6px; }
   .preview-btn, .preview-task-btn, .preview-counter { display: none; }
+  .ship-pr-label { display: none; }
+  .ship-pr-btn { padding: 0 9px; }
 
   /* Ligne de tâche : le titre d'abord, entier sur deux lignes au besoin. */
   .task-row { gap: 12px; padding: 16px 8px; }

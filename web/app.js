@@ -340,6 +340,9 @@
       'ship.files.one': '{n} fichier',
       'ship.files.other': '{n} fichiers',
       'ship.prLink': 'Voir la pull request',
+      'ship.prButton': 'Pull request',
+      'ship.mrButton': 'Merge request',
+      'ship.mrLink': 'Voir la merge request',
       'ship.mergedInto': 'Fusionné dans {base}',
       'ship.mergedPushed': 'Fusionné dans {base} et poussé',
       'ship.pushedBranch': 'Branche {branch} poussée',
@@ -1222,6 +1225,9 @@
       'ship.files.one': '{n} file',
       'ship.files.other': '{n} files',
       'ship.prLink': 'View the pull request',
+      'ship.prButton': 'Pull request',
+      'ship.mrButton': 'Merge request',
+      'ship.mrLink': 'View the merge request',
       'ship.mergedInto': 'Merged into {base}',
       'ship.mergedPushed': 'Merged into {base} and pushed',
       'ship.pushedBranch': 'Branch {branch} pushed',
@@ -4057,13 +4063,10 @@
     // l'en-tête le dit déjà (voir buildShipButtonHTML), et un simple texte ne
     // vaut pas le doublon, contrairement à un lien cliquable.
     var anchored = shipAlreadyOnTarget(prev);
-    var shipped = (prev.repos || []).filter(function (r) { return r.prUrl || (r.shippedAt && !anchored); });
+    // La pull request elle-même est un bouton de l'en-tête (buildPrButtonsHTML).
+    var shipped = (prev.repos || []).filter(function (r) { return !r.prUrl && r.shippedAt && !anchored; });
     if (!shipped.length) return '';
     var items = shipped.map(function (r) {
-      if (r.prUrl) {
-        return '<a class="ship-link" href="' + escapeHtml(r.prUrl) + '" target="_blank" rel="noopener">' +
-          escapeHtml(t('ship.prLink')) + (prev.repos.length > 1 ? ' (' + escapeHtml(r.repoName) + ')' : '') + '</a>';
-      }
       // Pas d'URL : fusion (locale ou poussée), ou branche poussée sans PR.
       var note;
       if (prev.mode === 'merge') note = t('ship.mergedInto', { base: prev.target || r.base });
@@ -4108,7 +4111,8 @@
     check: 'M3.5 8.5l3 3 6-7',
     alert: 'M8 14.25a6.25 6.25 0 1 0 0-12.5 6.25 6.25 0 0 0 0 12.5ZM8 4.75v3.75M8 11.1v.15',
     redo: 'M13.25 3.5v3.25H10M13 6.5A5.25 5.25 0 1 0 13.1 10',
-    dash: 'M5 8h6'
+    dash: 'M5 8h6',
+    external: 'M9.25 2.75h4v4M13.25 2.75 7.75 8.25M11.75 9.5v3a.75.75 0 0 1-.75.75H3.5a.75.75 0 0 1-.75-.75V5a.75.75 0 0 1 .75-.75h3'
   };
   // Chaque projet a sa teinte, prise dans une palette courte et choisie, jamais
   // tirée au hasard : l'ambiance derrière le verre la prend, et on sait dans
@@ -4257,7 +4261,7 @@
       var base = prev.target || (prev.repos[0] && prev.repos[0].base) || '';
       var label = t('ship.alreadyOnTarget', { base: base });
       var tip = t('ship.alreadyOnTargetSub', { base: base });
-      return '<span class="ship-slot"><span class="ship-anchored" title="' + escapeHtml(tip) + '">' +
+      return '<span class="ship-slot">' + buildPrButtonsHTML(prev) + '<span class="ship-anchored" title="' + escapeHtml(tip) + '">' +
         anchorIconHTML() + escapeHtml(label) + '</span>' + buildCommitsChipHTML(prev) + '</span>';
     }
     if (prev && shipNeedsRebase(prev)) {
@@ -4277,10 +4281,28 @@
         (catching ? ' disabled' : '') +
         ' title="' + escapeHtml(t('catchUp.tooltip', { base: target })) + '">' + catchUpLabel + '</button>';
     }
-    return '<span class="ship-slot">' + catchUp +
+    return '<span class="ship-slot">' + catchUp + buildPrButtonsHTML(prev) +
       '<button class="btn-green ship-btn" ' + (ready ? '' : 'disabled title="' + escapeHtml(sub) + '"') +
       ' data-action="open-ship-modal" data-card-id="' + card.id + '">' +
       shipIconHTML() + escapeHtml(t('ship.button')) + '</button>' + buildCommitsChipHTML(prev) + '</span>';
+  }
+
+  // La pull request ouverte par une livraison : un bouton de l'en-tête, à côté
+  // de celui qui l'a créée, et non une ligne de lien sous la barre. Elle reste
+  // là après l'arrivée de travail nouveau (la prochaine livraison la met à jour)
+  // et après la fusion (c'est là qu'on relit la discussion).
+  function buildPrButtonsHTML(prev) {
+    var repos = ((prev && prev.repos) || []).filter(function (r) { return r.prUrl; });
+    if (!repos.length) return '';
+    var gitlab = prev.provider === 'gitlab';
+    var multi = (prev.repos || []).length > 1;
+    return repos.map(function (r) {
+      var label = t(gitlab ? 'ship.mrButton' : 'ship.prButton') + (multi ? ' · ' + r.repoName : '');
+      var tip = t(gitlab ? 'ship.mrLink' : 'ship.prLink') + (multi ? ' (' + r.repoName + ')' : '');
+      var icon = prev.provider === 'github' ? repoIconHTML() : uiIconHTML('external', 14);
+      return '<a class="btn-outline ship-pr-btn" href="' + escapeHtml(r.prUrl) + '" target="_blank" rel="noopener noreferrer" title="' +
+        escapeHtml(tip) + '" aria-label="' + escapeHtml(tip) + '">' + icon + '<span class="ship-pr-label">' + escapeHtml(label) + '</span></a>';
+    }).join('');
   }
 
   // Un chantier a besoin d'être rattrapé dès que sa destination a avancé sans
