@@ -962,6 +962,7 @@ button, input, textarea { font-family: inherit; }
 .ship-links { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 2px; }
 .ship-link { font-size: 12px; color: var(--accent); text-decoration: none; }
 .ship-link:hover { text-decoration: underline; }
+.forge-links { display: inline-flex; align-items: center; gap: 2px; }
 .ship-link-note { font-size: 12px; color: var(--green-live); }
 
 /* Récapitulatif de livraison (modale) : le bouton d'action EST la confirmation. */

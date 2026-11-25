@@ -22,6 +22,11 @@ type TargetStatus struct {
 	Behind   int    `json:"behind"`
 	Ahead    int    `json:"ahead"`
 	Error    string `json:"error,omitempty"`
+
+	// Provider et WebURL décrivent la page du dépôt sur sa forge (github|gitlab),
+	// déduites du remote origin sans réseau. Vides pour une forge inconnue.
+	Provider string `json:"provider,omitempty"`
+	WebURL   string `json:"webUrl,omitempty"`
 }
 
 // targetFetches retient le dernier fetch de chaque dépôt (en mémoire seulement).
@@ -55,6 +60,16 @@ func repoTarget(project Project, repo Repo) (string, error) {
 	return currentBranch(repo.Path)
 }
 
+// repoWebURL donne la page web du dépôt sur sa forge, déduite du remote origin
+// (lecture de la config git, aucun réseau). Forge inconnue : deux chaînes vides.
+func repoWebURL(dir string) (provider, webURL string) {
+	info := DetectForge(dir)
+	if info.Provider == "" {
+		return "", ""
+	}
+	return info.Provider, "https://" + info.Host + "/" + info.Path
+}
+
 // targetStatuses calcule l'état de chaque dépôt du projet, après un fetch si
 // fetch est vrai et que le dernier date de plus de targetFetchInterval. Un
 // fetch en échec (hors ligne, remote qui demande des identifiants) n'empêche
@@ -62,12 +77,13 @@ func repoTarget(project Project, repo Repo) (string, error) {
 func (s *Server) targetStatuses(project Project, fetch bool) []TargetStatus {
 	out := make([]TargetStatus, 0, len(project.Repos))
 	for _, repo := range project.Repos {
+		provider, webURL := repoWebURL(repo.Path)
 		target, err := repoTarget(project, repo)
 		if err != nil {
-			out = append(out, TargetStatus{RepoName: repo.Name, Error: err.Error()})
+			out = append(out, TargetStatus{RepoName: repo.Name, Error: err.Error(), Provider: provider, WebURL: webURL})
 			continue
 		}
-		st := TargetStatus{RepoName: repo.Name, Target: target}
+		st := TargetStatus{RepoName: repo.Name, Target: target, Provider: provider, WebURL: webURL}
 		if fetch && s.targetFetches.due(repo.Path) {
 			if err := FetchTarget(repo.Path, target); err != nil {
 				st.Error = err.Error()

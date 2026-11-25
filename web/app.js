@@ -93,6 +93,7 @@
       'kanban.archived.other': '{n} chantiers archivés',
       'workstream.archived': 'Archivé',
       'project.editTooltip': 'Modifier le projet',
+      'project.openOnGithub': 'Ouvrir sur GitHub',
       'project.editTitle': 'Réglages du projet',
       'project.tabGeneral': 'Général',
       'project.tabRepos': 'Dépôts',
@@ -974,6 +975,7 @@
       'kanban.archived.other': '{n} archived workstreams',
       'workstream.archived': 'Archived',
       'project.editTooltip': 'Edit project',
+      'project.openOnGithub': 'Open on GitHub',
       'project.editTitle': 'Project settings',
       'project.tabGeneral': 'General',
       'project.tabRepos': 'Repositories',
@@ -3689,6 +3691,7 @@
       '<div class="kanban-title-row"><h1>' + escapeHtml(project ? project.name : '') + '</h1>';
     if (project) {
       head += '<button class="icon-btn" data-action="open-edit-project" title="' + escapeHtml(t('project.editTooltip')) + '" aria-label="' + escapeHtml(t('project.editTooltip')) + '">' + uiIconHTML('edit', 15) + '</button>';
+      head += buildForgeLinksHTML(project);
     }
     head += '</div>';
     // La description dit ce qu'est le projet : elle se lit sous son nom, avant
@@ -8913,6 +8916,24 @@
     var project = state.projectsById[projectId];
     var el = document.querySelector('[data-target-nudge="' + projectId + '"]');
     if (project && el) el.outerHTML = buildTargetNudgeHTML(project);
+    var links = document.querySelector('[data-forge-links="' + projectId + '"]');
+    if (project && links) links.outerHTML = buildForgeLinksHTML(project);
+  }
+
+  // Lien vers la page GitHub de chaque dépôt, à côté du crayon du titre. L'URL
+  // vient de target-status (déduite du remote origin côté serveur) : tant
+  // qu'elle n'est pas arrivée, un emplacement vide garde la place du nœud.
+  function buildForgeLinksHTML(project) {
+    var cur = state.targetStatus[project.id];
+    var attr = ' data-forge-links="' + project.id + '"';
+    var repos = ((cur && cur.repos) || []).filter(function (r) { return r.provider === 'github' && r.webUrl; });
+    if (!repos.length) return '<span' + attr + ' hidden></span>';
+    var multi = repos.length > 1;
+    return '<span class="forge-links"' + attr + '>' + repos.map(function (r) {
+      var label = t('project.openOnGithub') + (multi ? ' : ' + r.repoName : '');
+      return '<a class="icon-btn" href="' + escapeHtml(r.webUrl) + '" target="_blank" rel="noopener noreferrer" title="' +
+        escapeHtml(label) + '" aria-label="' + escapeHtml(label) + '">' + repoIconHTML() + '</a>';
+    }).join('') + '</span>';
   }
 
   function claudeSessionList(projectId) {

@@ -314,3 +314,24 @@ func TestCatchUpFastForwardsEmptyWorkstreamToOrigin(t *testing.T) {
 		t.Fatalf("compteurs de la tâche rebasée à la main : 1 fichier et 1 commit attendus, reçu %d et %d", task.FilesCount, task.CommitsCount)
 	}
 }
+
+func TestRepoWebURLFromOrigin(t *testing.T) {
+	cases := []struct{ remote, provider, url string }{
+		{"git@github.com:acme/app.git", "github", "https://github.com/acme/app"},
+		{"https://github.com/acme/app", "github", "https://github.com/acme/app"},
+		{"git@gitlab.example.com:team/sub/app.git", "gitlab", "https://gitlab.example.com/team/sub/app"},
+		{"git@git.example.com:acme/app.git", "", ""},
+	}
+	for _, c := range cases {
+		dir := t.TempDir()
+		runTestGit(t, dir, "init", "-q")
+		runTestGit(t, dir, "remote", "add", "origin", c.remote)
+		provider, url := repoWebURL(dir)
+		if provider != c.provider || url != c.url {
+			t.Errorf("%s: got (%q, %q), want (%q, %q)", c.remote, provider, url, c.provider, c.url)
+		}
+	}
+	if p, u := repoWebURL(t.TempDir()); p != "" || u != "" {
+		t.Errorf("no repo: got (%q, %q)", p, u)
+	}
+}
