@@ -57,11 +57,15 @@ Project { "id": "p1", "name": "sillage", "description": "...", "repos": [Repo, .
           // il reste listé (et modifiable) depuis la page "Tous les projets". Faux par défaut.
 
 CardBranch { "repoName": "api", "branch": "sillage/ws-101-refonte-auth", "base": "main",
-             "worktreeDir": "...", "prUrl": "", "shippedAt": null }
+             "worktreeDir": "...", "prUrl": "", "prState": "", "adopted": false, "shippedAt": null }
           // Branche de feature du chantier sur un dépôt (une par dépôt touché).
           // shippedAt : livré ET rien de nouveau depuis ; remis à null dès qu'une tâche
           // est ajoutée au chantier ou qu'une acceptation ajoute des commits.
-          // prUrl : conservée après cette remise à zéro (la PR existe toujours).
+          // prUrl : toujours une pull request réelle (/pull/<n>, /-/merge_requests/<n>),
+          // jamais une page de création ; conservée après la remise à zéro de shippedAt.
+          // prState : open|merged|closed, vide si inconnu (omis du JSON quand vide).
+          // adopted : la branche est la tête d'une PR existante (voir « Partir d'une
+          // pull request existante »), pas une branche sillage/ws-… (omis si faux).
 
 Card    { "id": "c1", "projectId": "p1", "ref": 101, "column": "soon|doing|done", "title": "...",
           "tasksTotal": 4, "tasksDone": 1, "docsCount": 2, "messagesCount": 12,
@@ -572,11 +576,11 @@ Forme de `quota` quand non nul : `{ "updatedAt": "...", "windows": [ { "label": 
 
 ### Livraison d'un chantier
 
-Le chantier est une branche de feature : une branche `sillage/ws-<card.ref>-<slug>` par couple (chantier, dépôt), avec son worktree dédié, créée à la première tâche du chantier sur ce dépôt depuis `project.delivery.target` (ou la branche courante du dépôt si `target` est vide). Les branches de tâche partent de cette branche et y sont fusionnées à l'acceptation ; elles ne sont jamais poussées.
+Le chantier est une branche de feature : une branche `sillage/ws-<card.ref>-<slug>` par couple (chantier, dépôt), avec son worktree dédié, créée à la première tâche du chantier sur ce dépôt depuis `project.delivery.target`. Si `target` est vide : la branche par défaut d'origin (`refs/remotes/origin/HEAD`, sans réseau, repli sur la branche courante) dans les modes `pr` et `push`, la branche courante dans les modes de fusion. La branche courante pouvait être une branche locale jamais poussée, base impossible pour une pull request. Les branches de tâche partent de cette branche et y sont fusionnées à l'acceptation ; elles ne sont jamais poussées.
 
 **Réglage du projet** (`Project.delivery.mode`), quatre comportements. L'API l'accepte à la création comme à la modification ; l'UI ne le demande qu'après coup (onglet Livraison des réglages du projet), la création s'appuyant sur la déduction décrite plus bas :
 
-- `"pr"` : pousse la branche du chantier puis ouvre la pull request (GitHub, `gh pr create`) ou la merge request (GitLab, `glab mr create`) ; en l'absence du CLI ou en cas d'échec, repli sur une URL de création pré-remplie en lecture seule (`https://<host>/<path>/compare/<base>...<branch>?expand=1`, ou `https://<host>/<path>/-/merge_requests/new?merge_request[source_branch]=...&merge_request[target_branch]=...`). La branche est poussée dans les deux cas : le repli ne dégrade que l'ouverture de la requête.
+- `"pr"` : pousse la branche du chantier puis ouvre la pull request (GitHub, `gh pr create`) ou la merge request (GitLab, `glab mr create`), sauf si une PR ouverte existe déjà pour la branche (le push la met à jour). En l'absence du CLI ou en cas d'échec, la branche reste poussée, mais le dépôt est **en erreur** (`error` : `"branch pushed, but the pull request was not opened: <sortie du CLI>"`), `compareUrl` porte la page de création pré-remplie (`https://<host>/<path>/compare/<base>...<branch>?expand=1`, ou `https://<host>/<path>/-/merge_requests/new?...`), et `shippedAt` n'est pas posé : le chantier reste à livrer, l'aperçu annonce `pending` > 0, et relivrer retente l'ouverture. La page de création n'est jamais enregistrée dans `prUrl`. Sur une forge inconnue, aucune PR n'est tentée et le push suffit à livrer.
 - `"push"` : pousse la branche du chantier, et s'arrête là. Aucune pull request n'est ouverte, `prUrl` reste vide.
 - `"merge"` : fusionne la branche du chantier dans `target` **en local, en fast-forward uniquement, et ne pousse jamais rien** (worktree transitoire dédié ; repli dans le dépôt lui-même seulement si `target` y est la branche courante et l'arbre propre ; 409 sinon).
 - `"merge-push"` : comme `"merge"`, mais `target` est **poussée** ensuite. Avant la fusion, `target` est rattrapée depuis `origin` (`git fetch origin <target>` puis fast-forward) : une vraie divergence est un 409 `"target branch has diverged: ..."` **avant** toute écriture, jamais une fusion locale suivie d'un push rejeté. Jamais de `--force`. La branche du chantier, elle, n'est pas poussée.
@@ -630,7 +634,7 @@ Un conflit annule la fusion (`git merge --abort`) : le worktree du chantier revi
   "repos": [ { "repoName": "api", "branch": "sillage/ws-101-refonte-auth", "base": "main",
                "commits": 4, "files": 11, "pending": 4, "behind": 2,
                "mergedIntoTarget": false, "fastForwardable": true,
-               "prUrl": "", "shippedAt": null,
+               "prUrl": "", "prState": "", "shippedAt": null,
                "prTitle": "fix(auth): refresh expired sessions", "prBody": "- fix(auth): refresh expired sessions" } ],
   "behind": { "t12": 2 } }
 ```
@@ -656,10 +660,14 @@ Un retard qui subsiste veut donc dire que le rebase automatique de l'acceptation
 { "card": Card, "mode": "pr",
   "repos": [ { "repoName": "api", "branch": "...", "base": "main", "pushed": true,
                "merged": false, "skipped": false, "prUrl": "https://...",
-               "output": "...", "error": "" } ] }
+               "compareUrl": "", "output": "...", "error": "" } ] }
 ```
 
-**Titre et description de la pull request.** `repos[].prTitle` et `repos[].prBody` ne sont renseignés qu'en mode `pr`, pour un dépôt qui a quelque chose à livrer et pas encore de pull request (`prUrl` vide) : ce sont les valeurs par défaut, le sujet du commit quand le chantier n'en a qu'un (sinon le titre du chantier) et la liste des sujets de commits, merge commits exclus. À l'ouverture de la modale de livraison, l'UI les met dans deux champs éditables et lance `POST /api/cards/{id}/pr-draft` pour chacun de ces dépôts : l'agent de la dernière tâche acceptée du dépôt s'il sait tourner en lecture seule (claude, codex, fake), sinon le premier agent claude puis codex sans avertissement de santé. Il lit les commits, le `diff --stat` et le diff au besoin, avec le contexte du projet et du chantier, et rend un titre selon les conventions du projet et une description courte, dans la langue des commits. Les lignes de signature d'outil (« Generated with », `Co-Authored-By`) sont retirées de sa réponse. La proposition remplace les champs tant que l'humain n'y a rien tapé ; sinon elle s'offre en un clic (« La reprendre »). Ce qui est dans les champs au clic sur Livrer part dans `prs` ; un dépôt absent de `prs` prend les valeurs par défaut. Le titre et la description servent à `gh pr create` / `glab mr create`, et, sans CLI de la forge, sont ajoutés à l'URL de création préremplie (`title`/`body`, `merge_request[title]`/`merge_request[description]`, description tronquée à 2000 caractères). Une pull request déjà ouverte n'est jamais retitrée.
+**Pull request connue d'une branche.** La PR d'une branche de chantier n'est pas seulement celle que la livraison a ouverte : en mode `pr` ou `push` sur GitHub, `GET /api/cards/{id}/delivery` (au plus une fois par minute et par branche) et `POST /api/cards/{id}/ship` (à chaque fois) la relisent par `gh pr list --head <branche> --state all`, PR du dépôt même seulement (jamais un fork homonyme). Une PR ouverte l'emporte, sinon la plus récente fusionnée ; une PR fermée sans fusion est ignorée. Une PR ouverte à la main est ainsi rattachée (`prUrl`, `prState: "open"`), une PR fusionnée ou fermée change d'état, et une PR fermée n'est plus réutilisée : la livraison suivante en ouvre une nouvelle. Lecture seule, un échec de `gh` laisse l'état connu tel quel. Les URL de compare que d'anciennes versions enregistraient dans `prUrl` sont effacées au chargement de l'état.
+
+**Partir d'une pull request existante.** `POST /api/tasks` accepte `pullRequest`, le numéro d'une PR **ouverte** du dépôt (GitHub). À la première tâche du chantier sur ce dépôt, la branche du chantier est alors la tête de cette PR, pas une branche `sillage/ws-…` : `git fetch origin <tête>` et `<base>` (lecture), worktree sur la branche (créée en suivi d'`origin/<tête>`, ou, si elle existe en local, extraite telle quelle et avancée en fast-forward seulement), `base` = base de la PR, `adopted: true`, `prUrl` connue. La livraison pousse sur cette branche (jamais en force) et n'ouvre pas de seconde PR. Refus en 400 : PR d'un fork (`"... comes from a fork ..."`), PR fermée ou fusionnée, nom de branche invalide (`git check-ref-format`, et rien qui commence par `-`), origin hors GitHub, ou chantier qui a déjà une autre branche sur ce dépôt. Une tâche qui répond à un signal de PR de la Vigie (`signalId`) adopte d'elle-même la branche de cette PR quand ces conditions sont réunies ; sinon (fork, PR fermée, `gh` muet), elle part d'une branche neuve comme avant, sans erreur. L'UI propose le champ dans la modale de création tant que le chantier n'a aucune branche et qu'un dépôt est sur GitHub.
+
+**Titre et description de la pull request.** `repos[].prTitle` et `repos[].prBody` ne sont renseignés qu'en mode `pr`, pour un dépôt qui a quelque chose à livrer et pas de pull request ouverte (`prState` différent de `open`) : ce sont les valeurs par défaut, le sujet du commit quand le chantier n'en a qu'un (sinon le titre du chantier) et la liste des sujets de commits, merge commits exclus. À l'ouverture de la modale de livraison, l'UI les met dans deux champs éditables et lance `POST /api/cards/{id}/pr-draft` pour chacun de ces dépôts : l'agent de la dernière tâche acceptée du dépôt s'il sait tourner en lecture seule (claude, codex, fake), sinon le premier agent claude puis codex sans avertissement de santé. Il lit les commits, le `diff --stat` et le diff au besoin, avec le contexte du projet et du chantier, et rend un titre selon les conventions du projet et une description courte, dans la langue des commits. Les lignes de signature d'outil (« Generated with », `Co-Authored-By`) sont retirées de sa réponse. La proposition remplace les champs tant que l'humain n'y a rien tapé ; sinon elle s'offre en un clic (« La reprendre »). Ce qui est dans les champs au clic sur Livrer part dans `prs` ; un dépôt absent de `prs` prend les valeurs par défaut. Le titre et la description servent à `gh pr create` / `glab mr create`, et, sans CLI de la forge, sont ajoutés à l'URL de création préremplie (`title`/`body`, `merge_request[title]`/`merge_request[description]`, description tronquée à 2000 caractères). Une pull request déjà ouverte n'est jamais retitrée.
 
 Un dépôt en échec n'annule pas les autres : chaque ligne porte sa propre erreur, et la livraison est rejouable telle quelle (les dépôts déjà livrés sont `skipped`). `pushed`/`merged` décrivent ce qui a réellement eu lieu : `pushed` seul dans les modes `pr` et `push`, `merged` seul en `merge`, les deux en `merge-push`.
 

@@ -12,6 +12,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -65,6 +66,7 @@ type Server struct {
 
 	// targetFetches espace les fetch de la branche de destination (target.go).
 	targetFetches targetFetches
+	prLookups     prLookups
 
 	// autoconf : les autoconfigurations de projet (voir autoconfig.go).
 	autoconf *autoconfTracker
@@ -1126,6 +1128,10 @@ func (s *Server) handleCreateTask(w http.ResponseWriter, r *http.Request) {
 		// SignalID : la tâche répond à un signal de la Vigie, qui passe en
 		// "handled" une fois la tâche créée.
 		SignalID string `json:"signalId"`
+		// PullRequest : numéro d'une pull request ouverte du dépôt, dont la
+		// branche devient celle du chantier (première tâche du chantier sur ce
+		// dépôt seulement). Déduit du signal quand il porte sur une PR.
+		PullRequest int `json:"pullRequest"`
 	}
 	if err := decodeJSON(r, &body); err != nil || (body.CardID == "" && body.ProjectID == "") || body.Title == "" || body.AgentID == "" {
 		writeError(w, http.StatusBadRequest, "cardId (or projectId), title and agentId are required")
@@ -1192,7 +1198,7 @@ func (s *Server) handleCreateTask(w http.ResponseWriter, r *http.Request) {
 	// La tâche part de la branche du chantier (créée à la première tâche du
 	// chantier sur ce dépôt) : une tâche créée après une acceptation démarre
 	// donc sur le travail déjà accepté.
-	cardBranch, err := s.ensureCardBranch(card, project, repo)
+	cardBranch, err := s.ensureCardBranch(card, project, repo, s.taskPullRequest(card, repo, body.PullRequest, body.SignalID))
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
@@ -1454,14 +1460,24 @@ func (s *Server) handleRestartTask(w http.ResponseWriter, r *http.Request) {
 
 // ensureCardBranch retourne la branche de feature du chantier sur un dépôt, en
 // la créant (branche + worktree dédié) si c'est la première tâche du chantier
-// sur ce dépôt. La base est la branche de destination du projet
-// (project.delivery.target), ou la branche courante du dépôt si elle est vide.
+// sur ce dépôt. La base est celle de cardBase.
+//
+// pr non nul : la branche du chantier sur ce dépôt est la tête de cette pull
+// request (voir adoptPRBranch), pas une branche sillage/ws-… neuve. Refusé si
+// le chantier a déjà une autre branche sur ce dépôt.
 //
 // Appelée à chaque création de tâche : si le chantier avait déjà été livré, il
 // repasse en « non livré » (tout n'est plus livré dès qu'il reste du travail à
 // faire), ce qui permet de continuer à travailler sur un chantier livré.
-func (s *Server) ensureCardBranch(card Card, project Project, repo Repo) (CardBranch, error) {
+func (s *Server) ensureCardBranch(card Card, project Project, repo Repo, pr ...int) (CardBranch, error) {
+	number := 0
+	if len(pr) > 0 {
+		number = pr[0]
+	}
 	if existing, ok := s.store.GetCardBranch(card.ID, repo.Name); ok {
+		if number != 0 && !(existing.Adopted && strings.HasSuffix(existing.PrURL, "/pull/"+strconv.Itoa(number))) {
+			return CardBranch{}, fmt.Errorf("this workstream already has the branch %s on %s: attach pull request #%d to a new workstream", existing.Branch, repo.Name, number)
+		}
 		if existing.ShippedAt != nil {
 			if _, err := s.store.MarkCardBranchPending(card.ID, repo.Name); err != nil {
 				return CardBranch{}, err
@@ -1471,17 +1487,77 @@ func (s *Server) ensureCardBranch(card Card, project Project, repo Repo) (CardBr
 		}
 		return existing, nil
 	}
-	branch := fmt.Sprintf("sillage/ws-%d-%s", card.Ref, Slugify(card.Title))
-	dir, base, err := CreateCardWorktree(repo.Path, s.dataDir, card.ID, repo.Name, branch, project.Delivery.Target)
-	if err != nil {
-		return CardBranch{}, fmt.Errorf("failed to create workstream branch: %w", err)
+	var cb CardBranch
+	if number != 0 {
+		adopted, err := s.adoptPRBranch(card, repo, number)
+		if err != nil {
+			return CardBranch{}, err
+		}
+		cb = adopted
+	} else {
+		base, err := cardBase(project, repo)
+		if err != nil {
+			return CardBranch{}, fmt.Errorf("failed to create workstream branch: %w", err)
+		}
+		branch := fmt.Sprintf("sillage/ws-%d-%s", card.Ref, Slugify(card.Title))
+		dir, base, err := CreateCardWorktree(repo.Path, s.dataDir, card.ID, repo.Name, branch, base)
+		if err != nil {
+			return CardBranch{}, fmt.Errorf("failed to create workstream branch: %w", err)
+		}
+		cb = CardBranch{RepoName: repo.Name, Branch: branch, Base: base, WorktreeDir: dir}
 	}
-	cb := CardBranch{RepoName: repo.Name, Branch: branch, Base: base, WorktreeDir: dir}
 	if _, err := s.store.SetCardBranch(card.ID, cb); err != nil {
 		return CardBranch{}, err
 	}
 	s.runner.publishCards(card.ProjectID)
 	return cb, nil
+}
+
+// taskPullRequest choisit la pull request dont la branche portera le chantier
+// sur ce dépôt : celle demandée explicitement, sinon celle du signal de la
+// Vigie auquel la tâche répond, quand c'est une PR du dépôt même encore
+// ouverte et que le chantier n'a pas encore de branche sur ce dépôt. Pour un
+// signal, l'adoption est un confort : la moindre réserve (fork, PR fermée,
+// forge muette) laisse la branche neuve habituelle, sans erreur.
+func (s *Server) taskPullRequest(card Card, repo Repo, explicit int, signalID string) int {
+	if explicit > 0 {
+		return explicit
+	}
+	if signalID == "" {
+		return 0
+	}
+	if _, ok := s.store.GetCardBranch(card.ID, repo.Name); ok {
+		return 0
+	}
+	sig, ok := s.store.GetSignal(signalID)
+	if !ok || sig.Kind != "pr" || sig.Number <= 0 || sig.RepoName != repo.Name {
+		return 0
+	}
+	if forgePR.provider(repo.Path) != "github" {
+		return 0
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), watchGhTimeout)
+	defer cancel()
+	pr, err := forgePR.view(ctx, repo.Path, sig.Number)
+	if err != nil || pr.IsCrossRepository || pr.State != "OPEN" {
+		return 0
+	}
+	return sig.Number
+}
+
+// cardBase est la base d'une nouvelle branche de chantier : la destination du
+// réglage de livraison, sinon, dans les modes qui livrent la branche elle-même
+// ("pr", "push"), la branche par défaut d'origin (une pull request vers la
+// branche qui se trouvait extraite ce jour-là, souvent locale, échouait), et
+// la branche courante dans les modes de fusion locale.
+func cardBase(project Project, repo Repo) (string, error) {
+	if project.Delivery.Target != "" {
+		return project.Delivery.Target, nil
+	}
+	if deliveryModeMerges(project.Delivery.Mode) {
+		return currentBranch(repo.Path)
+	}
+	return defaultBranch(repo.Path)
 }
 
 // handleAccept accepte une tâche en revue : commite ce qui reste dans son
@@ -1910,9 +1986,12 @@ func (s *Server) deliveryPreview(card Card, project Project) DeliveryPreview {
 		prev.Warnings = append(prev.Warnings, warning)
 	}
 	for _, b := range card.Branches {
+		if project.Delivery.Mode == "pr" || project.Delivery.Mode == "push" {
+			b = s.syncBranchPR(card.ID, b, false)
+		}
 		row := DeliveryRepoPreview{
 			RepoName: b.RepoName, Branch: b.Branch, Base: b.Base,
-			PrURL: b.PrURL, ShippedAt: b.ShippedAt,
+			PrURL: b.PrURL, PrState: b.PrState, ShippedAt: b.ShippedAt,
 		}
 		if prev.Provider == "" {
 			prev.Provider = DetectForge(b.WorktreeDir).Provider
@@ -1925,6 +2004,11 @@ func (s *Server) deliveryPreview(card Card, project Project) DeliveryPreview {
 			row.Files = len(files)
 		}
 		row.Pending = pendingCommits(project, b, row.Commits)
+		if row.Pending == 0 && row.Commits > 0 && s.prStillToOpen(project, b) {
+			// Poussée, mais sa pull request n'a jamais été ouverte : la
+			// livraison reste à faire, elle ouvrira la PR.
+			row.Pending = row.Commits
+		}
 		if behind, err := CountCommits(b.WorktreeDir, b.Branch, base); err == nil {
 			row.Behind = behind
 		}
@@ -1933,7 +2017,7 @@ func (s *Server) deliveryPreview(card Card, project Project) DeliveryPreview {
 		// se lisent avec merge-base, sans rien écrire.
 		target := deliveryTarget(project, b)
 		row.MergedIntoTarget = IsBranchMergedInto(b.WorktreeDir, b.Branch, target)
-		if project.Delivery.Mode == "pr" && b.PrURL == "" && row.Pending > 0 {
+		if project.Delivery.Mode == "pr" && b.PrState != "open" && row.Pending > 0 {
 			row.PrTitle = defaultPRTitle(b.WorktreeDir, b.Base, b.Branch, card.Title)
 			row.PrBody = prBody(b.WorktreeDir, b.Base, b.Branch)
 		}
@@ -2046,12 +2130,23 @@ func (s *Server) shipCardBranch(card Card, project Project, b CardBranch, draft 
 		res.Error = err.Error()
 		return res
 	}
-	// Rien à livrer : aucun commit, ou déjà tout poussé/fusionné.
-	if len(commits) == 0 || pendingCommits(project, b, len(commits)) == 0 {
+	// La PR que la forge connaît pour la branche (ouverte à la main, fusionnée,
+	// fermée) : relue à chaque livraison, sans cache.
+	if project.Delivery.Mode == "pr" {
+		b = s.syncBranchPR(card.ID, b, true)
+	}
+	// Rien à livrer : aucun commit, ou déjà tout poussé/fusionné. En mode "pr",
+	// une branche poussée dont la pull request n'a jamais pu être ouverte reste
+	// à livrer : relivrer retente l'ouverture.
+	pending := 0
+	if len(commits) > 0 {
+		pending = pendingCommits(project, b, len(commits))
+	}
+	if len(commits) == 0 || (pending == 0 && !s.prStillToOpen(project, b)) {
 		res.Skipped = true
+		res.PrURL = b.PrURL
 		return res
 	}
-
 	if deliveryModeMerges(project.Delivery.Mode) {
 		repo, ok := repoByName(project, b.RepoName)
 		if !ok {
@@ -2084,16 +2179,16 @@ func (s *Server) shipCardBranch(card Card, project Project, b CardBranch, draft 
 		return res
 	}
 	res.Pushed = true
-	// La branche est poussée, la livraison a eu lieu. L'ouverture de la pull
-	// request est un bonus : sur GitHub et GitLab elle aboutit toujours (repli
-	// sur une URL pré-remplie), et sur une forge inconnue son absence n'est pas
-	// une erreur (l'avertissement de santé du projet le dit déjà).
+	// La branche est poussée. Une pull request déjà ouverte est réutilisée
+	// telle quelle : le push suffit à la mettre à jour. Le mode "push"
+	// s'arrête ici : pousser sans ouvrir de pull request est ce qu'il promet.
 	//
-	// Une pull request déjà ouverte est réutilisée telle quelle : le push
-	// suffit à la mettre à jour, il n'y a rien de nouveau à ouvrir. Le mode
-	// "push" s'arrête ici : pousser sans ouvrir de pull request est justement
-	// ce qu'il promet.
-	if b.PrURL != "" {
+	// Sinon, en mode "pr", la PR est ouverte. Son échec est une erreur de
+	// livraison sur GitHub et GitLab : le chantier reste à livrer, la page de
+	// création pré-remplie est jointe, et relivrer retentera. Sur une forge
+	// inconnue, son absence n'est pas une erreur (l'avertissement de santé du
+	// projet le dit déjà) : le push était toute la livraison possible.
+	if b.PrState == "open" && isPullURL(b.PrURL) {
 		res.PrURL = b.PrURL
 	} else if project.Delivery.Mode == "pr" {
 		title := strings.TrimSpace(strings.SplitN(draft.Title, "\n", 2)[0])
@@ -2104,14 +2199,36 @@ func (s *Server) shipCardBranch(card Card, project Project, b CardBranch, draft 
 		if draft.Title == "" && text == "" {
 			text = prBody(b.WorktreeDir, b.Base, b.Branch)
 		}
-		if prURL, err := OpenPR(b.WorktreeDir, b.Branch, b.Base, title, text); err == nil {
+		prURL, fallback, err := forgePR.open(b.WorktreeDir, b.Branch, b.Base, title, text)
+		switch {
+		case err == nil:
 			res.PrURL = prURL
+		case errors.Is(err, errUnknownForge):
+		default:
+			res.CompareURL = fallback
+			res.Error = "branch pushed, but the pull request was not opened: " + err.Error()
+			return res
 		}
 	}
 	if _, err := s.store.MarkCardBranchShipped(card.ID, b.RepoName, res.PrURL, time.Now().UTC()); err != nil {
 		res.Error = err.Error()
 	}
 	return res
+}
+
+// prStillToOpen dit qu'une branche de chantier entièrement poussée attend
+// encore sa pull request : mode "pr", forge connue, aucune PR connue pour la
+// branche, et du travail que la destination n'a pas. Une PR fusionnée ou
+// fermée, elle, a été traitée par un humain : sans commit nouveau, rien n'est
+// relancé (avec du neuf, pendingCommits suffit à rouvrir la livraison).
+func (s *Server) prStillToOpen(project Project, b CardBranch) bool {
+	if project.Delivery.Mode != "pr" || b.PrState != "" || b.PrURL != "" {
+		return false
+	}
+	if p := forgePR.provider(b.WorktreeDir); p != "github" && p != "gitlab" {
+		return false
+	}
+	return !IsBranchMergedInto(b.WorktreeDir, b.Branch, deliveryTarget(project, b))
 }
 
 // handleCardCatchUp rattrape la branche de destination dans la branche du

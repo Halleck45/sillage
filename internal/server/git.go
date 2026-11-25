@@ -93,6 +93,49 @@ func CreateWorktree(repoPath, dataDir, taskID, branch, base string) (dir, resolv
 	return createWorktree(repoPath, filepath.Join(dataDir, "worktrees", taskID), branch, base)
 }
 
+// defaultBranch est la branche par défaut d'origin telle que le clone la
+// connaît (refs/remotes/origin/HEAD, posée par git clone, ou par
+// `git remote set-head origin -a`), sans réseau. Repli sur la branche courante
+// quand origin/HEAD est absent.
+func defaultBranch(repoPath string) (string, error) {
+	if out, err := runGit(repoPath, gitDefaultTimeout, "symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"); err == nil {
+		if b := strings.TrimPrefix(strings.TrimSpace(out), "origin/"); b != "" && b != "HEAD" {
+			return b, nil
+		}
+	}
+	return currentBranch(repoPath)
+}
+
+// CreatePRWorktree crée le worktree d'un chantier sur la tête d'une pull
+// request existante (head), au lieu d'une branche neuve. Les deux branches
+// sont d'abord relues depuis origin (lecture réseau). Une branche locale du
+// même nom n'est jamais réécrite : extraite telle quelle, avancée en
+// fast-forward seulement si elle est en retard pur sur origin.
+func CreatePRWorktree(repoPath, dataDir, cardID, repoName, head, base string) (string, error) {
+	if err := FetchTarget(repoPath, head); err != nil {
+		return "", fmt.Errorf("could not fetch %s from origin: %w", head, err)
+	}
+	_ = FetchTarget(repoPath, base)
+	dir := filepath.Join(dataDir, "worktrees", "ws-"+cardID+"-"+Slugify(repoName))
+	if err := os.MkdirAll(filepath.Dir(dir), 0o700); err != nil {
+		return "", err
+	}
+	_, _ = runGit(repoPath, gitDefaultTimeout, "worktree", "prune")
+	if _, err := runGit(repoPath, gitDefaultTimeout, "rev-parse", "--verify", "--quiet", "refs/heads/"+head); err != nil {
+		if _, err := runGit(repoPath, gitDefaultTimeout, "worktree", "add", "--track", "-b", head, dir, remoteTargetRef(head)); err != nil {
+			return "", err
+		}
+		return dir, nil
+	}
+	if _, err := runGit(repoPath, gitDefaultTimeout, "worktree", "add", dir, head); err != nil {
+		return "", err
+	}
+	if behind, ahead, ok := TargetDrift(repoPath, head); ok && behind > 0 && ahead == 0 {
+		_, _ = runGit(dir, gitDefaultTimeout, "merge", "--ff-only", "--quiet", remoteTargetRef(head))
+	}
+	return dir, nil
+}
+
 // CreateCardWorktree crée la branche de feature d'un chantier sur un dépôt,
 // avec son worktree dédié : c'est là que les tâches acceptées sont fusionnées,
 // et c'est cette branche que la livraison pousse. base vide = branche courante
@@ -877,28 +920,42 @@ func DetectForge(dir string) ForgeInfo {
 
 // OpenPR ouvre une pull request (GitHub) ou une merge request (GitLab) pour une
 // branche déjà poussée sur origin. Aucune commande d'écriture git : la branche
-// a été poussée par Ship. En l'absence du CLI de la forge, ou en cas d'échec,
-// replie sur une URL de création pré-remplie, en lecture seule.
-func OpenPR(dir, branch, base, title, body string) (string, error) {
+// a été poussée par Ship. prURL est l'URL de la requête créée. En l'absence du
+// CLI de la forge, ou en cas d'échec, prURL est vide, err dit pourquoi (sortie
+// du CLI comprise) et fallbackURL est une page de création pré-remplie, en
+// lecture seule, que l'humain peut ouvrir. Une URL de repli n'est jamais une
+// pull request : l'appelant ne doit pas l'enregistrer comme telle.
+func OpenPR(dir, branch, base, title, body string) (prURL, fallbackURL string, err error) {
 	info := DetectForge(dir)
 	switch info.Provider {
 	case "github":
-		if _, lookErr := exec.LookPath("gh"); lookErr == nil {
-			if u, err := runForgeCreate(dir, "gh", "pr", "create", "--head", branch, "--base", base, "--title", title, "--body", body); err == nil && u != "" {
-				return u, nil
-			}
+		fallbackURL = GithubCompareURL(info.Host, info.Path, base, branch) + prefillQuery("title", "body", title, body)
+		if _, lookErr := exec.LookPath("gh"); lookErr != nil {
+			return "", fallbackURL, errors.New("gh is not installed: the pull request was not opened")
 		}
-		return GithubCompareURL(info.Host, info.Path, base, branch) + prefillQuery("title", "body", title, body), nil
+		u, err := runForgeCreate(dir, "gh", "pr", "create", "--head", branch, "--base", base, "--title", title, "--body", body)
+		if err != nil {
+			return "", fallbackURL, err
+		}
+		return u, "", nil
 	case "gitlab":
-		if _, lookErr := exec.LookPath("glab"); lookErr == nil {
-			if u, err := runForgeCreate(dir, "glab", "mr", "create", "--source-branch", branch, "--target-branch", base, "--title", title, "--description", body, "--yes"); err == nil && u != "" {
-				return u, nil
-			}
+		fallbackURL = GitlabNewMRURL(info.Host, info.Path, base, branch) + prefillQuery("merge_request[title]", "merge_request[description]", title, body)
+		if _, lookErr := exec.LookPath("glab"); lookErr != nil {
+			return "", fallbackURL, errors.New("glab is not installed: the merge request was not opened")
 		}
-		return GitlabNewMRURL(info.Host, info.Path, base, branch) + prefillQuery("merge_request[title]", "merge_request[description]", title, body), nil
+		u, err := runForgeCreate(dir, "glab", "mr", "create", "--source-branch", branch, "--target-branch", base, "--title", title, "--description", body, "--yes")
+		if err != nil {
+			return "", fallbackURL, err
+		}
+		return u, "", nil
 	}
-	return "", fmt.Errorf("origin remote is not a github or gitlab repository")
+	return "", "", errUnknownForge
 }
+
+// errUnknownForge : origin n'est ni GitHub ni GitLab, aucune pull request ne
+// peut être ouverte. Ce n'est pas un échec de livraison (le push a eu lieu, et
+// l'avertissement de santé du projet le dit déjà).
+var errUnknownForge = errors.New("origin remote is not a github or gitlab repository")
 
 // prefillQuery ajoute le titre et la description validés à une URL de
 // création déjà pourvue d'une query : sans CLI de la forge, l'humain retrouve

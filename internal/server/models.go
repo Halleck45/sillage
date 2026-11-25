@@ -272,13 +272,24 @@ type IssueListResponse struct {
 // un chantier qui touche deux dépôts a deux CardBranch, et livrera deux pull
 // requests. Créée à la première tâche du chantier sur ce dépôt, avec son
 // worktree dédié (les tâches partent de cette branche et y sont fusionnées à
-// l'acceptation). PrURL et ShippedAt sont renseignés par la livraison.
+// l'acceptation). ShippedAt est renseigné par la livraison.
+//
+// PrURL est toujours une pull request réelle, jamais une page de création :
+// celle ouverte par la livraison, ou celle que la forge connaît pour la
+// branche (ouverte à la main, retrouvée par `gh pr list --head`). PrState dit
+// où elle en est : open | merged | closed, vide si inconnu.
+//
+// Adopted : la branche est la tête d'une pull request existante, adoptée à la
+// création du chantier sur ce dépôt (au lieu d'une branche sillage/ws-… neuve).
+// La livraison pousse alors sur cette PR.
 type CardBranch struct {
 	RepoName    string     `json:"repoName"`
 	Branch      string     `json:"branch"`
 	Base        string     `json:"base"`
 	WorktreeDir string     `json:"worktreeDir"`
 	PrURL       string     `json:"prUrl"`
+	PrState     string     `json:"prState,omitempty"`
+	Adopted     bool       `json:"adopted,omitempty"`
 	ShippedAt   *time.Time `json:"shippedAt"`
 }
 
@@ -840,6 +851,7 @@ type DeliveryRepoPreview struct {
 	FastForwardable bool `json:"fastForwardable"`
 
 	PrURL     string     `json:"prUrl"`
+	PrState   string     `json:"prState,omitempty"`
 	ShippedAt *time.Time `json:"shippedAt"`
 
 	// PrTitle et PrBody : titre et description par défaut de la pull request
@@ -888,8 +900,11 @@ type ShipRepoResult struct {
 	Merged   bool   `json:"merged"`
 	Skipped  bool   `json:"skipped"` // rien à livrer (aucun commit sur la branche)
 	PrURL    string `json:"prUrl"`
-	Output   string `json:"output"`
-	Error    string `json:"error"`
+	// CompareURL : la page de création pré-remplie, quand la pull request n'a
+	// pas pu être ouverte (Error dit pourquoi). Ce n'est pas une PR.
+	CompareURL string `json:"compareUrl,omitempty"`
+	Output     string `json:"output"`
+	Error      string `json:"error"`
 }
 
 // ShipResponse est la réponse de POST /api/cards/{id}/ship.

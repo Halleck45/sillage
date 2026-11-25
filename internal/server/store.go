@@ -139,6 +139,7 @@ func loadStoreFile(dataDir string) (*Store, error) {
 	migrateProjectPermissionProfiles(s)
 	migrateCardRefs(s)
 	migrateCardUpdatedAt(s)
+	migrateComparePrURLs(s)
 	migrateAgentSeeds(s)
 	resetTransientTaskFlags(s)
 	resetTransientSignals(s)
@@ -241,6 +242,25 @@ func migrateCardUpdatedAt(s *Store) {
 		}
 		c.UpdatedAt = latest
 		s.Cards[id] = c
+	}
+}
+
+// migrateComparePrURLs oublie les URL de compare que les versions antérieures
+// enregistraient dans CardBranch.PrURL quand gh échouait : ce n'étaient pas des
+// pull requests, et leur présence empêchait toute ouverture ultérieure. La
+// vraie PR, si elle a été ouverte à la main, est retrouvée par syncBranchPR.
+func migrateComparePrURLs(s *Store) {
+	for id, c := range s.Cards {
+		changed := false
+		for i, b := range c.Branches {
+			if b.PrURL != "" && !isPullURL(b.PrURL) {
+				c.Branches[i].PrURL, c.Branches[i].PrState = "", ""
+				changed = true
+			}
+		}
+		if changed {
+			s.Cards[id] = c
+		}
 	}
 }
 
@@ -1842,10 +1862,32 @@ func (s *Store) MarkCardBranchShipped(cardID, repoName, prURL string, at time.Ti
 		c.Branches[i].ShippedAt = &when
 		if prURL != "" {
 			c.Branches[i].PrURL = prURL
+			c.Branches[i].PrState = "open"
 		}
 	}
 	s.Cards[cardID] = c
 	s.recomputeCard(cardID)
+	if err := s.save(); err != nil {
+		return Card{}, err
+	}
+	return s.Cards[cardID], nil
+}
+
+// SetCardBranchPR enregistre la pull request connue de la branche de chantier
+// d'un dépôt (URL et état), sans toucher à ShippedAt.
+func (s *Store) SetCardBranchPR(cardID, repoName, prURL, state string) (Card, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	c, ok := s.Cards[cardID]
+	if !ok {
+		return Card{}, fmt.Errorf("card not found")
+	}
+	for i, b := range c.Branches {
+		if b.RepoName == repoName {
+			c.Branches[i].PrURL, c.Branches[i].PrState = prURL, state
+		}
+	}
+	s.Cards[cardID] = c
 	if err := s.save(); err != nil {
 		return Card{}, err
 	}

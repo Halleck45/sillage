@@ -51,13 +51,10 @@ func (f *targetFetches) due(repoPath string) bool {
 	return true
 }
 
-// repoTarget est la branche de destination d'un dépôt : celle du réglage de
-// livraison, sinon sa branche courante (la même règle que CreateCardWorktree).
+// repoTarget est la branche de destination d'un dépôt : la même règle que la
+// base d'un nouveau chantier (voir cardBase).
 func repoTarget(project Project, repo Repo) (string, error) {
-	if project.Delivery.Target != "" {
-		return project.Delivery.Target, nil
-	}
-	return currentBranch(repo.Path)
+	return cardBase(project, repo)
 }
 
 // repoWebURL donne la page web du dépôt sur sa forge, déduite du remote origin

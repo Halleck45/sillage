@@ -270,6 +270,8 @@
       'waitingFor.note': 'Démarrera automatiquement quand « {title} » sera acceptée.',
       'waitingFor.unknownTask': 'La tâche attendue n\'existe plus : démarrez-la manuellement.',
       'newTask.waitsForLabel': 'Démarrer après',
+      'newTask.prLabel': 'Travailler sur une pull request existante',
+      'newTask.prPlaceholder': 'Numéro de la PR (facultatif) : le chantier pousse sur sa branche',
       'newTask.waitsForNone': 'Immédiatement',
       'behind.taskTooltip.one': '1 commit de retard sur {base} : à rebaser avant acceptation, sinon conflit.',
       'behind.taskTooltip.other': '{n} commits de retard sur {base} : à rebaser avant acceptation, sinon conflit.',
@@ -341,6 +343,9 @@
       'ship.files.other': '{n} fichiers',
       'ship.prLink': 'Voir la pull request',
       'ship.prButton': 'Pull request',
+      'ship.prMerged': 'fusionnée',
+      'ship.prClosed': 'fermée',
+      'ship.openCompare': 'Ouvrir la page de création de la PR',
       'ship.mrButton': 'Merge request',
       'ship.mrLink': 'Voir la merge request',
       'ship.mergedInto': 'Fusionné dans {base}',
@@ -1155,6 +1160,8 @@
       'waitingFor.note': 'Will start automatically once "{title}" is accepted.',
       'waitingFor.unknownTask': 'The task it was waiting for no longer exists: start it manually.',
       'newTask.waitsForLabel': 'Start after',
+      'newTask.prLabel': 'Work on an existing pull request',
+      'newTask.prPlaceholder': 'PR number (optional): the workstream pushes to its branch',
       'newTask.waitsForNone': 'Immediately',
       'behind.taskTooltip.one': '1 commit behind {base}: rebase before accepting, or it will conflict.',
       'behind.taskTooltip.other': '{n} commits behind {base}: rebase before accepting, or it will conflict.',
@@ -1226,6 +1233,9 @@
       'ship.files.other': '{n} files',
       'ship.prLink': 'View the pull request',
       'ship.prButton': 'Pull request',
+      'ship.prMerged': 'merged',
+      'ship.prClosed': 'closed',
+      'ship.openCompare': 'Open the pull request creation page',
       'ship.mrButton': 'Merge request',
       'ship.mrLink': 'View the merge request',
       'ship.mergedInto': 'Merged into {base}',
@@ -4297,7 +4307,8 @@
     var gitlab = prev.provider === 'gitlab';
     var multi = (prev.repos || []).length > 1;
     return repos.map(function (r) {
-      var label = t(gitlab ? 'ship.mrButton' : 'ship.prButton') + (multi ? ' · ' + r.repoName : '');
+      var label = t(gitlab ? 'ship.mrButton' : 'ship.prButton') + (multi ? ' · ' + r.repoName : '') +
+        (r.prState === 'merged' ? ' · ' + t('ship.prMerged') : r.prState === 'closed' ? ' · ' + t('ship.prClosed') : '');
       var tip = t(gitlab ? 'ship.mrLink' : 'ship.prLink') + (multi ? ' (' + r.repoName + ')' : '');
       var icon = prev.provider === 'github' ? repoIconHTML() : uiIconHTML('external', 14);
       return '<a class="btn-outline ship-pr-btn" href="' + escapeHtml(r.prUrl) + '" target="_blank" rel="noopener noreferrer" title="' +
@@ -4557,8 +4568,13 @@
       else if (r.skipped) label = '· ' + t('ship.repoNothing');
       else if (r.merged) label = '✓ ' + t(r.pushed ? 'ship.mergedPushed' : 'ship.mergedInto', { base: target || r.base });
       else label = '✓ ' + (r.prUrl || r.branch);
+      // Pull request pas ouverte : la page de création pré-remplie, pour la
+      // finir à la main. Ce n'est pas une PR, elle n'est donc pas retenue.
+      var compare = r.compareUrl
+        ? ' <a href="' + escapeHtml(r.compareUrl) + '" target="_blank" rel="noopener noreferrer">' + escapeHtml(t('ship.openCompare')) + '</a>'
+        : '';
       return '<div class="ship-result-row ' + (r.error ? 'ship-result-error' : '') + '">' +
-        '<span class="repo-chip">' + escapeHtml(r.repoName) + '</span> ' + escapeHtml(label) + '</div>';
+        '<span class="repo-chip">' + escapeHtml(r.repoName) + '</span> ' + escapeHtml(label) + compare + '</div>';
     }).join('');
     return '<div class="ship-results">' + rows + '</div>';
   }
@@ -7576,7 +7592,7 @@
     var selected = state.agentsById[modalAgentId];
     var project = state.projectsById[card.projectId];
     var repos = (project && project.repos) || [];
-    var draft = newTaskDraft || { title: '', prompt: '', repoName: '', waitsForTaskId: '' };
+    var draft = newTaskDraft || { title: '', prompt: '', repoName: '', waitsForTaskId: '', pullRequest: '' };
     var repoSelectHTML = '';
     if (repos.length > 1) {
       var repoOptions = repos.map(function (r) {
@@ -7595,6 +7611,15 @@
         '<button class="attach-btn" data-action="open-issue-picker" data-card-id="' + card.id + '" title="' + escapeHtml(t('issues.importTooltip')) + '">' +
         issueIconHTML() + '<span>' + escapeHtml(t('issues.import')) + '</span></button>' +
         '</div>'
+      : '';
+    // Partir d'une pull request existante : sa branche devient celle du
+    // chantier, la livraison pousse dessus au lieu d'en ouvrir une autre. Ça ne
+    // se décide qu'à la naissance de la branche, donc tant que le chantier n'en
+    // a aucune. Un signal de PR de la Vigie s'en charge seul.
+    var prFieldHTML = githubRepos.length && !newTaskSignalId && !(card.branches && card.branches.length)
+      ? '<div class="modal-label">' + escapeHtml(t('newTask.prLabel')) + '</div>' +
+        '<input id="new-task-pr" class="modal-input" type="number" min="1" inputmode="numeric" placeholder="' +
+        escapeHtml(t('newTask.prPlaceholder')) + '" value="' + escapeHtml(draft.pullRequest || '') + '">'
       : '';
     // Démarrer après : uniquement les tâches du chantier pas encore terminales
     // (une tâche accepted/cancelled ne fera plus jamais rien). Absent du
@@ -7634,6 +7659,7 @@
       '</div>' +
       '<div class="attach-strip" id="new-task-attach-strip">' + buildAttachStripHTML(modalAttachments, 'new-task') + '</div>' +
       repoSelectHTML +
+      prFieldHTML +
       '<div class="modal-label modal-label-row"><span>' + escapeHtml(t('newTask.agentLabel')) + '</span>' +
       '<span class="modal-label-hint">' + escapeHtml(t('newTask.agentHint')) + '</span></div>' +
       '<div class="agent-choices" id="agent-choices" role="radiogroup" aria-label="' + escapeHtml(t('newTask.agentLabel')) + '">' + agentChoices + '</div>' +
@@ -7715,11 +7741,13 @@
     var promptEl = document.getElementById('new-task-prompt');
     var repoEl = document.getElementById('new-task-repo');
     var waitsForEl = document.getElementById('new-task-waits-for');
+    var prEl = document.getElementById('new-task-pr');
     newTaskDraft = {
       title: titleEl ? titleEl.value : '',
       prompt: promptEl ? promptEl.value : '',
       repoName: repoEl ? repoEl.value : '',
-      waitsForTaskId: waitsForEl ? waitsForEl.value : ''
+      waitsForTaskId: waitsForEl ? waitsForEl.value : '',
+      pullRequest: prEl ? prEl.value : ''
     };
   }
 
@@ -7795,6 +7823,9 @@
     if (repoEl && repoEl.value) body.repoName = repoEl.value;
     var waitsForEl = document.getElementById('new-task-waits-for');
     if (waitsForEl && waitsForEl.value) body.waitsForTaskId = waitsForEl.value;
+    var prEl = document.getElementById('new-task-pr');
+    var prNumber = prEl ? parseInt(prEl.value, 10) : 0;
+    if (prNumber > 0) body.pullRequest = prNumber;
     api('/api/tasks', { method: 'POST', body: body }).then(function (task) {
       upsertTask(task);
       // Un seul signal par tâche : « Créer et enchaîner » repart sans lui.
@@ -7802,6 +7833,8 @@
       if (mode === 'another') {
         titleEl.value = '';
         promptEl.value = '';
+        // Une PR n'a qu'un chantier : la tâche suivante n'en hérite pas.
+        if (prEl) prEl.value = '';
         // Les images sont parties avec la tâche créée : la suivante repart nue.
         modalAttachments = [];
         refreshModalAttachStrip();
