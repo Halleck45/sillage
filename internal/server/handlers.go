@@ -2123,8 +2123,12 @@ func (s *Server) handleCardCatchUp(w http.ResponseWriter, r *http.Request) {
 func (s *Server) catchUpCardBranch(card Card, project Project, b CardBranch) CatchUpRepoResult {
 	target := deliveryTarget(project, b)
 	res := CatchUpRepoResult{RepoName: b.RepoName, Target: target}
+	// La révision que mesure le retard affiché (deliveryPreview) : origin/main
+	// quand le main local n'en est qu'un ancêtre. Rattraper le main local
+	// laisserait le badge de retard en place.
+	ref := strings.TrimPrefix(freshestRef(b.WorktreeDir, target), "refs/remotes/")
 
-	if IsBranchMergedInto(b.WorktreeDir, target, b.Branch) {
+	if IsBranchMergedInto(b.WorktreeDir, ref, b.Branch) {
 		res.UpToDate = true
 		return res
 	}
@@ -2133,7 +2137,17 @@ func (s *Server) catchUpCardBranch(card Card, project Project, b CardBranch) Cat
 		return res
 	}
 
-	out, conflicts, err := MergeBranch(b.WorktreeDir, target)
+	// Un chantier sans commit propre (rien d'accepté encore) avance en
+	// fast-forward : un merge commit n'aurait rien à réunir.
+	ownWork := !IsBranchMergedInto(b.WorktreeDir, b.Branch, ref)
+	var out string
+	var conflicts []string
+	var err error
+	if ownWork {
+		out, conflicts, err = MergeBranch(b.WorktreeDir, ref)
+	} else {
+		out, err = FastForwardBranch(b.WorktreeDir, ref)
+	}
 	res.Output = out
 	if err != nil {
 		if len(conflicts) > 0 {
@@ -2144,10 +2158,19 @@ func (s *Server) catchUpCardBranch(card Card, project Project, b CardBranch) Cat
 	}
 	res.Merged = true
 	// La branche du chantier a de nouveaux commits : un chantier déjà livré ne
-	// l'est plus tout à fait (même règle qu'à l'acceptation).
-	if _, err := s.store.MarkCardBranchPending(card.ID, b.RepoName); err != nil {
-		res.Error = err.Error()
+	// l'est plus tout à fait (même règle qu'à l'acceptation). Un fast-forward
+	// n'apporte que la destination, rien de nouveau à livrer.
+	if ownWork {
+		if _, err := s.store.MarkCardBranchPending(card.ID, b.RepoName); err != nil {
+			res.Error = err.Error()
+		}
 	}
+	// Les tâches en revue repartent de la branche rattrapée, comme après une
+	// acceptation : sinon chacune garderait le retard, et son diff compterait
+	// la destination comme son propre travail si l'agent l'avait rebasée
+	// dessus à la main.
+	s.rebaseWG.Add(1)
+	go s.rebaseSiblingTasks(card.ID, "", b)
 	return res
 }
 

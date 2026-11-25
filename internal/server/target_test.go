@@ -259,3 +259,53 @@ func TestAcceptKeepsWorkstreamHistoryLinear(t *testing.T) {
 		}
 	}
 }
+
+// Le cas d'un chantier sans rien d'accepté, 127 commits derrière origin/main,
+// dont une tâche avait été rebasée à la main sur origin/main : elle montrait
+// 137 fichiers pour un commit. Le rattrapage avance le chantier en
+// fast-forward jusqu'à origin/main (pas le main local en retard), puis rejoue
+// les tâches en revue : chacune ne montre plus que son propre travail.
+func TestCatchUpFastForwardsEmptyWorkstreamToOrigin(t *testing.T) {
+	f := newDeliveryFixture(t, Delivery{Mode: "pr", Target: "main"})
+	first, cb := f.addTask(t, "Un", "a.txt", "a\n")
+	second, _ := f.addTask(t, "Deux", "b.txt", "b\n")
+	for _, id := range []string{first, second} {
+		task, _ := f.srv.store.GetTask(id)
+		runTestGit(t, task.WorktreeDir, "add", "-A")
+		runTestGit(t, task.WorktreeDir, "commit", "-q", "-m", "feat: "+id)
+	}
+	upstream := advanceOrigin(t, f)
+	if err := FetchTarget(f.repo, "main"); err != nil {
+		t.Fatal(err)
+	}
+	secondTask, _ := f.srv.store.GetTask(second)
+	runTestGit(t, secondTask.WorktreeDir, "rebase", "-q", "origin/main")
+	if files, _ := Diff(secondTask.WorktreeDir, TaskDiffBase(secondTask)); len(files) != 2 {
+		t.Fatalf("avant rattrapage, la tâche rebasée à la main compte la destination : 2 fichiers attendus, reçu %+v", files)
+	}
+	if prev := f.delivery(t); prev.Repos[0].Behind != 1 {
+		t.Fatalf("un commit de retard attendu, reçu %+v", prev.Repos[0])
+	}
+
+	resp := f.catchUp(t)
+	if len(resp.Repos) != 1 || !resp.Repos[0].Merged || resp.Repos[0].Error != "" {
+		t.Fatalf("rattrapage inattendu : %+v", resp.Repos)
+	}
+	if got := HeadSha(cb.WorktreeDir); got != upstream {
+		t.Fatalf("le chantier devrait avancer en fast-forward jusqu'à origin/main (%s), reçu %s", upstream, got)
+	}
+	if prev := f.delivery(t); prev.Repos[0].Behind != 0 {
+		t.Fatalf("plus aucun retard attendu, reçu %+v", prev.Repos[0])
+	}
+	f.srv.waitRebases()
+	for id, path := range map[string]string{first: "a.txt", second: "b.txt"} {
+		task, _ := f.srv.store.GetTask(id)
+		if !IsBranchMergedInto(task.WorktreeDir, cb.Branch, task.Branch) {
+			t.Fatalf("%s devrait repartir du chantier rattrapé", id)
+		}
+		files, err := Diff(task.WorktreeDir, TaskDiffBase(task))
+		if err != nil || len(files) != 1 || files[0].Path != path {
+			t.Fatalf("diff de %s attendu sur %s seul, reçu %+v (%v)", id, path, files, err)
+		}
+	}
+}
