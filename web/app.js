@@ -4260,7 +4260,7 @@
     // Rattraper la destination est le geste qui débloque la livraison : le
     // bouton se tient donc à côté de celui qu'il débloque.
     var catchUp = '';
-    if (prev && cardNeedsCatchUp(prev)) {
+    if (prev && cardNeedsCatchUp(card, prev)) {
       var target = catchUpTarget(prev);
       catchUp = '<button class="btn-outline catch-up-btn" data-action="catch-up-card" data-card-id="' + card.id + '"' +
         ' title="' + escapeHtml(t('catchUp.tooltip', { base: target })) + '">' +
@@ -4274,10 +4274,14 @@
 
   // Un chantier a besoin d'être rattrapé dès que sa destination a avancé sans
   // lui, quel que soit le mode : en fusion la livraison est bloquée, en pull
-  // request elle partirait sur une base périmée.
-  function cardNeedsCatchUp(prev) {
+  // request elle partirait sur une base périmée. Une branche encore vide est
+  // trivialement « arrivée » sur sa destination, mais ses tâches se mesurent
+  // contre elle : le retard compte tant que rien n'est accepté.
+  function cardNeedsCatchUp(card, prev) {
     var repos = (prev && prev.repos) || [];
-    if (!repos.length || shipAlreadyOnTarget(prev)) return false;
+    if (!repos.length) return false;
+    var nothingYet = card.shipBlocker === 'no-tasks' || card.shipBlocker === 'nothing-accepted';
+    if (!nothingYet && shipAlreadyOnTarget(prev)) return false;
     return repos.some(function (r) { return r.behind > 0 || !r.fastForwardable; });
   }
 
