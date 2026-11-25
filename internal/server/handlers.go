@@ -1660,7 +1660,11 @@ func (s *Server) rebaseSiblingTasks(cardID, acceptedTaskID string, cardBranch Ca
 			continue
 		}
 		if IsBranchMergedInto(task.WorktreeDir, cardBranch.Branch, task.Branch) {
-			continue // déjà à jour : la branche du chantier est contenue dans la tâche
+			// Déjà à jour : la branche du chantier est contenue dans la tâche.
+			// Elle a pu avancer jusqu'à elle (rattrapage d'une tâche rebasée à
+			// la main sur la destination) : le travail mesuré a changé.
+			s.refreshWorkCounts(task)
+			continue
 		}
 		// La vérification relancée après le rebase remplacera celle-ci, qui
 		// laisserait sinon ses artefacts dans le commit ci-dessous.
@@ -1673,6 +1677,24 @@ func (s *Server) rebaseSiblingTasks(cardID, acceptedTaskID string, cardBranch Ca
 		}
 		s.rebaseOneTask(task, cardBranch)
 	}
+}
+
+// refreshWorkCounts relit depuis git les compteurs d'une tâche (fichiers,
+// livrables, commits) et les publie s'ils ont changé : ils se mesurent contre
+// la branche du chantier, qui peut avancer sans que la tâche bouge.
+func (s *Server) refreshWorkCounts(task Task) {
+	files, docs, commits := TaskWorkCounts(task)
+	if files == task.FilesCount && docs == task.DocsCount && commits == task.CommitsCount {
+		return
+	}
+	updated, err := s.store.PatchTask(task.ID, func(t *Task) {
+		t.FilesCount, t.DocsCount, t.CommitsCount = files, docs, commits
+	})
+	if err != nil {
+		return
+	}
+	s.runner.publishTask(updated)
+	s.runner.publishCards(updated.ProjectID)
 }
 
 // rebaseOneTask rejoue une tâche sur la branche du chantier, en annonçant

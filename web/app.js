@@ -313,6 +313,7 @@
       'catchUp.tooltip': 'Fusionne {base} dans la branche du chantier, sans réécrire son historique. C\'est ce qui rend la livraison possible à nouveau.',
       'catchUp.done': 'Chantier remis à jour depuis {base}.',
       'catchUp.upToDate': 'Le chantier était déjà à jour.',
+      'catchUp.running': 'Rattrapage…',
       'catchUp.conflictTitle': 'Conflit avec {base}',
       'catchUp.conflictTitleMulti': 'Conflits de rattrapage',
       'catchUp.conflictBody': 'Fusionner {base} dans le chantier bute sur {files}. Rien n\'a été modifié : le chantier est intact. Un agent peut reprendre la base et régler les conflits dans une tâche dédiée.',
@@ -1193,6 +1194,7 @@
       'catchUp.tooltip': 'Merges {base} into the workstream branch, without rewriting its history. That is what makes shipping possible again.',
       'catchUp.done': 'Workstream caught up with {base}.',
       'catchUp.upToDate': 'The workstream was already up to date.',
+      'catchUp.running': 'Catching up…',
       'catchUp.conflictTitle': 'Conflict with {base}',
       'catchUp.conflictTitleMulti': 'Catch-up conflicts',
       'catchUp.conflictBody': 'Merging {base} into the workstream clashes on {files}. Nothing was changed: the workstream is intact. An agent can pick up the new base and settle the conflicts in a dedicated task.',
@@ -1840,6 +1842,8 @@
     shipResultByCard: {}, // dernier résultat de livraison, affiché dans la modale
     prDraftByCard: {}, // titre et description de PR par chantier puis dépôt (voir prDraftEntry)
     catchUpErrorByCard: {}, // échec de rattrapage hors conflit, affiché dans la barre
+    catchingUpByCard: {}, // rattrapage en vol : le bouton attend, sans deuxième clic possible
+    catchUpDoneByCard: {}, // issue d'un rattrapage réussi, affichée quelques secondes dans la barre
     checkLogOpen: {}, // journal de vérification déplié ou replié par tâche (défaut : déplié sur un échec)
     changesModeTask: null,
     changesModeStep: 'read', // étape d'où vient la demande de changements : read|test
@@ -4262,9 +4266,13 @@
     var catchUp = '';
     if (prev && cardNeedsCatchUp(card, prev)) {
       var target = catchUpTarget(prev);
+      var catching = !!state.catchingUpByCard[card.id];
+      var catchUpLabel = catching
+        ? '<span class="shimmer">' + escapeHtml(t('catchUp.running')) + '</span>'
+        : escapeHtml(t('catchUp.button', { base: target }));
       catchUp = '<button class="btn-outline catch-up-btn" data-action="catch-up-card" data-card-id="' + card.id + '"' +
-        ' title="' + escapeHtml(t('catchUp.tooltip', { base: target })) + '">' +
-        escapeHtml(t('catchUp.button', { base: target })) + '</button>';
+        (catching ? ' disabled' : '') +
+        ' title="' + escapeHtml(t('catchUp.tooltip', { base: target })) + '">' + catchUpLabel + '</button>';
     }
     return '<span class="ship-slot">' + catchUp +
       '<button class="btn-green ship-btn" ' + (ready ? '' : 'disabled title="' + escapeHtml(sub) + '"') +
@@ -4326,6 +4334,8 @@
     }).join('');
     var catchUpError = state.catchUpErrorByCard[card.id];
     if (catchUpError) warningsHTML += '<div class="ship-bar-warning">⚠ ' + escapeHtml(catchUpError) + '</div>';
+    var catchUpDone = state.catchUpDoneByCard[card.id];
+    var doneHTML = catchUpDone ? '<span class="ship-bar-done">' + escapeHtml(catchUpDone) + '</span>' : '';
     var partial = partialTaskCount(prev);
     var partialHTML = partial > 0
       ? '<span class="ship-bar-partial" title="' + escapeHtml(tCount('ship.partialNote', partial)) + '">' +
@@ -4338,7 +4348,7 @@
     var subHTML = sub ? '<span class="ship-bar-sub">' + escapeHtml(sub) + '</span>' : '';
     var behindHTML = buildCardBehindHTML(prev);
     var linksHTML = prev ? buildShipLinksHTML(prev) : '';
-    var hasContent = !!(subHTML || partialHTML || warningsHTML || behindHTML || linksHTML);
+    var hasContent = !!(subHTML || partialHTML || warningsHTML || doneHTML || behindHTML || linksHTML);
     var hasWarning = !!(warningsHTML);
     var cls = 'ship-bar' + (hasContent ? (hasWarning ? ' ship-bar-warn' : '') : ' ship-bar-empty');
     return '<div class="' + cls + '">' +
@@ -4346,6 +4356,7 @@
           subHTML +
           partialHTML +
           warningsHTML +
+          doneHTML +
           behindHTML +
           linksHTML +
         '</div>' +
@@ -4638,20 +4649,36 @@
   // dans le cas courant ; quand il conflicte, rien n'est modifié et c'est là
   // qu'un agent est utile, pas avant.
   function catchUpCard(cardId) {
+    if (state.catchingUpByCard[cardId]) return;
     delete state.catchUpErrorByCard[cardId];
+    delete state.catchUpDoneByCard[cardId];
+    state.catchingUpByCard[cardId] = true;
+    refreshShipBar(cardId);
     api('/api/cards/' + cardId + '/catch-up', { method: 'POST', body: {} }).then(function (res) {
+      delete state.catchingUpByCard[cardId];
       if (res && res.card) upsertCard(res.card);
-      var conflicted = (res.repos || []).filter(function (r) { return r.conflictFilePaths; });
-      var failed = (res.repos || []).filter(function (r) { return r.error && !r.conflictFilePaths; });
+      var repos = res.repos || [];
+      var conflicted = repos.filter(function (r) { return r.conflictFilePaths; });
+      var failed = repos.filter(function (r) { return r.error && !r.conflictFilePaths; });
       if (failed.length) state.catchUpErrorByCard[cardId] = failed[0].error;
-      // Succès : rien à annoncer, l'écran le dit déjà (le bouton disparaît, le
-      // retard tombe, la livraison s'active). loadDelivery redessine la barre.
+      // Succès : le bouton disparaît avec le retard, ce qui ne se remarque pas.
+      // Une phrase le dit dans la barre, le temps de la lire, puis s'efface.
+      var merged = repos.filter(function (r) { return r.merged; });
+      if (merged.length) state.catchUpDoneByCard[cardId] = t('catchUp.done', { base: merged[0].target });
+      else if (repos.length && repos.every(function (r) { return r.upToDate; })) state.catchUpDoneByCard[cardId] = t('catchUp.upToDate');
+      if (state.catchUpDoneByCard[cardId]) {
+        setTimeout(function () {
+          delete state.catchUpDoneByCard[cardId];
+          refreshShipBar(cardId);
+        }, 6000);
+      }
       loadDelivery(cardId);
       // Chaque dépôt a sa propre cible et ses propres fichiers en conflit : un
       // chantier multi-dépôts peut buter sur plusieurs à la fois, chacun réglé
       // par sa propre tâche (une tâche = un worktree = un dépôt).
       if (conflicted.length) openModal(buildCatchUpConflictHTML(cardId, conflicted));
     }).catch(function (e) {
+      delete state.catchingUpByCard[cardId];
       state.catchUpErrorByCard[cardId] = (e instanceof ApiError && e.message) || t('catchUp.errorFailed');
       refreshShipBar(cardId);
     });

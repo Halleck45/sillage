@@ -308,4 +308,9 @@ func TestCatchUpFastForwardsEmptyWorkstreamToOrigin(t *testing.T) {
 			t.Fatalf("diff de %s attendu sur %s seul, reçu %+v (%v)", id, path, files, err)
 		}
 	}
+	// La tâche rebasée à la main n'a pas bougé, mais sa base si : ses compteurs
+	// (l'onglet « Diff 137 ») doivent suivre sans attendre l'ouverture du diff.
+	if task, _ := f.srv.store.GetTask(second); task.FilesCount != 1 || task.CommitsCount != 1 {
+		t.Fatalf("compteurs de la tâche rebasée à la main : 1 fichier et 1 commit attendus, reçu %d et %d", task.FilesCount, task.CommitsCount)
+	}
 }
