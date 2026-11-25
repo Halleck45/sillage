@@ -42,7 +42,9 @@ const claudeAllowedTools = "Read,Edit,Write,Glob,Grep,WebFetch," +
 // Ce refus attrape la maladresse, pas la détermination (Bash(sh:*) le
 // contournerait) : le confinement réel reste le worktree dédié, la branche
 // jetable et la revue humaine avant toute sortie. À faire grandir quand un
-// nouveau binaire sortant apparaît, jamais à réduire.
+// nouveau binaire sortant apparaît, jamais à réduire. Seule exception, le
+// profil gh (claudeDenied) : Bash(gh:*) y cède la place au refus de toutes les
+// écritures (ghWriteDenied), pour que la lecture passe.
 const claudeDeniedTools = "Bash(git push:*),Bash(gh:*),Bash(glab:*)," +
 	"Bash(git commit --amend:*)," +
 	"Edit(.claude/settings*.json),Write(.claude/settings*.json)," +
@@ -920,7 +922,7 @@ func (r *Runner) runClaude(task *Task, agent Agent, project Project, card Card, 
 		"-p", "--output-format", "stream-json", "--verbose",
 		"--permission-mode", "acceptEdits",
 		"--allowedTools", claudeTools(project.AllowedTools, project.PermissionProfiles),
-		"--disallowedTools", claudeDeniedTools,
+		"--disallowedTools", claudeDenied(project.PermissionProfiles),
 	}
 	if agent.Model != "" {
 		args = append(args, "--model", agent.Model)

@@ -14,10 +14,102 @@ import (
 type permissionProfile struct {
 	ID           string
 	AllowedTools []string
-	Environment  func(string) map[string]string
+	// Denied s'ajoute au refus passé au CLI quand le profil est actif.
+	Denied []string
+	// Environment est nil pour un profil sans cache (git, gh).
+	Environment func(string) map[string]string
+}
+
+// ghWriteDenied remplace Bash(gh:*) dans le refus quand le profil gh est
+// actif : un refus l'emporte sur une autorisation, Bash(gh:*) bloquerait aussi
+// la lecture. Toute écriture sur la forge reste refusée, gh api compris (il
+// sait faire un POST). Une sous-commande absente d'ici n'est pas autorisée
+// pour autant : seule l'allowlist l'est, ce refus garde le cas où l'humain
+// ajouterait Bash(gh:*) à Project.AllowedTools.
+var ghWriteDenied = []string{
+	"Bash(gh api:*)", "Bash(gh browse:*)",
+	"Bash(gh pr create:*)", "Bash(gh pr merge:*)", "Bash(gh pr close:*)", "Bash(gh pr reopen:*)",
+	"Bash(gh pr edit:*)", "Bash(gh pr comment:*)", "Bash(gh pr review:*)", "Bash(gh pr ready:*)",
+	"Bash(gh pr checkout:*)", "Bash(gh pr lock:*)", "Bash(gh pr unlock:*)", "Bash(gh pr revert:*)",
+	"Bash(gh pr update-branch:*)",
+	"Bash(gh issue create:*)", "Bash(gh issue close:*)", "Bash(gh issue reopen:*)",
+	"Bash(gh issue edit:*)", "Bash(gh issue comment:*)", "Bash(gh issue delete:*)",
+	"Bash(gh issue transfer:*)", "Bash(gh issue pin:*)", "Bash(gh issue unpin:*)",
+	"Bash(gh issue lock:*)", "Bash(gh issue unlock:*)", "Bash(gh issue develop:*)",
+	"Bash(gh run rerun:*)", "Bash(gh run cancel:*)", "Bash(gh run delete:*)", "Bash(gh run download:*)",
+	"Bash(gh workflow run:*)", "Bash(gh workflow enable:*)", "Bash(gh workflow disable:*)",
+	"Bash(gh release create:*)", "Bash(gh release edit:*)", "Bash(gh release delete:*)",
+	"Bash(gh release upload:*)", "Bash(gh release delete-asset:*)", "Bash(gh release download:*)",
+	"Bash(gh repo create:*)", "Bash(gh repo delete:*)", "Bash(gh repo edit:*)", "Bash(gh repo fork:*)",
+	"Bash(gh repo rename:*)", "Bash(gh repo archive:*)", "Bash(gh repo unarchive:*)",
+	"Bash(gh repo sync:*)", "Bash(gh repo clone:*)", "Bash(gh repo set-default:*)",
+	"Bash(gh repo deploy-key:*)", "Bash(gh repo autolink:*)",
+	"Bash(gh secret:*)", "Bash(gh variable:*)", "Bash(gh auth:*)", "Bash(gh gist:*)",
+	"Bash(gh extension:*)", "Bash(gh label:*)", "Bash(gh ssh-key:*)", "Bash(gh gpg-key:*)",
+	"Bash(gh codespace:*)", "Bash(gh cache:*)", "Bash(gh ruleset:*)", "Bash(gh project:*)",
+	"Bash(gh org:*)", "Bash(gh alias:*)", "Bash(gh config:*)", "Bash(gh agent-task:*)",
+	"Bash(gh copilot:*)", "Bash(gh attestation:*)",
+}
+
+// claudeDenied est le refus réellement passé au CLI claude d'une tâche : le
+// refus figé, où Bash(gh:*) cède la place à ghWriteDenied si le profil gh est
+// actif, plus les refus propres aux profils actifs. Il ne fait que grandir,
+// sauf pour gh, et seulement vers la lecture.
+func claudeDenied(profileIDs []string) string {
+	denied := claudeDeniedTools
+	var extra []string
+	for _, id := range profileIDs {
+		profile, ok := permissionProfileByID(id)
+		if !ok {
+			continue
+		}
+		if profile.ID == "gh" {
+			denied = strings.Replace(denied, "Bash(gh:*),", strings.Join(ghWriteDenied, ",")+",", 1)
+		}
+		extra = append(extra, profile.Denied...)
+	}
+	if len(extra) > 0 {
+		denied += "," + strings.Join(extra, ",")
+	}
+	return denied
 }
 
 var permissionProfiles = []permissionProfile{
+	{
+		// git au-delà du socle (qui lit et commite) : rejouer, fusionner,
+		// défaire dans le worktree de la tâche, dont la branche est jetable, et
+		// lire l'historique plus finement. Ni push (refus figé), ni amend, ni
+		// changement ou suppression de branche : la tâche reste sur la sienne
+		// (voir IsOnBranch). fetch est une lecture réseau.
+		ID: "git",
+		AllowedTools: []string{
+			"Bash(git rebase:*)", "Bash(git merge:*)", "Bash(git cherry-pick:*)",
+			"Bash(git reset:*)", "Bash(git restore:*)", "Bash(git stash:*)",
+			"Bash(git rm:*)", "Bash(git mv:*)", "Bash(git fetch:*)",
+			"Bash(git blame:*)", "Bash(git grep:*)", "Bash(git rev-parse:*)",
+			"Bash(git rev-list:*)", "Bash(git merge-base:*)", "Bash(git ls-files:*)",
+			"Bash(git show-ref:*)", "Bash(git describe:*)", "Bash(git shortlog:*)",
+			"Bash(git reflog:*)", "Bash(git range-diff:*)",
+			"Bash(git branch --show-current:*)", "Bash(git branch --list:*)",
+			"Bash(git worktree list:*)",
+		},
+		Denied: []string{"Bash(git rebase --exec:*)", "Bash(git rebase -x:*)"},
+	},
+	{
+		// gh en lecture seule : relire une PR, ses commentaires, sa CI, une
+		// issue. Rien n'est écrit sur la forge hors livraison (invariant 3) :
+		// les sous-commandes d'écriture et gh api restent refusées (ghWriteDenied).
+		ID: "gh",
+		AllowedTools: []string{
+			"Bash(gh pr view:*)", "Bash(gh pr list:*)", "Bash(gh pr diff:*)",
+			"Bash(gh pr checks:*)", "Bash(gh pr status:*)",
+			"Bash(gh issue view:*)", "Bash(gh issue list:*)", "Bash(gh issue status:*)",
+			"Bash(gh run view:*)", "Bash(gh run list:*)", "Bash(gh run watch:*)",
+			"Bash(gh workflow list:*)", "Bash(gh workflow view:*)",
+			"Bash(gh release list:*)", "Bash(gh release view:*)",
+			"Bash(gh repo view:*)", "Bash(gh search:*)", "Bash(gh status:*)",
+		},
+	},
 	{
 		ID: "ruby",
 		AllowedTools: []string{
@@ -169,6 +261,9 @@ func preparePermissionRuntime(dataDir string, task Task, project Project) (permi
 	for _, id := range project.PermissionProfiles {
 		profile, ok := permissionProfileByID(id)
 		if !ok {
+			continue
+		}
+		if profile.Environment == nil {
 			continue
 		}
 		root := filepath.Join(cacheRoot, profile.ID)

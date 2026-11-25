@@ -752,3 +752,62 @@ func TestIsPermissionDenial(t *testing.T) {
 		}
 	}
 }
+
+// Profil gh : la lecture passe, toute écriture reste refusée. Sans le profil,
+// le refus figé est inchangé.
+func TestGhProfileIsReadOnly(t *testing.T) {
+	if claudeDenied(nil) != claudeDeniedTools || claudeDenied([]string{"go"}) != claudeDeniedTools {
+		t.Fatalf("sans profil gh ni git, le refus doit être le refus figé")
+	}
+	denied := claudeDenied([]string{"gh"})
+	if strings.Contains(denied, "Bash(gh:*)") {
+		t.Fatalf("avec le profil gh, Bash(gh:*) bloquerait la lecture : %q", denied)
+	}
+	for _, required := range []string{"Bash(git push:*)", "Bash(glab:*)", "Bash(gh api:*)", "Bash(gh pr create:*)",
+		"Bash(gh pr merge:*)", "Bash(gh pr comment:*)", "Bash(gh issue comment:*)", "Bash(gh repo delete:*)", ".claude/settings"} {
+		if !strings.Contains(denied, required) {
+			t.Fatalf("le refus avec profil gh doit couvrir %q", required)
+		}
+	}
+	gh, _ := permissionProfileByID("gh")
+	deniedSet := strings.Split(denied, ",")
+	for _, allowed := range gh.AllowedTools {
+		cmd := strings.TrimSuffix(strings.TrimPrefix(allowed, "Bash("), ":*)")
+		for _, d := range deniedSet {
+			prefix := strings.TrimSuffix(strings.TrimPrefix(d, "Bash("), ":*)")
+			if strings.HasPrefix(d, "Bash(") && strings.HasPrefix(cmd+" ", prefix+" ") {
+				t.Fatalf("%q est autorisé mais refusé par %q : le refus l'emporte", allowed, d)
+			}
+		}
+		for _, word := range []string{"create", "merge", "comment", "edit", "close", "api", "delete", "checkout"} {
+			if strings.Contains(cmd, " "+word) {
+				t.Fatalf("le profil gh ne doit rien autoriser qui écrive : %q", allowed)
+			}
+		}
+	}
+}
+
+// Profil git : il élargit le git du socle sans jamais ouvrir le push ni
+// l'amend, et refuse le --exec d'un rebase (une commande arbitraire).
+func TestGitProfileNeverPushes(t *testing.T) {
+	git, ok := permissionProfileByID("git")
+	if !ok {
+		t.Fatal("profil git absent")
+	}
+	for _, allowed := range git.AllowedTools {
+		for _, forbidden := range []string{"push", "amend", "Bash(git:*)", "git branch -", "git checkout", "git switch", "git config"} {
+			if strings.Contains(allowed, forbidden) && !strings.Contains(allowed, "--show-current") && !strings.Contains(allowed, "--list") {
+				t.Fatalf("le profil git autorise %q (%s)", allowed, forbidden)
+			}
+		}
+	}
+	denied := claudeDenied([]string{"git"})
+	for _, required := range []string{"Bash(git push:*)", "Bash(gh:*)", "Bash(git commit --amend:*)", "Bash(git rebase --exec:*)"} {
+		if !strings.Contains(denied, required) {
+			t.Fatalf("le refus avec profil git doit couvrir %q", required)
+		}
+	}
+	if got := claudeTools(nil, []string{"git", "gh"}); !strings.Contains(got, "Bash(git rebase:*)") || !strings.Contains(got, "Bash(gh pr view:*)") {
+		t.Fatalf("les profils git et gh doivent étendre l'allowlist : %q", got)
+	}
+}
