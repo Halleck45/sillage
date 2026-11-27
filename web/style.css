@@ -1447,15 +1447,26 @@ button, input, textarea { font-family: inherit; }
 .modal-image img { display: block; max-width: 100%; max-height: calc(100vh - 130px); border-radius: 14px; box-shadow: var(--shadow-3); }
 .modal-section-hint { margin-top: 3px; font-size: 11.5px; line-height: 1.4; color: var(--muted-3); }
 
-/* Modale à panneaux (réglages d'un projet) : la colonne de navigation EST le
-   découpage, d'où l'absence de filet horizontal. La hauteur minimale du panneau
-   évite que la modale saute d'une taille à l'autre en changeant d'onglet. */
-.modal-tabbed { width: min(760px, 100%); }
-.ptabs { display: flex; gap: 24px; margin-top: 16px; }
-.ptabs-nav { flex: 0 0 152px; display: flex; flex-direction: column; gap: 2px; }
+/* Modale à panneaux (réglages d'un projet, réglages généraux) : une grande
+   surface de taille fixe, pour que rien ne saute d'un panneau à l'autre. La
+   colonne de navigation EST le découpage ; seul le panneau défile, l'en-tête et
+   le pied restent en place. */
+.modal-overlay:has(.modal-tabbed) { padding-top: 6vh; }
+.modal-tabbed {
+  width: min(1180px, 100%); height: min(820px, calc(94vh - 24px)); max-height: none;
+  display: flex; flex-direction: column; overflow: hidden; padding: 22px 0 0;
+}
+.modal-tabbed > .modal-head { padding: 0 20px 0 26px; margin-bottom: 0; align-items: baseline; }
+.modal-tabbed > .modal-head .icon-btn { align-self: center; }
+.modal-tabbed > .modal-error { margin: 0; padding: 8px 26px 0; }
+.ptabs { flex: 1; min-height: 0; display: flex; margin-top: 18px; }
+.ptabs-nav {
+  flex: 0 0 204px; display: flex; flex-direction: column; gap: 2px;
+  padding: 0 14px 18px 16px; overflow-y: auto;
+}
 .ptab {
-  border: 0; background: transparent; text-align: left; padding: 7px 10px; border-radius: 9px;
-  font-size: 13px; color: var(--muted); cursor: pointer; transition: background-color .18s ease, color .18s ease;
+  flex: none; border: 0; background: transparent; text-align: left; padding: 8px 10px; border-radius: 9px;
+  font-size: 13.5px; color: var(--muted); cursor: pointer; transition: background-color .18s ease, color .18s ease;
 }
 .ptab:hover { background: var(--hover); color: var(--text-2); }
 .ptab-active { background: var(--hover); color: var(--text); font-weight: 600; }
@@ -1463,21 +1474,43 @@ button, input, textarea { font-family: inherit; }
    touche qu'une fois n'a pas à peser sur ceux qu'on change tous les jours. */
 .ptab-danger { margin-top: 14px; color: var(--muted-3); }
 .ptab-danger.ptab-active { background: var(--red-bg); color: var(--red); }
-/* min-height calée sur le panneau le plus haut (Instructions) : la modale ne
-   change pas de taille quand on passe d'un onglet à l'autre. */
-.ptabs-panel { flex: 1; min-width: 0; min-height: 308px; }
-.ptabs-panel > .modal-label:first-child,
-.ptabs-panel > .modal-section-hint:first-child { margin-top: 0; }
+.ptabs-nav-foot { margin-top: auto; padding-top: 18px; display: flex; flex-direction: column; gap: 2px; }
+.ptabs-nav-foot .about-links { flex-direction: column; align-items: flex-start; gap: 8px; margin-top: 10px; padding-left: 10px; }
+/* Le léger retrait intérieur laisse la place de l'ombre de focus des champs,
+   que le défilement couperait sinon. */
+.ptabs-panel { flex: 1; min-width: 0; min-height: 0; overflow-y: auto; padding: 2px 30px 26px 14px; }
+.panel-head { margin-bottom: 20px; }
+.panel-title { font-size: 16px; font-weight: 650; letter-spacing: -0.02em; color: var(--text); }
+.panel-sub { margin-top: 5px; max-width: 66ch; font-size: 13px; line-height: 1.5; color: var(--muted); }
+.panel-head + .modal-input, .panel-head + .choice-cards { margin-top: 0; }
+/* Un second sujet dans le même panneau : de l'air au-dessus, pas un filet. */
+.panel-group { margin-top: 30px; }
+div.panel-group > .modal-label:first-child { margin-top: 0; }
+.panel-group > .modal-label, .modal-label.panel-group { font-size: 12.5px; color: var(--text-2); }
+.panel-fill { display: flex; flex-direction: column; height: 100%; }
+.panel-fill .panel-head { flex: none; }
+.modal-textarea-fill { flex: 1; min-height: 240px; margin-top: 0; resize: none; }
+.ptabs-panel .btn-block { width: auto; padding: 0 18px; }
+.ptabs-panel .agent-manage-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.ptabs-panel .default-agent { margin-bottom: 22px; }
+.modal-tabbed > .modal-foot {
+  flex: none; margin-top: 0; padding: 14px 26px 18px; border-top: 1px solid var(--border-2);
+}
+.modal-tabbed > .modal-foot .btn-green { margin-left: 0; }
 
 /* Champ court : libellé à gauche, saisie à droite, alignés d'un champ à l'autre. */
 .field-row { display: flex; align-items: center; gap: 14px; margin-top: 10px; }
+.panel-head + .field-row { margin-top: 0; }
 .field-row:first-child { margin-top: 0; }
-.field-row .modal-label { flex: 0 0 104px; margin-top: 0; }
+.field-row .modal-label { flex: 0 0 124px; margin-top: 0; }
 .field-row-input { flex: 1; min-width: 0; }
-.field-row-input .modal-input { margin-top: 0; }
+.field-row-input .modal-input, .field-row-input .workspace-remote-row { margin-top: 0; }
+/* La note d'un champ en ligne s'aligne sur la saisie, pas sur le libellé. */
+.field-note { margin-left: 138px; }
 
 /* Cartes à cocher : un choix par carte, chacune portant sa conséquence. */
 .choice-cards { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+.choice-cards-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 .choice-card {
   display: flex; align-items: flex-start; gap: 10px; padding: 11px 13px; cursor: pointer;
   background: var(--glass-card); border: 1px solid var(--border-3); border-radius: 12px;
@@ -1522,9 +1555,6 @@ button, input, textarea { font-family: inherit; }
 }
 .modal-input { height: 42px; }
 .modal-textarea { padding: 11px 13px; font-size: 13.5px; resize: vertical; line-height: 1.5; }
-/* Le contexte projet finit dans le prompt système de chaque agent : il mérite
-   de la hauteur, pas trois lignes coincées entre deux autres champs. */
-.modal-textarea-tall { min-height: 208px; }
 .modal-input:focus, .modal-textarea:focus {
   border-color: var(--muted-5); background: #fff; box-shadow: var(--shadow-1);
 }
@@ -1676,16 +1706,13 @@ button, input, textarea { font-family: inherit; }
 .repo-row { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
 .repo-row .modal-input { margin-top: 0; }
 .repo-row-head { margin-top: 0; font-size: 11.5px; font-weight: 600; color: var(--muted-3); }
-.repo-row-name { flex: 0 0 140px; }
+.repo-row-name { flex: 0 0 220px; }
 .repo-row-path { flex: 1; min-width: 0; }
 .repo-row-remove { flex: none; }
-/* Recette d'un dépôt : commande et URL, sous le chemin auquel elles
-   s'appliquent, en retrait pour rester secondaires. */
-.repo-block + .repo-block { margin-top: 12px; }
-.repo-preview-row { display: flex; align-items: center; gap: 8px; margin: 4px 0 0 12px; }
-.repo-preview-row .modal-input { margin-top: 0; font-size: 12px; }
-.repo-row-preview-cmd { flex: 1; min-width: 0; }
-.repo-row-preview-url { flex: 0 0 200px; min-width: 0; }
+.repo-block + .repo-block { margin-top: 8px; }
+/* Recette : un bloc par dépôt, nommé dès qu'il y en a plusieurs. */
+.preview-block + .preview-block { margin-top: 26px; }
+.preview-block-name { margin-bottom: 10px; font-size: 13px; font-weight: 600; color: var(--text); }
 .add-repo-link {
   display: block; margin-top: 8px; border: 0; background: transparent; color: var(--muted-3);
   font-size: 12px; cursor: pointer; padding: 4px 2px;
@@ -1715,10 +1742,7 @@ button, input, textarea { font-family: inherit; }
   padding: 3px 8px;
 }
 .preview-hint-var code { font-size: 11px; }
-.preview-hint-example { margin-top: 8px; }
-.preview-hint-example code {
-  display: inline-block; margin-top: 3px; background: var(--hover); border-radius: 7px; padding: 2px 7px;
-}
+.preview-hint-vars { font-size: 11.5px; color: var(--muted-3); margin-top: 8px; }
 
 /* Recette manuelle (voir docs/SPEC-RECETTE.md) : une ligne par dépôt, le
    journal en direct, et toujours le chemin du worktree. */
@@ -1797,11 +1821,8 @@ button, input, textarea { font-family: inherit; }
 .workspace-autosync-row input[type="checkbox"] { cursor: pointer; }
 .workspace-sync-error { margin-top: 6px; font-size: 11.5px; color: var(--amber); }
 
-.preferences-lang-row { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
-.preferences-lang-label { font-size: 12.5px; color: var(--text-2); }
 .preferences-divider { margin: 16px 0; border-top: 1px solid var(--border-2); }
 
-.settings-tab-body { margin-top: 12px; }
 
 /* Onglet Agents des réglages : la liste complète des agents, sortie de la barre
    latérale (qui ne garde que ceux qui travaillent ou qui sont mal installés). */
@@ -1988,12 +2009,20 @@ button, input, textarea { font-family: inherit; }
   .modal, .search-box { width: calc(100vw - 40px); }
   .agent-form-row { grid-template-columns: 1fr; }
   /* Trop étroit pour deux colonnes : la navigation des panneaux passe au-dessus,
-     en bandeau défilant, et les libellés reviennent au-dessus de leur champ. */
+     en bandeau défilant, la modale reprend sa hauteur naturelle et défile en
+     entier, et les libellés reviennent au-dessus de leur champ. */
+  .modal-overlay:has(.modal-tabbed) { padding-top: 20px; }
+  .modal-tabbed { display: block; height: auto; max-height: calc(100vh - 40px); overflow-y: auto; }
   .ptabs { flex-direction: column; gap: 14px; }
-  .ptabs-nav { flex: none; flex-direction: row; gap: 6px; overflow-x: auto; }
+  .ptabs-nav { flex: none; flex-direction: row; gap: 6px; overflow-x: auto; padding: 0 16px; scrollbar-width: none; }
   .ptab { white-space: nowrap; }
   .ptab-danger { margin-top: 0; }
-  .ptabs-panel { min-height: 0; }
+  .ptabs-nav-foot { margin: 0; padding: 0; flex-direction: row; }
+  .ptabs-nav-foot .about-links { display: none; }
+  .ptabs-panel { overflow: visible; padding: 0 16px 18px; }
+  .panel-fill { height: auto; }
+  .choice-cards-grid, .ptabs-panel .agent-manage-list { grid-template-columns: 1fr; }
+  .field-note { margin-left: 0; }
   .field-row { display: block; }
   .field-row .modal-label { margin-bottom: 8px; }
 }
@@ -2297,7 +2326,7 @@ a.btn-primary, a.btn-quiet { display: inline-flex; align-items: center; text-dec
 
 /* ---------- Configuration automatique d'un projet ---------- */
 .autoconf { background-color: var(--glass-card); background-image: var(--sheen); border: 1px solid var(--border);
-  border-radius: 14px; padding: 16px 18px; margin-bottom: 22px; display: flex; flex-direction: column; gap: 12px; }
+  border-radius: 14px; padding: 16px 18px; margin-top: 30px; display: flex; flex-direction: column; gap: 12px; }
 .autoconf-head { display: flex; gap: 12px; align-items: flex-start; }
 .autoconf-icon { flex: none; width: 30px; height: 30px; border-radius: 9px; display: inline-flex; align-items: center; justify-content: center;
   background: var(--hover); color: var(--text-2); }
@@ -2305,7 +2334,8 @@ a.btn-primary, a.btn-quiet { display: inline-flex; align-items: center; text-dec
 .autoconf-title { font-size: 14px; font-weight: 600; color: var(--text); }
 .autoconf-hint { font-size: 12.5px; line-height: 1.5; color: var(--muted); }
 .autoconf-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-.autoconf-agent { width: auto; min-width: 160px; }
+.autoconf-head > .autoconf-actions { flex: none; align-self: center; flex-wrap: nowrap; }
+.autoconf-agent { width: auto; min-width: 160px; margin-top: 0; height: 34px; font-size: 13px; }
 .autoconf-live { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 13px; color: var(--text-2); }
 .autoconf-live .btn-quiet { margin-left: auto; }
 .autoconf-proposal { display: flex; flex-direction: column; border-top: 1px solid var(--border); }
@@ -2319,7 +2349,11 @@ a.btn-primary, a.btn-quiet { display: inline-flex; align-items: center; text-dec
 .autoconf-current { font-size: 11.5px; color: var(--muted-3); word-break: break-all; }
 .autoconf-notes { font-size: 12.5px; color: var(--text-3); line-height: 1.5; }
 .autoconf-warning { font-size: 12.5px; color: var(--text-3); }
-@media (max-width: 700px) { .autoconf-row { grid-template-columns: 1fr; gap: 4px; } }
+@media (max-width: 700px) {
+  .autoconf-row { grid-template-columns: 1fr; gap: 4px; }
+  .autoconf-head { flex-wrap: wrap; }
+  .autoconf-head > .autoconf-actions { flex: 1 0 100%; }
+}
 
 .autoconf-nudge { font-size: 13px; color: var(--muted); }
 .target-nudge { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; font-size: 13px; color: var(--text-2);

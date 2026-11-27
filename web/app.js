@@ -97,6 +97,14 @@
       'project.editTitle': 'Réglages du projet',
       'project.tabGeneral': 'Général',
       'project.tabRepos': 'Dépôts',
+      'project.tabCheck': 'Vérification',
+      'project.tabPreview': 'Recette',
+      'project.checkHint': 'La commande lancée dans le worktree d\'une tâche dès que son agent a fini. Son résultat s\'affiche sur la tâche.',
+      'project.previewHint': 'De quoi lancer le projet pour l\'essayer à la main, dans le worktree d\'un chantier ou d\'une tâche.',
+      'project.previewCmd': 'Commande',
+      'project.previewUrl': 'Adresse à ouvrir',
+      'project.previewVars': 'Variables disponibles',
+      'project.previewNoRepo': 'Ajoutez d\'abord un dépôt.',
       'project.tabInstructions': 'Instructions',
       'project.tabPermissions': 'Permissions',
       'project.tabDelivery': 'Livraison',
@@ -106,7 +114,7 @@
       'project.baseBranch': 'Branche de base',
       'project.baseBranchHint': 'Les chantiers partent de cette branche et y retournent à la livraison. Vide : branche par défaut du dépôt.',
       'project.checkCmd': 'Commande de vérification',
-      'project.permissionProfilesHint': 'Activez seulement les outils de confiance pour ce projet. Chaque profil autorise ses commandes aux agents Claude ; ceux d\'un langage placent leurs téléchargements dans un cache Sillage inscriptible, hors du dépôt et des dossiers système.',
+      'project.permissionProfilesHint': 'Ce que les agents Claude peuvent lancer dans ce projet. Les téléchargements d\'un langage vont dans un cache Sillage, hors du dépôt.',
       'project.profile.ruby': 'Ruby',
       'project.profile.rubyDesc': 'bundle, gem, rake et ruby · les gems ne sont jamais installées dans /usr/local',
       'project.profile.node': 'Node.js',
@@ -125,22 +133,18 @@
       'project.profile.rustDesc': 'cargo, rustc, rustfmt et clippy · registre et artefacts isolés',
       'project.allowedTools': 'Règles Claude supplémentaires',
       'project.allowedToolsPlaceholder': 'Bash(go test:*)\nBash(gofmt:*)',
-      'project.allowedToolsHint': 'Option avancée, une règle par ligne dans la syntaxe de Claude CLI. Les règles des profils cochés sont appliquées automatiquement sans être recopiées ici. Rien qui puisse pousser ne sera accepté.',
+      'project.allowedToolsHint': 'Une règle par ligne, dans la syntaxe de Claude CLI, en plus des profils cochés. Rien qui puisse pousser n\'est accepté.',
       'project.reposHint': 'Chemins locaux des dépôts git de ce projet.',
       'project.repoNamePlaceholder': 'Nom du dépôt',
       'project.repoName': 'Nom',
       'project.repoPath': 'Chemin',
       'project.addRepo': '+ dépôt',
       'project.removeRepo': 'Retirer',
-      'project.previewCmdPlaceholder': 'Commande de recette (optionnelle)',
-      'project.previewUrlPlaceholder': 'URL à ouvrir : http://… ou file:///… (optionnelle)',
-      'project.previewHintIntro': 'Recette manuelle : la commande est lancée dans le worktree du chantier ou de la tâche.',
       'project.previewVarIdDesc': 'noms : base de données, conteneur, répertoire',
       'project.previewVarNDesc': 'arithmétique explicite',
       'project.previewVarPortDesc': 'port prêt à l\'emploi, sans calcul à écrire',
       'project.previewVarDirDesc': 'chemins absolus',
       'project.previewVarBranchDesc': 'affichage, debug',
-      'project.previewExampleLabel': 'Par exemple, lancer un serveur Python :',
       'project.errorNameRequired': 'Le nom est requis.',
       'project.errorReposRequired': 'Au moins un dépôt est requis.',
       'project.errorSaveFailed': 'Erreur lors de l\'enregistrement.',
@@ -149,9 +153,8 @@
       'project.deleteSubtext': 'Supprime aussi {cards} chantiers et {tasks} tâches.',
       'project.deleteWarning': 'Les worktrees et les branches déjà créés ne sont pas touchés, mais le projet disparaît de Sillage. Sans retour possible.',
       'project.unsaved': 'Modifications non enregistrées',
-      'project.linksHint': 'Raccourcis affichés sur la page du projet, 12 au plus.',
+      'project.linksHint': 'Affichés sur la page du projet, 12 au plus.',
       'project.addLink': '+ lien',
-      'project.linksEmpty': 'Aucun lien épinglé.',
       'project.linksInvalidUrl': 'Utilisez une URL http(s).',
       'project.linksMax': 'Maximum 12 liens.',
       'project.description': 'Description',
@@ -385,7 +388,7 @@
       'preview.errorStopFailed': 'L\'arrêt a échoué.',
       'preview.running.one': '{n} recette en cours',
       'preview.running.other': '{n} recettes en cours',
-      'delivery.label': 'Livrer veut dire',
+      'delivery.label': 'Ce que « Livrer » fait dans ce projet.',
       'delivery.modePr': 'Ouvrir une pull request',
       'delivery.modePush': 'Pousser la branche',
       'delivery.modeMerge': 'Fusionner en local',
@@ -615,7 +618,7 @@
       'sessions.promptAsks': 'Ses dernières demandes, de la plus ancienne à la plus récente :',
       'sessions.shipWarning': 'Une session Claude Code est ouverte dans {repo} (« {title} ») : elle écrit peut-être au même endroit que cette livraison.',
       'autoconf.title': 'Configuration automatique',
-      'autoconf.hint': 'Un agent lit le dépôt (fichiers de build, CI, README) et propose la vérification lancée après chaque tâche, la commande de recette et son adresse. Il ne modifie rien, et vous relisez avant d\'enregistrer.',
+      'autoconf.hint': 'Un agent lit le dépôt et propose la vérification, la recette et les permissions. Rien n\'est enregistré sans vous.',
       'autoconf.start': 'Lancer l\'analyse',
       'autoconf.with': 'Agent',
       'autoconf.running': '{agent} lit {repo}',
@@ -829,7 +832,6 @@
       'onboarding.errorRemoteRequired': 'L\'URL du dépôt est requise.',
       'onboarding.errorFailed': 'Échec de la configuration.',
       'workspace.tooltip': 'Espace de travail',
-      'workspace.title': 'Espace de travail',
       'workspace.state.local': 'Local seul, pas de sauvegarde git',
       'workspace.state.gitNoRemote': 'Git activé, sans remote',
       'workspace.state.gitRemote': 'Git activé, avec remote',
@@ -848,7 +850,6 @@
       'workspace.errorActivateFailed': 'Échec de l\'activation.',
       'workspace.errorSyncFailed': 'Échec de la synchronisation.',
       'workspace.errorAutoSyncFailed': 'Échec de l\'enregistrement.',
-      'preferences.title': 'Préférences',
       'preferences.displayNamePlaceholder': 'Prénom',
       'preferences.langLabel': 'Langue',
       'preferences.errorSaveFailed': 'Échec de l\'enregistrement.',
@@ -991,6 +992,14 @@
       'project.editTitle': 'Project settings',
       'project.tabGeneral': 'General',
       'project.tabRepos': 'Repositories',
+      'project.tabCheck': 'Check',
+      'project.tabPreview': 'Preview',
+      'project.checkHint': 'The command run in a task\'s worktree as soon as its agent is done. Its result shows on the task.',
+      'project.previewHint': 'What starts the project so you can try it by hand, in a workstream or task worktree.',
+      'project.previewCmd': 'Command',
+      'project.previewUrl': 'Address to open',
+      'project.previewVars': 'Available variables',
+      'project.previewNoRepo': 'Add a repository first.',
       'project.tabInstructions': 'Instructions',
       'project.tabPermissions': 'Permissions',
       'project.tabDelivery': 'Delivery',
@@ -1000,7 +1009,7 @@
       'project.baseBranch': 'Base branch',
       'project.baseBranchHint': 'Workstreams branch off this branch and ship back into it. Empty: the repository default branch.',
       'project.checkCmd': 'Check command',
-      'project.permissionProfilesHint': 'Enable only tools you trust for this project. Each profile allows its commands to Claude agents; language profiles move downloads to a writable Sillage cache, outside the repository and system directories.',
+      'project.permissionProfilesHint': 'What Claude agents may run in this project. A language\'s downloads go to a Sillage cache, outside the repository.',
       'project.profile.ruby': 'Ruby',
       'project.profile.rubyDesc': 'bundle, gem, rake, and ruby · gems are never installed in /usr/local',
       'project.profile.node': 'Node.js',
@@ -1019,22 +1028,18 @@
       'project.profile.rustDesc': 'cargo, rustc, rustfmt, and clippy · isolated registry and artifacts',
       'project.allowedTools': 'Additional Claude rules',
       'project.allowedToolsPlaceholder': 'Bash(go test:*)\nBash(gofmt:*)',
-      'project.allowedToolsHint': 'Advanced option, one rule per line using Claude CLI syntax. Rules from checked profiles are applied automatically without being copied here. Nothing able to push will ever be accepted.',
+      'project.allowedToolsHint': 'One rule per line, in Claude CLI syntax, on top of the checked profiles. Nothing able to push is accepted.',
       'project.reposHint': 'Local paths of this project\'s git repositories.',
       'project.repoNamePlaceholder': 'Repository name',
       'project.repoName': 'Name',
       'project.repoPath': 'Path',
       'project.addRepo': '+ repo',
       'project.removeRepo': 'Remove',
-      'project.previewCmdPlaceholder': 'Preview command (optional)',
-      'project.previewUrlPlaceholder': 'URL to open: http://… or file:///… (optional)',
-      'project.previewHintIntro': 'Manual preview: the command runs in the workstream or task worktree.',
       'project.previewVarIdDesc': 'names: database, container, directory',
       'project.previewVarNDesc': 'explicit arithmetic',
       'project.previewVarPortDesc': 'ready-to-use port, no arithmetic to write',
       'project.previewVarDirDesc': 'absolute paths',
       'project.previewVarBranchDesc': 'display, debugging',
-      'project.previewExampleLabel': 'For example, to launch a Python server:',
       'project.errorNameRequired': 'Name is required.',
       'project.errorReposRequired': 'At least one repository is required.',
       'project.errorSaveFailed': 'Failed to save.',
@@ -1043,9 +1048,8 @@
       'project.deleteSubtext': 'Also deletes {cards} workstreams and {tasks} tasks.',
       'project.deleteWarning': 'Existing worktrees and branches are left untouched, but the project disappears from Sillage. This cannot be undone.',
       'project.unsaved': 'Unsaved changes',
-      'project.linksHint': 'Shortcuts shown on the project page, 12 at most.',
+      'project.linksHint': 'Shown on the project page, 12 at most.',
       'project.addLink': '+ link',
-      'project.linksEmpty': 'No pinned links.',
       'project.linksInvalidUrl': 'Use an http(s) URL.',
       'project.linksMax': 'Maximum 12 links.',
       'project.description': 'Description',
@@ -1279,7 +1283,7 @@
       'preview.errorStopFailed': 'Failed to stop.',
       'preview.running.one': '{n} preview running',
       'preview.running.other': '{n} previews running',
-      'delivery.label': 'Shipping means',
+      'delivery.label': 'What “Ship” does in this project.',
       'delivery.modePr': 'Open a pull request',
       'delivery.modePush': 'Push the branch',
       'delivery.modeMerge': 'Merge locally',
@@ -1509,7 +1513,7 @@
       'sessions.promptAsks': 'Its latest requests, oldest first:',
       'sessions.shipWarning': 'A Claude Code session is open in {repo} ("{title}"): it may be writing where this delivery goes.',
       'autoconf.title': 'Automatic setup',
-      'autoconf.hint': 'An agent reads the repository (build files, CI, README) and suggests the check run after every task, the preview command and its address. It changes nothing, and you review before saving.',
+      'autoconf.hint': 'An agent reads the repository and suggests the check, the preview and the permissions. Nothing is saved without you.',
       'autoconf.start': 'Start',
       'autoconf.with': 'Agent',
       'autoconf.running': '{agent} is reading {repo}',
@@ -1723,7 +1727,6 @@
       'onboarding.errorRemoteRequired': 'The repository URL is required.',
       'onboarding.errorFailed': 'Setup failed.',
       'workspace.tooltip': 'Workspace',
-      'workspace.title': 'Workspace',
       'workspace.state.local': 'Local only, no git backup',
       'workspace.state.gitNoRemote': 'Git enabled, no remote',
       'workspace.state.gitRemote': 'Git enabled, with remote',
@@ -1742,7 +1745,6 @@
       'workspace.errorActivateFailed': 'Failed to activate.',
       'workspace.errorSyncFailed': 'Failed to sync.',
       'workspace.errorAutoSyncFailed': 'Failed to save.',
-      'preferences.title': 'Preferences',
       'preferences.displayNamePlaceholder': 'First name',
       'preferences.langLabel': 'Language',
       'preferences.errorSaveFailed': 'Failed to save.',
@@ -5016,7 +5018,7 @@
   // Lien « Ouvrir les réglages du projet » du panneau de recette, quand un dépôt
   // n'a pas de commande : on retrouve le projet depuis la portée du panneau
   // (un chantier ou une tâche, jamais la portée « all ») et on ouvre directement
-  // l'onglet Dépôts, où la commande se déclare.
+  // le panneau Recette, où la commande se déclare.
   function openPreviewSettings() {
     var scope = state.previewScope;
     if (!scope) return;
@@ -5030,8 +5032,7 @@
     }
     if (!projectId) return;
     state.projectId = projectId;
-    openEditProjectModal();
-    setProjectTab('repos');
+    openEditProjectModal('preview', projectId);
   }
 
   // Rafraîchit le panneau sans le rouvrir : les lignes et leurs boutons, pas le
@@ -5743,7 +5744,7 @@
         v.actions = rvBtn(RV_SECONDARY, 'toggle-check-log', id, checkLogOpen(task, info) ? t('review.check.hideLog') : t('review.check.showLog')) +
           rvBtn(RV_SECONDARY, 'run-check', id, t('review.check.rerun'));
       } else if (st === 'off') {
-        v.actions = '<button class="' + RV_SECONDARY + '" data-action="open-edit-project">' + escapeHtml(t('review.check.configure')) + '</button>';
+        v.actions = '<button class="' + RV_SECONDARY + '" data-action="open-edit-project" data-project-tab="check">' + escapeHtml(t('review.check.configure')) + '</button>';
       }
     } else if (key === 'read' || key === 'test') {
       var verdict = key === 'read' ? task.review : task.tested;
@@ -7876,37 +7877,33 @@
   function buildRepoRowsHTML() {
     return modalRepos.map(function (r, i) {
       var canRemove = modalRepos.length > 1;
-      return '<div class="repo-block">' +
+      return '<div class="repo-block" data-index="' + i + '">' +
         '<div class="repo-row">' +
           '<input class="modal-input repo-row-name" placeholder="' + escapeHtml(t('project.repoNamePlaceholder')) + '" value="' + escapeHtml(r.name) + '">' +
           '<input class="modal-input mono repo-row-path" placeholder="' + escapeHtml(t('newProject.pathPlaceholder')) + '" value="' + escapeHtml(r.path) + '">' +
           (canRemove ? '<button class="icon-btn repo-row-remove" data-action="remove-repo-row" data-index="' + i + '" aria-label="' + escapeHtml(t('project.removeRepo')) + '">✕</button>' : '') +
         '</div>' +
-        '<div class="repo-preview-row">' +
-          '<input class="modal-input mono repo-row-preview-cmd" placeholder="' + escapeHtml(t('project.previewCmdPlaceholder')) + '" value="' + escapeHtml(r.previewCmd || '') + '">' +
-          '<input class="modal-input mono repo-row-preview-url" placeholder="' + escapeHtml(t('project.previewUrlPlaceholder')) + '" value="' + escapeHtml(r.previewUrl || '') + '">' +
-        '</div>' +
         '</div>';
     }).join('');
   }
-  // Une ligne est lue bloc par bloc (`.repo-block`), jamais champ par champ à
-  // l'échelle du document : l'en-tête des colonnes porte les mêmes classes
-  // `repo-row-name`/`repo-row-path` sur des <span>, et une lecture globale le
-  // comptait comme une ligne, décalant d'un cran la commande et l'URL de recette
-  // (la dernière ligne perdait les siennes à chaque enregistrement).
+  // Les dépôts s'éditent sur deux panneaux (nom et chemin dans Dépôts, commande
+  // et adresse dans Recette) : chaque bloc `.repo-block` porte l'index de son
+  // dépôt et ne réécrit que les champs qu'il montre. La lecture reste bloc par
+  // bloc, jamais champ par champ à l'échelle du document : l'en-tête des
+  // colonnes porte les mêmes classes `repo-row-name`/`repo-row-path`.
+  var REPO_FIELDS = [
+    ['input.repo-row-name', 'name'], ['input.repo-row-path', 'path'],
+    ['input.repo-row-preview-cmd', 'previewCmd'], ['input.repo-row-preview-url', 'previewUrl']
+  ];
   function captureRepoRowsFromDOM() {
-    var blocks = document.querySelectorAll('#repo-rows .repo-block');
-    if (blocks.length === 0) return;
-    modalRepos = Array.prototype.map.call(blocks, function (block) {
-      function val(selector) {
-        var el = block.querySelector(selector);
-        return el ? el.value : '';
-      }
-      return {
-        name: val('input.repo-row-name'), path: val('input.repo-row-path'),
-        previewCmd: val('input.repo-row-preview-cmd'),
-        previewUrl: val('input.repo-row-preview-url')
-      };
+    var blocks = document.querySelectorAll('#project-modal-body .repo-block');
+    Array.prototype.forEach.call(blocks, function (block) {
+      var repo = modalRepos[parseInt(block.getAttribute('data-index'), 10)];
+      if (!repo) return;
+      REPO_FIELDS.forEach(function (f) {
+        var el = block.querySelector(f[0]);
+        if (el) repo[f[1]] = el.value;
+      });
     });
   }
   function refreshRepoRowsUI() {
@@ -7924,59 +7921,37 @@
     modalRepos.splice(index, 1);
     refreshRepoRowsUI();
   }
-  // Variables de recette : une puce par variable (nom + à quoi elle sert),
-  // plus un exemple concret. Un bloc à part de `.modal-section-hint` pour
-  // pouvoir mettre `$SILLAGE_PORT` en avant visuellement (code), là où la
-  // phrase unique d'origine le noyait dans du texte.
+  // Variables de recette : une puce par variable (nom + à quoi elle sert), sous
+  // les champs où l'on écrit la commande, le seul endroit où l'on en a besoin.
   var PREVIEW_VARS = [
+    ['SILLAGE_PORT', 'project.previewVarPortDesc'],
     ['SILLAGE_ID', 'project.previewVarIdDesc'],
     ['SILLAGE_N', 'project.previewVarNDesc'],
-    ['SILLAGE_PORT', 'project.previewVarPortDesc'],
     ['SILLAGE_DIR', 'project.previewVarDirDesc'],
     ['SILLAGE_BRANCH', 'project.previewVarBranchDesc']
   ];
-  function buildPreviewHintHTML() {
-    var vars = PREVIEW_VARS.map(function (v) {
-      return '<li class="preview-hint-var">' +
-        '<code>$' + v[0] + '</code>' +
-        '<span>' + escapeHtml(t(v[1])) + '</span>' +
-        '</li>';
-    }).join('');
-    return '<div class="modal-section-hint preview-hint">' +
-      '<div>' + escapeHtml(t('project.previewHintIntro')) + '</div>' +
-      '<ul class="preview-hint-vars">' + vars + '</ul>' +
-      '<div class="preview-hint-example">' +
-        escapeHtml(t('project.previewExampleLabel')) +
-        ' <code>python3 -m http.server $SILLAGE_PORT</code>' +
-      '</div>' +
-    '</div>';
+  function buildPreviewVarsHTML() {
+    return '<div class="panel-group"><div class="modal-label">' + escapeHtml(t('project.previewVars')) + '</div>' +
+      '<ul class="preview-hint-vars preview-hint">' + PREVIEW_VARS.map(function (v) {
+        return '<li class="preview-hint-var"><code>$' + v[0] + '</code><span>' + escapeHtml(t(v[1])) + '</span></li>';
+      }).join('') + '</ul></div>';
   }
-  // L'aide ne s'affiche que quand la liste est vide : une fois les chemins
-  // saisis, ils se lisent seuls et la phrase n'est plus que du bruit. Les deux
-  // colonnes portent alors un en-tête, sans quoi une ligne remplie ne dit plus
-  // lequel des deux champs est le nom (les placeholders sont masqués).
-  // La branche de base vit ici, pas dans Livraison : le serveur s'en sert aussi
-  // comme point de départ des branches de chantier (voir CreateCardWorktree),
-  // c'est donc un réglage des dépôts, pas un sous-réglage de la livraison.
+  // La branche de base vit avec les dépôts, pas dans Livraison : le serveur s'en
+  // sert aussi comme point de départ des branches de chantier (voir
+  // CreateCardWorktree), ce n'est donc pas un sous-réglage de la livraison.
   function buildBaseBranchFieldHTML() {
-    return fieldRowHTML('project.baseBranch', 'project-delivery-target',
+    return '<div class="panel-group">' + fieldRowHTML('project.baseBranch', 'project-delivery-target',
         '<input id="project-delivery-target" class="modal-input mono" placeholder="' + escapeHtml(t('delivery.targetPlaceholder')) + '" value="' + escapeHtml(projectDraft.target) + '">') +
-      '<div class="modal-note">' + escapeHtml(t('project.baseBranchHint')) + '</div>';
+      '<div class="modal-note field-note">' + escapeHtml(t('project.baseBranchHint')) + '</div></div>';
   }
   function buildRepoSectionHTML() {
-    var hasPath = modalRepos.some(function (r) { return (r.path || '').trim(); });
-    var head = hasPath
-      ? '<div class="repo-row repo-row-head">' +
-          '<span class="repo-row-name">' + escapeHtml(t('project.repoName')) + '</span>' +
-          '<span class="repo-row-path">' + escapeHtml(t('project.repoPath')) + '</span>' +
-        '</div>'
-      : '<div class="modal-section-hint">' + escapeHtml(t('project.reposHint')) + '</div>';
-    // Le rappel des variables de recette est ici, à côté du champ où l'on écrit
-    // la commande : c'est le seul endroit où l'on en a besoin.
-    return head +
+    return panelHeadHTML('project.tabRepos', 'project.reposHint') +
+      '<div class="repo-row repo-row-head">' +
+        '<span class="repo-row-name">' + escapeHtml(t('project.repoName')) + '</span>' +
+        '<span class="repo-row-path">' + escapeHtml(t('project.repoPath')) + '</span>' +
+      '</div>' +
       '<div id="repo-rows">' + buildRepoRowsHTML() + '</div>' +
       '<button class="add-repo-link" data-action="add-repo-row">' + escapeHtml(t('project.addRepo')) + '</button>' +
-      buildPreviewHintHTML() +
       buildBaseBranchFieldHTML();
   }
   function collectReposForSubmit() {
@@ -8035,8 +8010,8 @@
       ? '<div class="modal-note modal-note-warning">⚠ ' + escapeHtml(deliveryWarningText(project.deliveryWarning)) +
         deliveryWarningLinkHTML(project.deliveryWarning) + '</div>'
       : '';
-    return '<div class="modal-section-hint">' + escapeHtml(t('delivery.label')) + '</div>' +
-      '<div class="choice-cards" role="radiogroup">' + cards + '</div>' +
+    return panelHeadHTML('project.tabDelivery', 'delivery.label') +
+      '<div class="choice-cards choice-cards-grid" role="radiogroup">' + cards + '</div>' +
       warning;
   }
 
@@ -8051,7 +8026,7 @@
   // Liens épinglés (modale d'édition de projet uniquement)
 
   function buildLinkRowsHTML() {
-    if (!modalLinks.length) return '<div class="empty-note-sm">' + escapeHtml(t('project.linksEmpty')) + '</div>';
+    if (!modalLinks.length) return '';
     return modalLinks.map(function (l, i) {
       var titleNote = l.title ? '<span class="link-row-title">' + escapeHtml(l.title) + '</span>' : '';
       return '<div class="link-row">' +
@@ -8097,12 +8072,13 @@
     refreshLinkRowsUI();
   }
   function buildLinksSectionHTML() {
-    return '<div class="modal-section-hint">' + escapeHtml(t('project.linksHint')) + '</div>' +
+    return '<div class="panel-group"><div class="modal-label">' + escapeHtml(t('project.tabLinks')) + '</div>' +
+      '<div class="modal-section-hint">' + escapeHtml(t('project.linksHint')) + '</div>' +
       '<div id="link-rows">' + buildLinkRowsHTML() + '</div>' +
       '<div class="link-add-row">' +
         '<input id="new-link-url" class="modal-input mono" placeholder="https://…">' +
         '<button class="add-repo-link" data-action="add-link-row">' + escapeHtml(t('project.addLink')) + '</button>' +
-      '</div>';
+      '</div></div>';
   }
   function collectLinksForSubmit() {
     captureLinksFromDOM();
@@ -9148,14 +9124,15 @@
       '<div class="autoconf-head-text"><div class="autoconf-title">' + escapeHtml(t('autoconf.title')) + '</div>';
     if (!run) {
       var agents = analystAgents();
-      head += '<div class="autoconf-hint">' + escapeHtml(t('autoconf.hint')) + '</div></div></div>';
-      if (!agents.length) return head + '<div class="modal-note">' + escapeHtml(t('autoconf.noAgent')) + '</div>';
+      // Au repos, tout tient sur une ligne : ce que ça fait à gauche, le bouton à droite.
+      head += '<div class="autoconf-hint">' + escapeHtml(t('autoconf.hint')) + '</div></div>';
+      if (!agents.length) return head + '</div><div class="modal-note">' + escapeHtml(t('autoconf.noAgent')) + '</div>';
       var chosen = defaultAutoconfAgent(project);
       return head + '<div class="autoconf-actions">' +
         (agents.length > 1 ? '<select id="autoconf-agent" class="modal-input autoconf-agent" aria-label="' + escapeHtml(t('autoconf.with')) + '">' +
           agents.map(function (a) { return '<option value="' + a.id + '"' + (a.id === chosen ? ' selected' : '') + '>' + a.emoji + ' ' + escapeHtml(a.name) + '</option>'; }).join('') +
         '</select>' : '') +
-        '<button class="btn-primary" data-action="autoconf-start" data-project-id="' + pid + '">' + escapeHtml(t('autoconf.start')) + '</button></div>';
+        '<button class="btn-primary" data-action="autoconf-start" data-project-id="' + pid + '">' + escapeHtml(t('autoconf.start')) + '</button></div></div>';
     }
     if (run.status === 'running') {
       var steps = run.steps || [];
@@ -9278,7 +9255,7 @@
 
   function openAutoconf(projectId, start) {
     state.projectId = projectId;
-    openEditProjectModal('general', projectId);
+    openEditProjectModal('check', projectId);
     if (start && !state.autoconfigs[projectId]) startAutoconf(projectId);
   }
 
@@ -9304,18 +9281,18 @@
   }
 
   // Réglages de projet : une modale à panneaux, pas un formulaire de onze
-  // champs empilés. La colonne de gauche EST le découpage (aucun filet
-  // horizontal), chaque panneau ne montre que deux ou trois choses, et ce qui ne
-  // se règle qu'une fois (dépôts, livraison, suppression) ne pèse plus sur ce
-  // qu'on change souvent (nom, description, instructions).
+  // champs empilés. La colonne de gauche EST le découpage, et chaque entrée
+  // porte le nom de ce qu'on vient y chercher : la vérification et la recette
+  // ont chacune la leur, au lieu de se cacher sous Instructions et Dépôts.
 
   var PROJECT_TABS = [
     { key: 'general', labelKey: 'project.tabGeneral' },
     { key: 'repos', labelKey: 'project.tabRepos' },
+    { key: 'check', labelKey: 'project.tabCheck' },
+    { key: 'preview', labelKey: 'project.tabPreview' },
     { key: 'instructions', labelKey: 'project.tabInstructions' },
     { key: 'permissions', labelKey: 'project.tabPermissions' },
     { key: 'delivery', labelKey: 'project.tabDelivery' },
-    { key: 'links', labelKey: 'project.tabLinks' },
     { key: 'danger', labelKey: 'project.tabDanger', danger: true }
   ];
 
@@ -9327,19 +9304,55 @@
       '<div class="field-row-input">' + inputHTML + '</div></div>';
   }
 
-  function buildProjectGeneralPanelHTML() {
-    var project = state.projectsById[state.projectId];
-    return (project ? buildAutoconfSectionHTML(project) : '') + fieldRowHTML('project.name', 'project-edit-name',
-        '<input id="project-edit-name" class="modal-input" value="' + escapeHtml(projectDraft.name) + '">') +
-      fieldRowHTML('project.description', 'project-description',
-        '<input id="project-description" class="modal-input" placeholder="' + escapeHtml(t('project.descriptionPlaceholder')) + '" value="' + escapeHtml(projectDraft.description) + '">');
+  // En tête de chaque panneau : son nom, et une phrase au plus qui dit à quoi
+  // sert ce qu'on y règle. C'est la seule aide du panneau.
+  function panelHeadHTML(titleKey, subKey) {
+    return '<div class="panel-head"><div class="panel-title">' + escapeHtml(t(titleKey)) + '</div>' +
+      (subKey ? '<div class="panel-sub">' + escapeHtml(t(subKey)) + '</div>' : '') + '</div>';
   }
 
+  function buildProjectGeneralPanelHTML() {
+    return panelHeadHTML('project.tabGeneral') +
+      fieldRowHTML('project.name', 'project-edit-name',
+        '<input id="project-edit-name" class="modal-input" value="' + escapeHtml(projectDraft.name) + '">') +
+      fieldRowHTML('project.description', 'project-description',
+        '<input id="project-description" class="modal-input" placeholder="' + escapeHtml(t('project.descriptionPlaceholder')) + '" value="' + escapeHtml(projectDraft.description) + '">') +
+      buildLinksSectionHTML();
+  }
+
+  // La configuration automatique propose la vérification comme la recette :
+  // elle se tient sous les champs qu'elle remplit, sur ces deux panneaux.
+  function buildProjectCheckPanelHTML(project) {
+    return panelHeadHTML('project.tabCheck', 'project.checkHint') +
+      '<input id="project-edit-checkcmd" class="modal-input mono" aria-label="' + escapeHtml(t('project.checkCmd')) + '" placeholder="go test ./..." value="' + escapeHtml(projectDraft.checkCmd) + '">' +
+      buildAutoconfSectionHTML(project);
+  }
+
+  function buildProjectPreviewPanelHTML(project) {
+    var listed = modalRepos.map(function (r, i) { return { repo: r, index: i }; })
+      .filter(function (x) { return (x.repo.path || '').trim(); });
+    var blocks = listed.map(function (x) {
+      var r = x.repo, i = x.index;
+      var name = (r.name || '').trim() || r.path.trim().replace(/\/+$/, '').split('/').pop();
+      return '<div class="repo-block preview-block" data-index="' + i + '">' +
+        (listed.length > 1 ? '<div class="preview-block-name">' + escapeHtml(name) + '</div>' : '') +
+        fieldRowHTML('project.previewCmd', 'repo-preview-cmd-' + i,
+          '<input id="repo-preview-cmd-' + i + '" class="modal-input mono repo-row-preview-cmd" placeholder="npm run dev -- --port $SILLAGE_PORT" value="' + escapeHtml(r.previewCmd || '') + '">') +
+        fieldRowHTML('project.previewUrl', 'repo-preview-url-' + i,
+          '<input id="repo-preview-url-' + i + '" class="modal-input mono repo-row-preview-url" placeholder="http://localhost:$SILLAGE_PORT" value="' + escapeHtml(r.previewUrl || '') + '">') +
+        '</div>';
+    }).join('');
+    return panelHeadHTML('project.tabPreview', 'project.previewHint') +
+      (blocks || '<div class="modal-note">' + escapeHtml(t('project.previewNoRepo')) + '</div>') +
+      buildPreviewVarsHTML() +
+      buildAutoconfSectionHTML(project);
+  }
+
+  // Le contexte projet finit dans le prompt de chaque agent : il prend toute la
+  // hauteur du panneau.
   function buildProjectInstructionsPanelHTML() {
-    return '<div class="modal-section-hint">' + escapeHtml(t('project.instructionsHint')) + '</div>' +
-      '<textarea id="project-context-prompt" class="modal-textarea modal-textarea-tall" rows="12" placeholder="' + escapeHtml(t('project.contextPromptPlaceholder')) + '">' + escapeHtml(projectDraft.contextPrompt) + '</textarea>' +
-      '<label class="modal-label" for="project-edit-checkcmd">' + escapeHtml(t('project.checkCmd')) + '</label>' +
-      '<input id="project-edit-checkcmd" class="modal-input mono" placeholder="go test ./..." value="' + escapeHtml(projectDraft.checkCmd) + '">';
+    return '<div class="panel-fill">' + panelHeadHTML('project.tabInstructions', 'project.instructionsHint') +
+      '<textarea id="project-context-prompt" class="modal-textarea modal-textarea-fill" aria-label="' + escapeHtml(t('project.tabInstructions')) + '" placeholder="' + escapeHtml(t('project.contextPromptPlaceholder')) + '">' + escapeHtml(projectDraft.contextPrompt) + '</textarea></div>';
   }
 
   var PERMISSION_PROFILES = [
@@ -9365,9 +9378,9 @@
         '</span>' +
       '</label>';
     }).join('');
-    return '<div class="modal-section-hint">' + escapeHtml(t('project.permissionProfilesHint')) + '</div>' +
-      '<div class="choice-cards permission-profile-cards">' + cards + '</div>' +
-      '<label class="modal-label" for="project-allowed-tools">' + escapeHtml(t('project.allowedTools')) + '</label>' +
+    return panelHeadHTML('project.tabPermissions', 'project.permissionProfilesHint') +
+      '<div class="choice-cards choice-cards-grid permission-profile-cards">' + cards + '</div>' +
+      '<label class="modal-label panel-group" for="project-allowed-tools">' + escapeHtml(t('project.allowedTools')) + '</label>' +
       '<textarea id="project-allowed-tools" class="modal-textarea mono" rows="4" placeholder="' + escapeHtml(t('project.allowedToolsPlaceholder')) + '">' + escapeHtml(projectDraft.allowedTools) + '</textarea>' +
       '<div class="modal-note">' + escapeHtml(t('project.allowedToolsHint')) + '</div>';
   }
@@ -9385,7 +9398,7 @@
     var deleteLabel = isPendingConfirm(deleteKey) ? t('project.deleteConfirm') : t('project.delete');
     var cardCount = state.cards.filter(function (c) { return c.projectId === project.id; }).length;
     var taskCount = state.tasks.filter(function (tk) { return tk.projectId === project.id; }).length;
-    return '<div class="danger-box">' +
+    return panelHeadHTML('project.delete') + '<div class="danger-box">' +
       '<div class="modal-section-hint">' + escapeHtml(t('project.deleteSubtext', { cards: cardCount, tasks: taskCount })) + '</div>' +
       '<div class="modal-note">' + escapeHtml(t('project.deleteWarning')) + '</div>' +
       '<div class="danger-panel-action">' +
@@ -9396,10 +9409,11 @@
 
   function buildProjectPanelHTML(project) {
     if (projectModalTab === 'repos') return buildRepoSectionHTML();
+    if (projectModalTab === 'check') return buildProjectCheckPanelHTML(project);
+    if (projectModalTab === 'preview') return buildProjectPreviewPanelHTML(project);
     if (projectModalTab === 'instructions') return buildProjectInstructionsPanelHTML();
     if (projectModalTab === 'permissions') return buildProjectPermissionsPanelHTML();
     if (projectModalTab === 'delivery') return buildDeliveryPanelHTML(project);
-    if (projectModalTab === 'links') return buildLinksSectionHTML();
     if (projectModalTab === 'danger') return buildProjectDangerPanelHTML(project);
     return buildProjectGeneralPanelHTML();
   }
@@ -9420,7 +9434,8 @@
 
   function buildProjectModalHTML(project) {
     return '<div class="modal modal-tabbed">' +
-      '<div class="modal-head"><span class="modal-title">' + escapeHtml(t('project.editTitle')) + '</span><button class="icon-btn" data-action="close-modal" aria-label="' + escapeHtml(t('common.close')) + '">✕</button></div>' +
+      '<div class="modal-head"><span class="modal-title">' + escapeHtml(t('project.editTitle')) + '</span>' +
+        '<span class="modal-sub">' + escapeHtml(project.name || '') + '</span><button class="icon-btn" data-action="close-modal" aria-label="' + escapeHtml(t('common.close')) + '">✕</button></div>' +
       '<div class="ptabs" id="project-modal-body">' + buildProjectModalBodyHTML(project) + '</div>' +
       '<div id="project-modal-error" class="modal-error hidden"></div>' +
       '<div class="modal-foot">' +
@@ -9502,7 +9517,7 @@
     });
     modalLinks = (project.links || []).map(function (l) { return { url: l.url || '', title: l.title || '' }; });
     openModal(buildProjectModalHTML(project));
-    focusById('project-edit-name');
+    if (projectModalTab === 'general') focusById('project-edit-name');
   }
 
   // Une saisie quelque part dans la modale allume la mention « modifications non
@@ -9651,16 +9666,14 @@
 
   function buildPreferencesSectionHTML() {
     var settings = state.settings || {};
-    return '<div class="modal-label">' + escapeHtml(t('preferences.title')) + '</div>' +
-      '<div class="workspace-remote-row">' +
-        '<input id="settings-display-name" class="modal-input" placeholder="' + escapeHtml(t('preferences.displayNamePlaceholder')) + '" value="' + escapeHtml(settings.displayName || '') + '">' +
-        '<button class="link-save-btn" data-action="save-display-name">' + escapeHtml(t('common.save')) + '</button>' +
-      '</div>' +
-      '<div class="preferences-lang-row">' +
-        '<span class="preferences-lang-label">' + escapeHtml(t('preferences.langLabel')) + '</span>' +
-        buildLangSwitchHTML() +
-      '</div>' +
-      '<div class="preferences-divider"></div>';
+    return fieldRowHTML('preferences.displayNamePlaceholder', 'settings-display-name',
+        '<div class="workspace-remote-row">' +
+          '<input id="settings-display-name" class="modal-input" value="' + escapeHtml(settings.displayName || '') + '">' +
+          '<button class="link-save-btn" data-action="save-display-name">' + escapeHtml(t('common.save')) + '</button>' +
+        '</div>') +
+      '<div class="field-row"><span class="modal-label">' + escapeHtml(t('preferences.langLabel')) + '</span>' +
+        '<div class="field-row-input">' + buildLangSwitchHTML() + '</div></div>' +
+      '<div id="workspace-modal-error" class="modal-error hidden"></div>';
   }
 
   // Onglet Statistiques de Settings : consommation de tokens par projet,
@@ -9683,19 +9696,19 @@
     return '<div id="usage-section">' + buildStatsSectionInnerHTML() + '</div>';
   }
 
+  var SETTINGS_TABS = [
+    { key: 'general', labelKey: 'settings.tabGeneral' },
+    { key: 'agents', labelKey: 'sidebar.agentsHeading' },
+    { key: 'sync', labelKey: 'settings.tabSync' },
+    { key: 'update', labelKey: 'update.title' },
+    { key: 'stats', labelKey: 'settings.tabStats' }
+  ];
   function buildSettingsTabsHTML() {
-    var tabs = [
-      { key: 'general', label: t('settings.tabGeneral') },
-      { key: 'sync', label: t('settings.tabSync') },
-      { key: 'agents', label: t('sidebar.agentsHeading') },
-      { key: 'update', label: t('update.title') },
-      { key: 'stats', label: t('settings.tabStats') }
-    ];
-    return '<div class="tabs">' + tabs.map(function (tb) {
+    return SETTINGS_TABS.map(function (tb) {
       var active = settingsModalTab === tb.key;
-      return '<button class="tab ' + (active ? 'tab-active' : '') + '" role="tab" data-action="set-settings-tab" data-settings-tab="' + tb.key + '">' +
-        escapeHtml(tb.label) + '</button>';
-    }).join('') + '</div>';
+      return '<button class="ptab' + (active ? ' ptab-active' : '') + '" role="tab" aria-selected="' + (active ? 'true' : 'false') + '"' +
+        ' data-action="set-settings-tab" data-settings-tab="' + tb.key + '">' + escapeHtml(t(tb.labelKey)) + '</button>';
+    }).join('');
   }
   function setSettingsTab(tabKey) {
     settingsModalTab = (tabKey === 'stats' || tabKey === 'update' || tabKey === 'agents' || tabKey === 'sync') ? tabKey : 'general';
@@ -9776,7 +9789,7 @@
     }
     var err = lanError || lan.error;
     if (err) html += '<div class="modal-error">' + escapeHtml(err) + '</div>';
-    return html + '<div class="preferences-divider"></div>';
+    return html;
   }
   function refreshLanSection() {
     var el = document.getElementById('lan-section');
@@ -9793,8 +9806,7 @@
 
   function buildSettingsGeneralHTML() {
     return buildPreferencesSectionHTML() +
-      '<div id="lan-section">' + buildLanSectionInnerHTML() + '</div>' +
-      '<button class="btn-outline btn-block" data-action="logout">' + escapeHtml(t('nav.logout')) + '</button>';
+      '<div id="lan-section" class="panel-group">' + buildLanSectionInnerHTML() + '</div>';
   }
 
   // Onglet Sauvegarde : synchronisation git de l'espace de travail, séparée
@@ -9849,8 +9861,8 @@
       dirtyNote;
   }
 
-  // Le dépôt et le sponsoring : sur tous les onglets de la modale, pas
-  // seulement Général, pour rester accessibles quel que soit l'onglet ouvert.
+  // Le pied de la colonne de navigation porte ce qui ne dépend d'aucun panneau :
+  // la déconnexion, le dépôt et le sponsoring.
   function buildAboutLinksHTML() {
     return '<div class="about-links">' +
       '<a href="https://github.com/Halleck45/sillage" target="_blank" rel="noopener noreferrer">' + repoIconHTML() + escapeHtml(t('sidebar.repoTooltip')) + '</a>' +
@@ -9863,12 +9875,18 @@
       : settingsModalTab === 'agents' ? buildSettingsAgentsHTML()
       : settingsModalTab === 'sync' ? buildSettingsSyncHTML()
       : buildSettingsGeneralHTML();
-    return buildSettingsTabsHTML() + '<div class="settings-tab-body">' + inner + '</div>' + buildAboutLinksHTML();
+    var tab = SETTINGS_TABS.filter(function (tb) { return tb.key === settingsModalTab; })[0] || SETTINGS_TABS[0];
+    return '<nav class="ptabs-nav" role="tablist">' + buildSettingsTabsHTML() +
+        '<div class="ptabs-nav-foot">' +
+          '<button class="ptab" data-action="logout">' + escapeHtml(t('nav.logout')) + '</button>' +
+          buildAboutLinksHTML() +
+        '</div></nav>' +
+      '<div class="ptabs-panel" role="tabpanel">' + panelHeadHTML(tab.labelKey) + inner + '</div>';
   }
   function buildWorkspaceModalHTML() {
-    return '<div class="modal modal-sm">' +
-      '<div class="modal-head"><span class="modal-title">' + escapeHtml(t('workspace.title')) + '</span><button class="icon-btn" data-action="close-modal" aria-label="' + escapeHtml(t('common.close')) + '">✕</button></div>' +
-      '<div id="workspace-modal-body">' + buildWorkspaceModalBodyHTML() + '</div>' +
+    return '<div class="modal modal-tabbed">' +
+      '<div class="modal-head"><span class="modal-title">' + escapeHtml(t('sidebar.settingsButton')) + '</span><button class="icon-btn" data-action="close-modal" aria-label="' + escapeHtml(t('common.close')) + '">✕</button></div>' +
+      '<div class="ptabs" id="workspace-modal-body">' + buildWorkspaceModalBodyHTML() + '</div>' +
       '</div>';
   }
   function openWorkspaceModal() {
@@ -10561,7 +10579,7 @@
       case 'pick-issue': pickIssue(parseInt(el.getAttribute('data-number'), 10)); break;
       case 'cancel-issue-picker': cancelIssuePicker(); break;
       case 'open-new-project': openNewProjectModal(); break;
-      case 'open-edit-project': openEditProjectModal(); break;
+      case 'open-edit-project': openEditProjectModal(el.getAttribute('data-project-tab') || 'general'); break;
       case 'set-project-tab': setProjectTab(el.getAttribute('data-project-tab')); break;
       case 'submit-project-edit': submitProjectEdit(el.getAttribute('data-project-id')); break;
       case 'open-edit-card': openEditCardModal(); break;

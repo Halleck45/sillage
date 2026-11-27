@@ -33,7 +33,7 @@ Delivery { "mode": "pr|push|merge|merge-push", "target": "main", "stackedPrs": f
           // target n'est pas qu'une destination de livraison : c'est aussi la branche
           // d'où partent les branches de chantier (voir "Livraison d'un chantier").
           // C'est donc la branche de référence du projet, présentée comme telle dans
-          // l'UI (« Branche de base », onglet Général) et non sous la livraison.
+          // l'UI (« Branche de base », panneau Dépôts) et non sous la livraison.
 
 Project { "id": "p1", "name": "sillage", "description": "...", "repos": [Repo, ...],
           "links": [Link, ...], "unread": 2,
@@ -796,7 +796,7 @@ Le frontend maintient son état en mémoire à partir de `/api/state` + SSE ; re
 - Push / livraison uniquement via le bouton « Livrer » de l'en-tête du chantier, en deux clics : le bouton ouvre un récapitulatif (mode, dépôts, branche → base, commits, fichiers, avertissements) dont le bouton d'action **est** la confirmation (`{"confirm":true}`). Jamais automatique. Le bouton est grisé, avec la raison en infobulle, tant que `card.shipReady` est faux ou qu'il n'y a rien à livrer. Il reste actif quand des tâches sont encore en cours ou à relire : le récapitulatif annonce alors la livraison partielle (« n tâches ne sont pas encore acceptées ») plutôt que d'interdire d'envoyer ce qui est prêt. Même règle de confirmation explicite pour la synchronisation de l'espace de travail (`/api/workspace/sync`).
 - Accepter ou refuser une tâche s'obtient en un clic depuis la liste de tâches (boutons révélés au survol d'une tâche à relire) : ces actions sont locales et réversibles (`/reopen`), donc sans confirmation. L'état de chaque tâche (acceptée, refusée) est lisible dans la liste sans ouvrir la tâche.
 - Recette manuelle : le bouton « Recette » est présent dans l'en-tête du chantier (avant « Livrer » : on éprouve, puis on livre) et dans le panneau de détail d'une tâche (action secondaire, la principale reste « Accepter »). Il est **toujours affiché**, même sans commande configurée : le panneau propose alors le chemin du worktree à copier. Lancer et arrêter sont des actions locales, sans confirmation. Une pastille verte sur le bouton, et un compteur en bas de sidebar, disent ce qui tourne.
-- Mise à jour : tout vit dans **Réglages > Mises à jour** (troisième onglet, à côté de Général et Statistiques) : la version courante, le mode d'installation, la date de dernière vérification, l'annonce quand une version existe, le bouton « Mettre à jour et redémarrer » (éteint avec la raison quand `blocker` est temporaire), la commande à copier, « Vérifier maintenant », et la case de vérification automatique. Le seul rappel hors de cet onglet est une ligne en bas de sidebar, jamais une bannière ni une modale spontanée : `Version <current>` en gris, qui devient « Mise à jour disponible » (vert, avec pastille) quand `update.available` est vrai, et rien du tout sur une compilation locale (`method: "dev"`). Cette ligne ouvre les réglages directement sur l'onglet. Après une réponse `restarting: true`, le frontend attend que le serveur réponde à nouveau puis **recharge la page** (le frontend est embarqué dans le binaire). Le même onglet porte le bloc « Démarrage » quand `update.service` est présent : l'état du lancement à l'ouverture de session, et la commande à copier quand il ne l'est pas. Rien du tout quand le champ est absent.
+- Mise à jour : tout vit dans **Réglages > Mises à jour** (un panneau de la modale des réglages) : la version courante, le mode d'installation, la date de dernière vérification, l'annonce quand une version existe, le bouton « Mettre à jour et redémarrer » (éteint avec la raison quand `blocker` est temporaire), la commande à copier, « Vérifier maintenant », et la case de vérification automatique. Le seul rappel hors de cet onglet est une ligne en bas de sidebar, jamais une bannière ni une modale spontanée : `Version <current>` en gris, qui devient « Mise à jour disponible » (vert, avec pastille) quand `update.available` est vrai, et rien du tout sur une compilation locale (`method: "dev"`). Cette ligne ouvre les réglages directement sur l'onglet. Après une réponse `restarting: true`, le frontend attend que le serveur réponde à nouveau puis **recharge la page** (le frontend est embarqué dans le binaire). Le même onglet porte le bloc « Démarrage » quand `update.service` est présent : l'état du lancement à l'ouverture de session, et la commande à copier quand il ne l'est pas. Rien du tout quand le champ est absent.
 - Tokens : jamais affichés dans le flux de travail (kanban, détail de tâche, liste des projets), pour ne pas ajouter de charge mentale. Seul endroit visible : Réglages > onglet Statistiques, consommation par projet, sans prix.
 - Un outil refusé à un agent s'affiche dans le fil comme une ligne système, qui nomme l'outil demandé et pointe vers les réglages du projet (voir « Outils autorisés aux agents »). Un refus silencieux se paie en tours d'agent que personne ne sait expliquer.
 - Le panneau Permissions propose d'abord cinq profils technologiques à cocher, chacun avec ses commandes et la conséquence sur les caches. `allowedTools` reste dessous comme option avancée, une règle Claude par ligne. Profils et champ avancé sont vides par défaut : aucune permission n'est inférée du dépôt.
@@ -810,26 +810,28 @@ La règle vaut aussi côté serveur (`name` optionnel sur `POST /api/projects`) 
 
 ### Réglages d'un projet : une modale à panneaux
 
-L'édition d'un projet est une modale à navigation latérale, pas une colonne de champs empilés. Sept panneaux, deux ou trois champs chacun :
+L'édition d'un projet est une grande modale à navigation latérale (1180 × 820 px au plus, taille fixe), pas une colonne de champs empilés. Les réglages généraux de Sillage reprennent la même coquille. Huit panneaux, chacun nommé d'après ce qu'on vient y chercher :
 
 | Panneau | Contenu |
 |---|---|
-| Général | nom, description, branche de base (`delivery.target`) |
-| Dépôts | les lignes nom + chemin, « + dépôt » |
-| Instructions | `contextPrompt` en grand (≥ 12 lignes), puis `checkCmd` |
-| Permissions | profils Ruby/Node.js/PHP/Python/Go/Rust à cocher, puis `allowedTools` avancé |
+| Général | nom, description, liens épinglés |
+| Dépôts | les lignes nom + chemin, « + dépôt », puis la branche de base (`delivery.target`) |
+| Vérification | `checkCmd`, puis la configuration automatique |
+| Recette | par dépôt, la commande (`previewCmd`) et l'adresse à ouvrir (`previewUrl`), les variables `$SILLAGE_*`, puis la configuration automatique |
+| Instructions | `contextPrompt`, sur toute la hauteur du panneau |
+| Permissions | profils à cocher, puis `allowedTools` avancé |
 | Livraison | les quatre modes en cartes à cocher, plus l'avertissement de santé s'il y en a un |
-| Liens | les liens épinglés |
 | Supprimer | conséquences chiffrées, puis le bouton de suppression en deux temps |
 
 Règles qui tiennent ce découpage :
 
-- **La colonne de navigation est le seul découpage** : aucun filet horizontal, aucun bloc encadré. Le panneau garde une hauteur minimale pour que la modale ne saute pas d'un onglet à l'autre.
-- **La branche de base est dans Général, pas dans Livraison** : le serveur s'en sert aussi comme point de départ des branches de chantier, ce n'est donc pas un sous-réglage de la livraison.
+- **La colonne de navigation est le seul découpage** : aucun bloc encadré, aucun filet entre les réglages. La modale a une taille fixe, seul le panneau défile ; l'en-tête et le pied (Annuler, Enregistrer) restent en place, le pied séparé par l'unique filet de la modale.
+- **Chaque panneau s'ouvre sur son nom et une phrase au plus** qui dit à quoi sert ce qu'on y règle. C'est la seule aide du panneau.
+- **Vérification et recette ont chacune leur panneau** : ce sont les deux commandes qu'on vient régler, elles ne se rangent ni sous Instructions ni sous Dépôts. Les liens qui mènent aux réglages depuis une tâche sans vérification ou une recette sans commande ouvrent directement le bon panneau.
+- **La branche de base est dans Dépôts, pas dans Livraison** : le serveur s'en sert aussi comme point de départ des branches de chantier, ce n'est donc pas un sous-réglage de la livraison.
 - **Le mode de livraison se choisit en cartes**, chacune portant sa phrase de conséquence (les quatre sont lisibles d'un coup). Une liste déroulante obligerait à changer la sélection pour découvrir ce que chaque option ferait, alors que c'est le réglage qui décide si le produit pousse ou non.
 - **La suppression est un panneau**, en bas de la colonne, détaché des autres : ce qu'on ne touche qu'une fois ne pèse pas en permanence sur ce qu'on change souvent. Elle garde la confirmation en deux temps.
 - **Les libellés des champs courts sont en ligne** (libellé à gauche, saisie à droite, alignés d'un champ à l'autre) ; seuls les grands champs gardent leur libellé au-dessus.
-- **L'aide est conditionnelle** : la phrase sur les chemins de dépôts ne s'affiche que si aucun chemin n'est encore saisi.
 - **Un seul enregistrement pour toute la modale** : les champs saisis sont conservés d'un panneau à l'autre, le pied affiche « Modifications non enregistrées » dès la première frappe, et une erreur de validation ramène sur le panneau fautif.
 
 ### Création de tâche et navigation clavier
