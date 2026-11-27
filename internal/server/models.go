@@ -487,7 +487,7 @@ type Task struct {
 	// et visibles par le client authentifié, ce qui est sans enjeu en mono-utilisateur.
 	Base        string `json:"base"`        // branche de base : la branche du chantier
 	WorktreeDir string `json:"worktreeDir"` //
-	SessionID   string `json:"sessionId"`   // session claude, pour --resume
+	SessionID   string `json:"sessionId"`   // session du CLI à reprendre (claude --resume, session/load en ACP)
 
 	// PendingPrompt est le texte initial en attente d'envoi à l'agent, mémorisé
 	// à la création d'une tâche "waiting" (le prompt fourni par l'utilisateur,

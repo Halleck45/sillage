@@ -13,7 +13,9 @@ internal/server/
   auth.go                    // bcrypt, sessions, middleware, rate-limit login
   sse.go                     // Hub SSE
   git.go                     // worktrees, diff parse, commits, push
-  runner.go                  // adaptateurs claude / codex / copilot / agy / kiro / fake
+  runner.go                  // adaptateurs claude / codex / agy / kiro / fake
+  acp.go, acp_runner.go      // client ACP (JSON-RPC sur stdio) et adaptateur commun runACP
+  copilot.go                 // adaptateur copilot, par ACP
   preview.go                 // superviseur des recettes manuelles (process + journal)
   preview_handlers.go        // routes de recette
   attachments.go             // images jointes : disque, service HTTP, chemins passés au CLI
@@ -130,11 +132,36 @@ En mode `workspace-write`, les worktrees liés gardent leur index/HEAD et leurs 
 
 Le quota de compte (`rate_limits`) n'est PAS porté par ce flux stdout, seulement par le fichier de session que codex écrit de son côté même en mode `exec` (`~/.codex/sessions/AAAA/MM/JJ/rollout-...-<thread_id>.jsonl`) : `readCodexRateLimits` retrouve ce fichier via le `thread_id` capturé sur l'événement `thread.started` du flux, lit son dernier `rate_limits` et met à jour `Store.CodexQuota` (best-effort, jamais bloquant). Voir SPEC-API.md « Quota des agents ».
 
-### Adaptateur GitHub Copilot (`cli:"copilot"`)
+### Client ACP (`acp.go`, `acp_runner.go`)
 
-`copilot --autopilot --max-autopilot-continues=10 --no-ask-user --allow-tool=read,write,shell --deny-tool=<refus figés> --disable-builtin-mcps --no-remote --no-remote-export --no-auto-update --no-color --stream=off --silent [--model=<model>] -p <texte>`.
+Sillage sait piloter un agent par l'[Agent Client Protocol](https://agentclientprotocol.com) : du JSON-RPC 2.0 sur stdio, un objet par ligne, où Sillage tient le rôle de l'éditeur. `acp.go` porte le protocole (`acpClient` : `initialize`, `session/new`, `session/load`, `session/prompt`, `session/cancel`, lecture des `session/update`, réponse aux `session/request_permission`), `acp_runner.go` l'adaptateur commun `runACP`. Brancher un nouvel agent ACP revient à écrire un `acpAgentSpec` : binaire, arguments, environnement, et les quelques écarts au protocole commun.
 
-Le texte contient les contextes agent, projet et chantier avant le prompt. Le stdout texte devient un Message agent final. Pas de reprise de session ni de compteurs de tokens. Les refus figés couvrent `git push`, `gh`, `glab` et les réglages Copilot du dépôt ; ils l'emportent sur les outils autorisés. Les MCP GitHub et les fonctions de contrôle distant sont désactivés.
+Un process par tour, comme les autres adaptateurs. Le déroulé de `runACP` :
+
+1. `initialize` annonce un client sans accès fichiers ni terminal (`fs.readTextFile`, `fs.writeTextFile` et `terminal` à `false`). L'agent garde ses propres outils, bornés par ses propres règles ; toute méthode non servie reçoit « method not found ».
+2. `Task.SessionID` connu et agent capable de reprise (`agentCapabilities.loadSession`) : `session/load`. L'agent rejoue alors tout son historique en `session/update` avant de répondre ; ces mises à jour sont ignorées, `acpTurn` ne lit rien hors d'un prompt. Session introuvable : elle est oubliée, une session neuve part avec l'historique du fil rejoué dans le prompt (`prepareCliInput`), comme pour claude. L'identifiant d'une session neuve n'est gardé que si l'agent sait reprendre, sinon le tour suivant se croirait dispensé de rejouer le fil.
+3. Le premier prompt d'une session neuve reçoit le contexte (`acpAgentSpec.FreshPrompt`) ; une session reprise le connaît déjà et ne reçoit que le message.
+4. Pendant le tour, `acpTurn` transforme le flux : les `agent_message_chunk` s'accumulent et deviennent un Message à chaque nouvel appel d'outil puis à la fin du tour ; chaque `tool_call` donne une ligne d'activité (`acpToolLine`, « genre · détail », chemins rendus relatifs au worktree) ajoutée à `Task.CommandLog` ; un outil en échec avec le code `denied`, ou une demande d'autorisation refusée, pose un marqueur `[tool-denied:...]`, une fois par outil et par tour.
+5. La réponse de `session/prompt` porte l'usage : `inputTokens - cachedReadTokens` s'ajoute à `Tokens.Input` (même convention que claude : entrée neuve et écriture de cache, pas la relecture), `outputTokens` à `Tokens.Output`. Pas de coût.
+6. L'entrée du process est fermée ; s'il ne sort pas en 3 s son groupe est tué.
+
+**Autorisations.** `acpRejectAll` est la politique par défaut, et la seule employée : toute `session/request_permission` reçoit l'option de refus, ou une annulation s'il n'y en a pas. Ce qu'un agent a le droit de faire est fixé d'avance par ses propres règles (ses drapeaux) ; une demande qui remonte jusqu'à Sillage sort de ce cadre, et personne n'est là pour en juger. Aucune autorisation n'est donc jamais accordée en cours de route, ce qui garde l'invariant 1 hors de portée de ce chemin.
+
+**Interruption.** `procHandle.softStop` envoie `session/cancel` avant tout signal : l'agent répond `stopReason: "cancelled"`, enregistre sa session et sort, ce qui garde la reprise possible au message suivant. Passé `softStopGrace` (5 s), `killGroup` prend le relais. Le texte en attente d'un tour annulé n'est pas publié (phrase coupée, ou accusé de réception de l'annulation).
+
+Un tour qui finit sans le moindre message est un échec (même règle que `runTextCLI`), de même qu'un `stopReason` autre que `end_turn`.
+
+### Adaptateur GitHub Copilot (`cli:"copilot"`, `copilot.go`)
+
+`copilot --acp --no-ask-user --allow-tool=read,write,shell --deny-tool=<refus figés> --disable-builtin-mcps --no-auto-update --sync-session=off [--model=<model>]`, piloté par le client ACP ci-dessus. Reprise de session, outils en direct et compteurs de tokens ; pas de coût ni de quota.
+
+Les autorisations sont entièrement dans ces drapeaux, que le mode ACP applique : lecture, écriture et shell passent sans demande, les refus figés (`git push`, `gh`, `glab`, réglages Copilot du dépôt) l'emportent sur toute autorisation, et le reste (chemin hors du worktree, URL) remonte en demande que `acpRejectAll` refuse. Ni `--allow-all` ni mode autopilot, qui revient à tout autoriser. Le MCP GitHub intégré est désactivé. `--no-remote` et `--no-remote-export` ont été retirés du CLI (il refuse de démarrer avec) : l'export des sessions est coupé par `remoteExport: false` dans les réglages du dossier isolé, et une session annonce `remoteSteerable: false` par défaut.
+
+**Dossier de configuration isolé.** Chaque tâche a son `COPILOT_HOME` : `<dataDir>/agent-homes/<taskId>/copilot/` (`prepareCopilotHome`), supprimé avec la tâche. Copilot charge depuis son dossier les hooks, serveurs MCP et plugins de l'utilisateur, et un hook en échec vaut refus : un seul hook `PermissionRequest` écrit pour un autre outil suffit à refuser toutes les écritures d'une tâche, sans message utile. Le dossier isolé n'hérite de rien. Il persiste d'un tour à l'autre, parce que c'est là que Copilot range la session à reprendre. À chaque tour, `settings.json` est réécrit (`remoteExport` et `autoUpdate` à `false`) et `config.json` reprend deux clés de celui de l'utilisateur, `lastLoggedInUser` et `loggedInUsers` : des noms de compte, pas des secrets, le jeton restant dans le trousseau du système où le CLI le retrouve par compte. Un utilisateur qui a choisi le stockage du jeton en clair (`storeTokenPlaintext`) n'est donc pas authentifié par ce chemin et doit passer `COPILOT_GITHUB_TOKEN` ou `GH_TOKEN`.
+
+`copilotEnv` retire en plus un `GITHUB_TOKEN` classique (`ghp_`), avec lequel le CLI refuse de démarrer.
+
+**Début de tour.** Copilot écrit ses avertissements de démarrage (« Run /login again to use Connectors ») dans le canal des messages, sans rien qui les distingue d'une réponse. Le client s'abonne donc à l'événement `assistant.turn_start` (`clientCapabilities._meta["github.com/copilot"].events`) et jette le texte reçu avant le premier de chaque tour (`acpTurn.discardPrelude`). Le même `_meta` porte `interactive: false`.
 
 ### Adaptateur Antigravity (`cli:"agy"`)
 
@@ -159,7 +186,7 @@ Sillage n'écrit ce fichier que sur clic explicite de l'humain (`POST /api/agent
 
 Reste un mode d'échec assumé : un agent qui veut lire ou écrire **hors** de son worktree fait tomber sa session (par exemple `/etc/hostname`, vérifié). C'est le comportement souhaitable, et il est maintenant visible dans la conversation. L'adaptateur prévient aussi l'agent dans son prompt (`antigravityWorktreeNote`) que `.git` est un pointeur qu'il ne doit pas ouvrir.
 
-`runTextCLI` (partagé avec copilot, agy et kiro) traite une sortie 0 sans rien sur stdout comme un échec et remonte stderr : sans ça, la tâche finissait « à relire » avec une conversation vide, ce qui ne laissait aucune trace du refus.
+`runTextCLI` (partagé avec kiro) traite une sortie 0 sans rien sur stdout comme un échec et remonte stderr : sans ça, la tâche finissait « à relire » avec une conversation vide, ce qui ne laissait aucune trace du refus.
 
 ### Adaptateur Kiro (`cli:"kiro"`)
 

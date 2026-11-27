@@ -405,37 +405,6 @@ func TestPrefixAgentContext(t *testing.T) {
 	}
 }
 
-func TestCopilotArgsAreAutonomousButKeepOutboundCommandsDenied(t *testing.T) {
-	args := copilotArgs(Agent{Model: "gpt-test"}, "Fix the bug")
-	joined := strings.Join(args, " ")
-	for _, required := range []string{
-		"--autopilot",
-		"--no-ask-user",
-		"--allow-tool=read,write,shell",
-		"--deny-tool=" + copilotDeniedTools,
-		"--disable-builtin-mcps",
-		"--no-remote",
-		"--model=gpt-test",
-	} {
-		if !strings.Contains(joined, required) {
-			t.Fatalf("Copilot arguments should contain %q: %v", required, args)
-		}
-	}
-	for _, required := range []string{"git push", "gh:*", "glab:*", ".github/copilot"} {
-		if !strings.Contains(copilotDeniedTools, required) {
-			t.Fatalf("Copilot deny rules should cover %q", required)
-		}
-	}
-	for _, forbidden := range []string{"--allow-all", "--yolo", "dangerously-skip-permissions"} {
-		if strings.Contains(joined, forbidden) {
-			t.Fatalf("Copilot arguments should not contain %q: %v", forbidden, args)
-		}
-	}
-	if len(args) < 2 || args[len(args)-2] != "-p" || args[len(args)-1] != "Fix the bug" {
-		t.Fatalf("Copilot prompt arguments are malformed: %v", args)
-	}
-}
-
 func TestKiroArgsUseHeadlessIsolatedAgent(t *testing.T) {
 	args := kiroArgs("Fix the bug")
 	joined := strings.Join(args, " ")

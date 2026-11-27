@@ -50,14 +50,6 @@ const claudeDeniedTools = "Bash(git push:*),Bash(gh:*),Bash(glab:*)," +
 	"Edit(.claude/settings*.json),Write(.claude/settings*.json)," +
 	"Edit(.claude/hooks/**),Write(.claude/hooks/**)"
 
-// Copilot deny rules override the selectively allowed read, write, and shell
-// tools. They keep outbound Git operations and agent-controlled settings out
-// of a task even when the CLI runs unattended.
-const copilotDeniedTools = "shell(git push),shell(gh:*),shell(glab:*)," +
-	"write(.github/copilot-instructions.md)," +
-	"write(.github/copilot/settings.json)," +
-	"write(.github/copilot/settings.local.json)"
-
 // claudeTools assemble la liste d'outils réellement passée au CLI : le socle,
 // puis les outils accordés au projet par l'humain dans les réglages.
 func claudeTools(projectTools, permissionProfileIDs []string) string {
@@ -88,6 +80,12 @@ type procHandle struct {
 	cancel      context.CancelFunc // utilisé par l'adaptateur fake (pas de process réel)
 	interrupted atomic.Bool
 	done        chan struct{}
+
+	// softStop demande à l'agent de s'arrêter par son protocole avant tout
+	// signal (ACP : session/cancel), pour qu'il enregistre sa session et que
+	// la reprise fonctionne au message suivant. Posé par l'adaptateur une fois
+	// la session ouverte, lu par killProcessGroup depuis une autre goroutine.
+	softStop atomic.Pointer[func()]
 }
 
 // Runner exécute au plus un agent par tâche à la fois. Les messages envoyés
@@ -514,6 +512,7 @@ func (r *Runner) deleteTaskQuiet(taskID string) (Task, error) {
 	removeTaskAttachments(r.store.DataDir(), taskID)
 	if task.ID != "" {
 		cacheDir := filepath.Join(r.store.DataDir(), "package-cache", task.ID)
+		homeDir := filepath.Join(r.store.DataDir(), agentHomesDir, task.ID)
 		if hasProc {
 			// The process may still be writing its package cache until its group
 			// exits. Cleaning after done avoids leaving files recreated during a
@@ -521,9 +520,11 @@ func (r *Runner) deleteTaskQuiet(taskID string) (Task, error) {
 			go func() {
 				<-handle.done
 				_ = os.RemoveAll(cacheDir)
+				_ = os.RemoveAll(homeDir)
 			}()
 		} else {
 			_ = os.RemoveAll(cacheDir)
+			_ = os.RemoveAll(homeDir)
 		}
 	}
 
@@ -618,8 +619,20 @@ func (r *Runner) DeleteProject(projectID string) error {
 	return nil
 }
 
+// softStopGrace : délai laissé à un agent pour s'arrêter de lui-même après
+// softStop, avant de passer aux signaux.
+const softStopGrace = 5 * time.Second
+
 func killProcessGroup(handle *procHandle) {
 	if handle.cmd != nil && handle.cmd.Process != nil {
+		if stop := handle.softStop.Load(); stop != nil {
+			(*stop)()
+			select {
+			case <-handle.done:
+				return
+			case <-time.After(softStopGrace):
+			}
+		}
 		killGroup(handle.cmd, handle.done)
 		return
 	}
@@ -1443,27 +1456,6 @@ func (r *Runner) runKiro(task *Task, agent Agent, project Project, card Card, ha
 	return r.runTextCLI(task, agent, handle, "kiro-cli", kiroArgs(cliInput), kiroEnv(home, runtime.Env))
 }
 
-func copilotArgs(agent Agent, cliInput string) []string {
-	args := []string{
-		"--autopilot",
-		"--max-autopilot-continues=10",
-		"--no-ask-user",
-		"--allow-tool=read,write,shell",
-		"--deny-tool=" + copilotDeniedTools,
-		"--disable-builtin-mcps",
-		"--no-remote",
-		"--no-remote-export",
-		"--no-auto-update",
-		"--no-color",
-		"--stream=off",
-		"--silent",
-	}
-	if agent.Model != "" {
-		args = append(args, "--model="+agent.Model)
-	}
-	return append(args, "-p", cliInput)
-}
-
 // antigravityArgs construit la ligne de commande d'agy. Trois pièges du CLI :
 //
 //   - `--print` prend le prompt en valeur (c'est un alias de `--prompt`, pas un
@@ -1501,11 +1493,6 @@ func antigravityArgs(agent Agent, worktreeDir, gitCommonDir, cliInput string) []
 	return append(args, "--print", cliInput)
 }
 
-func (r *Runner) runCopilot(task *Task, agent Agent, project Project, card Card, handle *procHandle, cliInput string, runtime permissionRuntime) error {
-	cliInput = prefixAgentContext(agent, project, card, commitNote+"\n\n"+cliInput)
-	return r.runTextCLI(task, agent, handle, "copilot", copilotArgs(agent, cliInput), copilotEnv(runtime.Env))
-}
-
 // antigravityWorktreeNote prévient l'agent de la particularité de son
 // répertoire qui l'a déjà fait échouer : une tâche travaille dans un worktree
 // git lié, où `.git` est un fichier d'une ligne qui pointe ailleurs. Un modèle
@@ -1531,32 +1518,8 @@ func (r *Runner) runAntigravity(task *Task, agent Agent, project Project, card C
 	return r.runTextCLI(task, agent, handle, "agy", args, runtime.Env)
 }
 
-// copilotEnv strips a classic GitHub PAT (the "ghp_" prefix) from GITHUB_TOKEN
-// before it reaches the copilot binary. The CLI refuses to start at all when
-// it finds one ("Classic Personal Access Tokens are not supported"), even
-// though this token is never needed inside the sandbox: copilotDeniedTools
-// already blocks git push/gh/glab, and Sillage itself never reads this
-// variable. Leaving it set otherwise breaks every copilot task on a machine
-// where GITHUB_TOKEN happens to hold an old classic PAT for unrelated tools.
-// Fine-grained PATs and an unset GITHUB_TOKEN pass through untouched, so
-// gh's own auth (gh auth login, copilot's /login) keeps working.
-func copilotEnv(base []string) []string {
-	env := base
-	if env == nil {
-		env = os.Environ()
-	}
-	filtered := make([]string, 0, len(env))
-	for _, kv := range env {
-		if strings.HasPrefix(kv, "GITHUB_TOKEN=ghp_") {
-			continue
-		}
-		filtered = append(filtered, kv)
-	}
-	return filtered
-}
-
 // runTextCLI runs a non-interactive CLI whose stdout is its final answer.
-// Copilot, Antigravity, and Kiro currently do not expose token accounting in this
+// Antigravity and Kiro currently do not expose token accounting in this
 // mode, so the adapter deliberately records only the response and exit error.
 // A nil env makes the child inherit the process environment unchanged.
 func (r *Runner) runTextCLI(task *Task, agent Agent, handle *procHandle, binary string, args []string, env []string) error {
